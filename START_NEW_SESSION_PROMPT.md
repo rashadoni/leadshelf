@@ -4,17 +4,17 @@
 
 Сначала прочитай все документы в:
 
-`/Users/rashadrahimov/Documents/leadshelf`
+`/Users/rashadrahimov/Projects/leadshelf`
 
 Особенно:
 
-- `/Users/rashadrahimov/Documents/leadshelf/docs/01-product-scope.md`
-- `/Users/rashadrahimov/Documents/leadshelf/docs/02-architecture.md`
-- `/Users/rashadrahimov/Documents/leadshelf/docs/03-roadmap-backlog.md`
-- `/Users/rashadrahimov/Documents/leadshelf/docs/04-implementation-instructions.md`
-- `/Users/rashadrahimov/Documents/leadshelf/docs/05-decisions-risks.md`
-- `/Users/rashadrahimov/Documents/leadshelf/docs/06-meeting-notes-from-leafio-demo.md`
-- `/Users/rashadrahimov/Documents/leadshelf/docs/07-data-model-draft.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/01-product-scope.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/02-architecture.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/03-roadmap-backlog.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/04-implementation-instructions.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/05-decisions-risks.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/06-meeting-notes-from-leafio-demo.md`
+- `/Users/rashadrahimov/Projects/leadshelf/docs/07-data-model-draft.md`
 
 Важно:
 
