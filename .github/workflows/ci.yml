@@ -40,6 +40,9 @@ jobs:
       - name: Prisma validate
         run: pnpm --filter @leadshelf/db validate
 
+      - name: Prisma generate (types for tenant client)
+        run: pnpm --filter @leadshelf/db generate
+
       - name: Apply migrations (incl. raw-SQL invariants)
         run: pnpm --filter @leadshelf/db exec prisma migrate deploy
 
