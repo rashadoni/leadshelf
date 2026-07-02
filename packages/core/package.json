@@ -6,10 +6,11 @@
   "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "typescript": "^5.8.0"
+    "@types/node": "^20.17.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
   }
 }

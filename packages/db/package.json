@@ -8,13 +8,17 @@
     "validate": "prisma validate",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3"
   },
   "devDependencies": {
+    "@types/node": "^20.17.0",
+    "dotenv": "^16.4.0",
     "prisma": "^6.19.3",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
   }
 }
