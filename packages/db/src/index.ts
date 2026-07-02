@@ -8,3 +8,4 @@ export {
   TENANT_MODELS,
   type TenantClient,
 } from "./tenant-client.ts"
+export { listImportErrorsForBatch } from "./repos/import.ts"

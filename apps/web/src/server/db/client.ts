@@ -24,3 +24,10 @@ export function tenantDb(organizationId: string) {
  * Использование где-либо ещё — нарушение правил доступа (docs/12).
  */
 export const authDb = prisma
+
+/**
+ * Для вызова worker-исполнителей (import) и parent-path репозиториев из
+ * packages/db — они принимают голый PrismaClient и сами обязаны скоупить
+ * КАЖДЫЙ запрос по organizationId (см. их контракты). Не для прямых запросов.
+ */
+export const workerDb = prisma

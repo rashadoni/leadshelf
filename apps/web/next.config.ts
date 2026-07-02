@@ -5,7 +5,12 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts")
 
 const config: NextConfig = {
   // workspace-пакеты с "main": "src/index.ts" транспилируются Next-ом
-  transpilePackages: ["@leadshelf/db", "@leadshelf/core"],
+  transpilePackages: [
+    "@leadshelf/db",
+    "@leadshelf/core",
+    "@leadshelf/api-contracts",
+    "@leadshelf/worker",
+  ],
   // нативные/Node-only пакеты не бандлим
   serverExternalPackages: ["@prisma/client", "@node-rs/argon2"],
 }

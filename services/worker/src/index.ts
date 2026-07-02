@@ -1,2 +1,4 @@
-export { executeProductsImport } from "./catalog-import/execute-products-import"
+export { executeProductsImport, type ImportSummary } from "./catalog-import/execute-products-import"
+export { executeSnapshotsImport } from "./catalog-import/execute-snapshots-import"
+export { executeAssortmentImport } from "./catalog-import/execute-assortment-import"
 export { readCsvRecords } from "./catalog-import/csv"

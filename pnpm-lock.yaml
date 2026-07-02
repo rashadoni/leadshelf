@@ -17,9 +17,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@leadshelf/api-contracts':
+        specifier: workspace:*
+        version: link:../../packages/api-contracts
+      '@leadshelf/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@leadshelf/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@leadshelf/worker':
+        specifier: workspace:*
+        version: link:../../services/worker
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2

@@ -18,7 +18,10 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@leadshelf/worker": "workspace:*",
+    "@leadshelf/core": "workspace:*",
+    "@leadshelf/api-contracts": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

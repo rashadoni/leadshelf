@@ -73,8 +73,13 @@ Definition of Done:
 Задачи:
 
 - Staging-контракт импорта (zod в api-contracts): SKU, barcode, category
-  tree, brand, price, stock, assortment status, sales.
+  tree, brand, price, stock, assortment status, sales. `[сделано: v1
+  заморожен, все 5 сущностей]`
 - Import CSV/XLSX через staging-слой (порт парсинга из MTM lib/mtm/sku).
+  `[CSV сделано: парсеры ru/az/en + исполнители products/prices/stock/
+  sales/assortment c идемпотентностью (42 теста), API-роуты upload/status/
+  errors/products/data-quality. Осталось: XLSX, очередь для больших файлов,
+  UI]`
 - Product CRUD.
 - Category tree.
 - Brand/supplier/manufacturer attributes.
