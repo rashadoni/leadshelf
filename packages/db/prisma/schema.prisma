@@ -1,0 +1,1351 @@
+// LeadShelf schema v0.
+//
+// Правила (docs/08 + docs/09-codex-migration-plan):
+// - Никаких Mtm*-префиксов и CRM-сущностей.
+// - Планограмма = физическая модель: мм, полки, фейсинги X/Y/Z.
+//   Фото-bbox живет только в AI-слое (golden reference), он добавится в Phase 10.
+// - Все физические размеры в миллиметрах (canonical unit).
+// - Publish = immutable snapshot: Task ссылается на PlanogramVersion, не на draft.
+// - ERP-данные (цены/остатки/продажи) — снапшоты по датам, не перезапись.
+// - Дочерние модели хранят organizationId строкой (индекс) без FK, чтобы не
+//   раздувать Organization; FK на Organization только у корневых агрегатов.
+//
+// Не входит в v0 (добавится своими фазами):
+// - Analytics snapshots (Phase 7): MetricSnapshot, PlanogramMetricSnapshot, ...
+// - AI/Vision (Phase 10): GoldenReference, ShelfScan, ShelfDetection, HumanReview, ...
+// - PlanogramRuleSet/RuleStep (Phase 5, auto placement).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & Tenant
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  OWNER
+  ADMIN
+  CATEGORY_MANAGER
+  MERCHANDISER
+  SUPERVISOR
+  ANALYST
+  FIELD_AGENT
+  STORE_STAFF
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  apiTokens          ApiToken[]
+  regions            Region[]
+  storeFormats       StoreFormat[]
+  stores             Store[]
+  storeGroups        StoreGroup[]
+  floorPlans         FloorPlan[]
+  categories         Category[]
+  brands             Brand[]
+  suppliers          Supplier[]
+  manufacturers      Manufacturer[]
+  products           Product[]
+  warehouses         Warehouse[]
+  importBatches      ImportBatch[]
+  equipmentTypes     EquipmentType[]
+  equipmentTemplates EquipmentTemplate[]
+  equipmentAssets    EquipmentAsset[]
+  planograms         Planogram[]
+  tasks              Task[]
+  teams              Team[]
+  routes             Route[]
+  visits             Visit[]
+  orders             Order[]
+  promotions         Promotion[]
+  alerts             Alert[]
+  auditLogs          AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  name           String
+  passwordHash   String?
+  role           UserRole     @default(STORE_STAFF)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  fieldAgent       FieldAgent?
+  mobileDevices    MobileDevice[]
+  photoSubmissions PhotoSubmission[]
+  taskComments     TaskComment[]
+  assignedTasks    Task[]            @relation("TaskAssignee")
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+model ApiToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  tokenHash      String       @unique
+  scopes         String[]
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@map("api_tokens")
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String?
+  payload        Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Retail network
+// ---------------------------------------------------------------------------
+
+model Region {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  parentId       String?
+  parent         Region?      @relation("RegionTree", fields: [parentId], references: [id])
+  children       Region[]     @relation("RegionTree")
+
+  stores Store[]
+
+  @@index([organizationId])
+  @@map("regions")
+}
+
+model StoreFormat {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+
+  stores               Store[]
+  floorPlans           FloorPlan[]
+  planogramAssignments PlanogramAssignment[]
+  assortmentMatrix     AssortmentMatrix[]
+
+  @@unique([organizationId, name])
+  @@map("store_formats")
+}
+
+model Store {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  code           String?
+  address        String?
+  latitude       Float?
+  longitude      Float?
+  regionId       String?
+  region         Region?      @relation(fields: [regionId], references: [id])
+  formatId       String?
+  format         StoreFormat? @relation(fields: [formatId], references: [id])
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  groups               StoreGroup[]          @relation("StoreGroupMembers")
+  floorPlans           FloorPlan[]
+  assortment           StoreAssortment[]
+  equipmentAssets      EquipmentAsset[]
+  planogramAssignments PlanogramAssignment[]
+  tasks                Task[]
+  routeStops           RouteStop[]
+  visits               Visit[]
+  orders               Order[]
+  creditLimit          CreditLimit?
+  photoSubmissions     PhotoSubmission[]
+  priceSnapshots       PriceSnapshot[]
+  stockSnapshots       StockSnapshot[]
+  salesSnapshots       SalesSnapshot[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, formatId])
+  @@index([organizationId, regionId])
+  @@map("stores")
+}
+
+model StoreGroup {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+
+  stores Store[] @relation("StoreGroupMembers")
+
+  @@unique([organizationId, name])
+  @@map("store_groups")
+}
+
+model FloorPlan {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  storeId        String?
+  store          Store?       @relation(fields: [storeId], references: [id])
+  formatId       String?
+  format         StoreFormat? @relation(fields: [formatId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  versions FloorPlanVersion[]
+
+  @@index([organizationId])
+  @@map("floor_plans")
+}
+
+model FloorPlanVersion {
+  id            String    @id @default(cuid())
+  floorPlanId   String
+  floorPlan     FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  widthMm       Int
+  depthMm       Int
+  isPublished   Boolean   @default(false)
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  equipment FloorPlanEquipment[]
+
+  @@unique([floorPlanId, versionNumber])
+  @@map("floor_plan_versions")
+}
+
+model FloorPlanEquipment {
+  id                 String           @id @default(cuid())
+  floorPlanVersionId String
+  floorPlanVersion   FloorPlanVersion @relation(fields: [floorPlanVersionId], references: [id], onDelete: Cascade)
+  equipmentVersionId String
+  equipmentVersion   EquipmentVersion @relation(fields: [equipmentVersionId], references: [id])
+  // Какая планограмма стоит на этом фикстуре — мобильная подсказка
+  // «куда подойти» (floor plan location hint, Phase 6).
+  planogramId        String?
+  planogram          Planogram?       @relation(fields: [planogramId], references: [id])
+  label              String?
+  xMm                Int
+  yMm                Int
+  rotationDeg        Int              @default(0)
+  isLocked           Boolean          @default(false)
+
+  @@index([floorPlanVersionId])
+  @@index([planogramId])
+  @@map("floor_plan_equipment")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog & ERP (snapshots, not overwrite)
+// ---------------------------------------------------------------------------
+
+model Category {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  externalCode   String?
+  parentId       String?
+  parent         Category?    @relation("CategoryTree", fields: [parentId], references: [id])
+  children       Category[]   @relation("CategoryTree")
+  sortOrder      Int          @default(0)
+
+  products   Product[]
+  planograms Planogram[]
+
+  @@index([organizationId, parentId])
+  @@map("categories")
+}
+
+model Brand {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+
+  products Product[]
+
+  @@unique([organizationId, name])
+  @@map("brands")
+}
+
+model Supplier {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+
+  products Product[]
+
+  @@unique([organizationId, name])
+  @@map("suppliers")
+}
+
+model Manufacturer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+
+  products Product[]
+
+  @@unique([organizationId, name])
+  @@map("manufacturers")
+}
+
+enum ProductUnit {
+  PCS
+  BOX
+  KG
+  L
+  PACK
+}
+
+model Product {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sku            String
+  name           String
+  categoryId     String?
+  category       Category?     @relation(fields: [categoryId], references: [id])
+  brandId        String?
+  brand          Brand?        @relation(fields: [brandId], references: [id])
+  supplierId     String?
+  supplier       Supplier?     @relation(fields: [supplierId], references: [id])
+  manufacturerId String?
+  manufacturer   Manufacturer? @relation(fields: [manufacturerId], references: [id])
+  // Canonical-словарь единиц; при импорте 1С маппить строки MTM:
+  // шт→PCS, ящик→BOX, кг→KG, л→L, пачка→PACK. UI локализует отображение.
+  unit           ProductUnit   @default(PCS)
+  // Физические габариты упаковки — основа планограммной математики.
+  widthMm        Int?
+  heightMm       Int?
+  depthMm        Int?
+  weightG        Int?
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  barcodes         ProductBarcode[]
+  images           ProductImage[]
+  attributeValues  ProductAttributeValue[]
+  assortmentMatrix AssortmentMatrix[]
+  assortment       StoreAssortment[]
+  priceSnapshots   PriceSnapshot[]
+  stockSnapshots   StockSnapshot[]
+  salesSnapshots   SalesSnapshot[]
+  placements       PlanogramPlacement[]
+  orderLines       OrderLine[]
+  promotions       PromotionProduct[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, categoryId])
+  @@index([organizationId, brandId])
+  @@map("products")
+}
+
+model ProductBarcode {
+  id             String  @id @default(cuid())
+  organizationId String
+  productId      String
+  product        Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  barcode        String
+  isPrimary      Boolean @default(false)
+
+  // Скан в мобильном должен резолвиться в ОДИН товар внутри тенанта.
+  @@unique([organizationId, barcode])
+  @@index([productId])
+  @@map("product_barcodes")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  // Отдельные ракурсы для 2D-рендера планограммы (front/side/top).
+  kind      String  @default("front")
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductAttributeDefinition {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  dataType       String  @default("string")
+  isFilterable   Boolean @default(false)
+
+  values ProductAttributeValue[]
+
+  @@unique([organizationId, name])
+  @@map("product_attribute_definitions")
+}
+
+model ProductAttributeValue {
+  id           String                     @id @default(cuid())
+  productId    String
+  product      Product                    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  definitionId String
+  definition   ProductAttributeDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  value        String
+
+  @@unique([productId, definitionId])
+  @@map("product_attribute_values")
+}
+
+// Ассортиментная матрица ФОРМАТА — ключ к масштабированию на сеть: одна
+// матрица управляет ассортиментом всех аптек формата. StoreAssortment ниже —
+// точечные исключения поверх матрицы.
+model AssortmentMatrix {
+  id        String      @id @default(cuid())
+  formatId  String
+  format    StoreFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  isActive  Boolean     @default(true)
+  validFrom DateTime?
+  validTo   DateTime?
+
+  @@unique([formatId, productId])
+  @@index([productId])
+  @@map("assortment_matrix")
+}
+
+model StoreAssortment {
+  id        String    @id @default(cuid())
+  storeId   String
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isActive  Boolean   @default(true)
+  validFrom DateTime?
+  validTo   DateTime?
+
+  @@unique([storeId, productId])
+  @@index([productId])
+  @@map("store_assortment")
+}
+
+model Warehouse {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  externalCode   String?
+
+  stockSnapshots StockSnapshot[]
+
+  @@unique([organizationId, name])
+  @@map("warehouses")
+}
+
+// ВАЖНО для всех *Snapshot: удаление Product запрещено (Restrict) — история
+// отчетов неприкосновенна; товары деактивируются через isActive.
+// Уникальность (productId, storeId, date) с nullable storeId НЕ выражается
+// в Prisma: NULL != NULL в Postgres. В миграцию добавить raw SQL:
+//   CREATE UNIQUE INDEX ... NULLS NOT DISTINCT (Postgres 15+).
+model PriceSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  storeId        String?
+  store          Store?   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  date           DateTime @db.Date
+  price          Decimal  @db.Decimal(12, 2)
+  costPrice      Decimal? @db.Decimal(12, 2)
+  currency       String   @default("AZN")
+
+  @@index([productId, storeId, date])
+  @@index([storeId, date])
+  @@index([organizationId, date])
+  @@map("price_snapshots")
+}
+
+model StockSnapshot {
+  id             String     @id @default(cuid())
+  organizationId String
+  productId      String
+  product        Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  storeId        String?
+  store          Store?     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  warehouseId    String?
+  warehouse      Warehouse? @relation(fields: [warehouseId], references: [id])
+  date           DateTime   @db.Date
+  quantity       Decimal    @db.Decimal(14, 3)
+
+  // Unique через raw SQL в миграции (NULLS NOT DISTINCT), см. PriceSnapshot.
+  @@index([productId, storeId, warehouseId, date])
+  @@index([storeId, date])
+  @@index([organizationId, date])
+  @@map("stock_snapshots")
+}
+
+model SalesSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  storeId        String?
+  store          Store?   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  date           DateTime @db.Date
+  quantity       Decimal  @db.Decimal(14, 3)
+  revenue        Decimal  @db.Decimal(14, 2)
+  profit         Decimal? @db.Decimal(14, 2)
+
+  // Unique через raw SQL в миграции (NULLS NOT DISTINCT), см. PriceSnapshot.
+  @@index([productId, storeId, date])
+  @@index([storeId, date])
+  @@index([organizationId, date])
+  @@map("sales_snapshots")
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+model ImportBatch {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source         String // csv | xlsx | 1c | api
+  entityType     String // products | prices | stock | sales | stores | assortment
+  status         ImportStatus @default(PENDING)
+  totalRows      Int          @default(0)
+  errorRows      Int          @default(0)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+
+  errors ImportError[]
+
+  @@index([organizationId, entityType, createdAt])
+  @@map("import_batches")
+}
+
+model ImportError {
+  id           String      @id @default(cuid())
+  batchId      String
+  batch        ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber    Int?
+  sourceRow    Json?
+  field        String?
+  reason       String
+  severity     String      @default("error")
+  suggestedFix String?
+
+  @@index([batchId])
+  @@map("import_errors")
+}
+
+model ExternalIdMap {
+  id             String @id @default(cuid())
+  organizationId String
+  system         String // 1c | erp-x
+  entityType     String
+  externalId     String
+  internalId     String
+
+  @@unique([organizationId, system, entityType, externalId])
+  @@index([organizationId, entityType, internalId])
+  @@map("external_id_map")
+}
+
+// ---------------------------------------------------------------------------
+// Equipment library (конструктор для планограмм)
+// ---------------------------------------------------------------------------
+
+model EquipmentType {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  kind           String // rack | pallet | fridge | pegboard | cabinet | table | stand
+
+  templates EquipmentTemplate[]
+
+  @@unique([organizationId, name])
+  @@map("equipment_types")
+}
+
+model EquipmentTemplate {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  typeId         String
+  type           EquipmentType @relation(fields: [typeId], references: [id])
+  name           String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  versions EquipmentVersion[]
+  assets   EquipmentAsset[]
+
+  @@index([organizationId])
+  @@map("equipment_templates")
+}
+
+// Версия геометрии оборудования. Планограммы и планы залов ссылаются на
+// ВЕРСИЮ, а не на шаблон: правка шаблона создает новую версию и не меняет
+// задним числом уже опубликованные планограммы. isFrozen выставляется при
+// первой публикации ссылающейся планограммы/плана (enforce на уровне app).
+model EquipmentVersion {
+  id            String            @id @default(cuid())
+  templateId    String
+  template      EquipmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  widthMm       Int
+  heightMm      Int
+  depthMm       Int
+  isFrozen      Boolean           @default(false)
+  createdAt     DateTime          @default(now())
+
+  shelves            EquipmentShelf[]
+  cells              EquipmentCell[]
+  hooks              EquipmentHook[]
+  floorPlanInstances FloorPlanEquipment[]
+  planogramEquipment PlanogramEquipment[]
+
+  @@unique([templateId, versionNumber])
+  @@map("equipment_versions")
+}
+
+model EquipmentShelf {
+  id                 String           @id @default(cuid())
+  equipmentVersionId String
+  equipmentVersion   EquipmentVersion @relation(fields: [equipmentVersionId], references: [id], onDelete: Cascade)
+  shelfIndex         Int // 0 = нижняя
+  yMm                Int // высота нижней кромки полки от пола оборудования
+  thicknessMm        Int              @default(20)
+  depthMm            Int
+  maxLoadKg          Int?
+
+  placements PlanogramPlacement[]
+
+  @@unique([equipmentVersionId, shelfIndex])
+  @@map("equipment_shelves")
+}
+
+model EquipmentCell {
+  id                 String           @id @default(cuid())
+  equipmentVersionId String
+  equipmentVersion   EquipmentVersion @relation(fields: [equipmentVersionId], references: [id], onDelete: Cascade)
+  xMm                Int
+  yMm                Int
+  widthMm            Int
+  heightMm           Int
+  depthMm            Int
+
+  @@index([equipmentVersionId])
+  @@map("equipment_cells")
+}
+
+model EquipmentHook {
+  id                 String           @id @default(cuid())
+  equipmentVersionId String
+  equipmentVersion   EquipmentVersion @relation(fields: [equipmentVersionId], references: [id], onDelete: Cascade)
+  xMm                Int
+  yMm                Int
+  lengthMm           Int
+
+  @@index([equipmentVersionId])
+  @@map("equipment_hooks")
+}
+
+// ---------------------------------------------------------------------------
+// Asset management (физическое оборудование на точках — бывший MtmEquipment)
+// ---------------------------------------------------------------------------
+
+enum AssetStatus {
+  ACTIVE
+  IN_REPAIR
+  RETIRED
+  LOST
+}
+
+model EquipmentAsset {
+  id             String             @id @default(cuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store              @relation(fields: [storeId], references: [id])
+  templateId     String?
+  template       EquipmentTemplate? @relation(fields: [templateId], references: [id])
+  serialNumber   String?
+  status         AssetStatus        @default(ACTIVE)
+  installedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  history        EquipmentAssetHistory[]
+  inspections    EquipmentInspection[]
+  repairRequests RepairRequest[]
+
+  @@index([organizationId, storeId])
+  @@map("equipment_assets")
+}
+
+model EquipmentAssetHistory {
+  id         String         @id @default(cuid())
+  assetId    String
+  asset      EquipmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  fromStatus AssetStatus?
+  toStatus   AssetStatus
+  note       String?
+  byUserId   String?
+  createdAt  DateTime       @default(now())
+
+  @@index([assetId, createdAt])
+  @@map("equipment_asset_history")
+}
+
+model EquipmentInspection {
+  id        String         @id @default(cuid())
+  assetId   String
+  asset     EquipmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  visitId   String?
+  result    String // ok | issue
+  notes     String?
+  photoUrls String[]
+  byUserId  String?
+  createdAt DateTime       @default(now())
+
+  @@index([assetId, createdAt])
+  @@map("equipment_inspections")
+}
+
+enum RepairStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+model RepairRequest {
+  id           String         @id @default(cuid())
+  assetId      String
+  asset        EquipmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  status       RepairStatus   @default(OPEN)
+  priority     String         @default("normal")
+  description  String
+  photoUrls    String[]
+  reportedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([status])
+  @@map("repair_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Planograms (физическая модель: мм + фейсинги, versioned, immutable publish)
+// ---------------------------------------------------------------------------
+
+enum PlanogramVersionState {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Planogram {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  categoryId     String?
+  category       Category?    @relation(fields: [categoryId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  versions           PlanogramVersion[]
+  floorPlanEquipment FloorPlanEquipment[]
+
+  @@index([organizationId, categoryId])
+  @@map("planograms")
+}
+
+model PlanogramVersion {
+  id            String                @id @default(cuid())
+  planogramId   String
+  planogram     Planogram             @relation(fields: [planogramId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  state         PlanogramVersionState @default(DRAFT)
+  authorId      String?
+  publishedAt   DateTime?
+  publishedById String?
+  changeNote    String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  equipment   PlanogramEquipment[]
+  zones       PlanogramZone[]
+  placements  PlanogramPlacement[]
+  assignments PlanogramAssignment[]
+  tasks       Task[]
+
+  @@unique([planogramId, versionNumber])
+  @@index([planogramId, state])
+  @@map("planogram_versions")
+}
+
+model PlanogramEquipment {
+  id                 String           @id @default(cuid())
+  planogramVersionId String
+  planogramVersion   PlanogramVersion @relation(fields: [planogramVersionId], references: [id], onDelete: Cascade)
+  // Ссылка на ВЕРСИЮ геометрии: publish не ломается при правке шаблона.
+  equipmentVersionId String
+  equipmentVersion   EquipmentVersion @relation(fields: [equipmentVersionId], references: [id])
+  label              String?
+  sortOrder          Int              @default(0)
+
+  placements PlanogramPlacement[]
+  zones      PlanogramZone[]
+
+  @@index([planogramVersionId])
+  @@map("planogram_equipment")
+}
+
+model PlanogramZone {
+  id                   String             @id @default(cuid())
+  planogramVersionId   String
+  planogramVersion     PlanogramVersion   @relation(fields: [planogramVersionId], references: [id], onDelete: Cascade)
+  planogramEquipmentId String
+  planogramEquipment   PlanogramEquipment @relation(fields: [planogramEquipmentId], references: [id], onDelete: Cascade)
+  name                 String
+  color                String?
+  xMm                  Int
+  yMm                  Int
+  widthMm              Int
+  heightMm             Int
+
+  placements PlanogramPlacement[]
+
+  @@index([planogramVersionId])
+  @@map("planogram_zones")
+}
+
+enum StackMode {
+  NONE
+  ON_TOP
+  LYING
+}
+
+// ИНВАРИАНТЫ ГРАФА (triggers в миграции + валидация в packages/core):
+// shelf принадлежит equipmentVersion того же planogramEquipment; zone
+// принадлежит тому же planogramVersion. См. prisma/MIGRATION_NOTES.md.
+model PlanogramPlacement {
+  id                   String             @id @default(cuid())
+  planogramVersionId   String
+  planogramVersion     PlanogramVersion   @relation(fields: [planogramVersionId], references: [id], onDelete: Cascade)
+  planogramEquipmentId String
+  planogramEquipment   PlanogramEquipment @relation(fields: [planogramEquipmentId], references: [id], onDelete: Cascade)
+  shelfId              String?
+  shelf                EquipmentShelf?    @relation(fields: [shelfId], references: [id])
+  zoneId               String?
+  zone                 PlanogramZone?     @relation(fields: [zoneId], references: [id])
+  productId            String
+  product              Product            @relation(fields: [productId], references: [id])
+  // Позиция первого фейса относительно оборудования, мм.
+  xMm                  Int
+  yMm                  Int
+  zMm                  Int                @default(0)
+  // Габариты, зафиксированные на момент размещения (продукт мог измениться).
+  widthMm              Int
+  heightMm             Int
+  depthMm              Int
+  facingsX             Int                @default(1)
+  facingsY             Int                @default(1)
+  facingsZ             Int                @default(1)
+  rotationX            Int                @default(0)
+  rotationY            Int                @default(0)
+  rotationZ            Int                @default(0)
+  compressionX         Float              @default(1)
+  compressionY         Float              @default(1)
+  compressionZ         Float              @default(1)
+  stackMode            StackMode          @default(NONE)
+  sortOrder            Int                @default(0)
+  metadata             Json?
+
+  @@index([planogramVersionId])
+  @@index([productId])
+  @@map("planogram_placements")
+}
+
+model PlanogramAssignment {
+  id                 String           @id @default(cuid())
+  planogramVersionId String
+  planogramVersion   PlanogramVersion @relation(fields: [planogramVersionId], references: [id], onDelete: Cascade)
+  // ИНВАРИАНТЫ (raw SQL в первой миграции, см. prisma/MIGRATION_NOTES.md):
+  // 1) CHECK num_nonnulls(store_id, format_id) = 1;
+  // 2) assignment допустим только для PUBLISHED версии (trigger).
+  // Ровно один из storeId/formatId (форматная vs индивидуальная планограмма).
+  storeId            String?
+  store              Store?           @relation(fields: [storeId], references: [id])
+  formatId           String?
+  format             StoreFormat?     @relation(fields: [formatId], references: [id])
+  activeFrom         DateTime         @default(now())
+  activeTo           DateTime?
+  createdAt          DateTime         @default(now())
+
+  tasks Task[]
+
+  @@index([storeId])
+  @@index([formatId])
+  @@index([planogramVersionId])
+  @@map("planogram_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// Tasks, photo proof, mobile sync
+// ---------------------------------------------------------------------------
+
+enum TaskStatus {
+  NEW
+  IN_PROGRESS
+  PHOTO_SUBMITTED
+  COMPLETED
+  EXPIRED
+  EMPTY
+}
+
+model Task {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  storeId            String
+  store              Store                @relation(fields: [storeId], references: [id])
+  // Задача исполнения ссылается на ОПУБЛИКОВАННУЮ версию, не на draft.
+  planogramVersionId String?
+  planogramVersion   PlanogramVersion?    @relation(fields: [planogramVersionId], references: [id])
+  // ИНВАРИАНТЫ (raw SQL/trigger в миграции + проверка в app-слое):
+  // 1) planogramVersionId обязателен для планограммных задач и указывает
+  //    только на PUBLISHED версию; 2) storeId/planogramVersionId должны
+  //    совпадать с целью assignment. См. prisma/MIGRATION_NOTES.md.
+  assignmentId       String?
+  assignment         PlanogramAssignment? @relation(fields: [assignmentId], references: [id])
+  assigneeId         String?
+  assignee           User?                @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  title              String
+  description        String?
+  status             TaskStatus           @default(NEW)
+  dueAt              DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  statusHistory    TaskStatusHistory[]
+  comments         TaskComment[]
+  photoSubmissions PhotoSubmission[]
+
+  @@index([organizationId, status, dueAt])
+  @@index([storeId, status])
+  @@index([assigneeId, status])
+  @@map("tasks")
+}
+
+model TaskStatusHistory {
+  id         String      @id @default(cuid())
+  taskId     String
+  task       Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fromStatus TaskStatus?
+  toStatus   TaskStatus
+  byUserId   String?
+  createdAt  DateTime    @default(now())
+
+  @@index([taskId, createdAt])
+  @@map("task_status_history")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@map("task_comments")
+}
+
+model PhotoSubmission {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  store          Store    @relation(fields: [storeId], references: [id])
+  taskId         String?
+  task           Task?    @relation(fields: [taskId], references: [id])
+  visitId        String?
+  visit          Visit?   @relation(fields: [visitId], references: [id])
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  url            String
+  thumbnailUrl   String?
+  // Идемпотентность offline-загрузки: клиентский id повторной отправки.
+  clientPhotoId  String?
+  takenAt        DateTime
+  // EXIF + watermark метаданные (портируется из mtm-photo-watermark-spec).
+  exif           Json?
+  qualityScore   Float?
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, clientPhotoId])
+  @@index([organizationId, storeId, takenAt])
+  @@index([taskId])
+  @@map("photo_submissions")
+}
+
+model MobileDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform   String // ios | android
+  deviceName String?
+  pushToken  String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  syncCursors   SyncCursor[]
+  outboxOps     OutboxOperation[]
+  syncConflicts SyncConflict[]
+
+  @@index([userId])
+  @@map("mobile_devices")
+}
+
+// Конфликт offline-синка: сервер и клиент разошлись по одной сущности.
+// Хранится, а не молча перезаписывается (last-write-wins только по решению).
+model SyncConflict {
+  id         String       @id @default(cuid())
+  deviceId   String
+  device     MobileDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  clientOpId String?
+  collection String
+  entityId   String
+  serverData Json
+  clientData Json
+  resolution String? // server_wins | client_wins | merged
+  resolvedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  @@index([deviceId, resolvedAt])
+  @@map("sync_conflicts")
+}
+
+model SyncCursor {
+  id         String       @id @default(cuid())
+  deviceId   String
+  device     MobileDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  collection String
+  cursor     String
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([deviceId, collection])
+  @@map("sync_cursors")
+}
+
+enum OutboxStatus {
+  PENDING
+  APPLIED
+  FAILED
+  DUPLICATE
+}
+
+model OutboxOperation {
+  id          String       @id @default(cuid())
+  deviceId    String
+  device      MobileDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  // Клиентский идемпотентный id — повторная доставка не создает дубликат.
+  // Уникальность per-device: разные устройства могут генерить одинаковые id.
+  clientOpId  String
+  kind        String // photo.submit | task.status | visit.checkin | order.create | ...
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@unique([deviceId, clientOpId])
+  @@index([deviceId, status])
+  @@map("outbox_operations")
+}
+
+// ---------------------------------------------------------------------------
+// Field force (routes, visits, live map)
+// ---------------------------------------------------------------------------
+
+model Team {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  leadUserId     String?
+
+  agents FieldAgent[]
+
+  @@unique([organizationId, name])
+  @@map("teams")
+}
+
+model FieldAgent {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId       String?
+  team         Team?   @relation(fields: [teamId], references: [id])
+  phone        String?
+  employeeCode String?
+
+  routes    Route[]
+  visits    Visit[]
+  locations AgentLocation[]
+  orders    Order[]
+
+  @@map("field_agents")
+}
+
+model Route {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  agentId        String?
+  agent          FieldAgent?  @relation(fields: [agentId], references: [id])
+  // Дни повторения: ISO weekday числа; пусто = разовый маршрут.
+  weekdays       Int[]
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  stops RouteStop[]
+
+  @@index([organizationId, agentId])
+  @@map("routes")
+}
+
+model RouteStop {
+  id        String    @id @default(cuid())
+  routeId   String
+  route     Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  storeId   String
+  store     Store     @relation(fields: [storeId], references: [id])
+  sortOrder Int
+  plannedAt DateTime?
+
+  visits Visit[]
+
+  @@unique([routeId, sortOrder])
+  @@index([storeId])
+  @@map("route_stops")
+}
+
+enum VisitStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+model Visit {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentId        String
+  agent          FieldAgent   @relation(fields: [agentId], references: [id])
+  storeId        String
+  store          Store        @relation(fields: [storeId], references: [id])
+  routeStopId    String?
+  routeStop      RouteStop?   @relation(fields: [routeStopId], references: [id])
+  status         VisitStatus  @default(PLANNED)
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  checkInLat     Float?
+  checkInLng     Float?
+  // Флаги anomaly detection (порт visit-anomaly из MTM): geofence, duration, ...
+  anomalyFlags   Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  photoSubmissions PhotoSubmission[]
+  orders           Order[]
+
+  @@index([organizationId, agentId, checkInAt])
+  @@index([storeId, checkInAt])
+  @@map("visits")
+}
+
+model AgentLocation {
+  id         String     @id @default(cuid())
+  agentId    String
+  agent      FieldAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  latitude   Float
+  longitude  Float
+  accuracyM  Float?
+  recordedAt DateTime
+
+  @@index([agentId, recordedAt])
+  @@map("agent_locations")
+}
+
+// ---------------------------------------------------------------------------
+// Orders / commercial execution
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  CONFIRMED
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store        @relation(fields: [storeId], references: [id])
+  agentId        String?
+  agent          FieldAgent?  @relation(fields: [agentId], references: [id])
+  visitId        String?
+  visit          Visit?       @relation(fields: [visitId], references: [id])
+  status         OrderStatus  @default(DRAFT)
+  currency       String       @default("AZN")
+  totalAmount    Decimal      @default(0) @db.Decimal(14, 2)
+  submittedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  lines OrderLine[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([storeId])
+  @@map("orders")
+}
+
+model OrderLine {
+  id          String     @id @default(cuid())
+  orderId     String
+  order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product    @relation(fields: [productId], references: [id])
+  quantity    Decimal    @db.Decimal(14, 3)
+  unitPrice   Decimal    @db.Decimal(12, 2)
+  discountPct Float      @default(0)
+  promotionId String?
+  promotion   Promotion? @relation(fields: [promotionId], references: [id])
+
+  @@index([orderId])
+  @@map("order_lines")
+}
+
+model Promotion {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  // Тип и параметры движка промо (порт promotion-engine из MTM).
+  kind           String // discount | bonus | bundle
+  config         Json
+  activeFrom     DateTime
+  activeTo       DateTime?
+  isActive       Boolean      @default(true)
+
+  products   PromotionProduct[]
+  orderLines OrderLine[]
+
+  @@index([organizationId, isActive])
+  @@map("promotions")
+}
+
+model PromotionProduct {
+  id          String    @id @default(cuid())
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, productId])
+  @@map("promotion_products")
+}
+
+model CreditLimit {
+  id          String   @id @default(cuid())
+  storeId     String   @unique
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  limitAmount Decimal  @db.Decimal(14, 2)
+  usedAmount  Decimal  @default(0) @db.Decimal(14, 2)
+  currency    String   @default("AZN")
+  updatedAt   DateTime @updatedAt
+
+  @@map("credit_limits")
+}
+
+// ---------------------------------------------------------------------------
+// Alerts
+// ---------------------------------------------------------------------------
+
+model Alert {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind           String // task.overdue | visit.anomaly | stock.gap | ...
+  severity       String       @default("info")
+  storeId        String?
+  entityType     String?
+  entityId       String?
+  payload        Json?
+  isResolved     Boolean      @default(false)
+  resolvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, isResolved, createdAt])
+  @@map("alerts")
+}

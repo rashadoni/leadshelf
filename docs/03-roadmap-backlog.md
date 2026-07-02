@@ -1,5 +1,9 @@
 # LeadShelf: roadmap и backlog
 
+Обновлено 2026-07-02: scope расширен до полного порта MTM (`docs/08`),
+добавлены фазы 11-13 (field force, заказы, алерты) и требования из
+самокритики (`docs/10` схема/UX, `docs/11` архитектура).
+
 ## Phase 0 - Product foundation
 
 Цель: зафиксировать scope, стек, структуру репозитория и первый прототип модели данных.
@@ -7,37 +11,84 @@
 Задачи:
 
 - Создать GitHub repo `leadshelf`.
-- Создать monorepo skeleton.
-- Настроить TypeScript, lint, formatting.
-- Создать Prisma schema v0.
+- Создать monorepo skeleton. `[сделано]`
+- Настроить TypeScript, lint, formatting. `[TS сделан]`
+- Создать Prisma schema v0. `[сделано, прошла Codex-ревью]`
 - Создать auth/tenant baseline.
 - Создать базовую навигацию web app.
 - Создать seed demo tenant.
 
+Требования из docs/11 (архитектурная самокритика):
+
+- Scoped tenant Prisma client в `packages/db` (auto-inject organizationId) —
+  единственная дверь к БД из route handlers; до первого handler.
+- Интеграционные тесты изоляции: «тенант A не видит данные тенанта B».
+- Auth-решение ДО скаффолда web: JWT access/refresh (refresh переживает
+  недели offline), login по employee code/телефону для STORE_STAFF без email.
+- i18n-решение ДО скаффолда web: az/ru (next-intl), messages-каталог.
+- CI (GitHub Actions): typecheck, prisma validate, тесты; vitest как единый
+  тест-раннер; eslint c `no-restricted-imports` в `packages/core`
+  (запрет prisma/next/react).
+- Явный `output` у prisma generator (pnpm-монорепо грабли).
+- Синхронизировать docs/01 и docs/04 с docs/08 (устранить противоречия scope).
+
 Definition of Done:
 
 - Есть локальный dev server.
-- Есть первая миграция.
+- Есть первая миграция — ОБЯЗАТЕЛЬНО вместе с raw SQL из
+  `packages/db/prisma/MIGRATION_NOTES.md` (NULLS NOT DISTINCT уникальность
+  снапшотов, CHECK на assignment, publish/graph-триггеры).
 - Есть demo user.
 - Есть пустые разделы: Catalog, Equipment, Floor Plans, Planograms, Tasks, Analytics.
 
-## Phase 1 - Catalog & ERP import
+## Phase 1 - Catalog & master-data import
 
 Цель: продуктовая база, без которой планограмма невозможна.
 
+Решения владельца (2026-07-02):
+
+- **Phase 1 начинается с импорта и качества master-data, не с редактора.**
+  Редактор без SKU, остатков, размеров и статусов ассортимента — демо,
+  а не продукт.
+- **1С-интеграцию НЕ делаем универсальной.** Phase 1 = контракт импорта
+  через промежуточный staging-слой (CSV/XLSX/API). Адаптер под конкретную
+  1С конкретного клиента — отдельная работа после пилотного контракта.
+- **Обязательные поля контракта импорта**: SKU, barcode, category tree,
+  brand, price, stock, assortment status, sales.
+- **Габариты — отдельный master-data процесс.** UI ручного ввода/коррекции
+  размеров + статус «размеры отсутствуют» (деривативен от NULL widthMm/
+  heightMm/depthMm) — обязательная часть MVP. GS1/базы поставщиков — позже,
+  старт от них не зависит.
+- **Фото товара — optional.** Есть фото — показываем; нет — заглушка-упаковка
+  с названием/брендом/цветом. Флоу загрузки фото SKU: admin — в этой фазе,
+  мобильная съемка SKU — в Phase 6.
+- **Пилотный сценарий — аптечный** (остатки, матрица, планограммы, мобильное
+  подтверждение, 1С). Проектируем под него, не «для всех».
+
 Задачи:
 
+- Staging-контракт импорта (zod в api-contracts): SKU, barcode, category
+  tree, brand, price, stock, assortment status, sales.
+- Import CSV/XLSX через staging-слой (порт парсинга из MTM lib/mtm/sku).
 - Product CRUD.
 - Category tree.
 - Brand/supplier/manufacturer attributes.
-- Product dimensions: width, height, depth, weight.
+- Product dimensions: width, height, depth, weight + UI ручного
+  ввода/коррекции + фильтр «без размеров».
 - Barcode support.
-- Product images.
-- Import CSV/XLSX.
-- 1C/ERP import contract.
+- Product images: admin-загрузка + заглушка (название/бренд/цвет) для SKU
+  без фото.
 - Stock/price/sales snapshots.
-- Assortment matrix.
-- Data quality report: missing dimensions, missing barcode, missing image, missing category.
+- Assortment matrix (формат) + store assortment (исключения).
+- Data quality report: missing dimensions, missing barcode, missing image,
+  missing category — первоклассный экран, не задворки.
+
+Требования из docs/11:
+
+- Импорт идемпотентен: только upsert по natural key снапшотов; тест
+  «двойной прогон батча = идентичный результат».
+- Маппинг единиц 1С → ProductUnit enum (шт→PCS, ящик→BOX, кг→KG, л→L,
+  пачка→PACK) в import pipeline.
 
 Не делать:
 
@@ -109,9 +160,20 @@ Definition of Done:
 - Save draft.
 - Version history.
 
+UX-дифференциаторы (Tier 1 из docs/10, не «потом», а требования фазы):
+
+- Валидация как физика: невлезающий товар не встает (ghost + причина
+  «глубина 320мм > полка 300мм»); математика уже в `packages/core/capacity`.
+- Деньги в drag-preview: ABC-класс, оборот/день, дней запаса, доля полки —
+  живые данные из снапшотов в момент перетаскивания.
+- Diff-режим версий («git diff для полки»): added/removed/moved подсветка
+  между двумя версиями + дельта метрик.
+
 Definition of Done:
 
 - Можно вручную собрать полку и увидеть, сколько товара помещается по ширине и глубине.
+- Планограмма редактируется только через EquipmentVersion (заморозка
+  геометрии при publish).
 
 ## Phase 5 - Auto placement v1
 
@@ -160,12 +222,30 @@ Definition of Done:
 - Comment/feedback.
 - Offline outbox.
 
+Требования из docs/11 (архитектура):
+
+- Sync-протокол спроектировать и прототипировать ДО мобильного UI;
+  e2e-тест с симуляцией обрывов сети — часть DoD.
+- API-версионирование: замороженный `/api/v1/mobile`, contracts в
+  `packages/api-contracts/v1/`, `protocolVersion` в sync, 426 на устаревший.
+- Фото-pipeline ADR: presigned upload, EXIF сохраняется (форензика,
+  watermark-спека), thumbnails в worker, retention/стоимость.
+- Decimal → string на границе api-contracts; мобильный считает в копейках.
+
+UX-дифференциаторы (Tier 1 из docs/10):
+
+- Offline-доверие как UX: видимая очередь «3 фото отправятся при сети»
+  с ручным retry.
+- Камера-оверлей: полупрозрачная планограмма поверх видоискателя при
+  фото-подтверждении (без AI; дисциплинирует ракурс — данные для Phase 10).
+
 Definition of Done:
 
 - Центральный офис публикует планограмму.
 - Мобильный пользователь видит задание.
 - Пользователь отправляет фото.
 - Офис видит задачу как выполненную/на проверке.
+- e2e-тест sync переживает обрыв сети посреди пуша без дублей и потерь.
 
 ## Phase 7 - Analytics v1
 
@@ -231,3 +311,60 @@ Definition of Done:
 
 - Начать с golden reference + human review.
 - Не начинать с обучения собственного детектора на 50 SKU до проверки бизнес-ценности.
+
+## Phase 11 - Field force: маршруты, визиты, live map
+
+Добавлено по docs/08 (полный порт MTM). Стартует ПОСЛЕ Phase 6 (мобильное
+фото-подтверждение стабильно), может идти параллельно Phase 7. Порт
+поведения из MTM `routes`, `visits`, `map`, `visit-anomaly/*`,
+`territory-scope.ts`.
+
+Задачи:
+
+- Teams/FieldAgent поверх User.
+- Routes + RouteStop, привязка к магазинам.
+- Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
+- AgentLocation + live map в web.
+- Territory scoping (порт в packages/core).
+- Мобильный флоу визита: маршрут дня -> точка -> чек-ин -> задачи точки.
+
+Definition of Done:
+
+- Агент проходит маршрут в мобильном, офис видит визиты и аномалии на карте.
+
+## Phase 12 - Заказы, промо, кредитные лимиты
+
+Порт чистых алгоритмов MTM (`promotion-engine`, `credit-limit`,
+`invoice-generator`, `price-ocr`) с тестами ДО UI — финансово-смежная логика.
+Только после стабильных Phase 1-6.
+
+Задачи:
+
+- Order/OrderLine из визита или напрямую.
+- Promotion engine (скидки/бонусы/бандлы) с тестами на портированных кейсах.
+- Credit limit проверка при создании заказа.
+- Invoice generation.
+- Offline-заказ через outbox (идемпотентность deviceId+clientOpId).
+
+## Phase 13 - Алерты и активность
+
+- Продуктовая событийная система (не порт MtmAlert как есть).
+- Типы: task.overdue, visit.anomaly, stock.gap, import.errors.
+- Push через MobileDevice.pushToken.
+- Утренний дайджест офису (Tier 3 UX из docs/10).
+
+## UX-бэклог (Tier 2/3 из docs/10, вплетать по фазам)
+
+- Рентген-слои метрик поверх полки (клавиши 1/2/3/4) — с Phase 7.
+- Explainable autofill с таймлайном шагов — Phase 5.
+- Cmd+K палитра + omnisearch — с Phase 3.
+- Комменты-пины на полке — Phase 4/5.
+- Сканер-навигатор «куда ставить SKU» + точка на плане зала — Phase 6+.
+- Сегментный чек-лист выкладки с фото по сегментам — Phase 6+.
+- QR-паспорт полки — v1.5.
+- Печатный PDF-режим планограммы — Phase 7.
+- NL-запросы к каталогу/аналитике (LLM раньше CV) — Phase 7+.
+- Голосовые комментарии с транскрипцией — v1.5.
+
+Анти-scope (не делать, docs/10): AR-очки, 3D-first редактор, AI-first
+compliance.

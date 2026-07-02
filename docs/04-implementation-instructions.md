@@ -27,7 +27,7 @@ Mobile и AI подключать после того, как планограм
 
 Источник:
 
-`/Users/rashadrahimov/Documents/leaddrive-v2`
+`/Users/rashadrahimov/Projects/leaddrive-v2`
 
 Полезные документы:
 
@@ -41,7 +41,7 @@ Mobile и AI подключать после того, как планограм
 
 Полезный mobile reference:
 
-- `/Users/rashadrahimov/Documents/mtm/MTMobileApp`
+- `/Users/rashadrahimov/Projects/mtm/MTMobileApp`
 
 Но это reference, не источник для blind copy.
 

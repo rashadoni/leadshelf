@@ -16,11 +16,16 @@ Start by reading:
 - `docs/05-decisions-risks.md`
 - `docs/06-meeting-notes-from-leafio-demo.md`
 - `docs/07-data-model-draft.md`
+- `docs/08-scope-expansion-mtm-full-port.md`
 
 Core instruction:
 
-Do not turn LeadShelf into LeadDrive CRM. Keep only shelf/planogram/store-layout
-functionality and use old MTM/Leafio notes as reference material.
+Do not turn LeadShelf into LeadDrive CRM (no leads/deals/marketing/loyalty/
+contracts/finance). Scope = full MTM module port: shelf/planogram/store-layout
+PLUS field-force (routes, visits, live map, orders, alerts, agents) — see
+`docs/08-scope-expansion-mtm-full-port.md`. Port behavior and proven algorithms
+from `leaddrive-v2` MTM, not its architecture: LeadShelf-native schema/naming,
+no `Mtm*` prefixes, planogram = physical model (mm/facings), not photo bbox.
 
 Before creating code, summarize the intended architecture and ask for direction
 confirmation.

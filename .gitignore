@@ -11,3 +11,6 @@ coverage/
 tmp/
 temp/
 .cache/
+*.tsbuildinfo
+.turbo/
+.expo/

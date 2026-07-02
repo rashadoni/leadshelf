@@ -1,0 +1,39 @@
+# Dev-окружение LeadShelf: docker compose up -d
+# Те же образы поедут на прод-VPS (deploy/), среда идентична.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: leadshelf
+      POSTGRES_PASSWORD: leadshelf
+      POSTGRES_DB: leadshelf
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadshelf"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: leadshelf
+      MINIO_ROOT_PASSWORD: leadshelf-dev
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  miniodata:
