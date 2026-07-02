@@ -5,6 +5,7 @@ import {
   executeProductsImport,
   executeSnapshotsImport,
   readCsvRecords,
+  readXlsxRecords,
 } from "@leadshelf/worker"
 import { canImport, forbidden, requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
@@ -42,15 +43,20 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+  const isXlsx =
+    file.name.toLowerCase().endsWith(".xlsx") ||
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   let rows
   try {
-    rows = readCsvRecords(buffer, {
-      encoding: parsed.data.encoding,
-      delimiter: parsed.data.delimiter,
-    })
+    rows = isXlsx
+      ? readXlsxRecords(buffer)
+      : readCsvRecords(buffer, {
+          encoding: parsed.data.encoding,
+          delimiter: parsed.data.delimiter,
+        })
   } catch (e) {
     return NextResponse.json(
-      { error: "csv_parse_failed", message: e instanceof Error ? e.message : String(e) },
+      { error: "file_parse_failed", message: e instanceof Error ? e.message : String(e) },
       { status: 422 },
     )
   }

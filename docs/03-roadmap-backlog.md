@@ -76,10 +76,10 @@ Definition of Done:
   tree, brand, price, stock, assortment status, sales. `[сделано: v1
   заморожен, все 5 сущностей]`
 - Import CSV/XLSX через staging-слой (порт парсинга из MTM lib/mtm/sku).
-  `[CSV сделано: парсеры ru/az/en + исполнители products/prices/stock/
-  sales/assortment c идемпотентностью (42 теста), API-роуты upload/status/
-  errors/products/data-quality. Осталось: XLSX, очередь для больших файлов,
-  UI]`
+  `[CSV+XLSX сделано: парсеры ru/az/en + исполнители products/prices/stock/
+  sales/assortment c идемпотентностью, API-роуты upload/status/errors/
+  products/data-quality, UI каталога (таблица/импорт/качество/размеры).
+  Осталось: очередь для больших файлов (pg-boss), фото товаров, CRUD-форма]`
 - Product CRUD.
 - Category tree.
 - Brand/supplier/manufacturer attributes.

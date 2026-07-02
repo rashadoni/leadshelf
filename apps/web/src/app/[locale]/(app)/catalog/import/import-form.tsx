@@ -87,7 +87,13 @@ export function ImportForm() {
         </div>
         <label className="block space-y-1 text-sm">
           <span className="text-neutral-600">{t("file")}</span>
-          <input type="file" name="file" accept=".csv,text/csv" required className="block text-sm" />
+          <input
+            type="file"
+            name="file"
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            required
+            className="block text-sm"
+          />
         </label>
         <button
           type="submit"
