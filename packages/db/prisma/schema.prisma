@@ -304,6 +304,9 @@ model Category {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
+  // Natural key дерева: полный нормализованный путь "otc/pain/tablets".
+  // Делает импорт категорий идемпотентным и concurrency-safe (upsert по нему).
+  normalizedPath String
   externalCode   String?
   parentId       String?
   parent         Category?    @relation("CategoryTree", fields: [parentId], references: [id])
@@ -313,6 +316,7 @@ model Category {
   products   Product[]
   planograms Planogram[]
 
+  @@unique([organizationId, normalizedPath])
   @@index([organizationId, parentId])
   @@map("categories")
 }

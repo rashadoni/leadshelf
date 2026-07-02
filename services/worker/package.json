@@ -1,0 +1,26 @@
+{
+  "name": "@leadshelf/worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@leadshelf/api-contracts": "workspace:*",
+    "@leadshelf/core": "workspace:*",
+    "@leadshelf/db": "workspace:*",
+    "@prisma/client": "^6.19.3",
+    "csv-parse": "^5.6.0",
+    "iconv-lite": "^0.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "dotenv": "^16.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

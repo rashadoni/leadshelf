@@ -1,3 +1,3 @@
-// Zod-контракты web/mobile/backend. Заполняются по мере портирования доменов
-// (см. docs/09-codex-migration-plan.md, порядок B1-B15).
-export {}
+// Zod-контракты web/mobile/backend. Версионирование директориями:
+// import/v1 заморожен после выхода в прод, изменения -> v2 рядом.
+export * as importV1 from "./import/v1"
