@@ -12,7 +12,9 @@
 
 - Создать GitHub repo `leadshelf`. `[сделано]`
 - Создать monorepo skeleton. `[сделано]`
-- Настроить TypeScript, lint, formatting. `[TS сделан; eslint/CI осталось]`
+- Настроить TypeScript, lint, formatting. `[сделано: eslint-заборы
+  (no-restricted-imports core/web) + GitHub Actions CI: validate ->
+  migrate -> lint -> typecheck -> тесты изоляции -> build]`
 - Создать Prisma schema v0. `[сделано, прошла Codex-ревью]`
 - Создать auth/tenant baseline. `[сделано: JWT+Argon2id, AuthSession
   rotation+reuse-detection, scoped tenant client]`

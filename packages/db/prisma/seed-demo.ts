@@ -34,16 +34,19 @@ async function main() {
   }
 
   // Дальше — через tenant client: seed заодно прогоняет главную дверь к данным.
+  // organizationId в data обязателен для ТИПОВ Prisma; клиент сверяет его со
+  // своим скоупом (чужой -> ошибка), так что подмена невозможна.
   const db = createTenantClient(prisma, org.id)
+  const scope = { organizationId: org.id }
 
   const region =
     (await db.region.findFirst({ where: { name: "Bakı" } })) ??
-    (await db.region.create({ data: { name: "Bakı" } }))
+    (await db.region.create({ data: { name: "Bakı", ...scope } }))
 
   const format =
     (await db.storeFormat.findFirst({ where: { name: "Standart" } })) ??
     (await db.storeFormat.create({
-      data: { name: "Standart", description: "Standart aptek formatı" },
+      data: { name: "Standart", description: "Standart aptek formatı", ...scope },
     }))
 
   if (!(await db.store.findFirst({ where: { code: "DEMO-001" } }))) {
@@ -54,6 +57,7 @@ async function main() {
         address: "Bakı, Nizami küç. 1",
         regionId: region.id,
         formatId: format.id,
+        ...scope,
       },
     })
   }
@@ -64,7 +68,7 @@ async function main() {
     ["Soyuducu vitrin", "fridge"],
   ] as const) {
     if (!(await db.equipmentType.findFirst({ where: { name } }))) {
-      await db.equipmentType.create({ data: { name, kind } })
+      await db.equipmentType.create({ data: { name, kind, ...scope } })
     }
   }
 
