@@ -1,0 +1,40 @@
+{
+  "common": {
+    "appName": "LeadShelf",
+    "loading": "Yüklənir..."
+  },
+  "auth": {
+    "title": "Daxil ol",
+    "email": "E-poçt",
+    "password": "Şifrə",
+    "submit": "Daxil ol",
+    "error": "E-poçt və ya şifrə yanlışdır",
+    "logout": "Çıxış"
+  },
+  "nav": {
+    "overview": "Panel",
+    "catalog": "Kataloq",
+    "equipmentLibrary": "Avadanlıq kitabxanası",
+    "stores": "Satış nöqtələri",
+    "floorPlans": "Zal planları",
+    "planograms": "Planoqramlar",
+    "tasks": "Tapşırıqlar",
+    "fieldForce": "Saha komandası",
+    "analytics": "Analitika"
+  },
+  "dashboard": {
+    "welcome": "Xoş gəlmisiniz",
+    "overviewHint": "LeadShelf idarəetmə paneli. Bölmələr fazalar üzrə aktivləşəcək."
+  },
+  "emptyStates": {
+    "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",
+    "catalog": "Məhsul kataloqu və 1C idxalı — Faza 1.",
+    "equipmentLibrary": "Avadanlıq konstruktoru — Faza 2.",
+    "stores": "Satış nöqtələri və formatlar — Faza 1-3.",
+    "floorPlans": "Zal planı konstruktoru — Faza 3.",
+    "planograms": "Planoqram redaktoru — Faza 4.",
+    "tasks": "Tapşırıqlar və icra nəzarəti — Faza 6.",
+    "fieldForce": "Marşrutlar, vizitlər, canlı xəritə — Faza 11.",
+    "analytics": "Analitika və hesabatlar — Faza 7."
+  }
+}

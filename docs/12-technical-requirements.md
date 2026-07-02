@@ -97,6 +97,11 @@
 - `[решено]` Бэкапы: ночной pg_dump + бэкап MinIO-volume на Hetzner Storage
   Box (или borgbackup); настроить ДО загрузки пилотных данных.
 - `[решено]` Секреты: GitHub Actions secrets + `.env` на сервере (не в git).
+- `[решено 2026-07-02, владелец]` Dev и prod на одном VPS ЖЁСТКО разделены:
+  `/opt/leadshelf/prod` и `/opt/leadshelf/dev`, разные compose-имена
+  (`leadshelf-prod`/`leadshelf-dev`) и volumes, prod-`.env` root-only (600),
+  dev-порт 3100 не публикуется (SSH-туннель/basic auth). Dev НЕ видит
+  prod-БД. Подробности: deploy/SERVER_SETUP.md шаг 3.
 - `[решено 2026-07-02, владелец]` **Пока работаем по IP** `157.90.227.191`
   без домена. Демо-доступ — `http://157.90.227.191` (Caddy на 80). TLS через
   Let's Encrypt для голого IP невозможен; вариант при необходимости —

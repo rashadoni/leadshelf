@@ -10,13 +10,16 @@
 
 Задачи:
 
-- Создать GitHub repo `leadshelf`.
+- Создать GitHub repo `leadshelf`. `[сделано]`
 - Создать monorepo skeleton. `[сделано]`
-- Настроить TypeScript, lint, formatting. `[TS сделан]`
+- Настроить TypeScript, lint, formatting. `[TS сделан; eslint/CI осталось]`
 - Создать Prisma schema v0. `[сделано, прошла Codex-ревью]`
-- Создать auth/tenant baseline.
-- Создать базовую навигацию web app.
-- Создать seed demo tenant.
+- Создать auth/tenant baseline. `[сделано: JWT+Argon2id, AuthSession
+  rotation+reuse-detection, scoped tenant client]`
+- Создать базовую навигацию web app. `[сделано: next-intl az/ru, login,
+  dashboard shell, 8 пустых разделов]`
+- Создать seed demo tenant. `[сделано: org demo, 5 ролей, точка,
+  типы оборудования]`
 
 Требования из docs/11 (архитектурная самокритика):
 

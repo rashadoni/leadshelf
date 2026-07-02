@@ -33,17 +33,47 @@ chown -R deploy:deploy /home/deploy/.ssh
 apt install -y unattended-upgrades fail2ban
 ```
 
-## Шаг 3. Стек на сервере
+## Шаг 3. Структура на сервере: dev и prod ЖЁСТКО разделены
 
-`deploy/docker-compose.prod.yml` (появится вместе со скаффолдом web):
+Решение владельца (2026-07-02): dev не имеет доступа к prod-БД; никакие
+.env/volumes/compose-имена не пересекаются — одна ошибка
+`docker compose down -v` не должна снести не то.
 
-- `caddy` — reverse proxy + авто-TLS (80/443);
-- `web` — Next.js (образ из GitHub Container Registry);
-- `worker` — pg-boss джобы (тот же образ, другая команда);
-- `postgres:16` — данные в volume;
-- `minio` — фото, volume.
+```text
+/opt/leadshelf/
+  prod/
+    app/                    # git checkout (деплой из CI)
+    docker-compose.yml      # name: leadshelf-prod
+    .env.production         # root:root 600 — deploy-юзер НЕ читает
+  dev/
+    app/                    # рабочая копия для разработки на сервере
+    docker-compose.yml      # name: leadshelf-dev
+    .env.development        # deploy:deploy 600
+  backups/                  # pg_dump + minio-snapshots
+  uploads/                  # (если фото вне minio-volume)
+  logs/
+```
 
-Postgres и MinIO наружу НЕ торчат — только через docker-сеть.
+Правила изоляции:
+
+- Compose project names: `leadshelf-prod` / `leadshelf-dev` (явный `name:`
+  в compose) -> volumes автоматически префиксуются
+  (`leadshelf-prod_pgdata` vs `leadshelf-dev_pgdata`), перепутать нельзя.
+- Порты: prod web 3000 и dev web 3100 — только на 127.0.0.1; Postgres/MinIO
+  наружу не торчат вообще (только docker-сеть). Наружу — только Caddy 80/443.
+- Caddy: `<домен>` -> prod:3000; `dev.<домен>` -> dev:3100 c basic auth
+  (или вообще не публиковать dev — доступ через SSH-туннель).
+- Prod-стек: `caddy` + `web` (образ из ghcr.io) + `worker` + `postgres:16`
+  + `minio`. Dev-стек: то же, но локальная сборка и отдельные volumes.
+
+Секреты:
+
+- `.env.production` принадлежит root (600); контейнеры прод-стека запускает
+  systemd-unit/root. Claude/Codex на сервере работают под `deploy` в
+  `/opt/leadshelf/dev/` и prod-секреты прочитать не могут.
+- Секреты не попадают в shell history/доки: только .env-файлы и GitHub
+  Actions secrets. `history -d` не спасает — просто не вставлять секреты
+  в команды.
 
 ## Шаг 4. CI → сервер
 
