@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client"
 // tenant-models-audit сверяет его со schema.prisma и падает при расхождении.
 export const TENANT_MODELS = new Set([
   "User",
+  "AuthSession",
   "ApiToken",
   "AuditLog",
   "Region",

@@ -99,6 +99,31 @@ model User {
   @@map("users")
 }
 
+// Refresh-сессии (ротация + возможность отзыва). Stateless refresh-JWT
+// нельзя ни отозвать, ни отследить повторное использование украденного
+// токена — поэтому серверное состояние. Пишется ТОЛЬКО через auth-слой
+// (system client, identity boundary до того как известен тенант).
+model AuthSession {
+  id               String    @id @default(cuid())
+  organizationId   String
+  userId           String
+  // Семья токенов: reuse украденного refresh -> revoke всей семьи.
+  refreshFamilyId  String
+  refreshJti       String    @unique
+  refreshTokenHash String    @unique
+  userAgent        String?
+  expiresAt        DateTime
+  lastUsedAt       DateTime?
+  revokedAt        DateTime?
+  revokedReason    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([organizationId, userId])
+  @@index([refreshFamilyId])
+  @@map("auth_sessions")
+}
+
 model ApiToken {
   id             String       @id @default(cuid())
   organizationId String
