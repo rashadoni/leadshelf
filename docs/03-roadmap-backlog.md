@@ -84,14 +84,17 @@ Definition of Done:
 - Category tree.
 - Brand/supplier/manufacturer attributes.
 - Product dimensions: width, height, depth, weight + UI ручного
-  ввода/коррекции + фильтр «без размеров».
+  ввода/коррекции + фильтр «без размеров». `[сделано: inline-редактор в
+  таблице каталога + PATCH API + фильтр]`
 - Barcode support.
 - Product images: admin-загрузка + заглушка (название/бренд/цвет) для SKU
   без фото.
 - Stock/price/sales snapshots.
 - Assortment matrix (формат) + store assortment (исключения).
 - Data quality report: missing dimensions, missing barcode, missing image,
-  missing category — первоклассный экран, не задворки.
+  missing category — первоклассный экран, не задворки. `[сделано: вкладка
+  «Качество данных» с кликабельными карточками -> фильтры каталога +
+  история импортов; таблица товаров и форма импорта с ошибками — тоже]`
 
 Требования из docs/11:
 
