@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: leadshelf
       POSTGRES_DB: leadshelf
     ports:
-      - "5432:5432"
+      # Явный bind на loopback:55432. У владельца заняты 5432 (нативный PG)
+      # и 5433 (SSH-туннель) — оба перехватывают loopback раньше docker.
+      # Высокий свободный порт + явный 127.0.0.1 избегают этого. Прод — 5432.
+      - "127.0.0.1:55432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

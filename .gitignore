@@ -14,3 +14,4 @@ temp/
 *.tsbuildinfo
 .turbo/
 .expo/
+package-lock.json
