@@ -241,7 +241,12 @@ publish-диалог в редакторе, read-only опубликованно
 pull/push/ack delta-sync с per-collection курсорами, идемпотентный push
 (clientOpId -> записанный результат), фото multipart + photo.submit,
 media по bearer; назначение задач в web (assignee-select). План: docs/18.
-Осталось: Expo-приложение (срез 2), автопросрочка EXPIRED, sla-отчеты.
+Expo-приложение (срез 2, 2026-07-03) сделано: login, task list/detail,
+planogram view, offline status/photo/comment outbox, ручной sync retry,
+shared mobile contracts, Android export smoke. Автопросрочка EXPIRED и
+SLA-счетчики сделаны. Product detail tap сделан: кликабельная SVG-планограмма,
+карточка товара и список товаров из published bundle. Осталось: changed items
+list/diff, barcode scanner, floor-plan location hint, camera overlay.
 
 Задачи web:
 
@@ -258,7 +263,7 @@ media по bearer; назначение задач в web (assignee-select). П�
 - Store selection.
 - Task list.
 - Planogram view.
-- Product detail tap.
+- Product detail tap. `[сделано: кликабельная SVG-позиция + карточка товара]`
 - Changed items list.
 - Barcode scanner: find where SKU should be placed.
 - Floor plan location hint.

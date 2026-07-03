@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
@@ -12,6 +12,7 @@ import {
   getTask,
 } from "../../../src/db/local-store"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
+import { listPlacementSummaries } from "../../../src/planogram/bundle-utils"
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
@@ -25,6 +26,7 @@ export default function TaskDetailScreen() {
   const [task, setTask] = useState<TaskRow | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [comment, setComment] = useState("")
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null)
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -34,6 +36,15 @@ export default function TaskDetailScreen() {
     }
   }, [taskId])
   useFocusEffect(reload)
+
+  const placementSummaries = useMemo(
+    () => (bundle ? listPlacementSummaries(bundle) : []),
+    [bundle],
+  )
+  const selectedPlacement =
+    placementSummaries.find((p) => p.placementId === selectedPlacementId) ??
+    placementSummaries[0] ??
+    null
 
   if (!task) return null
   const store = getStore(task.storeId)
@@ -109,7 +120,60 @@ export default function TaskDetailScreen() {
         {bundle ? (
           <>
             <Text style={styles.section}>{t("planogram")}</Text>
-            <PlanogramSvg bundle={bundle} />
+            <PlanogramSvg
+              bundle={bundle}
+              selectedPlacementId={selectedPlacement?.placementId ?? null}
+              onPlacementPress={setSelectedPlacementId}
+            />
+            <Text style={styles.section}>{t("productDetail")}</Text>
+            {selectedPlacement ? (
+              <View style={styles.detailCard}>
+                <Text style={styles.detailTitle}>{selectedPlacement.name}</Text>
+                <Text style={styles.detailMeta}>
+                  {selectedPlacement.sku}
+                  {selectedPlacement.brandName ? ` · ${selectedPlacement.brandName}` : ""}
+                </Text>
+                <View style={styles.detailGrid}>
+                  <Text style={styles.detailLabel}>{t("shelf")}</Text>
+                  <Text style={styles.detailValue}>{selectedPlacement.shelfLabel}</Text>
+                  <Text style={styles.detailLabel}>{t("dimensions")}</Text>
+                  <Text style={styles.detailValue}>{selectedPlacement.dimensionsLabel}</Text>
+                  <Text style={styles.detailLabel}>{t("facings")}</Text>
+                  <Text style={styles.detailValue}>{selectedPlacement.facingsLabel}</Text>
+                  <Text style={styles.detailLabel}>{t("units")}</Text>
+                  <Text style={styles.detailValue}>{selectedPlacement.totalUnits}</Text>
+                  <Text style={styles.detailLabel}>{t("barcode")}</Text>
+                  <Text style={styles.detailValue}>{selectedPlacement.barcode ?? "-"}</Text>
+                </View>
+              </View>
+            ) : null}
+            {placementSummaries.length > 0 ? (
+              <>
+                <Text style={styles.section}>{t("productList")}</Text>
+                <View style={styles.productList}>
+                  {placementSummaries.map((item) => {
+                    const selected = selectedPlacement?.placementId === item.placementId
+                    return (
+                      <Pressable
+                        key={item.placementId}
+                        onPress={() => setSelectedPlacementId(item.placementId)}
+                        style={[styles.productRow, selected && styles.productRowSelected]}
+                      >
+                        <View style={styles.productRowBody}>
+                          <Text style={styles.productName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.productMeta}>
+                            {item.sku} · {t("shelf")} {item.shelfLabel}
+                          </Text>
+                        </View>
+                        <Text style={styles.productUnits}>{item.totalUnits}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </>
+            ) : null}
           </>
         ) : null}
         <View style={styles.actions}>
@@ -159,6 +223,39 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: "#737373" },
   section: { fontSize: 13, fontWeight: "600", color: "#525252" },
   actions: { gap: 8, marginTop: 8 },
+  detailCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    backgroundColor: "white",
+    padding: 12,
+    gap: 8,
+  },
+  detailTitle: { fontSize: 15, fontWeight: "700", color: "#171717" },
+  detailMeta: { fontSize: 12, color: "#737373" },
+  detailGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 6,
+  },
+  detailLabel: { width: "38%", fontSize: 12, color: "#737373" },
+  detailValue: { width: "62%", fontSize: 12, fontWeight: "600", color: "#404040" },
+  productList: { borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: "#e7e5e4" },
+  productRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "white",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f4",
+  },
+  productRowSelected: { backgroundColor: "#f5f5f4" },
+  productRowBody: { flex: 1 },
+  productName: { fontSize: 13, fontWeight: "600", color: "#171717" },
+  productMeta: { marginTop: 2, fontSize: 11, color: "#737373" },
+  productUnits: { fontSize: 13, fontWeight: "700", color: "#171717" },
   commentInput: {
     minHeight: 84,
     borderWidth: 1,

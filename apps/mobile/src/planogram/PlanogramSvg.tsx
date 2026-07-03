@@ -1,30 +1,43 @@
 // Планограмма «вид спереди» из иммутабельного бандла: рама, полки,
 // размещения цвет-боксами с SKU. Фото товаров — следующий срез (кэш медиа).
-import Svg, { Line, Rect, Text as SvgText } from "react-native-svg"
+import Svg, { G, Line, Rect, Text as SvgText } from "react-native-svg"
 import { useWindowDimensions, View } from "react-native"
 
 interface Shelf {
   id: string
+  shelfIndex?: number
   yMm: number
   thicknessMm: number
 }
-interface Placement {
+export interface PlanogramPlacement {
   id: string
   shelfId: string | null
   xMm: number
+  yMm?: number
   widthMm: number
   heightMm: number
+  depthMm?: number
   facingsX: number
   facingsY: number
-  product: { sku: string; name: string }
+  facingsZ?: number
+  product: {
+    id?: string
+    sku: string
+    name: string
+    unit?: string
+    brandName?: string | null
+    barcode?: string | null
+    imageKey?: string | null
+  }
 }
 export interface Bundle {
   equipment: Array<{
     widthMm: number
     heightMm: number
+    depthMm?: number
     shelves: Shelf[]
   }>
-  placements: Placement[]
+  placements: PlanogramPlacement[]
 }
 
 const PALETTE = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#14b8a6", "#f97316"]
@@ -34,7 +47,15 @@ function colorFor(text: string): string {
   return PALETTE[Math.abs(hash) % PALETTE.length]!
 }
 
-export function PlanogramSvg({ bundle }: { bundle: Bundle }) {
+export function PlanogramSvg({
+  bundle,
+  selectedPlacementId,
+  onPlacementPress,
+}: {
+  bundle: Bundle
+  selectedPlacementId?: string | null
+  onPlacementPress?: (placementId: string) => void
+}) {
   const { width: screenW } = useWindowDimensions()
   const eq = bundle.equipment[0]
   if (!eq) return null
@@ -65,18 +86,18 @@ export function PlanogramSvg({ bundle }: { bundle: Bundle }) {
           const hPx = p.heightMm * p.facingsY * k
           const x = p.xMm * k
           const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
+          const selected = selectedPlacementId === p.id
           return (
-            <>
+            <G key={p.id} onPress={() => onPlacementPress?.(p.id)}>
               <Rect
-                key={p.id}
                 x={x}
                 y={y}
                 width={wPx}
                 height={hPx}
                 fill={colorFor(p.product.sku)}
                 opacity={0.85}
-                stroke="white"
-                strokeWidth={0.8}
+                stroke={selected ? "#171717" : "white"}
+                strokeWidth={selected ? 2 : 0.8}
               />
               {Array.from({ length: p.facingsX - 1 }, (_, i) => (
                 <Line
@@ -95,7 +116,7 @@ export function PlanogramSvg({ bundle }: { bundle: Bundle }) {
                   {p.product.sku}
                 </SvgText>
               )}
-            </>
+            </G>
           )
         })}
       </Svg>
