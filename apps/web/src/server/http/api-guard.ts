@@ -6,7 +6,11 @@ import { verifyAccessToken, type AccessClaims } from "../auth/jwt"
 // каждый API-роут проверяет access-токен сам.
 
 export async function requireApiSession(req: NextRequest): Promise<AccessClaims | null> {
-  const token = req.cookies.get(ACCESS_COOKIE)?.value
+  // web -> httpOnly cookie; mobile -> Authorization: Bearer <access>
+  const bearer = req.headers.get("authorization")
+  const token = bearer?.startsWith("Bearer ")
+    ? bearer.slice(7)
+    : req.cookies.get(ACCESS_COOKIE)?.value
   if (!token) return null
   try {
     return await verifyAccessToken(token)

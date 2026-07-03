@@ -235,8 +235,13 @@ assignment (формат XOR точки), авто-задачами по точ�
 next-draft клонирует выкладку в новую версию; FSM статусов задач с
 историей; DB-триггеры инвариантов (MIGRATION_NOTES п.3 закрыт); UI:
 publish-диалог в редакторе, read-only опубликованной версии, страница
-задач со статус-фильтрами и переходами. План: docs/17. Осталось: mobile
-(offline sync, фото), автопросрочка EXPIRED воркером, sla-отчеты.
+задач со статус-фильтрами и переходами. План: docs/17. Mobile API (срез 1, 2026-07-03) сделан: замороженный
+/api/v1/mobile (protocolVersion+426), вход employeeCode+PIN с привязкой
+устройства, refresh-ротация с grace-ретраем и reuse-детекцией,
+pull/push/ack delta-sync с per-collection курсорами, идемпотентный push
+(clientOpId -> записанный результат), фото multipart + photo.submit,
+media по bearer; назначение задач в web (assignee-select). План: docs/18.
+Осталось: Expo-приложение (срез 2), автопросрочка EXPIRED, sla-отчеты.
 
 Задачи web:
 

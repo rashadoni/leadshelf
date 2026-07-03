@@ -27,7 +27,11 @@
     "overviewHint": "LeadShelf idarəetmə paneli. Bölmələr fazalar üzrə aktivləşəcək."
   },
   "catalog": {
-    "tabs": { "products": "Məhsullar", "import": "İdxal", "quality": "Data keyfiyyəti" },
+    "tabs": {
+      "products": "Məhsullar",
+      "import": "İdxal",
+      "quality": "Data keyfiyyəti"
+    },
     "search": "Ad, SKU və ya barkod üzrə axtar",
     "filterMissingDimensions": "Ölçüsüz",
     "filterMissingBarcode": "Barkodsuz",
@@ -48,12 +52,26 @@
       "prev": "Əvvəlki",
       "next": "Növbəti"
     },
-    "dims": { "edit": "Ölçüləri düzəlt", "save": "Saxla", "cancel": "Ləğv et", "width": "En", "height": "Hündürlük", "depth": "Dərinlik", "weightG": "Çəki (q)" },
+    "dims": {
+      "edit": "Ölçüləri düzəlt",
+      "save": "Saxla",
+      "cancel": "Ləğv et",
+      "width": "En",
+      "height": "Hündürlük",
+      "depth": "Dərinlik",
+      "weightG": "Çəki (q)"
+    },
     "import": {
       "title": "CSV idxalı",
       "hint": "Sütun başlıqları az/ru/en dillərində ola bilər. Ayırıcı: vergül və ya nöqtəli vergül.",
       "entityType": "Nə idxal edilir",
-      "entities": { "products": "Məhsullar", "prices": "Qiymətlər", "stock": "Qalıqlar", "sales": "Satışlar", "assortment": "Assortiment" },
+      "entities": {
+        "products": "Məhsullar",
+        "prices": "Qiymətlər",
+        "stock": "Qalıqlar",
+        "sales": "Satışlar",
+        "assortment": "Assortiment"
+      },
       "encoding": "Kodlaşdırma",
       "file": "CSV faylı",
       "submit": "İdxal et",
@@ -78,14 +96,29 @@
       "missingCategory": "Kateqoriyasız",
       "showList": "Siyahını göstər",
       "recentImports": "Son idxallar",
-      "batchStatus": { "PENDING": "Gözləyir", "PROCESSING": "İcra olunur", "COMPLETED": "Bitdi", "COMPLETED_WITH_ERRORS": "Xətalarla bitdi", "FAILED": "Uğursuz" }
+      "batchStatus": {
+        "PENDING": "Gözləyir",
+        "PROCESSING": "İcra olunur",
+        "COMPLETED": "Bitdi",
+        "COMPLETED_WITH_ERRORS": "Xətalarla bitdi",
+        "FAILED": "Uğursuz"
+      }
     }
   },
   "equipment": {
     "createNew": "Yeni avadanlıq",
     "empty": "Kitabxana boşdur. İlk avadanlığı yaradın.",
-    "table": { "name": "Ad", "type": "Növ", "dimensions": "E×H×D (mm)", "shelves": "Rəf sayı", "version": "Versiya" },
-    "badge": { "draft": "Qaralama", "frozen": "Dondurulub" },
+    "table": {
+      "name": "Ad",
+      "type": "Növ",
+      "dimensions": "E×H×D (mm)",
+      "shelves": "Rəf sayı",
+      "version": "Versiya"
+    },
+    "badge": {
+      "draft": "Qaralama",
+      "frozen": "Dondurulub"
+    },
     "form": {
       "name": "Ad",
       "type": "Avadanlıq növü",
@@ -118,7 +151,11 @@
     "createNew": "Yeni planoqram",
     "empty": "Hələ planoqram yoxdur.",
     "placements": "yerləşdirmə",
-    "state": { "DRAFT": "Qaralama", "PUBLISHED": "Dərc edilib", "ARCHIVED": "Arxiv" },
+    "state": {
+      "DRAFT": "Qaralama",
+      "PUBLISHED": "Dərc edilib",
+      "ARCHIVED": "Arxiv"
+    },
     "new": {
       "name": "Ad",
       "equipment": "Kitabxanadan avadanlıq",
@@ -165,7 +202,14 @@
   "tasks": {
     "all": "Hamısı",
     "empty": "Tapşırıq yoxdur. Planoqramı nöqtələrə dərc edin.",
-    "table": { "title": "Tapşırıq", "store": "Nöqtə", "planogram": "Planoqram", "due": "Müddət", "status": "Status" },
+    "table": {
+      "title": "Tapşırıq",
+      "store": "Nöqtə",
+      "planogram": "Planoqram",
+      "due": "Müddət",
+      "status": "Status",
+      "assignee": "İcraçı"
+    },
     "status": {
       "NEW": "Yeni",
       "IN_PROGRESS": "İcradadır",
@@ -180,7 +224,8 @@
       "COMPLETED": "Qəbul et",
       "EXPIRED": "Vaxtı keçmiş",
       "EMPTY": "Boş"
-    }
+    },
+    "unassigned": "— təyin edilməyib —"
   },
   "emptyStates": {
     "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",

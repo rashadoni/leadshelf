@@ -17,7 +17,9 @@ export async function GET(
 
   const { path } = await params
   const key = path.join("/")
-  if (!key.startsWith(`products/${session.org}/`)) {
+  const allowed =
+    key.startsWith(`products/${session.org}/`) || key.startsWith(`photos/${session.org}/`)
+  if (!allowed) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }
 

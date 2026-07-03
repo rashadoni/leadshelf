@@ -26,13 +26,15 @@ export async function persistSession(params: {
   userId: string
   refreshToken: string
   userAgent?: string
+  deviceId?: string
 }): Promise<void> {
-  const { ids, organizationId, userId, refreshToken, userAgent } = params
+  const { ids, organizationId, userId, refreshToken, userAgent, deviceId } = params
   await authDb.authSession.create({
     data: {
       id: ids.sid,
       organizationId,
       userId,
+      deviceId: deviceId ?? null,
       refreshFamilyId: ids.familyId,
       refreshJti: ids.jti,
       refreshTokenHash: hashToken(refreshToken),
@@ -41,6 +43,9 @@ export async function persistSession(params: {
     },
   })
 }
+
+/** Мобильный ретрай: потерянный ответ ротации — не reuse-атака (docs/18). */
+const ROTATION_GRACE_MS = 120_000
 
 /**
  * Ротация: атомально сверяем sid+jti+hash. Несовпадение jti/hash на живой
@@ -52,15 +57,24 @@ export async function rotateSession(params: {
   presentedToken: string
   newJti: string
   newRefreshToken: string
-}): Promise<{ organizationId: string; userId: string } | null> {
+  requireDeviceId?: string
+}): Promise<{ organizationId: string; userId: string; deviceId: string | null } | null> {
   const { sid, jti, presentedToken, newJti, newRefreshToken } = params
   const now = new Date()
 
   const session = await authDb.authSession.findUnique({ where: { id: sid } })
   if (!session || session.revokedAt || session.expiresAt < now) return null
+  if (params.requireDeviceId && session.deviceId !== params.requireDeviceId) return null
 
   const presentedHash = hashToken(presentedToken)
-  if (session.refreshJti !== jti || session.refreshTokenHash !== presentedHash) {
+  const isCurrent = session.refreshJti === jti && session.refreshTokenHash === presentedHash
+  const inGrace =
+    session.prevRefreshJti === jti &&
+    session.prevRefreshHash === presentedHash &&
+    session.rotatedAt != null &&
+    now.getTime() - session.rotatedAt.getTime() < ROTATION_GRACE_MS
+
+  if (!isCurrent && !inGrace) {
     // reuse detected: гасим всю семью токенов
     await authDb.authSession.updateMany({
       where: { refreshFamilyId: session.refreshFamilyId, revokedAt: null },
@@ -72,12 +86,19 @@ export async function rotateSession(params: {
   await authDb.authSession.update({
     where: { id: sid },
     data: {
+      prevRefreshJti: session.refreshJti,
+      prevRefreshHash: session.refreshTokenHash,
+      rotatedAt: now,
       refreshJti: newJti,
       refreshTokenHash: hashToken(newRefreshToken),
       lastUsedAt: now,
     },
   })
-  return { organizationId: session.organizationId, userId: session.userId }
+  return {
+    organizationId: session.organizationId,
+    userId: session.userId,
+    deviceId: session.deviceId,
+  }
 }
 
 export async function revokeSession(sid: string, reason: string): Promise<void> {

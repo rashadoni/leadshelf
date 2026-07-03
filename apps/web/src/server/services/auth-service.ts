@@ -17,7 +17,7 @@ export interface TokenPair {
 export interface AuthenticatedUser {
   id: string
   organizationId: string
-  email: string
+  email: string | null
   name: string
   role: string
 }

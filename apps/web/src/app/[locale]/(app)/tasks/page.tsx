@@ -3,6 +3,7 @@ import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { TaskStatusActions } from "./task-status-actions"
+import { AssigneeSelect } from "./assignee-select"
 
 const STATUSES = ["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED", "COMPLETED", "EXPIRED", "EMPTY"] as const
 
@@ -23,21 +24,30 @@ export default async function TasksPage({
     ? (params.status as (typeof STATUSES)[number])
     : undefined
 
-  const tasks = await tenantDb(session.org).task.findMany({
-    where: statusFilter ? { status: statusFilter } : {},
-    include: {
-      store: { select: { name: true, code: true } },
-      planogramVersion: {
-        select: {
-          id: true,
-          versionNumber: true,
-          planogram: { select: { id: true, name: true } },
+  const db = tenantDb(session.org)
+  const [tasks, assignableUsers] = await Promise.all([
+    db.task.findMany({
+      where: statusFilter ? { status: statusFilter } : {},
+      include: {
+        store: { select: { name: true, code: true } },
+        assignee: { select: { id: true, name: true } },
+        planogramVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            planogram: { select: { id: true, name: true } },
+          },
         },
       },
-    },
-    orderBy: [{ createdAt: "desc" }],
-    take: 100,
-  })
+      orderBy: [{ createdAt: "desc" }],
+      take: 100,
+    }),
+    db.user.findMany({
+      where: { isActive: true, role: { in: ["MERCHANDISER", "SUPERVISOR", "STORE_STAFF"] } },
+      select: { id: true, name: true, employeeCode: true },
+      orderBy: { name: "asc" },
+    }),
+  ])
 
   return (
     <div>
@@ -74,6 +84,7 @@ export default async function TasksPage({
                 <th className="px-3 py-2">{t("table.store")}</th>
                 <th className="px-3 py-2">{t("table.planogram")}</th>
                 <th className="px-3 py-2">{t("table.due")}</th>
+                <th className="px-3 py-2">{t("table.assignee")}</th>
                 <th className="px-3 py-2">{t("table.status")}</th>
                 <th className="px-3 py-2" />
               </tr>
@@ -97,6 +108,13 @@ export default async function TasksPage({
                   </td>
                   <td className="px-3 py-2 text-neutral-500">
                     {task.dueAt ? new Date(task.dueAt).toLocaleDateString() : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <AssigneeSelect
+                      taskId={task.id}
+                      current={task.assignee?.id ?? null}
+                      users={assignableUsers}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <span

@@ -29,3 +29,13 @@ export {
   transitionTaskStatus,
   type PublishTarget,
 } from "./repos/publish.ts"
+export {
+  pullChanges,
+  pushOperations,
+  ackCursors,
+  storedCursors,
+  encodeCursor,
+  decodeCursor,
+  type PushOperation,
+  type PushResult,
+} from "./repos/mobile-sync.ts"

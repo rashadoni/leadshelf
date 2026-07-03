@@ -18,6 +18,7 @@ export interface AccessClaims {
   org: string // organizationId
   role: string
   sid: string // AuthSession.id
+  did?: string // MobileDevice.id (только мобильные сессии)
 }
 
 export interface RefreshClaims {
@@ -27,7 +28,7 @@ export interface RefreshClaims {
 }
 
 export async function signAccessToken(c: AccessClaims): Promise<string> {
-  return new SignJWT({ typ: "access", org: c.org, role: c.role, sid: c.sid })
+  return new SignJWT({ typ: "access", org: c.org, role: c.role, sid: c.sid, did: c.did })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(c.sub)
     .setIssuedAt()
@@ -53,6 +54,7 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims> {
     org: payload.org as string,
     role: payload.role as string,
     sid: payload.sid as string,
+    did: payload.did as string | undefined,
   }
 }
 

@@ -33,6 +33,22 @@ async function main() {
     })
   }
 
+  // Полевой сотрудник: вход с телефона по employeeCode + PIN (docs/18)
+  const MOBILE_PIN = "1234"
+  await prisma.user.upsert({
+    where: {
+      organizationId_employeeCode: { organizationId: org.id, employeeCode: "M-001" },
+    },
+    update: {},
+    create: {
+      organizationId: org.id,
+      employeeCode: "M-001",
+      name: "Полевой мерчендайзер",
+      role: "MERCHANDISER",
+      passwordHash: await hash(MOBILE_PIN, ARGON_OPTS),
+    },
+  })
+
   // Дальше — через tenant client: seed заодно прогоняет главную дверь к данным.
   // organizationId в data обязателен для ТИПОВ Prisma; клиент сверяет его со
   // своим скоупом (чужой -> ошибка), так что подмена невозможна.
@@ -75,6 +91,7 @@ async function main() {
   console.log(`Demo tenant готов: org=${org.slug} (${org.id})`)
   console.log(`Логины (пароль у всех: ${DEMO_PASSWORD}):`)
   for (const [email, , role] of USERS) console.log(`  ${email}  [${role}]`)
+  console.log(`Мобильный вход: org=demo, employeeCode=M-001, PIN=${MOBILE_PIN}`)
 }
 
 main()

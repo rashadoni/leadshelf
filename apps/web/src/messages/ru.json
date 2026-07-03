@@ -27,7 +27,11 @@
     "overviewHint": "Панель управления LeadShelf. Разделы включаются по фазам."
   },
   "catalog": {
-    "tabs": { "products": "Товары", "import": "Импорт", "quality": "Качество данных" },
+    "tabs": {
+      "products": "Товары",
+      "import": "Импорт",
+      "quality": "Качество данных"
+    },
     "search": "Поиск по названию, SKU или штрих-коду",
     "filterMissingDimensions": "Без размеров",
     "filterMissingBarcode": "Без штрих-кода",
@@ -48,12 +52,26 @@
       "prev": "Назад",
       "next": "Далее"
     },
-    "dims": { "edit": "Править размеры", "save": "Сохранить", "cancel": "Отмена", "width": "Ширина", "height": "Высота", "depth": "Глубина", "weightG": "Вес (г)" },
+    "dims": {
+      "edit": "Править размеры",
+      "save": "Сохранить",
+      "cancel": "Отмена",
+      "width": "Ширина",
+      "height": "Высота",
+      "depth": "Глубина",
+      "weightG": "Вес (г)"
+    },
     "import": {
       "title": "Импорт CSV",
       "hint": "Заголовки колонок — на az/ru/en. Разделитель: запятая или точка с запятой.",
       "entityType": "Что импортируем",
-      "entities": { "products": "Товары", "prices": "Цены", "stock": "Остатки", "sales": "Продажи", "assortment": "Ассортимент" },
+      "entities": {
+        "products": "Товары",
+        "prices": "Цены",
+        "stock": "Остатки",
+        "sales": "Продажи",
+        "assortment": "Ассортимент"
+      },
       "encoding": "Кодировка",
       "file": "CSV-файл",
       "submit": "Импортировать",
@@ -78,14 +96,29 @@
       "missingCategory": "Без категории",
       "showList": "Показать список",
       "recentImports": "Последние импорты",
-      "batchStatus": { "PENDING": "Ожидает", "PROCESSING": "Выполняется", "COMPLETED": "Завершён", "COMPLETED_WITH_ERRORS": "Завершён с ошибками", "FAILED": "Ошибка" }
+      "batchStatus": {
+        "PENDING": "Ожидает",
+        "PROCESSING": "Выполняется",
+        "COMPLETED": "Завершён",
+        "COMPLETED_WITH_ERRORS": "Завершён с ошибками",
+        "FAILED": "Ошибка"
+      }
     }
   },
   "equipment": {
     "createNew": "Новое оборудование",
     "empty": "Библиотека пуста. Создайте первое оборудование.",
-    "table": { "name": "Название", "type": "Тип", "dimensions": "Ш×В×Г (мм)", "shelves": "Полок", "version": "Версия" },
-    "badge": { "draft": "Черновик", "frozen": "Заморожена" },
+    "table": {
+      "name": "Название",
+      "type": "Тип",
+      "dimensions": "Ш×В×Г (мм)",
+      "shelves": "Полок",
+      "version": "Версия"
+    },
+    "badge": {
+      "draft": "Черновик",
+      "frozen": "Заморожена"
+    },
     "form": {
       "name": "Название",
       "type": "Тип оборудования",
@@ -118,7 +151,11 @@
     "createNew": "Новая планограмма",
     "empty": "Планограмм пока нет.",
     "placements": "размещений",
-    "state": { "DRAFT": "Черновик", "PUBLISHED": "Опубликована", "ARCHIVED": "Архив" },
+    "state": {
+      "DRAFT": "Черновик",
+      "PUBLISHED": "Опубликована",
+      "ARCHIVED": "Архив"
+    },
     "new": {
       "name": "Название",
       "equipment": "Оборудование из библиотеки",
@@ -165,7 +202,14 @@
   "tasks": {
     "all": "Все",
     "empty": "Задач нет. Опубликуйте планограмму на точки.",
-    "table": { "title": "Задача", "store": "Точка", "planogram": "Планограмма", "due": "Срок", "status": "Статус" },
+    "table": {
+      "title": "Задача",
+      "store": "Точка",
+      "planogram": "Планограмма",
+      "due": "Срок",
+      "status": "Статус",
+      "assignee": "Исполнитель"
+    },
     "status": {
       "NEW": "Новая",
       "IN_PROGRESS": "В работе",
@@ -180,7 +224,8 @@
       "COMPLETED": "Принять",
       "EXPIRED": "Просрочить",
       "EMPTY": "Пустая"
-    }
+    },
+    "unassigned": "— не назначена —"
   },
   "emptyStates": {
     "sectionPlanned": "Этот раздел появится в следующей фазе.",
