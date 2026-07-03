@@ -239,10 +239,12 @@
     "subtitle": "Первый слой аналитики: что и сколько занимает место в активных планограммах.",
     "exportExcel": "Экспорт Excel",
     "kpi": {
-      "planograms": "Версий планограмм",
+      "storesWithPlanograms": "Магазинов с планограммами",
+      "activePlanograms": "Активных планограмм",
       "products": "SKU в выкладке",
-      "units": "Единиц на полке",
-      "linearMeters": "Линейных метров"
+      "linearMeters": "Линейных метров",
+      "turnover": "Оборот",
+      "profit": "Прибыль"
     },
     "state": {
       "DRAFT": "Черновик",

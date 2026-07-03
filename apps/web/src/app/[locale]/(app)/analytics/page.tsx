@@ -6,6 +6,7 @@ import {
   formatMeters,
   getAssortmentGapRows,
   getAbcRows,
+  getBasicDashboardSummary,
   getObsoletePlanogramRows,
   getPlanogramProductRows,
   getStockCoverageByProduct,
@@ -135,21 +136,36 @@ export default async function AnalyticsPage({
   const colorMode = parseColorMode(params.color)
 
   const db = tenantDb(session.org)
-  const [rows, abcRows, assortmentGapRows, obsoletePlanogramRows, taskKpiReport] = await Promise.all([
+  const [
+    rows,
+    abcRows,
+    assortmentGapRows,
+    obsoletePlanogramRows,
+    taskKpiReport,
+    basicDashboardSummary,
+  ] = await Promise.all([
     getPlanogramProductRows(db),
     getAbcRows(db),
     getAssortmentGapRows(db),
     getObsoletePlanogramRows(db),
     getTaskKpiReport(db),
+    getBasicDashboardSummary(db),
   ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
     rows.map((row) => row.productId),
   )
-  const uniquePlanograms = new Set(rows.map((r) => r.versionId)).size
+  const placedProductIds = new Set(rows.map((r) => r.productId))
   const uniqueProducts = new Set(rows.map((r) => r.sku)).size
-  const totalUnits = rows.reduce((sum, r) => sum + r.units, 0)
   const totalLinearMm = rows.reduce((sum, r) => sum + r.linearMm, 0)
+  const dashboardTurnover = abcRows.reduce(
+    (sum, row) => (placedProductIds.has(row.productId) ? sum + row.turnover : sum),
+    0,
+  )
+  const dashboardProfit = abcRows.reduce(
+    (sum, row) => (placedProductIds.has(row.productId) ? sum + row.profit : sum),
+    0,
+  )
   const groupRows = groupBy
     ? [
         ...rows
@@ -272,12 +288,14 @@ export default async function AnalyticsPage({
         </a>
       </div>
 
-      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
         {[
-          [t("kpi.planograms"), uniquePlanograms],
+          [t("kpi.storesWithPlanograms"), basicDashboardSummary.storesWithPlanograms],
+          [t("kpi.activePlanograms"), basicDashboardSummary.activePlanograms],
           [t("kpi.products"), uniqueProducts],
-          [t("kpi.units"), totalUnits],
           [t("kpi.linearMeters"), formatMeters(totalLinearMm)],
+          [t("kpi.turnover"), formatAmount(dashboardTurnover)],
+          [t("kpi.profit"), formatAmount(dashboardProfit)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
             <div className="text-xs text-neutral-500">{label}</div>

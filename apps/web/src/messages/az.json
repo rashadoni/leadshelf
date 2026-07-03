@@ -239,10 +239,12 @@
     "subtitle": "Analitikanın ilk qatı: aktiv planoqramlarda hansı məhsulun nə qədər yer tutduğunu göstərir.",
     "exportExcel": "Excel ixracı",
     "kpi": {
-      "planograms": "Planoqram versiyası",
+      "storesWithPlanograms": "Planoqramlı mağaza",
+      "activePlanograms": "Aktiv planoqram",
       "products": "Rəfdə SKU",
-      "units": "Rəfdə ədəd",
-      "linearMeters": "Xətti metr"
+      "linearMeters": "Xətti metr",
+      "turnover": "Dövriyyə",
+      "profit": "Mənfəət"
     },
     "state": {
       "DRAFT": "Qaralama",

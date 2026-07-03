@@ -321,6 +321,8 @@ Definition of Done:
 - Task KPI report. `[сделано: /analytics показывает task KPI summary,
   разрез по магазинам и планограммам, completion/on-time/photo proof метрики]`
 - Basic dashboard: stores with planograms, active planograms, placed SKUs, linear meters, turnover, profit.
+  `[сделано: верхний /analytics summary считает магазины под активными
+  assignment, активные версии, SKU, linear meters, turnover и profit]`
 
 ## Phase 8 - Like-for-like and space productivity
 

@@ -103,6 +103,11 @@ export type TaskKpiReport = {
   planograms: TaskKpiGroupRow[]
 }
 
+export type BasicDashboardSummary = {
+  storesWithPlanograms: number
+  activePlanograms: number
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
@@ -190,6 +195,44 @@ export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[
     if (planogram !== 0) return planogram
     return a.sku.localeCompare(b.sku)
   })
+}
+
+export async function getBasicDashboardSummary(
+  db: TenantDb,
+  now = new Date(),
+): Promise<BasicDashboardSummary> {
+  const assignments = await db.planogramAssignment.findMany({
+    select: {
+      storeId: true,
+      formatId: true,
+      planogramVersionId: true,
+      activeFrom: true,
+      activeTo: true,
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 3000,
+  })
+  const activeAssignments = assignments.filter((assignment) => isAssignmentActive(assignment, now))
+  const directStoreIds = new Set(
+    activeAssignments.flatMap((assignment) => (assignment.storeId ? [assignment.storeId] : [])),
+  )
+  const formatIds = [
+    ...new Set(activeAssignments.flatMap((assignment) => (assignment.formatId ? [assignment.formatId] : []))),
+  ]
+  const formatStores =
+    formatIds.length > 0
+      ? await db.store.findMany({
+          where: { isActive: true, formatId: { in: formatIds } },
+          select: { id: true },
+          take: 5000,
+        })
+      : []
+  for (const store of formatStores) directStoreIds.add(store.id)
+
+  return {
+    storesWithPlanograms: directStoreIds.size,
+    activePlanograms: new Set(activeAssignments.map((assignment) => assignment.planogramVersionId)).size,
+  }
 }
 
 export async function getAbcRows(db: TenantDb): Promise<AbcRow[]> {
