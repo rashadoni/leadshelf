@@ -119,6 +119,26 @@ export default async function AnalyticsPage({
           .values(),
       ].sort((a, b) => b.linearMm - a.linearMm || a.label.localeCompare(b.label))
     : []
+  const salesBySku = new Map(abcRows.map((row) => [row.sku, row.turnover]))
+  const heatmapRows = rows
+    .map((row) => ({
+      key: row.key,
+      planogramId: row.planogramId,
+      versionId: row.versionId,
+      planogramName: row.planogramName,
+      versionNumber: row.versionNumber,
+      sku: row.sku,
+      productName: row.productName,
+      turnover: salesBySku.get(row.sku) ?? 0,
+      linearMm: row.linearMm,
+    }))
+    .filter((row) => row.turnover > 0)
+    .sort((a, b) => {
+      const planogram = a.planogramName.localeCompare(b.planogramName)
+      if (planogram !== 0) return planogram
+      return b.turnover - a.turnover
+    })
+  const maxHeatmapTurnover = Math.max(0, ...heatmapRows.map((row) => row.turnover))
 
   return (
     <div>
@@ -286,6 +306,57 @@ export default async function AnalyticsPage({
                     ))}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("heatmap.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("heatmap.hint")}</p>
+        </div>
+        {heatmapRows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("heatmap.empty")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.product")}</th>
+                  <th className="px-3 py-2 text-right">{t("abc.columns.turnover")}</th>
+                  <th className="px-3 py-2">{t("heatmap.intensity")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {heatmapRows.map((row) => {
+                  const pct = maxHeatmapTurnover > 0 ? Math.max(4, (row.turnover / maxHeatmapTurnover) * 100) : 0
+                  return (
+                    <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/planograms/${row.planogramId}/${row.versionId}`}
+                          className="font-medium hover:underline"
+                        >
+                          {row.planogramName}
+                        </Link>
+                        <div className="mt-0.5 text-xs text-neutral-500">v{row.versionNumber}</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{row.productName}</div>
+                        <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{formatAmount(row.turnover)}</td>
+                      <td className="min-w-[180px] px-3 py-2">
+                        <div className="h-3 rounded bg-neutral-100">
+                          <div className="h-3 rounded bg-emerald-600" style={{ width: `${pct}%` }} />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

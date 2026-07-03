@@ -272,6 +272,12 @@
         "quantity": "Miqdar"
       }
     },
+    "heatmap": {
+      "title": "Planoqram üzrə satış heatmap",
+      "hint": "İntensivlik yerləşdirilmiş SKU-lar içində nisbi dövriyyəni göstərir.",
+      "empty": "Satış datası ilə yerləşdirilmiş məhsullar arasında uyğunluq yoxdur.",
+      "intensity": "İntensivlik"
+    },
     "productTable": {
       "title": "Planoqramlardakı məhsullar",
       "hint": "Planoqram versiyası və SKU üzrə aqreqasiya: yerləşdirmə, feysinqlərdə ədəd və xətti en.",
