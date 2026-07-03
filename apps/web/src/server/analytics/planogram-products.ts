@@ -53,6 +53,25 @@ export type AssortmentGapRow = {
   supplier: string | null
 }
 
+export type ObsoleteAssortmentReason = "inactive" | "expired" | "missing" | "productInactive"
+
+export type ObsoletePlanogramRow = {
+  key: string
+  source: "format" | "store"
+  scopeName: string
+  planogramId: string
+  versionId: string
+  planogramName: string
+  versionNumber: number
+  productId: string
+  sku: string
+  productName: string
+  brand: string | null
+  category: string | null
+  placements: number
+  reason: ObsoleteAssortmentReason
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
@@ -271,6 +290,18 @@ function isAssignmentActive(
   return true
 }
 
+function obsoleteReasonForAssortment(
+  product: { isActive: boolean },
+  assortment: { isActive: boolean; validFrom?: Date | null; validTo?: Date | null } | undefined,
+  now: Date,
+): ObsoleteAssortmentReason | null {
+  if (!product.isActive) return "productInactive"
+  if (!assortment) return "missing"
+  if (!assortment.isActive) return "inactive"
+  if (!isInDateRange(assortment, now)) return "expired"
+  return null
+}
+
 export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Promise<AssortmentGapRow[]> {
   const [formatAssortment, storeAssortment, assignments] = await Promise.all([
     db.assortmentMatrix.findMany({
@@ -378,6 +409,139 @@ export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Prom
   return gaps.sort((a, b) => {
     const scope = a.scopeName.localeCompare(b.scopeName)
     if (scope !== 0) return scope
+    return a.sku.localeCompare(b.sku)
+  })
+}
+
+export async function getObsoletePlanogramRows(
+  db: TenantDb,
+  now = new Date(),
+): Promise<ObsoletePlanogramRow[]> {
+  const [formatAssortment, storeAssortment, assignments] = await Promise.all([
+    db.assortmentMatrix.findMany({
+      select: {
+        formatId: true,
+        productId: true,
+        isActive: true,
+        validFrom: true,
+        validTo: true,
+      },
+      orderBy: [{ formatId: "asc" }, { productId: "asc" }],
+      take: 5000,
+    }),
+    db.storeAssortment.findMany({
+      select: {
+        storeId: true,
+        productId: true,
+        isActive: true,
+        validFrom: true,
+        validTo: true,
+      },
+      orderBy: [{ storeId: "asc" }, { productId: "asc" }],
+      take: 5000,
+    }),
+    db.planogramAssignment.findMany({
+      include: {
+        format: { select: { id: true, name: true } },
+        store: { select: { id: true, name: true, formatId: true } },
+        planogramVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            planogram: { select: { id: true, name: true } },
+            placements: {
+              select: {
+                productId: true,
+                product: {
+                  select: {
+                    id: true,
+                    sku: true,
+                    name: true,
+                    isActive: true,
+                    brand: { select: { name: true } },
+                    category: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 3000,
+    }),
+  ])
+
+  const formatAssortmentByProduct = new Map<
+    string,
+    { isActive: boolean; validFrom: Date | null; validTo: Date | null }
+  >()
+  const storeAssortmentByProduct = new Map<
+    string,
+    { isActive: boolean; validFrom: Date | null; validTo: Date | null }
+  >()
+  for (const item of formatAssortment) {
+    formatAssortmentByProduct.set(`${item.formatId}:${item.productId}`, item)
+  }
+  for (const item of storeAssortment) {
+    storeAssortmentByProduct.set(`${item.storeId}:${item.productId}`, item)
+  }
+
+  const rowsByKey = new Map<string, ObsoletePlanogramRow>()
+  for (const assignment of assignments) {
+    if (!isAssignmentActive(assignment, now)) continue
+
+    const isStoreAssignment = assignment.storeId != null
+    const source: "format" | "store" = isStoreAssignment ? "store" : "format"
+    const scopeName = assignment.store?.name ?? assignment.format?.name ?? ""
+    const scopeId = assignment.storeId ?? assignment.formatId
+    if (!scopeId || !scopeName) continue
+
+    for (const placement of assignment.planogramVersion.placements) {
+      const directStoreAssortment =
+        assignment.storeId != null
+          ? storeAssortmentByProduct.get(`${assignment.storeId}:${placement.productId}`)
+          : undefined
+      const inheritedFormatAssortment =
+        assignment.formatId != null
+          ? formatAssortmentByProduct.get(`${assignment.formatId}:${placement.productId}`)
+          : assignment.store?.formatId
+            ? formatAssortmentByProduct.get(`${assignment.store.formatId}:${placement.productId}`)
+            : undefined
+      const assortment = directStoreAssortment ?? inheritedFormatAssortment
+      const reason = obsoleteReasonForAssortment(placement.product, assortment, now)
+      if (!reason) continue
+
+      const key = `${assignment.id}:${placement.productId}`
+      const existing = rowsByKey.get(key)
+      if (existing) {
+        existing.placements += 1
+        continue
+      }
+      rowsByKey.set(key, {
+        key,
+        source,
+        scopeName,
+        planogramId: assignment.planogramVersion.planogram.id,
+        versionId: assignment.planogramVersion.id,
+        planogramName: assignment.planogramVersion.planogram.name,
+        versionNumber: assignment.planogramVersion.versionNumber,
+        productId: placement.productId,
+        sku: placement.product.sku,
+        productName: placement.product.name,
+        brand: placement.product.brand?.name ?? null,
+        category: placement.product.category?.name ?? null,
+        placements: 1,
+        reason,
+      })
+    }
+  }
+
+  return [...rowsByKey.values()].sort((a, b) => {
+    const scope = a.scopeName.localeCompare(b.scopeName)
+    if (scope !== 0) return scope
+    const planogram = a.planogramName.localeCompare(b.planogramName)
+    if (planogram !== 0) return planogram
     return a.sku.localeCompare(b.sku)
   })
 }

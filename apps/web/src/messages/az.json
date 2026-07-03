@@ -291,6 +291,20 @@
         "store": "Mağaza istisnası"
       }
     },
+    "obsoletePlanogram": {
+      "title": "Köhnəlmiş planoqram SKU-ları",
+      "hint": "Planoqramda qalan, amma aktiv assortment məntiqinə görə artıq rəfdə olmamalı SKU-lar.",
+      "empty": "Planoqramlarda qeyri-aktiv assortment SKU-su yoxdur.",
+      "columns": {
+        "reason": "Səbəb"
+      },
+      "reason": {
+        "inactive": "Assortment deaktivdir",
+        "expired": "Assortment müddəti bitib",
+        "missing": "Assortmentdə yoxdur",
+        "productInactive": "Məhsul deaktivdir"
+      }
+    },
     "colorOverlay": {
       "title": "Rəng qatı",
       "hint": "Planoqramı brend, təchizatçı, marja və ya stok günləri üzrə rəngləmək üçün ayrıca analitik qat.",

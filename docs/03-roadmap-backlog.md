@@ -315,7 +315,9 @@ Definition of Done:
 - Assortment gaps: active in assortment but absent in planogram. `[сделано:
   /analytics показывает активные SKU из форматной матрицы и store-исключений,
   которых нет в назначенной планограмме]`
-- Obsolete in planogram but inactive in assortment.
+- Obsolete in planogram but inactive in assortment. `[сделано: /analytics
+  показывает SKU, оставшиеся в назначенных планограммах, но выключенные,
+  истекшие или отсутствующие в активной ассортиментной логике]`
 - Task KPI report.
 - Basic dashboard: stores with planograms, active planograms, placed SKUs, linear meters, turnover, profit.
 

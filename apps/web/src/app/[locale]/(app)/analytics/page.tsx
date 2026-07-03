@@ -6,6 +6,7 @@ import {
   formatMeters,
   getAssortmentGapRows,
   getAbcRows,
+  getObsoletePlanogramRows,
   getPlanogramProductRows,
   getStockCoverageByProduct,
   type AbcClass,
@@ -129,10 +130,11 @@ export default async function AnalyticsPage({
   const colorMode = parseColorMode(params.color)
 
   const db = tenantDb(session.org)
-  const [rows, abcRows, assortmentGapRows] = await Promise.all([
+  const [rows, abcRows, assortmentGapRows, obsoletePlanogramRows] = await Promise.all([
     getPlanogramProductRows(db),
     getAbcRows(db),
     getAssortmentGapRows(db),
+    getObsoletePlanogramRows(db),
   ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
@@ -568,6 +570,63 @@ export default async function AnalyticsPage({
                     <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
                     <td className="px-3 py-2 text-neutral-600">{row.category ?? "—"}</td>
                     <td className="px-3 py-2 text-neutral-600">{row.supplier ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("obsoletePlanogram.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("obsoletePlanogram.hint")}</p>
+        </div>
+        {obsoletePlanogramRows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("obsoletePlanogram.empty")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t("assortmentGaps.columns.scope")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.product")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.brand")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.category")}</th>
+                  <th className="px-3 py-2 text-right">{t("productTable.columns.placements")}</th>
+                  <th className="px-3 py-2">{t("obsoletePlanogram.columns.reason")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {obsoletePlanogramRows.map((row) => (
+                  <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.scopeName}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">
+                        {t(`assortmentGaps.source.${row.source}` as never)}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/planograms/${row.planogramId}/${row.versionId}`}
+                        className="font-medium hover:underline"
+                      >
+                        {row.planogramName}
+                      </Link>
+                      <div className="mt-0.5 text-xs text-neutral-500">v{row.versionNumber}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.productName}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
+                    </td>
+                    <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
+                    <td className="px-3 py-2 text-neutral-600">{row.category ?? "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.placements}</td>
+                    <td className="px-3 py-2 text-neutral-600">
+                      {t(`obsoletePlanogram.reason.${row.reason}` as never)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
