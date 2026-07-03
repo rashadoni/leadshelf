@@ -1,11 +1,15 @@
 // Offline-доверие как UX (docs/10 Tier-1 №4): статус синка виден всегда.
-import { StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
 import { useSync } from "../sync/sync-context"
 import { t } from "../i18n"
 
 export function SyncBar() {
-  const { status } = useSync()
+  const { status, sync } = useSync()
   const queued = status.pendingOps + status.pendingPhotos
+  const running = !["idle", "offline", "error", "upgradeRequired"].includes(status.phase)
+  const canRetry =
+    status.phase !== "upgradeRequired" &&
+    (queued > 0 || status.phase === "offline" || status.phase === "error")
 
   const label =
     status.phase === "offline"
@@ -32,6 +36,15 @@ export function SyncBar() {
         {label}
         {queued > 0 ? ` · ${queued} ${t("pendingOps")}` : ""}
       </Text>
+      {canRetry ? (
+        <Pressable
+          disabled={running}
+          onPress={() => void sync()}
+          style={[styles.retry, running && styles.retryDisabled]}
+        >
+          <Text style={styles.retryText}>{t("syncRetry")}</Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -46,5 +59,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f4",
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  text: { fontSize: 12, color: "#525252" },
+  text: { flex: 1, fontSize: 12, color: "#525252" },
+  retry: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#d4d4d4",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "white",
+  },
+  retryDisabled: { opacity: 0.5 },
+  retryText: { fontSize: 12, fontWeight: "600", color: "#404040" },
 })
