@@ -2,23 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
-
-type ProductRow = {
-  key: string
-  planogramId: string
-  versionId: string
-  planogramName: string
-  versionNumber: number
-  state: string
-  sku: string
-  productName: string
-  category: string | null
-  brand: string | null
-  supplier: string | null
-  placements: number
-  units: number
-  linearMm: number
-}
+import { formatMeters, getPlanogramProductRows } from "@/server/analytics/planogram-products"
 
 type GroupRow = {
   key: string
@@ -33,10 +17,6 @@ const OPTIONAL_COLUMNS = ["brand", "category", "supplier", "placements", "units"
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]
 const GROUP_COLUMNS = ["brand", "category", "supplier"] as const
 type GroupColumn = (typeof GROUP_COLUMNS)[number]
-
-function formatMeters(mm: number): string {
-  return (mm / 1000).toFixed(2)
-}
 
 function parseVisibleColumns(raw: string | undefined): Set<OptionalColumn> {
   if (!raw) return new Set(OPTIONAL_COLUMNS)
@@ -92,67 +72,7 @@ export default async function AnalyticsPage({
   const visibleColumns = parseVisibleColumns(params.cols)
   const groupBy = parseGroup(params.group)
 
-  const placements = await tenantDb(session.org).planogramPlacement.findMany({
-    where: { planogramVersion: { state: { in: ["DRAFT", "PUBLISHED"] } } },
-    include: {
-      planogramVersion: {
-        select: {
-          id: true,
-          versionNumber: true,
-          state: true,
-          planogram: { select: { id: true, name: true } },
-        },
-      },
-      product: {
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          category: { select: { name: true } },
-          brand: { select: { name: true } },
-          supplier: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: [{ planogramVersionId: "asc" }, { productId: "asc" }, { sortOrder: "asc" }],
-    take: 2000,
-  })
-
-  const rowsByKey = new Map<string, ProductRow>()
-  for (const placement of placements) {
-    const key = `${placement.planogramVersionId}:${placement.productId}`
-    const units = placement.facingsX * placement.facingsY * placement.facingsZ
-    const linearMm = placement.widthMm * placement.facingsX
-    const existing = rowsByKey.get(key)
-    if (existing) {
-      existing.placements += 1
-      existing.units += units
-      existing.linearMm += linearMm
-      continue
-    }
-    rowsByKey.set(key, {
-      key,
-      planogramId: placement.planogramVersion.planogram.id,
-      versionId: placement.planogramVersion.id,
-      planogramName: placement.planogramVersion.planogram.name,
-      versionNumber: placement.planogramVersion.versionNumber,
-      state: placement.planogramVersion.state,
-      sku: placement.product.sku,
-      productName: placement.product.name,
-      category: placement.product.category?.name ?? null,
-      brand: placement.product.brand?.name ?? null,
-      supplier: placement.product.supplier?.name ?? null,
-      placements: 1,
-      units,
-      linearMm,
-    })
-  }
-
-  const rows = [...rowsByKey.values()].sort((a, b) => {
-    const planogram = a.planogramName.localeCompare(b.planogramName)
-    if (planogram !== 0) return planogram
-    return a.sku.localeCompare(b.sku)
-  })
+  const rows = await getPlanogramProductRows(tenantDb(session.org))
   const uniquePlanograms = new Set(rows.map((r) => r.versionId)).size
   const uniqueProducts = new Set(rows.map((r) => r.sku)).size
   const totalUnits = rows.reduce((sum, r) => sum + r.units, 0)
@@ -186,9 +106,17 @@ export default async function AnalyticsPage({
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">{tNav("analytics")}</h1>
-        <p className="mt-1 max-w-3xl text-sm text-neutral-500">{t("subtitle")}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">{tNav("analytics")}</h1>
+          <p className="mt-1 max-w-3xl text-sm text-neutral-500">{t("subtitle")}</p>
+        </div>
+        <a
+          href="/api/v1/analytics/planogram-products/export"
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+        >
+          {t("exportExcel")}
+        </a>
       </div>
 
       <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

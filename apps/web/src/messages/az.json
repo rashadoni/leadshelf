@@ -237,6 +237,7 @@
   },
   "analytics": {
     "subtitle": "Analitikanın ilk qatı: aktiv planoqramlarda hansı məhsulun nə qədər yer tutduğunu göstərir.",
+    "exportExcel": "Excel ixracı",
     "kpi": {
       "planograms": "Planoqram versiyası",
       "products": "Rəfdə SKU",
