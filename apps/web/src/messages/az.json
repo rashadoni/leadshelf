@@ -31,6 +31,7 @@
     "search": "Ad, SKU və ya barkod üzrə axtar",
     "filterMissingDimensions": "Ölçüsüz",
     "filterMissingBarcode": "Barkodsuz",
+    "filterMissingImage": "Şəkilsiz",
     "apply": "Tətbiq et",
     "reset": "Sıfırla",
     "table": {

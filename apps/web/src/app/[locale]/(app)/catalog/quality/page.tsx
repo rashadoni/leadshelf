@@ -34,7 +34,12 @@ export default async function CatalogQualityPage() {
       href: "/catalog?missingBarcode=true",
       tone: "amber",
     },
-    { label: t("missingImage"), value: products.missingImage, href: "/catalog", tone: "amber" },
+    {
+      label: t("missingImage"),
+      value: products.missingImage,
+      href: "/catalog?missingImage=true",
+      tone: "amber",
+    },
     { label: t("missingCategory"), value: products.missingCategory, href: "/catalog", tone: "amber" },
   ] as const
 

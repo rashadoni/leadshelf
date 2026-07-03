@@ -4,6 +4,7 @@ import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { CatalogTabs } from "./catalog-tabs"
 import { DimensionsEditor } from "./dimensions-editor"
+import { PhotoCell } from "./photo-cell"
 
 const PAGE_SIZE = 25
 
@@ -23,6 +24,7 @@ export default async function CatalogPage({
   const q = params.q?.trim() || undefined
   const missingDimensions = params.missingDimensions === "true"
   const missingBarcode = params.missingBarcode === "true"
+  const missingImage = params.missingImage === "true"
   const cursor = params.cursor
 
   const products = await tenantDb(session.org).product.findMany({
@@ -40,11 +42,13 @@ export default async function CatalogPage({
         ? { OR: [{ widthMm: null }, { heightMm: null }, { depthMm: null }] }
         : {}),
       ...(missingBarcode ? { barcodes: { none: {} } } : {}),
+      ...(missingImage ? { images: { none: {} } } : {}),
     },
     include: {
       brand: { select: { name: true } },
       category: { select: { name: true } },
       barcodes: { where: { isPrimary: true }, select: { barcode: true } },
+      images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
     },
     orderBy: [{ name: "asc" }, { id: "asc" }],
     take: PAGE_SIZE + 1,
@@ -59,6 +63,7 @@ export default async function CatalogPage({
     if (q) sp.set("q", q)
     if (missingDimensions) sp.set("missingDimensions", "true")
     if (missingBarcode) sp.set("missingBarcode", "true")
+    if (missingImage) sp.set("missingImage", "true")
     sp.set("cursor", page[page.length - 1]!.id)
     return `/catalog?${sp.toString()}`
   }
@@ -94,6 +99,10 @@ export default async function CatalogPage({
           />
           {t("filterMissingBarcode")}
         </label>
+        <label className="flex items-center gap-1 text-sm text-neutral-600">
+          <input type="checkbox" name="missingImage" value="true" defaultChecked={missingImage} />
+          {t("filterMissingImage")}
+        </label>
         <button className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white">
           {t("apply")}
         </button>
@@ -111,6 +120,7 @@ export default async function CatalogPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                <th className="px-3 py-2" />
                 <th className="px-3 py-2">{t("table.sku")}</th>
                 <th className="px-3 py-2">{t("table.name")}</th>
                 <th className="px-3 py-2">{t("table.barcode")}</th>
@@ -127,6 +137,14 @@ export default async function CatalogPage({
                   key={p.id}
                   className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
                 >
+                  <td className="px-3 py-2">
+                    <PhotoCell
+                      productId={p.id}
+                      name={p.name}
+                      brandName={p.brand?.name ?? null}
+                      imageKey={p.images[0]?.url ?? null}
+                    />
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs">{p.sku}</td>
                   <td className="px-3 py-2">{p.name}</td>
                   <td className="px-3 py-2 font-mono text-xs">

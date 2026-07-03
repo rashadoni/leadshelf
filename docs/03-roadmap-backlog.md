@@ -88,7 +88,8 @@ Definition of Done:
   таблице каталога + PATCH API + фильтр]`
 - Barcode support.
 - Product images: admin-загрузка + заглушка (название/бренд/цвет) для SKU
-  без фото.
+  без фото. `[сделано: MinIO/S3 storage, media-proxy с tenant-guard,
+  клик-загрузка в таблице каталога, цветная заглушка, фильтр «без фото»]`
 - Stock/price/sales snapshots.
 - Assortment matrix (формат) + store assortment (исключения).
 - Data quality report: missing dimensions, missing barcode, missing image,
