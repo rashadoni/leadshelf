@@ -372,7 +372,8 @@ Definition of Done:
   эталонного фото в процентах изображения, привязка к placement/product]`
 - Photo quality check. `[сделано: core photo-proof quality scorer по
   MIME/размерам/takenAt/EXIF, сохранение qualityScore + details при mobile upload]`
-- Detector/embedding service.
+- Detector/embedding service. `[сделано: packages/api-contracts vision/v1 +
+  optional services/vision HTTP boundary с stub provider, /health и /v1/scan]`
 - Compliance score.
 - Missing/wrong/extra products.
 - Human review queue.
