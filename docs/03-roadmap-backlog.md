@@ -247,8 +247,9 @@ shared mobile contracts, Android export smoke. Автопросрочка EXPIRE
 SLA-счетчики сделаны. Product detail tap сделан: кликабельная SVG-планограмма,
 карточка товара и список товаров из published bundle. Changed items list
 сделан в mobile: показывает diff payload, если он есть, иначе текущие позиции
-как проверочный список. Barcode/SKU finder, camera scanner binding и
-floor-plan location hint сделаны. Осталось: camera overlay.
+как проверочный список. Barcode/SKU finder, camera scanner binding,
+floor-plan location hint и camera overlay сделаны. Остатки Phase 6 mobile
+на этом срезе закрыты.
 
 Задачи web:
 
@@ -269,7 +270,7 @@ floor-plan location hint сделаны. Осталось: camera overlay.
 - Changed items list. `[сделано: diff/current list в mobile]`
 - Barcode scanner: find where SKU should be placed. `[сделано: ручной barcode/SKU finder + expo-camera scanner binding]`
 - Floor plan location hint. `[сделано: store-aware task locationHint из published floor plan + fallback в mobile]`
-- Photo submit.
+- Photo submit. `[сделано: offline queue + CameraView proof overlay]`
 - Comment/feedback.
 - Offline outbox.
 

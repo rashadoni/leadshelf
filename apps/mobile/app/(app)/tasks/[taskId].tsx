@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
@@ -8,7 +8,6 @@ import {
   type BarcodeScanningResult,
   type BarcodeType,
 } from "expo-camera"
-import * as ImagePicker from "expo-image-picker"
 import * as Crypto from "expo-crypto"
 import {
   enqueueTaskComment,
@@ -48,6 +47,7 @@ export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>()
   const { sync } = useSync()
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+  const photoCameraRef = useRef<CameraView | null>(null)
   const [task, setTask] = useState<TaskRow | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [comment, setComment] = useState("")
@@ -55,6 +55,8 @@ export default function TaskDetailScreen() {
   const [barcodeQuery, setBarcodeQuery] = useState("")
   const [lastBarcodeLookup, setLastBarcodeLookup] = useState<string | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [photoCameraOpen, setPhotoCameraOpen] = useState(false)
+  const [photoSaving, setPhotoSaving] = useState(false)
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -103,12 +105,7 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
-  async function takePhoto() {
-    const perm = await ImagePicker.requestCameraPermissionsAsync()
-    const result = perm.granted
-      ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
-      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7 })
-    if (result.canceled || !result.assets[0]) return
+  async function queueProofPhoto(sourceUri: string) {
     let expectedTaskStatus: MobileTaskStatus = task!.status
     if (task!.status === "NEW") {
       enqueueTaskStatus({
@@ -121,12 +118,35 @@ export default function TaskDetailScreen() {
     }
     await persistAndQueuePhoto({
       taskId: task!.id,
-      sourceUri: result.assets[0].uri,
+      sourceUri,
       expectedTaskStatus,
     })
     Alert.alert(t("photoQueued"))
     reload()
     void sync()
+  }
+
+  async function takePhoto() {
+    const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
+    if (!permission.granted) {
+      Alert.alert(t("cameraPermissionDenied"))
+      return
+    }
+    setScannerOpen(false)
+    setPhotoCameraOpen(true)
+  }
+
+  async function captureProofPhoto() {
+    if (photoSaving) return
+    setPhotoSaving(true)
+    try {
+      const picture = await photoCameraRef.current?.takePictureAsync({ quality: 0.7 })
+      if (!picture?.uri) return
+      await queueProofPhoto(picture.uri)
+      setPhotoCameraOpen(false)
+    } finally {
+      setPhotoSaving(false)
+    }
   }
 
   function sendComment() {
@@ -171,6 +191,49 @@ export default function TaskDetailScreen() {
     setScannerOpen(false)
     setBarcodeQuery(result.data)
     applyCodeLookup(result.data)
+  }
+
+  if (photoCameraOpen) {
+    return (
+      <SafeAreaView style={styles.proofRoot} edges={["top", "bottom"]}>
+        <CameraView ref={photoCameraRef} style={styles.proofCamera} facing="back" />
+        <View style={styles.proofTop}>
+          <Text style={styles.proofEyebrow}>{t("photoOverlayHint")}</Text>
+          <Text style={styles.proofTitle} numberOfLines={2}>
+            {selectedPlacement?.name ?? task.title}
+          </Text>
+          <Text style={styles.proofMeta} numberOfLines={2}>
+            {selectedPlacement
+              ? `${selectedPlacement.sku} · ${t("shelf")} ${selectedPlacement.shelfLabel}`
+              : locationTitle}
+          </Text>
+        </View>
+        <View style={styles.proofFrame} pointerEvents="none" />
+        <View style={styles.proofBottom}>
+          <Text style={styles.proofMeta} numberOfLines={2}>
+            {locationTitle}
+          </Text>
+          <View style={styles.proofActions}>
+            <Pressable
+              style={styles.proofSecondary}
+              disabled={photoSaving}
+              onPress={() => setPhotoCameraOpen(false)}
+            >
+              <Text style={styles.proofSecondaryText}>{t("cancel")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.proofCapture, photoSaving && styles.disabled]}
+              disabled={photoSaving}
+              onPress={captureProofPhoto}
+            >
+              <Text style={styles.proofCaptureText}>
+                {photoSaving ? t("savingPhoto") : t("capturePhoto")}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -412,6 +475,59 @@ export default function TaskDetailScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#fafaf9" },
+  proofRoot: { flex: 1, backgroundColor: "#171717" },
+  proofCamera: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
+  proofTop: {
+    margin: 12,
+    borderRadius: 10,
+    backgroundColor: "rgba(23, 23, 23, 0.78)",
+    padding: 12,
+    gap: 4,
+  },
+  proofEyebrow: { color: "#d6d3d1", fontSize: 11, fontWeight: "700" },
+  proofTitle: { color: "white", fontSize: 18, fontWeight: "800" },
+  proofMeta: { color: "#e7e5e4", fontSize: 12, fontWeight: "600" },
+  proofFrame: {
+    position: "absolute",
+    left: 28,
+    right: 28,
+    top: "29%",
+    height: "34%",
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 10,
+    backgroundColor: "transparent",
+  },
+  proofBottom: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 12,
+    borderRadius: 10,
+    backgroundColor: "rgba(23, 23, 23, 0.78)",
+    padding: 12,
+    gap: 10,
+  },
+  proofActions: { flexDirection: "row", gap: 10 },
+  proofSecondary: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.35)",
+  },
+  proofSecondaryText: { color: "white", fontSize: 15, fontWeight: "700" },
+  proofCapture: {
+    flex: 1.2,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: "white",
+  },
+  proofCaptureText: { color: "#171717", fontSize: 15, fontWeight: "800" },
   header: {
     flexDirection: "row",
     alignItems: "center",
