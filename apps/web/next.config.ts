@@ -4,6 +4,8 @@ import createNextIntlPlugin from "next-intl/plugin"
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts")
 
 const config: NextConfig = {
+  // прод-образ: самодостаточный сервер с trace-нутыми зависимостями
+  output: "standalone",
   // workspace-пакеты с "main": "src/index.ts" транспилируются Next-ом
   transpilePackages: [
     "@leadshelf/db",
