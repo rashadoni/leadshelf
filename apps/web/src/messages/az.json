@@ -235,6 +235,35 @@
     },
     "unassigned": "— təyin edilməyib —"
   },
+  "analytics": {
+    "subtitle": "Analitikanın ilk qatı: aktiv planoqramlarda hansı məhsulun nə qədər yer tutduğunu göstərir.",
+    "kpi": {
+      "planograms": "Planoqram versiyası",
+      "products": "Rəfdə SKU",
+      "units": "Rəfdə ədəd",
+      "linearMeters": "Xətti metr"
+    },
+    "state": {
+      "DRAFT": "Qaralama",
+      "PUBLISHED": "Dərc edilib",
+      "ARCHIVED": "Arxiv"
+    },
+    "productTable": {
+      "title": "Planoqramlardakı məhsullar",
+      "hint": "Planoqram versiyası və SKU üzrə aqreqasiya: yerləşdirmə, feysinqlərdə ədəd və xətti en.",
+      "empty": "Hələ yerləşdirilmiş məhsul yoxdur.",
+      "columns": {
+        "planogram": "Planoqram",
+        "product": "Məhsul",
+        "brand": "Brend",
+        "category": "Kateqoriya",
+        "supplier": "Təchizatçı",
+        "placements": "Yer",
+        "units": "Ədəd",
+        "linearMeters": "Xətti m"
+      }
+    }
+  },
   "emptyStates": {
     "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",
     "catalog": "Məhsul kataloqu və 1C idxalı — Faza 1.",

@@ -305,7 +305,7 @@ Definition of Done:
 
 Задачи:
 
-- Planogram product table.
+- Planogram product table. `[сделано: /analytics server table по planogramVersion+SKU, placements/units/linear meters]`
 - Column chooser.
 - Group by brand/category/supplier.
 - Excel export.
