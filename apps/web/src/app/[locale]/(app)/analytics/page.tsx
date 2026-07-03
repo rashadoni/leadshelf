@@ -2,7 +2,12 @@ import { getTranslations } from "next-intl/server"
 import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
-import { formatMeters, getPlanogramProductRows } from "@/server/analytics/planogram-products"
+import {
+  formatMeters,
+  getAbcRows,
+  getPlanogramProductRows,
+  type AbcClass,
+} from "@/server/analytics/planogram-products"
 
 type GroupRow = {
   key: string
@@ -24,6 +29,16 @@ function parseVisibleColumns(raw: string | undefined): Set<OptionalColumn> {
     return OPTIONAL_COLUMNS.includes(v as OptionalColumn)
   }))
   return requested.size > 0 ? requested : new Set(OPTIONAL_COLUMNS)
+}
+
+function formatAmount(value: number): string {
+  return value.toFixed(2)
+}
+
+function abcBadgeClass(value: AbcClass): string {
+  if (value === "A") return "bg-green-50 text-green-700"
+  if (value === "B") return "bg-amber-50 text-amber-700"
+  return "bg-neutral-100 text-neutral-600"
 }
 
 function parseGroup(raw: string | undefined): GroupColumn | null {
@@ -72,7 +87,8 @@ export default async function AnalyticsPage({
   const visibleColumns = parseVisibleColumns(params.cols)
   const groupBy = parseGroup(params.group)
 
-  const rows = await getPlanogramProductRows(tenantDb(session.org))
+  const db = tenantDb(session.org)
+  const [rows, abcRows] = await Promise.all([getPlanogramProductRows(db), getAbcRows(db)])
   const uniquePlanograms = new Set(rows.map((r) => r.versionId)).size
   const uniqueProducts = new Set(rows.map((r) => r.sku)).size
   const totalUnits = rows.reduce((sum, r) => sum + r.units, 0)
@@ -229,6 +245,52 @@ export default async function AnalyticsPage({
           </div>
         </section>
       ) : null}
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("abc.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("abc.hint")}</p>
+        </div>
+        {abcRows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("abc.empty")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t("productTable.columns.product")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.brand")}</th>
+                  <th className="px-3 py-2 text-right">{t("abc.columns.turnover")}</th>
+                  <th className="px-3 py-2 text-right">{t("abc.columns.cost")}</th>
+                  <th className="px-3 py-2 text-right">{t("abc.columns.profit")}</th>
+                  <th className="px-3 py-2 text-right">{t("abc.columns.quantity")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {abcRows.map((row) => (
+                  <tr key={row.productId} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.productName}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
+                    </td>
+                    <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
+                    {(["turnover", "cost", "profit", "quantity"] as const).map((metric) => (
+                      <td key={metric} className="px-3 py-2 text-right tabular-nums">
+                        <div>{formatAmount(row[metric])}</div>
+                        <span
+                          className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs ${abcBadgeClass(row.classes[metric])}`}
+                        >
+                          {row.classes[metric]}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="border-b border-neutral-200 px-4 py-3">

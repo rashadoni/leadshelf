@@ -261,6 +261,17 @@
       "summaryHint": "Sahə üzrə ümumi rəf payı: {column}",
       "products": "SKU"
     },
+    "abc": {
+      "title": "Satış üzrə ABC",
+      "hint": "A/B/C sinifləri dövriyyə, maya dəyəri, mənfəət və miqdar üzrə SalesSnapshot bazasında ayrıca hesablanır.",
+      "empty": "Satış datası hələ yoxdur.",
+      "columns": {
+        "turnover": "Dövriyyə",
+        "cost": "Maya dəyəri",
+        "profit": "Mənfəət",
+        "quantity": "Miqdar"
+      }
+    },
     "productTable": {
       "title": "Planoqramlardakı məhsullar",
       "hint": "Planoqram versiyası və SKU üzrə aqreqasiya: yerləşdirmə, feysinqlərdə ədəd və xətti en.",

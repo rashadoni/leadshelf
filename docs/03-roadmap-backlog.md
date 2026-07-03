@@ -309,7 +309,7 @@ Definition of Done:
 - Column chooser. `[сделано: server-driven cols query + toggle chips]`
 - Group by brand/category/supplier. `[сделано: server-driven group query + summary table]`
 - Excel export. `[сделано: SpreadsheetML .xls export route + кнопка в /analytics]`
-- ABC by turnover/cost/profit/quantity.
+- ABC by turnover/cost/profit/quantity. `[сделано: ABC table по SalesSnapshot с A/B/C классами]`
 - Sales heatmap by planogram.
 - Color by brand/supplier/markup/stock days.
 - Assortment gaps: active in assortment but absent in planogram.

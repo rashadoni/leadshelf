@@ -17,8 +17,41 @@ export type ProductRow = {
   linearMm: number
 }
 
+export type AbcMetric = "turnover" | "cost" | "profit" | "quantity"
+export type AbcClass = "A" | "B" | "C"
+
+export type AbcRow = {
+  productId: string
+  sku: string
+  productName: string
+  brand: string | null
+  category: string | null
+  turnover: number
+  cost: number
+  profit: number
+  quantity: number
+  classes: Record<AbcMetric, AbcClass>
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
+}
+
+function emptyClasses(): Record<AbcMetric, AbcClass> {
+  return { turnover: "C", cost: "C", profit: "C", quantity: "C" }
+}
+
+function assignAbcClasses(rows: AbcRow[], metric: AbcMetric): void {
+  const ranked = [...rows].sort((a, b) => b[metric] - a[metric])
+  const total = ranked.reduce((sum, row) => sum + Math.max(0, row[metric]), 0)
+  if (total <= 0) return
+
+  let cumulative = 0
+  for (const row of ranked) {
+    cumulative += Math.max(0, row[metric])
+    const share = cumulative / total
+    row.classes[metric] = share <= 0.8 ? "A" : share <= 0.95 ? "B" : "C"
+  }
 }
 
 type TenantDb = ReturnType<typeof tenantDb>
@@ -85,4 +118,57 @@ export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[
     if (planogram !== 0) return planogram
     return a.sku.localeCompare(b.sku)
   })
+}
+
+export async function getAbcRows(db: TenantDb): Promise<AbcRow[]> {
+  const sales = await db.salesSnapshot.findMany({
+    include: {
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: { select: { name: true } },
+          category: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ date: "desc" }, { productId: "asc" }],
+    take: 5000,
+  })
+
+  const rowsByProduct = new Map<string, AbcRow>()
+  for (const sale of sales) {
+    const revenue = Number(sale.revenue)
+    const profit = sale.profit == null ? 0 : Number(sale.profit)
+    const cost = sale.profit == null ? 0 : revenue - profit
+    const quantity = Number(sale.quantity)
+    const existing = rowsByProduct.get(sale.productId)
+    if (existing) {
+      existing.turnover += revenue
+      existing.profit += profit
+      existing.cost += cost
+      existing.quantity += quantity
+      continue
+    }
+    rowsByProduct.set(sale.productId, {
+      productId: sale.productId,
+      sku: sale.product.sku,
+      productName: sale.product.name,
+      brand: sale.product.brand?.name ?? null,
+      category: sale.product.category?.name ?? null,
+      turnover: revenue,
+      cost,
+      profit,
+      quantity,
+      classes: emptyClasses(),
+    })
+  }
+
+  const rows = [...rowsByProduct.values()].sort((a, b) => b.turnover - a.turnover)
+  assignAbcClasses(rows, "turnover")
+  assignAbcClasses(rows, "cost")
+  assignAbcClasses(rows, "profit")
+  assignAbcClasses(rows, "quantity")
+  return rows
 }
