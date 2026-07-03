@@ -6,6 +6,7 @@
 // при 409 перезагружаем draft.
 
 import { useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
 import {
@@ -14,6 +15,11 @@ import {
   type EquipmentGeometryMm,
 } from "@leadshelf/core"
 import { PublishDialog, type PublishTargetOption } from "./publish-dialog"
+
+const PlanogramThreeViewer = dynamic(
+  () => import("./planogram-three-viewer").then((mod) => mod.PlanogramThreeViewer),
+  { ssr: false },
+)
 
 export interface EditorProduct {
   id: string
@@ -351,6 +357,7 @@ export function PlanogramEditor({
           <p className="mt-1 text-center text-xs text-neutral-400">
             {equipment.widthMm}×{equipment.heightMm}×{equipment.depthMm} mm
           </p>
+          <PlanogramThreeViewer equipment={equipment} placements={placements} />
         </div>
 
         {/* Side panels */}

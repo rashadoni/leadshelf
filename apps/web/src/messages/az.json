@@ -197,6 +197,10 @@
       "rejected": "Sığmadı",
       "conflict": "Qaralama paralel dəyişdirilib — səhifə yeniləndi",
       "placedUnits": "əd rəfdə"
+    },
+    "viewer3d": {
+      "title": "3D görünüş",
+      "screenshot": "PNG ixracı"
     }
   },
   "tasks": {

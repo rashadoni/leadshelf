@@ -348,9 +348,11 @@ Definition of Done:
 
 Задачи:
 
-- 3D view from 2D planogram data.
-- Shelf/equipment perspective.
-- Screenshot export.
+- 3D view from 2D planogram data. `[сделано: Three.js viewer строит
+  оборудование, полки и product blocks из текущих mm placement данных]`
+- Shelf/equipment perspective. `[сделано: orbit camera показывает глубину,
+  полки, стойки и размещение по x/y/z]`
+- Screenshot export. `[сделано: PNG export из WebGL canvas]`
 - Store/floor plan viewer later.
 
 Не делать:
