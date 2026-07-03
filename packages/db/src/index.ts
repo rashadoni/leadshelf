@@ -9,3 +9,9 @@ export {
   type TenantClient,
 } from "./tenant-client.ts"
 export { listImportErrorsForBatch } from "./repos/import.ts"
+export {
+  createTemplateWithVersion,
+  saveVersion,
+  renameTemplate,
+  EquipmentRepoError,
+} from "./repos/equipment.ts"

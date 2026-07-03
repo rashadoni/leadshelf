@@ -113,6 +113,13 @@ Definition of Done:
 
 Цель: конструктор торгового оборудования.
 
+Статус (2026-07-03): срез 1 сделан — core-математика раскладки полок
+(равные просветы, валидация clearance>=50мм), parent-path repo с версионной
+семантикой (draft на месте / frozen -> клон, optimistic lock), API
+templates/types/save-version, UI: библиотека карточками с SVG-превью,
+конструктор с shelf fill tool и живым превью (az/ru). DoD пройден вживую.
+План: docs/15. Осталось: cells/hooks (перфорация/ячейки), copy template.
+
 Задачи:
 
 - Equipment template library.

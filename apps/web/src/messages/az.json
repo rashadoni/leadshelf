@@ -81,6 +81,39 @@
       "batchStatus": { "PENDING": "Gözləyir", "PROCESSING": "İcra olunur", "COMPLETED": "Bitdi", "COMPLETED_WITH_ERRORS": "Xətalarla bitdi", "FAILED": "Uğursuz" }
     }
   },
+  "equipment": {
+    "createNew": "Yeni avadanlıq",
+    "empty": "Kitabxana boşdur. İlk avadanlığı yaradın.",
+    "table": { "name": "Ad", "type": "Növ", "dimensions": "E×H×D (mm)", "shelves": "Rəf sayı", "version": "Versiya" },
+    "badge": { "draft": "Qaralama", "frozen": "Dondurulub" },
+    "form": {
+      "name": "Ad",
+      "type": "Avadanlıq növü",
+      "width": "En, mm",
+      "height": "Hündürlük, mm",
+      "depth": "Dərinlik, mm",
+      "fillTool": "Rəf düzülüşü",
+      "shelfCount": "Rəf sayı",
+      "shelfThickness": "Rəf qalınlığı, mm",
+      "shelfDepth": "Rəf dərinliyi, mm",
+      "topOffset": "Yuxarı boşluq, mm",
+      "bottomOffset": "Aşağı boşluq, mm",
+      "rowGap": "Rəflər arası məsafə",
+      "save": "Kitabxanaya saxla",
+      "saving": "Saxlanılır...",
+      "saved": "Saxlanıldı",
+      "frozenHint": "Cari versiya dondurulub — saxlama yeni versiya yaradacaq.",
+      "conflict": "Daha yeni versiya var — səhifəni yeniləyin.",
+      "preview": "Öncədən baxış (öndən)"
+    },
+    "errors": {
+      "invalid_dimension": "Yanlış ölçü",
+      "shelf_count_required": "Ən azı bir rəf lazımdır",
+      "shelves_do_not_fit": "Rəflər hündürlüyə sığmır",
+      "clearance_too_small": "Rəflər arası məsafə 50 mm-dən azdır",
+      "shelf_depth_exceeds_equipment": "Rəf avadanlıqdan dərindir"
+    }
+  },
   "emptyStates": {
     "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",
     "catalog": "Məhsul kataloqu və 1C idxalı — Faza 1.",
