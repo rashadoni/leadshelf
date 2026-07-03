@@ -167,6 +167,7 @@ export default async function AnalyticsPage({
     db,
     rows.map((row) => row.productId),
   )
+  const abcByProductId = new Map(abcRows.map((row) => [row.productId, row]))
   const placedProductIds = new Set(rows.map((r) => r.productId))
   const uniqueProducts = new Set(rows.map((r) => r.sku)).size
   const totalLinearMm = rows.reduce((sum, r) => sum + r.linearMm, 0)
@@ -200,6 +201,49 @@ export default async function AnalyticsPage({
     { key: "stockDays", value: avgStockDays == null ? "—" : avgStockDays.toFixed(1) },
     { key: "turnoverRatio", value: previousTurnover !== 0 ? (currentTurnover / previousTurnover).toFixed(2) : "—" },
   ] as const
+  const productShareRows = [
+    ...rows
+      .reduce((map, row) => {
+        const existing = map.get(row.productId)
+        if (existing) {
+          existing.linearMm += row.linearMm
+        } else {
+          const sales = abcByProductId.get(row.productId)
+          map.set(row.productId, {
+            productId: row.productId,
+            sku: row.sku,
+            productName: row.productName,
+            brand: row.brand,
+            category: row.category,
+            linearMm: row.linearMm,
+            turnover: sales?.turnover ?? 0,
+            profit: sales?.profit ?? 0,
+          })
+        }
+        return map
+      }, new Map<string, { productId: string; sku: string; productName: string; brand: string | null; category: string | null; linearMm: number; turnover: number; profit: number }>())
+      .values(),
+  ]
+  const productShareTotalLinear = productShareRows.reduce((sum, row) => sum + row.linearMm, 0)
+  const productShareTotalTurnover = productShareRows.reduce((sum, row) => sum + Math.max(0, row.turnover), 0)
+  const productShareTotalProfit = productShareRows.reduce((sum, row) => sum + Math.max(0, row.profit), 0)
+  const spaceProductivityRows = productShareRows
+    .map((row) => {
+      const shelfShare = productShareTotalLinear > 0 ? row.linearMm / productShareTotalLinear : 0
+      const salesShare =
+        productShareTotalTurnover > 0 ? Math.max(0, row.turnover) / productShareTotalTurnover : 0
+      const profitShare = productShareTotalProfit > 0 ? Math.max(0, row.profit) / productShareTotalProfit : 0
+      return {
+        ...row,
+        shelfShare,
+        salesShare,
+        profitShare,
+        salesGap: salesShare - shelfShare,
+        profitGap: profitShare - shelfShare,
+      }
+    })
+    .sort((a, b) => Math.abs(b.salesGap) - Math.abs(a.salesGap) || a.sku.localeCompare(b.sku))
+    .slice(0, 15)
   const groupRows = groupBy
     ? [
         ...rows
@@ -246,7 +290,6 @@ export default async function AnalyticsPage({
       return b.turnover - a.turnover
     })
   const maxHeatmapTurnover = Math.max(0, ...heatmapRows.map((row) => row.turnover))
-  const abcByProductId = new Map(abcRows.map((row) => [row.productId, row]))
   const categoryColorIndexes = new Map<string, number>()
   const colorRows = rows.map((row) => {
     const sales = abcByProductId.get(row.productId)
@@ -438,6 +481,52 @@ export default async function AnalyticsPage({
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("spaceProductivity.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("spaceProductivity.hint")}</p>
+        </div>
+        {spaceProductivityRows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("productTable.empty")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t("productTable.columns.product")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.brand")}</th>
+                  <th className="px-3 py-2 text-right">{t("spaceProductivity.columns.shelfShare")}</th>
+                  <th className="px-3 py-2 text-right">{t("spaceProductivity.columns.salesShare")}</th>
+                  <th className="px-3 py-2 text-right">{t("spaceProductivity.columns.profitShare")}</th>
+                  <th className="px-3 py-2 text-right">{t("spaceProductivity.columns.salesGap")}</th>
+                  <th className="px-3 py-2 text-right">{t("spaceProductivity.columns.profitGap")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {spaceProductivityRows.map((row) => (
+                  <tr key={row.productId} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.productName}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
+                    </td>
+                    <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatPercent(row.shelfShare)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatPercent(row.salesShare)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatPercent(row.profitShare)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${deltaClass(row.salesGap)}`}>
+                      {formatPercent(row.salesGap)}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${deltaClass(row.profitGap)}`}>
+                      {formatPercent(row.profitGap)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <div className="mb-4 rounded-lg border border-neutral-200 bg-white px-3 py-2">

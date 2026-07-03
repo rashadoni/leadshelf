@@ -288,6 +288,17 @@
         "turnoverRatio": "Turnover ratio"
       }
     },
+    "spaceProductivity": {
+      "title": "Доля полки vs доля продаж",
+      "hint": "Сравнение SKU по доле полочного места, оборота и прибыли, чтобы увидеть недо- и пере-выделенное пространство.",
+      "columns": {
+        "shelfShare": "Доля полки",
+        "salesShare": "Доля продаж",
+        "profitShare": "Доля прибыли",
+        "salesGap": "Разрыв продаж",
+        "profitGap": "Разрыв прибыли"
+      }
+    },
     "columnChooser": {
       "title": "Колонки",
       "reset": "Сбросить"

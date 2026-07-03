@@ -337,7 +337,8 @@ Definition of Done:
 - Metrics: turnover, profit, sales qty, turnover per meter, profit per meter, stock days, turnover ratio.
   `[сделано: /analytics показывает current LFL turnover/profit/qty,
   turnover per meter, profit per meter, avg stock days и turnover ratio]`
-- Space productivity: share in shelf vs share in sales/profit.
+- Space productivity: share in shelf vs share in sales/profit. `[сделано:
+  /analytics показывает SKU imbalance table: shelf share vs sales/profit share]`
 - Shelf share by brand/category/supplier.
 
 ## Phase 9 - 3D viewer

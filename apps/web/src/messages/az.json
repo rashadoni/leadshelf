@@ -288,6 +288,17 @@
         "turnoverRatio": "Dövriyyə nisbəti"
       }
     },
+    "spaceProductivity": {
+      "title": "Rəf payı və satış payı",
+      "hint": "SKU üzrə rəfdə tutulan pay satış və mənfəət payı ilə müqayisə olunur.",
+      "columns": {
+        "shelfShare": "Rəf payı",
+        "salesShare": "Satış payı",
+        "profitShare": "Mənfəət payı",
+        "salesGap": "Satış fərqi",
+        "profitGap": "Mənfəət fərqi"
+      }
+    },
     "columnChooser": {
       "title": "Sütunlar",
       "reset": "Sıfırla"
