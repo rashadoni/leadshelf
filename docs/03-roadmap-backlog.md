@@ -306,7 +306,7 @@ Definition of Done:
 Задачи:
 
 - Planogram product table. `[сделано: /analytics server table по planogramVersion+SKU, placements/units/linear meters]`
-- Column chooser.
+- Column chooser. `[сделано: server-driven cols query + toggle chips]`
 - Group by brand/category/supplier.
 - Excel export.
 - ABC by turnover/cost/profit/quantity.

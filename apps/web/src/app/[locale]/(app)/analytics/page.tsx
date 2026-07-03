@@ -20,17 +20,45 @@ type ProductRow = {
   linearMm: number
 }
 
+const OPTIONAL_COLUMNS = ["brand", "category", "supplier", "placements", "units", "linearMeters"] as const
+type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]
+
 function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
 
-export default async function AnalyticsPage() {
-  const [t, tNav, session] = await Promise.all([
+function parseVisibleColumns(raw: string | undefined): Set<OptionalColumn> {
+  if (!raw) return new Set(OPTIONAL_COLUMNS)
+  const requested = new Set(raw.split(",").filter((v): v is OptionalColumn => {
+    return OPTIONAL_COLUMNS.includes(v as OptionalColumn)
+  }))
+  return requested.size > 0 ? requested : new Set(OPTIONAL_COLUMNS)
+}
+
+function columnHref(column: OptionalColumn, visibleColumns: Set<OptionalColumn>): string {
+  const next = new Set(visibleColumns)
+  if (next.has(column)) {
+    next.delete(column)
+  } else {
+    next.add(column)
+  }
+  const cols = OPTIONAL_COLUMNS.filter((c) => next.has(c))
+  return cols.length === OPTIONAL_COLUMNS.length ? "/analytics" : `/analytics?cols=${cols.join(",")}`
+}
+
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const [t, tNav, session, params] = await Promise.all([
     getTranslations("analytics"),
     getTranslations("nav"),
     getSession(),
+    searchParams,
   ])
   if (!session) return null
+  const visibleColumns = parseVisibleColumns(params.cols)
 
   const placements = await tenantDb(session.org).planogramPlacement.findMany({
     where: { planogramVersion: { state: { in: ["DRAFT", "PUBLISHED"] } } },
@@ -119,6 +147,35 @@ export default async function AnalyticsPage() {
         ))}
       </div>
 
+      <div className="mb-4 rounded-lg border border-neutral-200 bg-white px-3 py-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold uppercase text-neutral-500">
+            {t("columnChooser.title")}
+          </span>
+          <Link href="/analytics" className="text-xs text-neutral-500 hover:underline">
+            {t("columnChooser.reset")}
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {OPTIONAL_COLUMNS.map((column) => {
+            const active = visibleColumns.has(column)
+            return (
+              <Link
+                key={column}
+                href={columnHref(column, visibleColumns)}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  active
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600"
+                }`}
+              >
+                {t(`productTable.columns.${column}` as never)}
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="border-b border-neutral-200 px-4 py-3">
           <h2 className="font-semibold">{t("productTable.title")}</h2>
@@ -134,12 +191,24 @@ export default async function AnalyticsPage() {
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>
                   <th className="px-3 py-2">{t("productTable.columns.product")}</th>
-                  <th className="px-3 py-2">{t("productTable.columns.brand")}</th>
-                  <th className="px-3 py-2">{t("productTable.columns.category")}</th>
-                  <th className="px-3 py-2">{t("productTable.columns.supplier")}</th>
-                  <th className="px-3 py-2 text-right">{t("productTable.columns.placements")}</th>
-                  <th className="px-3 py-2 text-right">{t("productTable.columns.units")}</th>
-                  <th className="px-3 py-2 text-right">{t("productTable.columns.linearMeters")}</th>
+                  {visibleColumns.has("brand") ? (
+                    <th className="px-3 py-2">{t("productTable.columns.brand")}</th>
+                  ) : null}
+                  {visibleColumns.has("category") ? (
+                    <th className="px-3 py-2">{t("productTable.columns.category")}</th>
+                  ) : null}
+                  {visibleColumns.has("supplier") ? (
+                    <th className="px-3 py-2">{t("productTable.columns.supplier")}</th>
+                  ) : null}
+                  {visibleColumns.has("placements") ? (
+                    <th className="px-3 py-2 text-right">{t("productTable.columns.placements")}</th>
+                  ) : null}
+                  {visibleColumns.has("units") ? (
+                    <th className="px-3 py-2 text-right">{t("productTable.columns.units")}</th>
+                  ) : null}
+                  {visibleColumns.has("linearMeters") ? (
+                    <th className="px-3 py-2 text-right">{t("productTable.columns.linearMeters")}</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -160,12 +229,24 @@ export default async function AnalyticsPage() {
                       <div className="font-medium">{row.productName}</div>
                       <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
                     </td>
-                    <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
-                    <td className="px-3 py-2 text-neutral-600">{row.category ?? "—"}</td>
-                    <td className="px-3 py-2 text-neutral-600">{row.supplier ?? "—"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{row.placements}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{row.units}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMeters(row.linearMm)}</td>
+                    {visibleColumns.has("brand") ? (
+                      <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
+                    ) : null}
+                    {visibleColumns.has("category") ? (
+                      <td className="px-3 py-2 text-neutral-600">{row.category ?? "—"}</td>
+                    ) : null}
+                    {visibleColumns.has("supplier") ? (
+                      <td className="px-3 py-2 text-neutral-600">{row.supplier ?? "—"}</td>
+                    ) : null}
+                    {visibleColumns.has("placements") ? (
+                      <td className="px-3 py-2 text-right tabular-nums">{row.placements}</td>
+                    ) : null}
+                    {visibleColumns.has("units") ? (
+                      <td className="px-3 py-2 text-right tabular-nums">{row.units}</td>
+                    ) : null}
+                    {visibleColumns.has("linearMeters") ? (
+                      <td className="px-3 py-2 text-right tabular-nums">{formatMeters(row.linearMm)}</td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

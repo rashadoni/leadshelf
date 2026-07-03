@@ -248,6 +248,10 @@
       "PUBLISHED": "Dərc edilib",
       "ARCHIVED": "Arxiv"
     },
+    "columnChooser": {
+      "title": "Sütunlar",
+      "reset": "Sıfırla"
+    },
     "productTable": {
       "title": "Planoqramlardakı məhsullar",
       "hint": "Planoqram versiyası və SKU üzrə aqreqasiya: yerləşdirmə, feysinqlərdə ədəd və xətti en.",
