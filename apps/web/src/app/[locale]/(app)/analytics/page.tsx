@@ -20,8 +20,19 @@ type ProductRow = {
   linearMm: number
 }
 
+type GroupRow = {
+  key: string
+  label: string
+  products: Set<string>
+  placements: number
+  units: number
+  linearMm: number
+}
+
 const OPTIONAL_COLUMNS = ["brand", "category", "supplier", "placements", "units", "linearMeters"] as const
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]
+const GROUP_COLUMNS = ["brand", "category", "supplier"] as const
+type GroupColumn = (typeof GROUP_COLUMNS)[number]
 
 function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
@@ -35,15 +46,35 @@ function parseVisibleColumns(raw: string | undefined): Set<OptionalColumn> {
   return requested.size > 0 ? requested : new Set(OPTIONAL_COLUMNS)
 }
 
-function columnHref(column: OptionalColumn, visibleColumns: Set<OptionalColumn>): string {
+function parseGroup(raw: string | undefined): GroupColumn | null {
+  return GROUP_COLUMNS.includes(raw as GroupColumn) ? (raw as GroupColumn) : null
+}
+
+function analyticsHref(visibleColumns: Set<OptionalColumn>, groupBy: GroupColumn | null): string {
+  const params = new URLSearchParams()
+  const cols = OPTIONAL_COLUMNS.filter((c) => visibleColumns.has(c))
+  if (cols.length !== OPTIONAL_COLUMNS.length) params.set("cols", cols.join(","))
+  if (groupBy) params.set("group", groupBy)
+  const query = params.toString()
+  return query ? `/analytics?${query}` : "/analytics"
+}
+
+function columnHref(
+  column: OptionalColumn,
+  visibleColumns: Set<OptionalColumn>,
+  groupBy: GroupColumn | null,
+): string {
   const next = new Set(visibleColumns)
   if (next.has(column)) {
     next.delete(column)
   } else {
     next.add(column)
   }
-  const cols = OPTIONAL_COLUMNS.filter((c) => next.has(c))
-  return cols.length === OPTIONAL_COLUMNS.length ? "/analytics" : `/analytics?cols=${cols.join(",")}`
+  return analyticsHref(next, groupBy)
+}
+
+function groupHref(groupBy: GroupColumn | null, visibleColumns: Set<OptionalColumn>): string {
+  return analyticsHref(visibleColumns, groupBy)
 }
 
 export default async function AnalyticsPage({
@@ -59,6 +90,7 @@ export default async function AnalyticsPage({
   ])
   if (!session) return null
   const visibleColumns = parseVisibleColumns(params.cols)
+  const groupBy = parseGroup(params.group)
 
   const placements = await tenantDb(session.org).planogramPlacement.findMany({
     where: { planogramVersion: { state: { in: ["DRAFT", "PUBLISHED"] } } },
@@ -125,6 +157,32 @@ export default async function AnalyticsPage({
   const uniqueProducts = new Set(rows.map((r) => r.sku)).size
   const totalUnits = rows.reduce((sum, r) => sum + r.units, 0)
   const totalLinearMm = rows.reduce((sum, r) => sum + r.linearMm, 0)
+  const groupRows = groupBy
+    ? [
+        ...rows
+          .reduce((map, row) => {
+            const label = row[groupBy] ?? t("grouping.empty")
+            const existing = map.get(label)
+            if (existing) {
+              existing.products.add(row.sku)
+              existing.placements += row.placements
+              existing.units += row.units
+              existing.linearMm += row.linearMm
+            } else {
+              map.set(label, {
+                key: label,
+                label,
+                products: new Set([row.sku]),
+                placements: row.placements,
+                units: row.units,
+                linearMm: row.linearMm,
+              })
+            }
+            return map
+          }, new Map<string, GroupRow>())
+          .values(),
+      ].sort((a, b) => b.linearMm - a.linearMm || a.label.localeCompare(b.label))
+    : []
 
   return (
     <div>
@@ -162,7 +220,7 @@ export default async function AnalyticsPage({
             return (
               <Link
                 key={column}
-                href={columnHref(column, visibleColumns)}
+                href={columnHref(column, visibleColumns, groupBy)}
                 className={`rounded-full border px-3 py-1 text-xs ${
                   active
                     ? "border-neutral-900 bg-neutral-900 text-white"
@@ -175,6 +233,74 @@ export default async function AnalyticsPage({
           })}
         </div>
       </div>
+
+      <div className="mb-4 rounded-lg border border-neutral-200 bg-white px-3 py-2">
+        <div className="mb-2 text-xs font-semibold uppercase text-neutral-500">
+          {t("grouping.title")}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          <Link
+            href={groupHref(null, visibleColumns)}
+            className={`rounded-full border px-3 py-1 text-xs ${
+              !groupBy
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-200 bg-white text-neutral-600"
+            }`}
+          >
+            {t("grouping.none")}
+          </Link>
+          {GROUP_COLUMNS.map((column) => (
+            <Link
+              key={column}
+              href={groupHref(column, visibleColumns)}
+              className={`rounded-full border px-3 py-1 text-xs ${
+                groupBy === column
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-200 bg-white text-neutral-600"
+              }`}
+            >
+              {t(`productTable.columns.${column}` as never)}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {groupBy ? (
+        <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+          <div className="border-b border-neutral-200 px-4 py-3">
+            <h2 className="font-semibold">{t("grouping.summaryTitle")}</h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              {t("grouping.summaryHint", {
+                column: t(`productTable.columns.${groupBy}` as never),
+              })}
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t(`productTable.columns.${groupBy}` as never)}</th>
+                  <th className="px-3 py-2 text-right">{t("grouping.products")}</th>
+                  <th className="px-3 py-2 text-right">{t("productTable.columns.placements")}</th>
+                  <th className="px-3 py-2 text-right">{t("productTable.columns.units")}</th>
+                  <th className="px-3 py-2 text-right">{t("productTable.columns.linearMeters")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupRows.map((row) => (
+                  <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2 font-medium">{row.label}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.products.size}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.placements}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.units}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMeters(row.linearMm)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="border-b border-neutral-200 px-4 py-3">

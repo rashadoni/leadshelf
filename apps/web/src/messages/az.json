@@ -252,6 +252,14 @@
       "title": "Sütunlar",
       "reset": "Sıfırla"
     },
+    "grouping": {
+      "title": "Qruplaşdırma",
+      "none": "Qruplaşdırma yoxdur",
+      "empty": "Göstərilməyib",
+      "summaryTitle": "Qrup üzrə xülasə",
+      "summaryHint": "Sahə üzrə ümumi rəf payı: {column}",
+      "products": "SKU"
+    },
     "productTable": {
       "title": "Planoqramlardakı məhsullar",
       "hint": "Planoqram versiyası və SKU üzrə aqreqasiya: yerləşdirmə, feysinqlərdə ədəd və xətti en.",
