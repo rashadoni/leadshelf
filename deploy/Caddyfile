@@ -1,8 +1,9 @@
-# Демо-домен без покупки домена: sslip.io резолвит 157-90-227-191.sslip.io
-# в 157.90.227.191, Caddy берет настоящий Let's Encrypt сертификат.
-# Когда появится свой домен — просто замените хост.
-157-90-227-191.sslip.io {
+# Основной домен: hermescrm.xyz (за Cloudflare-прокси).
+# sslip.io оставлен как запасной прямой вход (без CF).
+hermescrm.xyz, www.hermescrm.xyz {
 	reverse_proxy web:3000
 }
 
-# http -> https редирект Caddy делает сам для named-хостов.
+157-90-227-191.sslip.io {
+	reverse_proxy web:3000
+}

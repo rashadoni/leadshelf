@@ -11,7 +11,7 @@
 - IP: **157.90.227.191** (IPv4 + IPv6).
 - SSH: ключ `rashadrahimov@Rashads-MacBook-Air.local` (ed25519, default
   в проекте), root-доступ проверен.
-- **Демо работает (2026-07-03): https://157-90-227-191.sslip.io** —
+- **Демо работает: **https://hermescrm.xyz** (за Cloudflare; запасной прямой вход https://157-90-227-191.sslip.io)** —
   sslip.io-домен с настоящим Let's Encrypt TLS, логины demo-тенанта
   (пароль demo1234). Прод-стек в /opt/leadshelf/prod (compose
   leadshelf-prod: caddy+web+postgres16+minio), секреты в

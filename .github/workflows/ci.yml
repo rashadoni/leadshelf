@@ -89,4 +89,4 @@ jobs:
       - name: Smoke check
         run: |
           sleep 8
-          curl -sf --max-time 20 https://157-90-227-191.sslip.io/api/health
+          curl -sf --max-time 20 https://hermescrm.xyz/api/health
