@@ -251,6 +251,22 @@
       "PUBLISHED": "Опубликована",
       "ARCHIVED": "Архив"
     },
+    "likeForLike": {
+      "title": "Like-for-like сравнение периодов",
+      "hint": "Последние {days} дней ({currentStart} - {currentEnd}) сравниваются с предыдущими {days} днями ({previousStart} - {previousEnd}).",
+      "columns": {
+        "metric": "Метрика",
+        "current": "Текущий период",
+        "previous": "Предыдущий период",
+        "delta": "Дельта",
+        "deltaPct": "Дельта %"
+      },
+      "metrics": {
+        "turnover": "Оборот",
+        "profit": "Прибыль",
+        "quantity": "Кол-во продаж"
+      }
+    },
     "columnChooser": {
       "title": "Колонки",
       "reset": "Сбросить"

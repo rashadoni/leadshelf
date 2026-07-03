@@ -7,6 +7,7 @@ import {
   getAssortmentGapRows,
   getAbcRows,
   getBasicDashboardSummary,
+  getLikeForLikeSummary,
   getObsoletePlanogramRows,
   getPlanogramProductRows,
   getStockCoverageByProduct,
@@ -44,6 +45,12 @@ function formatAmount(value: number): string {
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`
+}
+
+function deltaClass(value: number): string {
+  if (value > 0) return "text-green-700"
+  if (value < 0) return "text-red-600"
+  return "text-neutral-600"
 }
 
 function abcBadgeClass(value: AbcClass): string {
@@ -143,6 +150,7 @@ export default async function AnalyticsPage({
     obsoletePlanogramRows,
     taskKpiReport,
     basicDashboardSummary,
+    likeForLikeSummary,
   ] = await Promise.all([
     getPlanogramProductRows(db),
     getAbcRows(db),
@@ -150,6 +158,7 @@ export default async function AnalyticsPage({
     getObsoletePlanogramRows(db),
     getTaskKpiReport(db),
     getBasicDashboardSummary(db),
+    getLikeForLikeSummary(db),
   ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
@@ -303,6 +312,49 @@ export default async function AnalyticsPage({
           </div>
         ))}
       </div>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("likeForLike.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            {t("likeForLike.hint", {
+              days: likeForLikeSummary.days,
+              currentStart: likeForLikeSummary.currentStart,
+              currentEnd: likeForLikeSummary.currentEnd,
+              previousStart: likeForLikeSummary.previousStart,
+              previousEnd: likeForLikeSummary.previousEnd,
+            })}
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                <th className="px-3 py-2">{t("likeForLike.columns.metric")}</th>
+                <th className="px-3 py-2 text-right">{t("likeForLike.columns.current")}</th>
+                <th className="px-3 py-2 text-right">{t("likeForLike.columns.previous")}</th>
+                <th className="px-3 py-2 text-right">{t("likeForLike.columns.delta")}</th>
+                <th className="px-3 py-2 text-right">{t("likeForLike.columns.deltaPct")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {likeForLikeSummary.rows.map((row) => (
+                <tr key={row.metric} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                  <td className="px-3 py-2 font-medium">{t(`likeForLike.metrics.${row.metric}` as never)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatAmount(row.current)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatAmount(row.previous)}</td>
+                  <td className={`px-3 py-2 text-right tabular-nums ${deltaClass(row.delta)}`}>
+                    {formatAmount(row.delta)}
+                  </td>
+                  <td className={`px-3 py-2 text-right tabular-nums ${deltaClass(row.delta)}`}>
+                    {row.deltaPct == null ? "—" : formatPercent(row.deltaPct)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <div className="mb-4 rounded-lg border border-neutral-200 bg-white px-3 py-2">
         <div className="mb-2 flex items-center justify-between gap-3">

@@ -251,6 +251,22 @@
       "PUBLISHED": "Dərc edilib",
       "ARCHIVED": "Arxiv"
     },
+    "likeForLike": {
+      "title": "Like-for-like dövr müqayisəsi",
+      "hint": "Son {days} gün ({currentStart} - {currentEnd}) əvvəlki {days} günlə ({previousStart} - {previousEnd}) müqayisə olunur.",
+      "columns": {
+        "metric": "Metrika",
+        "current": "Cari dövr",
+        "previous": "Əvvəlki dövr",
+        "delta": "Fərq",
+        "deltaPct": "Fərq %"
+      },
+      "metrics": {
+        "turnover": "Dövriyyə",
+        "profit": "Mənfəət",
+        "quantity": "Satış miqdarı"
+      }
+    },
     "columnChooser": {
       "title": "Sütunlar",
       "reset": "Sıfırla"

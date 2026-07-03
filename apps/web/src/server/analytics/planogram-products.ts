@@ -108,6 +108,25 @@ export type BasicDashboardSummary = {
   activePlanograms: number
 }
 
+export type LikeForLikeMetric = "turnover" | "profit" | "quantity"
+
+export type LikeForLikeMetricRow = {
+  metric: LikeForLikeMetric
+  current: number
+  previous: number
+  delta: number
+  deltaPct: number | null
+}
+
+export type LikeForLikeSummary = {
+  days: number
+  currentStart: string
+  currentEnd: string
+  previousStart: string
+  previousEnd: string
+  rows: LikeForLikeMetricRow[]
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
@@ -131,6 +150,22 @@ function assignAbcClasses(rows: AbcRow[], metric: AbcMetric): void {
 
 type TenantDb = ReturnType<typeof tenantDb>
 const OPEN_TASK_STATUSES = new Set(["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"])
+
+function startOfDay(date: Date): Date {
+  const result = new Date(date)
+  result.setHours(0, 0, 0, 0)
+  return result
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function dateKey(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
 
 export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[]> {
   const placements = await db.planogramPlacement.findMany({
@@ -286,6 +321,53 @@ export async function getAbcRows(db: TenantDb): Promise<AbcRow[]> {
   assignAbcClasses(rows, "profit")
   assignAbcClasses(rows, "quantity")
   return rows
+}
+
+export async function getLikeForLikeSummary(
+  db: TenantDb,
+  now = new Date(),
+  days = 30,
+): Promise<LikeForLikeSummary> {
+  const currentEnd = addDays(startOfDay(now), 1)
+  const currentStart = addDays(currentEnd, -days)
+  const previousEnd = currentStart
+  const previousStart = addDays(previousEnd, -days)
+  const sales = await db.salesSnapshot.findMany({
+    where: { date: { gte: previousStart, lt: currentEnd } },
+    select: { date: true, quantity: true, revenue: true, profit: true },
+    orderBy: [{ date: "asc" }],
+    take: 10000,
+  })
+
+  const current = { turnover: 0, profit: 0, quantity: 0 }
+  const previous = { turnover: 0, profit: 0, quantity: 0 }
+  for (const sale of sales) {
+    const target = sale.date >= currentStart ? current : previous
+    target.turnover += Number(sale.revenue)
+    target.profit += sale.profit == null ? 0 : Number(sale.profit)
+    target.quantity += Number(sale.quantity)
+  }
+
+  const rows = (["turnover", "profit", "quantity"] as const).map((metric) => {
+    const currentValue = current[metric]
+    const previousValue = previous[metric]
+    return {
+      metric,
+      current: currentValue,
+      previous: previousValue,
+      delta: currentValue - previousValue,
+      deltaPct: previousValue !== 0 ? (currentValue - previousValue) / Math.abs(previousValue) : null,
+    }
+  })
+
+  return {
+    days,
+    currentStart: dateKey(currentStart),
+    currentEnd: dateKey(addDays(currentEnd, -1)),
+    previousStart: dateKey(previousStart),
+    previousEnd: dateKey(addDays(previousEnd, -1)),
+    rows,
+  }
 }
 
 export async function getStockCoverageByProduct(
