@@ -1,4 +1,4 @@
-import type { Bundle, PlanogramPlacement } from "./PlanogramSvg"
+import type { Bundle, PlanogramChangeItem, PlanogramPlacement } from "./PlanogramSvg"
 
 export interface PlacementSummary {
   placementId: string
@@ -11,6 +11,15 @@ export interface PlacementSummary {
   facingsLabel: string
   totalUnits: number
   placement: PlanogramPlacement
+}
+
+export interface ChangeSummary {
+  id: string
+  kind: PlanogramChangeItem["kind"] | "current"
+  sku: string
+  name: string
+  detail: string
+  placementId: string | null
 }
 
 export function placementTotalUnits(p: PlanogramPlacement): number {
@@ -38,4 +47,44 @@ export function listPlacementSummaries(bundle: Bundle): PlacementSummary[] {
       placement: p,
     }
   })
+}
+
+function productName(change: PlanogramChangeItem): { sku: string; name: string } {
+  return {
+    sku: change.product?.sku ?? change.sku ?? "-",
+    name: change.product?.name ?? change.name ?? "-",
+  }
+}
+
+export function listChangeSummaries(bundle: Bundle): ChangeSummary[] {
+  if (bundle.changes?.length) {
+    return bundle.changes.map((change, index) => {
+      const product = productName(change)
+      const move =
+        change.fromShelfIndex != null && change.toShelfIndex != null
+          ? `${change.fromShelfIndex + 1} -> ${change.toShelfIndex + 1}`
+          : null
+      const facings =
+        change.fromFacings && change.toFacings
+          ? `${change.fromFacings} -> ${change.toFacings}`
+          : null
+      return {
+        id: `${change.kind}-${change.placementId ?? product.sku}-${index}`,
+        kind: change.kind,
+        sku: product.sku,
+        name: product.name,
+        detail: change.note ?? move ?? facings ?? "",
+        placementId: change.placementId ?? null,
+      }
+    })
+  }
+
+  return listPlacementSummaries(bundle).map((p) => ({
+    id: `current-${p.placementId}`,
+    kind: "current",
+    sku: p.sku,
+    name: p.name,
+    detail: `${p.facingsLabel} · ${p.totalUnits}`,
+    placementId: p.placementId,
+  }))
 }

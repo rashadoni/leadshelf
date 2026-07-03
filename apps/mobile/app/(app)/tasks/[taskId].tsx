@@ -12,7 +12,7 @@ import {
   getTask,
 } from "../../../src/db/local-store"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
-import { listPlacementSummaries } from "../../../src/planogram/bundle-utils"
+import { listChangeSummaries, listPlacementSummaries } from "../../../src/planogram/bundle-utils"
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
@@ -41,6 +41,7 @@ export default function TaskDetailScreen() {
     () => (bundle ? listPlacementSummaries(bundle) : []),
     [bundle],
   )
+  const changeSummaries = useMemo(() => (bundle ? listChangeSummaries(bundle) : []), [bundle])
   const selectedPlacement =
     placementSummaries.find((p) => p.placementId === selectedPlacementId) ??
     placementSummaries[0] ??
@@ -174,6 +175,37 @@ export default function TaskDetailScreen() {
                 </View>
               </>
             ) : null}
+            {changeSummaries.length > 0 ? (
+              <>
+                <Text style={styles.section}>{t("changedItems")}</Text>
+                <View style={styles.changeList}>
+                  {changeSummaries.map((item) => {
+                    const canSelect = !!item.placementId
+                    return (
+                      <Pressable
+                        key={item.id}
+                        disabled={!canSelect}
+                        onPress={() => item.placementId && setSelectedPlacementId(item.placementId)}
+                        style={styles.changeRow}
+                      >
+                        <Text style={[styles.changeBadge, styles[`change_${item.kind}`]]}>
+                          {t(`change_${item.kind}` as MessageKey)}
+                        </Text>
+                        <View style={styles.productRowBody}>
+                          <Text style={styles.productName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.productMeta}>
+                            {item.sku}
+                            {item.detail ? ` · ${item.detail}` : ""}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </>
+            ) : null}
           </>
         ) : null}
         <View style={styles.actions}>
@@ -256,6 +288,32 @@ const styles = StyleSheet.create({
   productName: { fontSize: 13, fontWeight: "600", color: "#171717" },
   productMeta: { marginTop: 2, fontSize: 11, color: "#737373" },
   productUnits: { fontSize: 13, fontWeight: "700", color: "#171717" },
+  changeList: { borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: "#e7e5e4" },
+  changeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "white",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f4",
+  },
+  changeBadge: {
+    minWidth: 72,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    textAlign: "center",
+    fontSize: 10,
+    fontWeight: "700",
+    overflow: "hidden",
+  },
+  change_added: { backgroundColor: "#dcfce7", color: "#166534" },
+  change_removed: { backgroundColor: "#fee2e2", color: "#991b1b" },
+  change_moved: { backgroundColor: "#dbeafe", color: "#1d4ed8" },
+  change_changed: { backgroundColor: "#fef3c7", color: "#92400e" },
+  change_current: { backgroundColor: "#f5f5f4", color: "#525252" },
   commentInput: {
     minHeight: 84,
     borderWidth: 1,

@@ -30,6 +30,20 @@ export interface PlanogramPlacement {
     imageKey?: string | null
   }
 }
+
+export interface PlanogramChangeItem {
+  kind: "added" | "removed" | "moved" | "changed"
+  placementId?: string | null
+  product?: PlanogramPlacement["product"] | null
+  sku?: string | null
+  name?: string | null
+  fromShelfIndex?: number | null
+  toShelfIndex?: number | null
+  fromFacings?: string | null
+  toFacings?: string | null
+  note?: string | null
+}
+
 export interface Bundle {
   equipment: Array<{
     widthMm: number
@@ -38,6 +52,7 @@ export interface Bundle {
     shelves: Shelf[]
   }>
   placements: PlanogramPlacement[]
+  changes?: PlanogramChangeItem[]
 }
 
 const PALETTE = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#14b8a6", "#f97316"]

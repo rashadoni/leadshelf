@@ -245,8 +245,10 @@ Expo-приложение (срез 2, 2026-07-03) сделано: login, task l
 planogram view, offline status/photo/comment outbox, ручной sync retry,
 shared mobile contracts, Android export smoke. Автопросрочка EXPIRED и
 SLA-счетчики сделаны. Product detail tap сделан: кликабельная SVG-планограмма,
-карточка товара и список товаров из published bundle. Осталось: changed items
-list/diff, barcode scanner, floor-plan location hint, camera overlay.
+карточка товара и список товаров из published bundle. Changed items list
+сделан в mobile: показывает diff payload, если он есть, иначе текущие позиции
+как проверочный список. Осталось: barcode scanner, floor-plan location hint,
+camera overlay.
 
 Задачи web:
 
@@ -264,7 +266,7 @@ list/diff, barcode scanner, floor-plan location hint, camera overlay.
 - Task list.
 - Planogram view.
 - Product detail tap. `[сделано: кликабельная SVG-позиция + карточка товара]`
-- Changed items list.
+- Changed items list. `[сделано: diff/current list в mobile]`
 - Barcode scanner: find where SKU should be placed.
 - Floor plan location hint.
 - Photo submit.

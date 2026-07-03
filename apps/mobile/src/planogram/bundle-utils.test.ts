@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { listPlacementSummaries, placementTotalUnits } from "./bundle-utils"
+import { listChangeSummaries, listPlacementSummaries, placementTotalUnits } from "./bundle-utils"
 import type { Bundle } from "./PlanogramSvg"
 
 const bundle: Bundle = {
@@ -48,6 +48,57 @@ describe("planogram bundle summaries", () => {
         dimensionsLabel: "75x150x60 mm",
         facingsLabel: "4x2x3",
         totalUnits: 24,
+      },
+    ])
+  })
+
+  test("builds current changed-items fallback when bundle has no diff", () => {
+    expect(listChangeSummaries(bundle)).toMatchObject([
+      {
+        kind: "current",
+        sku: "SKU-1",
+        name: "Pain Relief",
+        detail: "4x2x3 · 24",
+        placementId: "p1",
+      },
+    ])
+  })
+
+  test("uses explicit changed-items payload when bundle provides diff", () => {
+    expect(
+      listChangeSummaries({
+        ...bundle,
+        changes: [
+          {
+            kind: "moved",
+            placementId: "p1",
+            product: { sku: "SKU-1", name: "Pain Relief" },
+            fromShelfIndex: 0,
+            toShelfIndex: 2,
+          },
+          {
+            kind: "changed",
+            sku: "SKU-2",
+            name: "Cough Syrup",
+            fromFacings: "2x1x1",
+            toFacings: "3x1x2",
+          },
+        ],
+      }),
+    ).toMatchObject([
+      {
+        kind: "moved",
+        sku: "SKU-1",
+        name: "Pain Relief",
+        detail: "1 -> 3",
+        placementId: "p1",
+      },
+      {
+        kind: "changed",
+        sku: "SKU-2",
+        name: "Cough Syrup",
+        detail: "2x1x1 -> 3x1x2",
+        placementId: null,
       },
     ])
   })
