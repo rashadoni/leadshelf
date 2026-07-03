@@ -46,6 +46,8 @@ export interface PlanogramChangeItem {
 
 export interface Bundle {
   equipment: Array<{
+    planogramEquipmentId?: string
+    name?: string
     widthMm: number
     heightMm: number
     depthMm?: number

@@ -61,6 +61,17 @@ export const mobileTaskStatusSchema = z.enum([
 ])
 export type MobileTaskStatus = z.infer<typeof mobileTaskStatusSchema>
 
+export const mobileTaskLocationHintSchema = z.object({
+  source: z.enum(["STORE_FLOOR_PLAN", "FORMAT_FLOOR_PLAN"]),
+  floorPlanName: z.string().nullable(),
+  label: z.string().nullable(),
+  equipmentName: z.string().nullable(),
+  xMm: z.number().int().nullable(),
+  yMm: z.number().int().nullable(),
+  rotationDeg: z.number().int().nullable(),
+})
+export type MobileTaskLocationHint = z.infer<typeof mobileTaskLocationHintSchema>
+
 export const mobileTaskRowSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -68,6 +79,7 @@ export const mobileTaskRowSchema = z.object({
   dueAt: z.string().nullable(),
   storeId: z.string(),
   planogramVersionId: z.string().nullable(),
+  locationHint: mobileTaskLocationHintSchema.nullable().optional(),
   updatedAt: z.string(),
 })
 export type MobileTaskRow = z.infer<typeof mobileTaskRowSchema>

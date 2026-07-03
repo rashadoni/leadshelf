@@ -9,7 +9,7 @@ import {
   publishPlanogramVersion,
   transitionTaskStatus,
 } from "../repos/publish.ts"
-import { pushOperations } from "../repos/mobile-sync.ts"
+import { pullChanges, pushOperations } from "../repos/mobile-sync.ts"
 
 const prisma = createSystemClient("publish-repo-test")
 const slug = `test-pub-${Date.now()}`
@@ -314,6 +314,54 @@ describe("publish", () => {
     expect(summary.expired).toBeGreaterThanOrEqual(2)
     expect(summary.completed).toBeGreaterThanOrEqual(1)
     expect(summary.unassignedOpen).toBeGreaterThanOrEqual(0)
+  })
+
+  test("mobile pull отдает floor-plan location hint для назначенной задачи", async () => {
+    const task = await prisma.task.findFirstOrThrow({
+      where: { planogramVersionId: versionId, storeId: store1 },
+    })
+    await prisma.task.update({ where: { id: task.id }, data: { assigneeId: mobileUserId } })
+    const planogramEquipment = await prisma.planogramEquipment.findFirstOrThrow({
+      where: { planogramVersionId: versionId },
+      select: { equipmentVersionId: true },
+    })
+    const floorPlan = await prisma.floorPlan.create({
+      data: { organizationId: orgId, formatId, name: "Main floor" },
+    })
+    const floorPlanVersion = await prisma.floorPlanVersion.create({
+      data: {
+        floorPlanId: floorPlan.id,
+        versionNumber: 1,
+        widthMm: 10000,
+        depthMm: 8000,
+        isPublished: true,
+        publishedAt: new Date("2026-07-03T00:00:00Z"),
+      },
+    })
+    await prisma.floorPlanEquipment.create({
+      data: {
+        floorPlanVersionId: floorPlanVersion.id,
+        equipmentVersionId: planogramEquipment.equipmentVersionId,
+        planogramId,
+        label: "Aisle A / Bay 03",
+        xMm: 1200,
+        yMm: 2400,
+        rotationDeg: 90,
+      },
+    })
+
+    const pulled = await pullChanges(prisma, orgId, mobileUserId, {})
+    const mobileTask = pulled.tasks.find((t) => t.id === task.id)
+
+    expect(mobileTask?.locationHint).toMatchObject({
+      source: "FORMAT_FLOOR_PLAN",
+      floorPlanName: "Main floor",
+      label: "Aisle A / Bay 03",
+      equipmentName: "Стеллаж",
+      xMm: 1200,
+      yMm: 2400,
+      rotationDeg: 90,
+    })
   })
 
   test("mobile task.comment сохраняет feedback идемпотентно", async () => {

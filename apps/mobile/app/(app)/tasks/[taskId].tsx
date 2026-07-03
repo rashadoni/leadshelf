@@ -62,6 +62,12 @@ export default function TaskDetailScreen() {
 
   if (!task) return null
   const store = getStore(task.storeId)
+  const primaryEquipmentName = task.locationHint?.equipmentName ?? bundle?.equipment[0]?.name ?? null
+  const locationTitle = task.locationHint?.label ?? primaryEquipmentName ?? store?.name ?? t("noLocationHint")
+  const locationPosition =
+    task.locationHint?.xMm != null && task.locationHint.yMm != null
+      ? `${task.locationHint.xMm}x${task.locationHint.yMm} mm`
+      : null
 
   function start() {
     // оптимистично локально + в outbox; синк доставит
@@ -142,6 +148,45 @@ export default function TaskDetailScreen() {
       </View>
       <SyncBar />
       <ScrollView contentContainerStyle={{ padding: 12, gap: 12 }}>
+        <Text style={styles.section}>{t("locationHint")}</Text>
+        <View style={styles.locationCard}>
+          <Text style={styles.locationTitle}>{locationTitle}</Text>
+          <View style={styles.locationGrid}>
+            {task.locationHint?.floorPlanName ? (
+              <>
+                <Text style={styles.detailLabel}>{t("floorPlan")}</Text>
+                <Text style={styles.detailValue}>{task.locationHint.floorPlanName}</Text>
+              </>
+            ) : null}
+            {primaryEquipmentName ? (
+              <>
+                <Text style={styles.detailLabel}>{t("equipment")}</Text>
+                <Text style={styles.detailValue}>{primaryEquipmentName}</Text>
+              </>
+            ) : null}
+            {locationPosition ? (
+              <>
+                <Text style={styles.detailLabel}>{t("position")}</Text>
+                <Text style={styles.detailValue}>{locationPosition}</Text>
+              </>
+            ) : null}
+            {task.locationHint?.rotationDeg != null ? (
+              <>
+                <Text style={styles.detailLabel}>{t("rotation")}</Text>
+                <Text style={styles.detailValue}>{task.locationHint.rotationDeg}°</Text>
+              </>
+            ) : null}
+            {store?.address ? (
+              <>
+                <Text style={styles.detailLabel}>{t("storeAddress")}</Text>
+                <Text style={styles.detailValue}>{store.address}</Text>
+              </>
+            ) : null}
+            {!task.locationHint ? (
+              <Text style={styles.locationMeta}>{t("noLocationHint")}</Text>
+            ) : null}
+          </View>
+        </View>
         {bundle ? (
           <>
             <Text style={styles.section}>{t("planogram")}</Text>
@@ -318,6 +363,17 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: "#737373" },
   section: { fontSize: 13, fontWeight: "600", color: "#525252" },
   actions: { gap: 8, marginTop: 8 },
+  locationCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    backgroundColor: "white",
+    padding: 12,
+    gap: 8,
+  },
+  locationTitle: { fontSize: 15, fontWeight: "700", color: "#171717" },
+  locationGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: 6 },
+  locationMeta: { fontSize: 12, color: "#737373" },
   detailCard: {
     borderRadius: 10,
     borderWidth: 1,

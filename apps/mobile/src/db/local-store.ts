@@ -25,7 +25,7 @@ export function initDb(): void {
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY, title TEXT, status TEXT, dueAt TEXT,
-      storeId TEXT, planogramVersionId TEXT, updatedAt TEXT
+      storeId TEXT, planogramVersionId TEXT, locationHint TEXT, updatedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS stores (
       id TEXT PRIMARY KEY, name TEXT, code TEXT, address TEXT
@@ -44,6 +44,10 @@ export function initDb(): void {
       takenAt TEXT, uploaded INTEGER DEFAULT 0
     );
   `)
+  const taskColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(tasks)")
+  if (!taskColumns.some((c) => c.name === "locationHint")) {
+    db.execSync("ALTER TABLE tasks ADD COLUMN locationHint TEXT")
+  }
 }
 
 export const localStore: LocalStore = {
@@ -51,12 +55,22 @@ export const localStore: LocalStore = {
     db.withTransactionSync(() => {
       for (const t of data.tasks) {
         db.runSync(
-          `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, updatedAt)
-           VALUES (?,?,?,?,?,?,?)
+          `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, locationHint, updatedAt)
+           VALUES (?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status,
              dueAt=excluded.dueAt, storeId=excluded.storeId,
-             planogramVersionId=excluded.planogramVersionId, updatedAt=excluded.updatedAt`,
-          [t.id, t.title, t.status, t.dueAt, t.storeId, t.planogramVersionId, t.updatedAt],
+             planogramVersionId=excluded.planogramVersionId, locationHint=excluded.locationHint,
+             updatedAt=excluded.updatedAt`,
+          [
+            t.id,
+            t.title,
+            t.status,
+            t.dueAt,
+            t.storeId,
+            t.planogramVersionId,
+            t.locationHint ? JSON.stringify(t.locationHint) : null,
+            t.updatedAt,
+          ],
         )
       }
       for (const s of data.stores) {
@@ -170,12 +184,24 @@ export const localStore: LocalStore = {
 
 // --- локальные чтения/записи для UI ---
 
+type TaskDbRow = Omit<TaskRow, "locationHint"> & { locationHint?: string | null }
+
+function mapTaskRow(row: TaskDbRow): TaskRow {
+  return {
+    ...row,
+    locationHint: row.locationHint ? JSON.parse(row.locationHint) : null,
+  }
+}
+
 export function listTasks(): TaskRow[] {
-  return db.getAllSync<TaskRow>("SELECT * FROM tasks ORDER BY dueAt IS NULL, dueAt, title")
+  return db
+    .getAllSync<TaskDbRow>("SELECT * FROM tasks ORDER BY dueAt IS NULL, dueAt, title")
+    .map(mapTaskRow)
 }
 
 export function getTask(id: string): TaskRow | null {
-  return db.getFirstSync<TaskRow>("SELECT * FROM tasks WHERE id=?", [id])
+  const row = db.getFirstSync<TaskDbRow>("SELECT * FROM tasks WHERE id=?", [id])
+  return row ? mapTaskRow(row) : null
 }
 
 export function getStore(id: string): StoreRow | null {

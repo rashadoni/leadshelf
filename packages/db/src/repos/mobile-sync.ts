@@ -38,6 +38,20 @@ function cursorWhere(token: SyncCursorToken | null): Prisma.TaskWhereInput {
 
 const PULL_LIMIT = 200
 
+type TaskLocationHint = {
+  source: "STORE_FLOOR_PLAN" | "FORMAT_FLOOR_PLAN"
+  floorPlanName: string | null
+  label: string | null
+  equipmentName: string | null
+  xMm: number | null
+  yMm: number | null
+  rotationDeg: number | null
+}
+
+function floorPlanHintKey(target: "store" | "format", targetId: string, planogramId: string): string {
+  return `${target}:${targetId}:${planogramId}`
+}
+
 export async function pullChanges(
   prisma: PrismaClient,
   organizationId: string,
@@ -73,8 +87,73 @@ export async function pullChanges(
 
   const stores = await prisma.store.findMany({
     where: { id: { in: storeIds } },
-    select: { id: true, name: true, code: true, address: true },
+    select: { id: true, name: true, code: true, address: true, formatId: true },
   })
+  const storeFormatById = new Map(stores.map((s) => [s.id, s.formatId]))
+  const formatIds = [...new Set(stores.map((s) => s.formatId).filter((id): id is string => !!id))]
+  const assignedVersions = await prisma.planogramVersion.findMany({
+    where: { id: { in: versionIds } },
+    select: { id: true, planogramId: true },
+  })
+  const planogramIdByVersion = new Map(assignedVersions.map((v) => [v.id, v.planogramId]))
+  const planogramIds = [...new Set(assignedVersions.map((v) => v.planogramId))]
+
+  const hintByTarget = new Map<string, TaskLocationHint>()
+  if (planogramIds.length > 0 && (storeIds.length > 0 || formatIds.length > 0)) {
+    const targetFilters: Prisma.FloorPlanWhereInput[] = []
+    if (storeIds.length > 0) targetFilters.push({ storeId: { in: storeIds } })
+    if (formatIds.length > 0) targetFilters.push({ formatId: { in: formatIds } })
+
+    const floorPlanVersions = await prisma.floorPlanVersion.findMany({
+      where: {
+        isPublished: true,
+        floorPlan: { organizationId, OR: targetFilters },
+        equipment: { some: { planogramId: { in: planogramIds } } },
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        floorPlan: { select: { name: true, storeId: true, formatId: true } },
+        equipment: {
+          where: { planogramId: { in: planogramIds } },
+          orderBy: [{ xMm: "asc" }, { yMm: "asc" }],
+          select: {
+            planogramId: true,
+            label: true,
+            xMm: true,
+            yMm: true,
+            rotationDeg: true,
+            equipmentVersion: { select: { template: { select: { name: true } } } },
+          },
+        },
+      },
+    })
+
+    for (const version of floorPlanVersions) {
+      for (const eq of version.equipment) {
+        if (!eq.planogramId) continue
+        const hint = {
+          floorPlanName: version.floorPlan.name,
+          label: eq.label,
+          equipmentName: eq.equipmentVersion.template.name,
+          xMm: eq.xMm,
+          yMm: eq.yMm,
+          rotationDeg: eq.rotationDeg,
+        }
+        if (version.floorPlan.storeId) {
+          const key = floorPlanHintKey("store", version.floorPlan.storeId, eq.planogramId)
+          if (!hintByTarget.has(key)) {
+            hintByTarget.set(key, { source: "STORE_FLOOR_PLAN", ...hint })
+          }
+        }
+        if (version.floorPlan.formatId) {
+          const key = floorPlanHintKey("format", version.floorPlan.formatId, eq.planogramId)
+          if (!hintByTarget.has(key)) {
+            hintByTarget.set(key, { source: "FORMAT_FLOOR_PLAN", ...hint })
+          }
+        }
+      }
+    }
+  }
 
   // Бандлы опубликованных версий immutable — курсор по publishedAt
   const bundleCursor = decodeCursor(cursors.planogramBundles)
@@ -128,16 +207,29 @@ export async function pullChanges(
     : (cursors.planogramBundles ?? null)
 
   return {
-    tasks: tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      dueAt: t.dueAt?.toISOString() ?? null,
-      storeId: t.storeId,
-      planogramVersionId: t.planogramVersionId,
-      updatedAt: t.updatedAt.toISOString(),
-    })),
-    stores,
+    tasks: tasks.map((t) => {
+      const planogramId = t.planogramVersionId
+        ? (planogramIdByVersion.get(t.planogramVersionId) ?? null)
+        : null
+      const formatId = storeFormatById.get(t.storeId) ?? null
+      const locationHint = planogramId
+        ? (hintByTarget.get(floorPlanHintKey("store", t.storeId, planogramId)) ??
+          (formatId ? hintByTarget.get(floorPlanHintKey("format", formatId, planogramId)) : null) ??
+          null)
+        : null
+
+      return {
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        dueAt: t.dueAt?.toISOString() ?? null,
+        storeId: t.storeId,
+        planogramVersionId: t.planogramVersionId,
+        locationHint,
+        updatedAt: t.updatedAt.toISOString(),
+      }
+    }),
+    stores: stores.map(({ formatId: _formatId, ...store }) => store),
     planogramBundles: versions.map((v) => ({
       versionId: v.id,
       versionNumber: v.versionNumber,
