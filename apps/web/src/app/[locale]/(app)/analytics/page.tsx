@@ -244,6 +244,32 @@ export default async function AnalyticsPage({
     })
     .sort((a, b) => Math.abs(b.salesGap) - Math.abs(a.salesGap) || a.sku.localeCompare(b.sku))
     .slice(0, 15)
+  const shelfShareGroups = (["brand", "category", "supplier"] as const).map((dimension) => {
+    const groupMap = rows.reduce(
+      (map, row) => {
+        const label = row[dimension] ?? t("grouping.empty")
+        const existing = map.get(label)
+        if (existing) {
+          existing.products.add(row.sku)
+          existing.linearMm += row.linearMm
+        } else {
+          map.set(label, { label, products: new Set([row.sku]), linearMm: row.linearMm })
+        }
+        return map
+      },
+      new Map<string, { label: string; products: Set<string>; linearMm: number }>(),
+    )
+    return {
+      dimension,
+      rows: [...groupMap.values()]
+        .map((row) => ({
+          ...row,
+          shelfShare: totalLinearMm > 0 ? row.linearMm / totalLinearMm : 0,
+        }))
+        .sort((a, b) => b.linearMm - a.linearMm || a.label.localeCompare(b.label))
+        .slice(0, 10),
+    }
+  })
   const groupRows = groupBy
     ? [
         ...rows
@@ -527,6 +553,47 @@ export default async function AnalyticsPage({
             </table>
           </div>
         )}
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("shelfShare.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("shelfShare.hint")}</p>
+        </div>
+        <div className="grid gap-4 p-3 xl:grid-cols-3">
+          {shelfShareGroups.map((group) => (
+            <div key={group.dimension} className="overflow-x-auto rounded-lg border border-neutral-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                    <th className="px-3 py-2">{t(`productTable.columns.${group.dimension}` as never)}</th>
+                    <th className="px-3 py-2 text-right">{t("shelfShare.columns.products")}</th>
+                    <th className="px-3 py-2 text-right">{t("productTable.columns.linearMeters")}</th>
+                    <th className="px-3 py-2 text-right">{t("shelfShare.columns.share")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.rows.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-4 text-sm text-neutral-500" colSpan={4}>
+                        {t("productTable.empty")}
+                      </td>
+                    </tr>
+                  ) : (
+                    group.rows.map((row) => (
+                      <tr key={row.label} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                        <td className="px-3 py-2 font-medium">{row.label}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.products.size}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatMeters(row.linearMm)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatPercent(row.shelfShare)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       </section>
 
       <div className="mb-4 rounded-lg border border-neutral-200 bg-white px-3 py-2">

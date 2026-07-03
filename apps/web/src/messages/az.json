@@ -299,6 +299,14 @@
         "profitGap": "Mənfəət fərqi"
       }
     },
+    "shelfShare": {
+      "title": "Brend, kateqoriya və təchizatçı üzrə rəf payı",
+      "hint": "Rəfdə tutulan xətti metrlər brend, kateqoriya və təchizatçı kəsimində aqreqasiya olunur.",
+      "columns": {
+        "products": "SKU",
+        "share": "Rəf payı"
+      }
+    },
     "columnChooser": {
       "title": "Sütunlar",
       "reset": "Sıfırla"
