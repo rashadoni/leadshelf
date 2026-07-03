@@ -15,3 +15,11 @@ export {
   renameTemplate,
   EquipmentRepoError,
 } from "./repos/equipment.ts"
+export {
+  createPlanogramFromTemplate,
+  getPlanogramEditor,
+  addPlacement,
+  updatePlacement,
+  removePlacement,
+  PlanogramRepoError,
+} from "./repos/planogram.ts"

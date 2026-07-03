@@ -114,6 +114,37 @@
       "shelf_depth_exceeds_equipment": "Rəf avadanlıqdan dərindir"
     }
   },
+  "planograms": {
+    "createNew": "Yeni planoqram",
+    "empty": "Hələ planoqram yoxdur.",
+    "placements": "yerləşdirmə",
+    "state": { "DRAFT": "Qaralama", "PUBLISHED": "Dərc edilib", "ARCHIVED": "Arxiv" },
+    "new": {
+      "name": "Ad",
+      "equipment": "Kitabxanadan avadanlıq",
+      "create": "Yarat",
+      "creating": "Yaradılır...",
+      "noEquipment": "Əvvəlcə kitabxanada avadanlıq yaradın"
+    },
+    "editor": {
+      "products": "Məhsullar",
+      "searchProducts": "Məhsul axtar...",
+      "noDims": "ölçü yoxdur",
+      "selectShelf": "Rəfə klikləyin, sonra məhsula — ilk boş yerə qoyulacaq",
+      "shelf": "Rəf",
+      "freeWidth": "boş",
+      "facings": "Feysinqlər",
+      "facingsX": "X (en)",
+      "facingsY": "Y (üst-üstə)",
+      "facingsZ": "Z (dərinlik)",
+      "position": "Mövqe X, mm",
+      "capacityHint": "maks: {x}×{y}×{z} = {total} əd",
+      "remove": "Rəfdən götür",
+      "rejected": "Sığmadı",
+      "conflict": "Qaralama paralel dəyişdirilib — səhifə yeniləndi",
+      "placedUnits": "əd rəfdə"
+    }
+  },
   "emptyStates": {
     "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",
     "catalog": "Məhsul kataloqu və 1C idxalı — Faza 1.",
