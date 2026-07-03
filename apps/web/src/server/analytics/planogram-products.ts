@@ -2,6 +2,7 @@ import type { tenantDb } from "@/server/db/client"
 
 export type ProductRow = {
   key: string
+  productId: string
   planogramId: string
   versionId: string
   planogramName: string
@@ -31,6 +32,13 @@ export type AbcRow = {
   profit: number
   quantity: number
   classes: Record<AbcMetric, AbcClass>
+}
+
+export type StockCoverage = {
+  productId: string
+  latestStockQty: number
+  avgDailySalesQty: number
+  stockDays: number | null
 }
 
 export function formatMeters(mm: number): string {
@@ -97,6 +105,7 @@ export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[
     }
     rowsByKey.set(key, {
       key,
+      productId: placement.productId,
       planogramId: placement.planogramVersion.planogram.id,
       versionId: placement.planogramVersion.id,
       planogramName: placement.planogramVersion.planogram.name,
@@ -171,4 +180,63 @@ export async function getAbcRows(db: TenantDb): Promise<AbcRow[]> {
   assignAbcClasses(rows, "profit")
   assignAbcClasses(rows, "quantity")
   return rows
+}
+
+export async function getStockCoverageByProduct(
+  db: TenantDb,
+  productIds: string[],
+): Promise<Map<string, StockCoverage>> {
+  if (productIds.length === 0) return new Map()
+  const uniqueProductIds = [...new Set(productIds)]
+  const [stockSnapshots, salesSnapshots] = await Promise.all([
+    db.stockSnapshot.findMany({
+      where: { productId: { in: uniqueProductIds } },
+      select: { productId: true, date: true, quantity: true },
+      orderBy: [{ date: "desc" }, { productId: "asc" }],
+      take: 5000,
+    }),
+    db.salesSnapshot.findMany({
+      where: { productId: { in: uniqueProductIds } },
+      select: { productId: true, date: true, quantity: true },
+      orderBy: [{ date: "desc" }, { productId: "asc" }],
+      take: 5000,
+    }),
+  ])
+
+  const latestStockByProduct = new Map<string, number>()
+  for (const snapshot of stockSnapshots) {
+    if (!latestStockByProduct.has(snapshot.productId)) {
+      latestStockByProduct.set(snapshot.productId, Number(snapshot.quantity))
+    }
+  }
+
+  const salesByProduct = new Map<string, { quantity: number; dates: Set<string> }>()
+  for (const snapshot of salesSnapshots) {
+    const existing = salesByProduct.get(snapshot.productId)
+    const dateKey = snapshot.date.toISOString().slice(0, 10)
+    if (existing) {
+      existing.quantity += Number(snapshot.quantity)
+      existing.dates.add(dateKey)
+    } else {
+      salesByProduct.set(snapshot.productId, {
+        quantity: Number(snapshot.quantity),
+        dates: new Set([dateKey]),
+      })
+    }
+  }
+
+  const result = new Map<string, StockCoverage>()
+  for (const productId of uniqueProductIds) {
+    const latestStockQty = latestStockByProduct.get(productId) ?? 0
+    const sales = salesByProduct.get(productId)
+    const avgDailySalesQty = sales && sales.dates.size > 0 ? sales.quantity / sales.dates.size : 0
+    result.set(productId, {
+      productId,
+      latestStockQty,
+      avgDailySalesQty,
+      stockDays: avgDailySalesQty > 0 ? latestStockQty / avgDailySalesQty : null,
+    })
+  }
+
+  return result
 }

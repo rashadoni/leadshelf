@@ -311,7 +311,7 @@ Definition of Done:
 - Excel export. `[сделано: SpreadsheetML .xls export route + кнопка в /analytics]`
 - ABC by turnover/cost/profit/quantity. `[сделано: ABC table по SalesSnapshot с A/B/C классами]`
 - Sales heatmap by planogram. `[сделано: /analytics heatmap table по planogram+SKU turnover]`
-- Color by brand/supplier/markup/stock days.
+- Color by brand/supplier/markup/stock days. `[сделано: color overlay table по brand/supplier/markup/stock days]`
 - Assortment gaps: active in assortment but absent in planogram.
 - Obsolete in planogram but inactive in assortment.
 - Task KPI report.

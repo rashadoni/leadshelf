@@ -6,6 +6,7 @@ import {
   formatMeters,
   getAbcRows,
   getPlanogramProductRows,
+  getStockCoverageByProduct,
   type AbcClass,
 } from "@/server/analytics/planogram-products"
 
@@ -22,6 +23,8 @@ const OPTIONAL_COLUMNS = ["brand", "category", "supplier", "placements", "units"
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]
 const GROUP_COLUMNS = ["brand", "category", "supplier"] as const
 type GroupColumn = (typeof GROUP_COLUMNS)[number]
+const COLOR_MODES = ["brand", "supplier", "markup", "stockDays"] as const
+type ColorMode = (typeof COLOR_MODES)[number]
 
 function parseVisibleColumns(raw: string | undefined): Set<OptionalColumn> {
   if (!raw) return new Set(OPTIONAL_COLUMNS)
@@ -41,15 +44,38 @@ function abcBadgeClass(value: AbcClass): string {
   return "bg-neutral-100 text-neutral-600"
 }
 
+function colorSwatchClass(index: number): string {
+  const colors = [
+    "bg-sky-500",
+    "bg-violet-500",
+    "bg-amber-500",
+    "bg-emerald-500",
+    "bg-rose-500",
+    "bg-cyan-500",
+    "bg-lime-600",
+    "bg-fuchsia-500",
+  ]
+  return colors[index % colors.length]!
+}
+
 function parseGroup(raw: string | undefined): GroupColumn | null {
   return GROUP_COLUMNS.includes(raw as GroupColumn) ? (raw as GroupColumn) : null
 }
 
-function analyticsHref(visibleColumns: Set<OptionalColumn>, groupBy: GroupColumn | null): string {
+function parseColorMode(raw: string | undefined): ColorMode {
+  return COLOR_MODES.includes(raw as ColorMode) ? (raw as ColorMode) : "brand"
+}
+
+function analyticsHref(
+  visibleColumns: Set<OptionalColumn>,
+  groupBy: GroupColumn | null,
+  colorMode: ColorMode,
+): string {
   const params = new URLSearchParams()
   const cols = OPTIONAL_COLUMNS.filter((c) => visibleColumns.has(c))
   if (cols.length !== OPTIONAL_COLUMNS.length) params.set("cols", cols.join(","))
   if (groupBy) params.set("group", groupBy)
+  if (colorMode !== "brand") params.set("color", colorMode)
   const query = params.toString()
   return query ? `/analytics?${query}` : "/analytics"
 }
@@ -58,6 +84,7 @@ function columnHref(
   column: OptionalColumn,
   visibleColumns: Set<OptionalColumn>,
   groupBy: GroupColumn | null,
+  colorMode: ColorMode,
 ): string {
   const next = new Set(visibleColumns)
   if (next.has(column)) {
@@ -65,11 +92,23 @@ function columnHref(
   } else {
     next.add(column)
   }
-  return analyticsHref(next, groupBy)
+  return analyticsHref(next, groupBy, colorMode)
 }
 
-function groupHref(groupBy: GroupColumn | null, visibleColumns: Set<OptionalColumn>): string {
-  return analyticsHref(visibleColumns, groupBy)
+function groupHref(
+  groupBy: GroupColumn | null,
+  visibleColumns: Set<OptionalColumn>,
+  colorMode: ColorMode,
+): string {
+  return analyticsHref(visibleColumns, groupBy, colorMode)
+}
+
+function colorHref(
+  colorMode: ColorMode,
+  visibleColumns: Set<OptionalColumn>,
+  groupBy: GroupColumn | null,
+): string {
+  return analyticsHref(visibleColumns, groupBy, colorMode)
 }
 
 export default async function AnalyticsPage({
@@ -86,9 +125,14 @@ export default async function AnalyticsPage({
   if (!session) return null
   const visibleColumns = parseVisibleColumns(params.cols)
   const groupBy = parseGroup(params.group)
+  const colorMode = parseColorMode(params.color)
 
   const db = tenantDb(session.org)
   const [rows, abcRows] = await Promise.all([getPlanogramProductRows(db), getAbcRows(db)])
+  const stockCoverageByProduct = await getStockCoverageByProduct(
+    db,
+    rows.map((row) => row.productId),
+  )
   const uniquePlanograms = new Set(rows.map((r) => r.versionId)).size
   const uniqueProducts = new Set(rows.map((r) => r.sku)).size
   const totalUnits = rows.reduce((sum, r) => sum + r.units, 0)
@@ -139,6 +183,66 @@ export default async function AnalyticsPage({
       return b.turnover - a.turnover
     })
   const maxHeatmapTurnover = Math.max(0, ...heatmapRows.map((row) => row.turnover))
+  const abcByProductId = new Map(abcRows.map((row) => [row.productId, row]))
+  const categoryColorIndexes = new Map<string, number>()
+  const colorRows = rows.map((row) => {
+    const sales = abcByProductId.get(row.productId)
+    const coverage = stockCoverageByProduct.get(row.productId)
+    let label = ""
+    let value = ""
+    let swatchClass = "bg-neutral-400"
+
+    if (colorMode === "brand" || colorMode === "supplier") {
+      label = row[colorMode] ?? t("grouping.empty")
+      if (!categoryColorIndexes.has(label)) categoryColorIndexes.set(label, categoryColorIndexes.size)
+      swatchClass = colorSwatchClass(categoryColorIndexes.get(label) ?? 0)
+      value = label
+    } else if (colorMode === "markup") {
+      const markup = sales && sales.turnover > 0 ? (sales.profit / sales.turnover) * 100 : null
+      if (markup == null) {
+        label = t("colorOverlay.noData")
+        value = "—"
+        swatchClass = "bg-neutral-400"
+      } else if (markup < 0) {
+        label = t("colorOverlay.markup.negative")
+        value = `${markup.toFixed(1)}%`
+        swatchClass = "bg-red-600"
+      } else if (markup < 10) {
+        label = t("colorOverlay.markup.low")
+        value = `${markup.toFixed(1)}%`
+        swatchClass = "bg-amber-500"
+      } else if (markup < 25) {
+        label = t("colorOverlay.markup.medium")
+        value = `${markup.toFixed(1)}%`
+        swatchClass = "bg-emerald-500"
+      } else {
+        label = t("colorOverlay.markup.high")
+        value = `${markup.toFixed(1)}%`
+        swatchClass = "bg-green-700"
+      }
+    } else {
+      const stockDays = coverage?.stockDays ?? null
+      if (stockDays == null) {
+        label = t("colorOverlay.noData")
+        value = "—"
+        swatchClass = "bg-neutral-400"
+      } else if (stockDays < 7) {
+        label = t("colorOverlay.stockDays.low")
+        value = stockDays.toFixed(1)
+        swatchClass = "bg-red-600"
+      } else if (stockDays <= 21) {
+        label = t("colorOverlay.stockDays.ok")
+        value = stockDays.toFixed(1)
+        swatchClass = "bg-emerald-500"
+      } else {
+        label = t("colorOverlay.stockDays.high")
+        value = stockDays.toFixed(1)
+        swatchClass = "bg-sky-600"
+      }
+    }
+
+    return { ...row, label, value, swatchClass }
+  })
 
   return (
     <div>
@@ -184,7 +288,7 @@ export default async function AnalyticsPage({
             return (
               <Link
                 key={column}
-                href={columnHref(column, visibleColumns, groupBy)}
+                href={columnHref(column, visibleColumns, groupBy, colorMode)}
                 className={`rounded-full border px-3 py-1 text-xs ${
                   active
                     ? "border-neutral-900 bg-neutral-900 text-white"
@@ -204,7 +308,7 @@ export default async function AnalyticsPage({
         </div>
         <div className="flex flex-wrap gap-1">
           <Link
-            href={groupHref(null, visibleColumns)}
+            href={groupHref(null, visibleColumns, colorMode)}
             className={`rounded-full border px-3 py-1 text-xs ${
               !groupBy
                 ? "border-neutral-900 bg-neutral-900 text-white"
@@ -216,7 +320,7 @@ export default async function AnalyticsPage({
           {GROUP_COLUMNS.map((column) => (
             <Link
               key={column}
-              href={groupHref(column, visibleColumns)}
+              href={groupHref(column, visibleColumns, colorMode)}
               className={`rounded-full border px-3 py-1 text-xs ${
                 groupBy === column
                   ? "border-neutral-900 bg-neutral-900 text-white"
@@ -304,6 +408,68 @@ export default async function AnalyticsPage({
                         </span>
                       </td>
                     ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("colorOverlay.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("colorOverlay.hint")}</p>
+          <div className="mt-3 flex flex-wrap gap-1">
+            {COLOR_MODES.map((mode) => (
+              <Link
+                key={mode}
+                href={colorHref(mode, visibleColumns, groupBy)}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  colorMode === mode
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600"
+                }`}
+              >
+                {t(`colorOverlay.modes.${mode}` as never)}
+              </Link>
+            ))}
+          </div>
+        </div>
+        {colorRows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("productTable.empty")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.product")}</th>
+                  <th className="px-3 py-2">{t("colorOverlay.color")}</th>
+                  <th className="px-3 py-2">{t("colorOverlay.value")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {colorRows.map((row) => (
+                  <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/planograms/${row.planogramId}/${row.versionId}`}
+                        className="font-medium hover:underline"
+                      >
+                        {row.planogramName}
+                      </Link>
+                      <div className="mt-0.5 text-xs text-neutral-500">v{row.versionNumber}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.productName}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`mr-2 inline-block h-3 w-3 rounded-full ${row.swatchClass}`} />
+                      {row.label}
+                    </td>
+                    <td className="px-3 py-2 text-neutral-600">{row.value}</td>
                   </tr>
                 ))}
               </tbody>

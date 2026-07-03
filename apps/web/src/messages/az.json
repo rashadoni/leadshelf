@@ -278,6 +278,30 @@
       "empty": "Satış datası ilə yerləşdirilmiş məhsullar arasında uyğunluq yoxdur.",
       "intensity": "İntensivlik"
     },
+    "colorOverlay": {
+      "title": "Rəng qatı",
+      "hint": "Planoqramı brend, təchizatçı, marja və ya stok günləri üzrə rəngləmək üçün ayrıca analitik qat.",
+      "color": "Rəng",
+      "value": "Dəyər",
+      "noData": "Data yoxdur",
+      "modes": {
+        "brand": "Brend",
+        "supplier": "Təchizatçı",
+        "markup": "Marja",
+        "stockDays": "Stok günü"
+      },
+      "markup": {
+        "negative": "Mənfi",
+        "low": "Aşağı",
+        "medium": "Orta",
+        "high": "Yüksək"
+      },
+      "stockDays": {
+        "low": "Out-of-stock riski",
+        "ok": "Normal",
+        "high": "Yüksək stok"
+      }
+    },
     "productTable": {
       "title": "Planoqramlardakı məhsullar",
       "hint": "Planoqram versiyası və SKU üzrə aqreqasiya: yerləşdirmə, feysinqlərdə ədəd və xətti en.",
