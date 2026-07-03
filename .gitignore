@@ -14,4 +14,8 @@ temp/
 *.tsbuildinfo
 .turbo/
 .expo/
+.claude/
+apps/mobile/AGENTS.md
+apps/mobile/CLAUDE.md
+apps/mobile/LICENSE
 package-lock.json

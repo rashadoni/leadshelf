@@ -187,6 +187,3 @@ Tasks page:
 - Store list duplicates: dedupe input, but reject if dedupe changes count.
 - Assignment overlap: resolve stores from both explicit and format assignments in app; raw DB exclusion is not enough with current schema.
 - Format membership changes later: tasks are snapshot for resolved stores at publish time; assignment remains format-level intent.
-tokens used
-67,401
-**(a) Repo Layer**

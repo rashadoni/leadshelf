@@ -72,8 +72,12 @@
 - `[решено]` Expo + dev-client (не bare RN): WatermelonDB и VisionCamera
   подключаются config-плагинами, а DX Expo сильно дешевле. Пересобрать в
   bare можно позже без переписывания.
-- `[решено]` WatermelonDB, outbox по mtm-offline-sync-spec, идемпотентность
-  deviceId+clientOpId.
+- `[уточнено 2026-07-03, docs/19]` Хранилище пилота — **expo-sqlite**
+  (работает в Expo Go: демо на телефоне владельца без нативной сборки);
+  WatermelonDB — миграция позже через LocalStore-интерфейс (clientOpId/
+  clientPhotoId/курсоры сохраняются). Требование docs/05 — про НАЛИЧИЕ
+  outbox, не про движок. Outbox по mtm-offline-sync-spec, идемпотентность
+  deviceId+clientOpId — без изменений.
 
 ## Тестирование и CI
 

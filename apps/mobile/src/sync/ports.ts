@@ -1,0 +1,72 @@
+// Порты sync-движка. Sync-manager — чистый TS: НИКАКИХ импортов expo/*,
+// все side-effects инжектятся (docs/19) — поэтому он тестируется в CI.
+
+import type {
+  MobilePushOperation,
+  MobilePushResult,
+  MobileStoreRow,
+  MobileSyncPullResponse,
+  MobileTaskRow,
+} from "@leadshelf/api-contracts/mobile/v1"
+
+export type TaskRow = MobileTaskRow
+export type StoreRow = MobileStoreRow
+export type PullResponse = MobileSyncPullResponse
+export type PushOperation = MobilePushOperation
+export type PushResult = MobilePushResult
+
+/** Транспорт к замороженному mobile API (реализация: api/mobile-client). */
+export interface SyncApi {
+  pull(cursors: { tasks?: string | null; planogramBundles?: string | null }): Promise<PullResponse>
+  push(operations: PushOperation[]): Promise<{ results: PushResult[] }>
+  ack(cursors: { tasks?: string | null; planogramBundles?: string | null }): Promise<void>
+  uploadPhoto(photo: {
+    clientPhotoId: string
+    taskId: string
+    fileUri: string
+    takenAt: string
+  }): Promise<{ photoId: string; key: string }>
+}
+
+export type OutboxRow = PushOperation & {
+  status: "pending" | "applied" | "conflict" | "rejected"
+  attempts: number
+}
+
+export interface PhotoQueueRow {
+  clientPhotoId: string
+  taskId: string
+  fileUri: string
+  takenAt: string
+  uploaded: boolean
+}
+
+/** Локальное хранилище (реализация: db/local-store на expo-sqlite). */
+export interface LocalStore {
+  applyPull(data: PullResponse): Promise<void>
+  getCursors(): Promise<{ tasks: string | null; planogramBundles: string | null }>
+  setCursors(c: { tasks: string | null; planogramBundles: string | null }): Promise<void>
+  pendingOutbox(limit?: number): Promise<OutboxRow[]>
+  markOutbox(clientOpId: string, status: OutboxRow["status"], detail?: unknown): Promise<void>
+  bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
+  pendingPhotos(): Promise<PhotoQueueRow[]>
+  markPhotoUploaded(clientPhotoId: string): Promise<void>
+}
+
+export type SyncPhase =
+  | "idle"
+  | "pulling"
+  | "acking"
+  | "uploadingPhotos"
+  | "pushing"
+  | "error"
+  | "offline"
+  | "upgradeRequired"
+
+export interface SyncStatus {
+  phase: SyncPhase
+  lastSyncAt: string | null
+  pendingOps: number
+  pendingPhotos: number
+  error: string | null
+}

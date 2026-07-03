@@ -6,7 +6,8 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./import/v1": "./src/import/v1/index.ts"
+    "./import/v1": "./src/import/v1/index.ts",
+    "./mobile/v1": "./src/mobile/v1/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

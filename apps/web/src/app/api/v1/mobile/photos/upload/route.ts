@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { z } from "zod"
+import { mobilePhotoUploadFieldsSchema } from "@leadshelf/api-contracts/mobile/v1"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 import { putObject } from "@/server/storage/s3"
@@ -13,13 +13,6 @@ export const maxDuration = 120
 const MAX_SIZE = 15 * 1024 * 1024
 const ALLOWED: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }
 
-const fieldsSchema = z.object({
-  clientPhotoId: z.string().min(8).max(128),
-  taskId: z.string().min(1),
-  takenAt: z.string().datetime(),
-  exifJson: z.string().max(20000).optional(),
-})
-
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session?.did) return unauthorized()
@@ -27,7 +20,7 @@ export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
   if (!(file instanceof File)) return NextResponse.json({ error: "file_required" }, { status: 400 })
-  const parsed = fieldsSchema.safeParse({
+  const parsed = mobilePhotoUploadFieldsSchema.safeParse({
     clientPhotoId: form!.get("clientPhotoId"),
     taskId: form!.get("taskId"),
     takenAt: form!.get("takenAt"),
