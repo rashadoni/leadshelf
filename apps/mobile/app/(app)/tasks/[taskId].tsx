@@ -2,6 +2,12 @@ import { useCallback, useMemo, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
+import {
+  CameraView,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+  type BarcodeType,
+} from "expo-camera"
 import * as ImagePicker from "expo-image-picker"
 import * as Crypto from "expo-crypto"
 import {
@@ -24,15 +30,31 @@ import { t, type MessageKey } from "../../../src/i18n"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import type { TaskRow } from "../../../src/sync/ports"
 
+const BARCODE_TYPES: BarcodeType[] = [
+  "ean13",
+  "ean8",
+  "upc_a",
+  "upc_e",
+  "code128",
+  "code39",
+  "code93",
+  "itf14",
+  "codabar",
+  "datamatrix",
+  "qr",
+]
+
 export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>()
   const { sync } = useSync()
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [task, setTask] = useState<TaskRow | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [comment, setComment] = useState("")
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null)
   const [barcodeQuery, setBarcodeQuery] = useState("")
   const [lastBarcodeLookup, setLastBarcodeLookup] = useState<string | null>(null)
+  const [scannerOpen, setScannerOpen] = useState(false)
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -120,8 +142,8 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
-  function findProductByCode() {
-    const query = barcodeQuery.trim()
+  function applyCodeLookup(rawCode: string) {
+    const query = rawCode.trim()
     if (!query) {
       setLastBarcodeLookup(null)
       return
@@ -129,6 +151,26 @@ export default function TaskDetailScreen() {
     const found = findPlacementSummaryByCode(placementSummaries, query)
     if (found) setSelectedPlacementId(found.placementId)
     setLastBarcodeLookup(query)
+  }
+
+  function findProductByCode() {
+    applyCodeLookup(barcodeQuery)
+  }
+
+  async function openBarcodeScanner() {
+    const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
+    if (!permission.granted) {
+      Alert.alert(t("cameraPermissionDenied"))
+      return
+    }
+    setScannerOpen(true)
+    setLastBarcodeLookup(null)
+  }
+
+  function handleBarcodeScanned(result: BarcodeScanningResult) {
+    setScannerOpen(false)
+    setBarcodeQuery(result.data)
+    applyCodeLookup(result.data)
   }
 
   return (
@@ -243,6 +285,25 @@ export default function TaskDetailScreen() {
                       <Text style={styles.finderButtonText}>{t("findProduct")}</Text>
                     </Pressable>
                   </View>
+                  <Pressable style={styles.scanButton} onPress={openBarcodeScanner}>
+                    <Text style={styles.scanButtonText}>{t("scanBarcode")}</Text>
+                  </Pressable>
+                  {scannerOpen ? (
+                    <View style={styles.scannerCard}>
+                      <CameraView
+                        style={styles.scannerCamera}
+                        facing="back"
+                        barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
+                        onBarcodeScanned={handleBarcodeScanned}
+                      />
+                      <View style={styles.scannerFooter}>
+                        <Text style={styles.scannerHint}>{t("scannerHint")}</Text>
+                        <Pressable style={styles.scannerClose} onPress={() => setScannerOpen(false)}>
+                          <Text style={styles.scannerCloseText}>{t("closeScanner")}</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                   {lastBarcodeLookup ? (
                     <Text
                       style={[
@@ -418,6 +479,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   finderButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
+  scanButton: {
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d4d4d4",
+    backgroundColor: "#fafaf9",
+  },
+  scanButtonText: { color: "#171717", fontSize: 13, fontWeight: "700" },
+  scannerCard: {
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#d4d4d4",
+    backgroundColor: "#171717",
+  },
+  scannerCamera: { height: 220, width: "100%" },
+  scannerFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+  },
+  scannerHint: { flex: 1, color: "white", fontSize: 12, fontWeight: "600" },
+  scannerClose: {
+    borderRadius: 6,
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  scannerCloseText: { color: "#171717", fontSize: 12, fontWeight: "700" },
   finderMessage: { fontSize: 12, fontWeight: "600" },
   finderSuccess: { color: "#166534" },
   finderError: { color: "#991b1b" },
