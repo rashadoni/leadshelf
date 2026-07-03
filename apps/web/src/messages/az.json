@@ -275,6 +275,19 @@
         "quantity": "Satış miqdarı"
       }
     },
+    "phase8Metrics": {
+      "title": "Məkan məhsuldarlığı metrikləri",
+      "hint": "Cari LFL dövrü üçün satış, mənfəət, rəf metri və stok günləri üzrə əsas göstəricilər.",
+      "items": {
+        "turnover": "Dövriyyə",
+        "profit": "Mənfəət",
+        "quantity": "Satış miqdarı",
+        "turnoverPerMeter": "Dövriyyə / metr",
+        "profitPerMeter": "Mənfəət / metr",
+        "stockDays": "Orta stok günü",
+        "turnoverRatio": "Dövriyyə nisbəti"
+      }
+    },
     "columnChooser": {
       "title": "Sütunlar",
       "reset": "Sıfırla"

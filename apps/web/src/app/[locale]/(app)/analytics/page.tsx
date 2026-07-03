@@ -178,6 +178,28 @@ export default async function AnalyticsPage({
     (sum, row) => (placedProductIds.has(row.productId) ? sum + row.profit : sum),
     0,
   )
+  const likeForLikeMetricByKey = new Map(likeForLikeSummary.rows.map((row) => [row.metric, row]))
+  const currentTurnover = likeForLikeMetricByKey.get("turnover")?.current ?? 0
+  const previousTurnover = likeForLikeMetricByKey.get("turnover")?.previous ?? 0
+  const currentProfit = likeForLikeMetricByKey.get("profit")?.current ?? 0
+  const currentQuantity = likeForLikeMetricByKey.get("quantity")?.current ?? 0
+  const linearMeters = totalLinearMm / 1000
+  const stockDayValues = [...new Set(rows.map((row) => row.productId))]
+    .map((productId) => stockCoverageByProduct.get(productId)?.stockDays ?? null)
+    .filter((value): value is number => value != null)
+  const avgStockDays =
+    stockDayValues.length > 0
+      ? stockDayValues.reduce((sum, value) => sum + value, 0) / stockDayValues.length
+      : null
+  const phase8Metrics = [
+    { key: "turnover", value: formatAmount(currentTurnover) },
+    { key: "profit", value: formatAmount(currentProfit) },
+    { key: "quantity", value: formatAmount(currentQuantity) },
+    { key: "turnoverPerMeter", value: linearMeters > 0 ? formatAmount(currentTurnover / linearMeters) : "—" },
+    { key: "profitPerMeter", value: linearMeters > 0 ? formatAmount(currentProfit / linearMeters) : "—" },
+    { key: "stockDays", value: avgStockDays == null ? "—" : avgStockDays.toFixed(1) },
+    { key: "turnoverRatio", value: previousTurnover !== 0 ? (currentTurnover / previousTurnover).toFixed(2) : "—" },
+  ] as const
   const groupRows = groupBy
     ? [
         ...rows
@@ -396,6 +418,23 @@ export default async function AnalyticsPage({
                   )}
                 </tbody>
               </table>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("phase8Metrics.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("phase8Metrics.hint")}</p>
+        </div>
+        <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          {phase8Metrics.map((metric) => (
+            <div key={metric.key} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+              <div className="text-xs text-neutral-500">
+                {t(`phase8Metrics.items.${metric.key}` as never)}
+              </div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">{metric.value}</div>
             </div>
           ))}
         </div>

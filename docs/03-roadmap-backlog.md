@@ -335,6 +335,8 @@ Definition of Done:
 - Compare store/format/planogram. `[сделано: LFL breakdown в /analytics
   сравнивает turnover по store, format и active assignment planogram]`
 - Metrics: turnover, profit, sales qty, turnover per meter, profit per meter, stock days, turnover ratio.
+  `[сделано: /analytics показывает current LFL turnover/profit/qty,
+  turnover per meter, profit per meter, avg stock days и turnover ratio]`
 - Space productivity: share in shelf vs share in sales/profit.
 - Shelf share by brand/category/supplier.
 

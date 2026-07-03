@@ -275,6 +275,19 @@
         "quantity": "Кол-во продаж"
       }
     },
+    "phase8Metrics": {
+      "title": "Метрики space productivity",
+      "hint": "Ключевые показатели текущего LFL-периода по продажам, прибыли, полочному метру и дням запаса.",
+      "items": {
+        "turnover": "Оборот",
+        "profit": "Прибыль",
+        "quantity": "Кол-во продаж",
+        "turnoverPerMeter": "Оборот / метр",
+        "profitPerMeter": "Прибыль / метр",
+        "stockDays": "Средн. дни запаса",
+        "turnoverRatio": "Turnover ratio"
+      }
+    },
     "columnChooser": {
       "title": "Колонки",
       "reset": "Сбросить"
