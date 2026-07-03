@@ -353,7 +353,8 @@ Definition of Done:
 - Shelf/equipment perspective. `[сделано: orbit camera показывает глубину,
   полки, стойки и размещение по x/y/z]`
 - Screenshot export. `[сделано: PNG export из WebGL canvas]`
-- Store/floor plan viewer later.
+- Store/floor plan viewer later. `[сделано: /floor-plans read-only viewer
+  показывает published floor plans, equipment placement и linked planograms]`
 
 Не делать:
 

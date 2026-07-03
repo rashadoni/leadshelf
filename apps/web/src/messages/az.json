@@ -203,6 +203,13 @@
       "screenshot": "PNG ixracı"
     }
   },
+  "floorPlans": {
+    "title": "Zal planları",
+    "subtitle": "Mağaza və formatlar üçün dərc edilmiş zal planları: avadanlıq yerləşimi və bağlı planoqramlar.",
+    "empty": "Hələ zal planı yoxdur.",
+    "noPublished": "Dərc edilmiş versiya yoxdur.",
+    "equipmentCount": "avadanlıq: {count}"
+  },
   "tasks": {
     "all": "Hamısı",
     "empty": "Tapşırıq yoxdur. Planoqramı nöqtələrə dərc edin.",
