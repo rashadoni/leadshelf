@@ -59,3 +59,34 @@ jobs:
         run: pnpm --filter @leadshelf/web build
         env:
           JWT_SECRET: ci-only-not-a-secret
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency: deploy-prod
+    steps:
+      - name: Deploy to leadshelf-1
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key "root@$HOST" '
+            set -e
+            cd /opt/leadshelf/prod/app && git pull --ff-only
+            cp deploy/docker-compose.prod.yml ../docker-compose.yml
+            cp deploy/Caddyfile ../Caddyfile
+            cd /opt/leadshelf/prod
+            docker compose build web migrate
+            docker compose run --rm migrate
+            docker compose up -d web caddy
+            docker image prune -f > /dev/null
+          '
+      - name: Smoke check
+        run: |
+          sleep 8
+          curl -sf --max-time 20 https://157-90-227-191.sslip.io/api/health

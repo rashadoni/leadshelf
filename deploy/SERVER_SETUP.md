@@ -11,12 +11,19 @@
 - IP: **157.90.227.191** (IPv4 + IPv6).
 - SSH: ключ `rashadrahimov@Rashads-MacBook-Air.local` (ed25519, default
   в проекте), root-доступ проверен.
+- **Демо работает (2026-07-03): https://157-90-227-191.sslip.io** —
+  sslip.io-домен с настоящим Let's Encrypt TLS, логины demo-тенанта
+  (пароль demo1234). Прод-стек в /opt/leadshelf/prod (compose
+  leadshelf-prod: caddy+web+postgres16+minio), секреты в
+  .env.production (root:600, сгенерированы на сервере).
+- **Автодеплой**: push в main -> CI (тесты) -> deploy job (ssh, git pull,
+  build, migrate, up) -> smoke check. Ключ CI — отдельный, в GH secrets.
+- Repo подключен read-only deploy-ключом (leadshelf-1-deploy).
 - TODO владельца: удалить случайный дубль `ubuntu-8gb-fsn1-1`
-  (167.233.203.207, Falkenstein) — ••• -> Delete.
-- TODO: Hetzner Firewall (22/80/443), Storage Box для бэкапов до
-  пилотных данных.
-- Осталось от владельца: **домен/поддомен** для демо (A-запись на
-  157.90.227.191); Caddy сам получит TLS-сертификат.
+  (167.233.203.207, Falkenstein) — ••• -> Delete, если ещё не удален.
+- TODO: бэкапы (pg_dump + minio volume) до пилотных данных — см. Шаг 5.
+- Свой домен (опционально): A-запись на 157.90.227.191 и заменить хост
+  в deploy/Caddyfile — TLS Caddy возьмет сам.
 
 ## Шаг 2. Первичная настройка (сделает Claude по SSH или руками)
 
