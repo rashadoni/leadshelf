@@ -312,7 +312,9 @@ Definition of Done:
 - ABC by turnover/cost/profit/quantity. `[сделано: ABC table по SalesSnapshot с A/B/C классами]`
 - Sales heatmap by planogram. `[сделано: /analytics heatmap table по planogram+SKU turnover]`
 - Color by brand/supplier/markup/stock days. `[сделано: color overlay table по brand/supplier/markup/stock days]`
-- Assortment gaps: active in assortment but absent in planogram.
+- Assortment gaps: active in assortment but absent in planogram. `[сделано:
+  /analytics показывает активные SKU из форматной матрицы и store-исключений,
+  которых нет в назначенной планограмме]`
 - Obsolete in planogram but inactive in assortment.
 - Task KPI report.
 - Basic dashboard: stores with planograms, active planograms, placed SKUs, linear meters, turnover, profit.

@@ -4,6 +4,7 @@ import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import {
   formatMeters,
+  getAssortmentGapRows,
   getAbcRows,
   getPlanogramProductRows,
   getStockCoverageByProduct,
@@ -128,7 +129,11 @@ export default async function AnalyticsPage({
   const colorMode = parseColorMode(params.color)
 
   const db = tenantDb(session.org)
-  const [rows, abcRows] = await Promise.all([getPlanogramProductRows(db), getAbcRows(db)])
+  const [rows, abcRows, assortmentGapRows] = await Promise.all([
+    getPlanogramProductRows(db),
+    getAbcRows(db),
+    getAssortmentGapRows(db),
+  ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
     rows.map((row) => row.productId),
@@ -523,6 +528,48 @@ export default async function AnalyticsPage({
                     </tr>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("assortmentGaps.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("assortmentGaps.hint")}</p>
+        </div>
+        {assortmentGapRows.length === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("assortmentGaps.empty")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                  <th className="px-3 py-2">{t("assortmentGaps.columns.scope")}</th>
+                  <th className="px-3 py-2">{t("assortmentGaps.columns.source")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.product")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.brand")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.category")}</th>
+                  <th className="px-3 py-2">{t("productTable.columns.supplier")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assortmentGapRows.map((row) => (
+                  <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2 font-medium">{row.scopeName}</td>
+                    <td className="px-3 py-2 text-neutral-600">
+                      {t(`assortmentGaps.source.${row.source}` as never)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{row.productName}</div>
+                      <div className="mt-0.5 text-xs text-neutral-500">{row.sku}</div>
+                    </td>
+                    <td className="px-3 py-2 text-neutral-600">{row.brand ?? "—"}</td>
+                    <td className="px-3 py-2 text-neutral-600">{row.category ?? "—"}</td>
+                    <td className="px-3 py-2 text-neutral-600">{row.supplier ?? "—"}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

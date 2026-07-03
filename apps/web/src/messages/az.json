@@ -278,6 +278,19 @@
       "empty": "Satış datası ilə yerləşdirilmiş məhsullar arasında uyğunluq yoxdur.",
       "intensity": "İntensivlik"
     },
+    "assortmentGaps": {
+      "title": "Assortiment boşluqları",
+      "hint": "Aktiv format və mağaza assortimenti içində planoqramda yerləşdirilməyən SKU-lar.",
+      "empty": "Aktiv assortment üçün planoqram boşluğu yoxdur.",
+      "columns": {
+        "scope": "Format / mağaza",
+        "source": "Mənbə"
+      },
+      "source": {
+        "format": "Format matrisi",
+        "store": "Mağaza istisnası"
+      }
+    },
     "colorOverlay": {
       "title": "Rəng qatı",
       "hint": "Planoqramı brend, təchizatçı, marja və ya stok günləri üzrə rəngləmək üçün ayrıca analitik qat.",

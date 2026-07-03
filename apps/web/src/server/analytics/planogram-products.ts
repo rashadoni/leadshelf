@@ -41,6 +41,18 @@ export type StockCoverage = {
   stockDays: number | null
 }
 
+export type AssortmentGapRow = {
+  key: string
+  source: "format" | "store"
+  scopeName: string
+  productId: string
+  sku: string
+  productName: string
+  brand: string | null
+  category: string | null
+  supplier: string | null
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
@@ -239,4 +251,133 @@ export async function getStockCoverageByProduct(
   }
 
   return result
+}
+
+function isInDateRange(
+  range: { validFrom?: Date | null; validTo?: Date | null },
+  now: Date,
+): boolean {
+  if (range.validFrom && range.validFrom > now) return false
+  if (range.validTo && range.validTo < now) return false
+  return true
+}
+
+function isAssignmentActive(
+  assignment: { activeFrom: Date; activeTo: Date | null },
+  now: Date,
+): boolean {
+  if (assignment.activeFrom > now) return false
+  if (assignment.activeTo && assignment.activeTo < now) return false
+  return true
+}
+
+export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Promise<AssortmentGapRow[]> {
+  const [formatAssortment, storeAssortment, assignments] = await Promise.all([
+    db.assortmentMatrix.findMany({
+      where: { isActive: true },
+      include: {
+        format: { select: { id: true, name: true } },
+        product: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            brand: { select: { name: true } },
+            category: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ formatId: "asc" }, { productId: "asc" }],
+      take: 3000,
+    }),
+    db.storeAssortment.findMany({
+      where: { isActive: true },
+      include: {
+        store: { select: { id: true, name: true } },
+        product: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            brand: { select: { name: true } },
+            category: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ storeId: "asc" }, { productId: "asc" }],
+      take: 3000,
+    }),
+    db.planogramAssignment.findMany({
+      include: {
+        planogramVersion: {
+          select: {
+            id: true,
+            placements: { select: { productId: true } },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 3000,
+    }),
+  ])
+
+  const placedProductsByFormat = new Map<string, Set<string>>()
+  const placedProductsByStore = new Map<string, Set<string>>()
+  for (const assignment of assignments) {
+    if (!isAssignmentActive(assignment, now)) continue
+    const target =
+      assignment.formatId != null
+        ? placedProductsByFormat
+        : assignment.storeId != null
+          ? placedProductsByStore
+          : null
+    const targetId = assignment.formatId ?? assignment.storeId
+    if (!target || !targetId) continue
+    const productIds = target.get(targetId) ?? new Set<string>()
+    for (const placement of assignment.planogramVersion.placements) {
+      productIds.add(placement.productId)
+    }
+    target.set(targetId, productIds)
+  }
+
+  const gaps: AssortmentGapRow[] = []
+  for (const item of formatAssortment) {
+    if (!isInDateRange(item, now)) continue
+    if (placedProductsByFormat.get(item.formatId)?.has(item.productId)) continue
+    gaps.push({
+      key: `format:${item.formatId}:${item.productId}`,
+      source: "format",
+      scopeName: item.format.name,
+      productId: item.productId,
+      sku: item.product.sku,
+      productName: item.product.name,
+      brand: item.product.brand?.name ?? null,
+      category: item.product.category?.name ?? null,
+      supplier: item.product.supplier?.name ?? null,
+    })
+  }
+
+  for (const item of storeAssortment) {
+    if (!isInDateRange(item, now)) continue
+    if (placedProductsByStore.get(item.storeId)?.has(item.productId)) continue
+    gaps.push({
+      key: `store:${item.storeId}:${item.productId}`,
+      source: "store",
+      scopeName: item.store.name,
+      productId: item.productId,
+      sku: item.product.sku,
+      productName: item.product.name,
+      brand: item.product.brand?.name ?? null,
+      category: item.product.category?.name ?? null,
+      supplier: item.product.supplier?.name ?? null,
+    })
+  }
+
+  return gaps.sort((a, b) => {
+    const scope = a.scopeName.localeCompare(b.scopeName)
+    if (scope !== 0) return scope
+    return a.sku.localeCompare(b.sku)
+  })
 }
