@@ -32,7 +32,26 @@ export default async function PlanogramEditorPage({
     }),
     db.goldenReference.findMany({
       where: { planogramVersionId: versionId },
-      select: { id: true, imageUrl: true, status: true, createdAt: true },
+      select: {
+        id: true,
+        imageUrl: true,
+        status: true,
+        createdAt: true,
+        slots: {
+          select: {
+            id: true,
+            placementId: true,
+            productId: true,
+            label: true,
+            xPct: true,
+            yPct: true,
+            widthPct: true,
+            heightPct: true,
+            product: { select: { sku: true, name: true } },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
@@ -99,6 +118,18 @@ export default async function PlanogramEditorPage({
         imageUrl: ref.imageUrl,
         status: ref.status,
         createdAt: ref.createdAt.toISOString(),
+        slots: ref.slots.map((slot) => ({
+          id: slot.id,
+          placementId: slot.placementId,
+          productId: slot.productId,
+          productSku: slot.product?.sku ?? null,
+          productName: slot.product?.name ?? null,
+          label: slot.label,
+          xPct: slot.xPct,
+          yPct: slot.yPct,
+          widthPct: slot.widthPct,
+          heightPct: slot.heightPct,
+        })),
       }))}
       goldenPhotoCandidates={goldenPhotoCandidates.map((photo) => ({
         id: photo.id,

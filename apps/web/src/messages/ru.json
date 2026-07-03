@@ -197,10 +197,18 @@
       "rejected": "Не встало",
       "conflict": "Черновик изменён параллельно — страница обновлена",
       "placedUnits": "шт на полке",
-      "goldenReference": "Golden reference",
+      "goldenReference": "Эталонный снимок",
       "noGoldenReference": "Для этой версии ещё не выбран эталонный снимок.",
       "noGoldenPhotoCandidates": "Для этой планограммы ещё нет фото-подтверждений.",
-      "createGoldenReference": "Создать эталонный снимок"
+      "createGoldenReference": "Создать эталонный снимок",
+      "referenceSlot": "Эталонная зона",
+      "noReferenceSlots": "Для этого эталонного снимка зоны ещё не размечены.",
+      "addReferenceSlot": "Добавить зону",
+      "deleteReferenceSlot": "Удалить",
+      "xPct": "X %",
+      "yPct": "Y %",
+      "widthPct": "Ширина %",
+      "heightPct": "Высота %"
     },
     "viewer3d": {
       "title": "3D просмотр",

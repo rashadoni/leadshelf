@@ -368,7 +368,8 @@ Definition of Done:
 
 - Golden reference photo. `[сделано: Prisma GoldenReference/Slot слой +
   API/UI для создания эталонного фото из PhotoSubmission по planogram version]`
-- Reference slots.
+- Reference slots. `[сделано: API create/delete + UI overlay-разметка зон
+  эталонного фото в процентах изображения, привязка к placement/product]`
 - Photo quality check.
 - Detector/embedding service.
 - Compliance score.

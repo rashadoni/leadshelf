@@ -51,11 +51,25 @@ interface PickerProduct {
   widthMm: number | null
 }
 
+interface GoldenReferenceSlot {
+  id: string
+  placementId: string | null
+  productId: string | null
+  productSku: string | null
+  productName: string | null
+  label: string | null
+  xPct: number
+  yPct: number
+  widthPct: number
+  heightPct: number
+}
+
 interface GoldenReferencePhoto {
   id: string
   imageUrl: string
   status: string
   createdAt: string
+  slots: GoldenReferenceSlot[]
 }
 
 interface GoldenPhotoCandidate {
@@ -106,12 +120,18 @@ export function PlanogramEditor({
   const [search, setSearch] = useState("")
   const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
   const [references, setReferences] = useState(goldenReferences)
+  const [activeReferenceId, setActiveReferenceId] = useState(goldenReferences[0]?.id ?? "")
   const [selectedGoldenPhotoId, setSelectedGoldenPhotoId] = useState(goldenPhotoCandidates[0]?.id ?? "")
+  const [slotPlacementId, setSlotPlacementId] = useState(initialPlacements[0]?.id ?? "")
+  const [slotDraft, setSlotDraft] = useState({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
+  const activeReference = references.find((ref) => ref.id === activeReferenceId) ?? references[0] ?? null
+  const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
 
   const base = `/api/v1/planograms/${planogram.id}/versions/${version.id}/placements`
+  const goldenReferenceBase = `/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`
 
   async function handleResponse(res: Response): Promise<Record<string, unknown> | null> {
     if (res.status === 409) {
@@ -223,16 +243,61 @@ export function PlanogramEditor({
     })
     const body = await handleResponse(res)
     if (body) {
+      const reference = {
+        id: body.id as string,
+        imageUrl: body.imageUrl as string,
+        status: body.status as string,
+        createdAt: body.createdAt as string,
+        slots: [],
+      }
       setReferences((prev) => [
-        {
-          id: body.id as string,
-          imageUrl: body.imageUrl as string,
-          status: body.status as string,
-          createdAt: body.createdAt as string,
-        },
+        reference,
         ...prev,
       ])
+      setActiveReferenceId(reference.id)
     }
+  }
+
+  async function createReferenceSlot() {
+    if (!activeReference || !slotPlacement) return
+    const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        placementId: slotPlacement.id,
+        label: slotPlacement.product.name,
+        ...slotDraft,
+      }),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+
+    const slot: GoldenReferenceSlot = {
+      id: body.id as string,
+      placementId: body.placementId as string,
+      productId: body.productId as string,
+      productSku: body.productSku as string,
+      productName: body.productName as string,
+      label: body.label as string,
+      xPct: body.xPct as number,
+      yPct: body.yPct as number,
+      widthPct: body.widthPct as number,
+      heightPct: body.heightPct as number,
+    }
+    setReferences((prev) =>
+      prev.map((ref) => (ref.id === activeReference.id ? { ...ref, slots: [...ref.slots, slot] } : ref)),
+    )
+  }
+
+  async function deleteReferenceSlot(referenceId: string, slotId: string) {
+    const res = await fetch(`${goldenReferenceBase}/${referenceId}/slots/${slotId}`, { method: "DELETE" })
+    const body = await handleResponse(res)
+    if (!body) return
+    setReferences((prev) =>
+      prev.map((ref) =>
+        ref.id === referenceId ? { ...ref, slots: ref.slots.filter((slot) => slot.id !== slotId) } : ref,
+      ),
+    )
   }
 
   // --- SVG geometry ---
@@ -472,13 +537,76 @@ export function PlanogramEditor({
                 {t("noGoldenReference")}
               </div>
             ) : (
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                {references.slice(0, 4).map((ref) => (
-                  <div key={ref.id} className="overflow-hidden rounded-md border border-neutral-200">
-                    <img src={`/api/media/${ref.imageUrl}`} alt="" className="h-24 w-full object-cover" />
-                    <div className="px-2 py-1 text-xs text-neutral-500">{ref.status}</div>
+              <div className="mb-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {references.slice(0, 4).map((ref) => (
+                    <button
+                      type="button"
+                      key={ref.id}
+                      onClick={() => setActiveReferenceId(ref.id)}
+                      className={`overflow-hidden rounded-md border text-left ${
+                        ref.id === activeReference?.id ? "border-neutral-900" : "border-neutral-200"
+                      }`}
+                    >
+                      <img src={`/api/media/${ref.imageUrl}`} alt="" className="h-24 w-full object-cover" />
+                      <div className="flex items-center justify-between px-2 py-1 text-xs text-neutral-500">
+                        <span>{ref.status}</span>
+                        <span>{ref.slots.length}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {activeReference && (
+                  <div>
+                    <div className="relative overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                      <img
+                        src={`/api/media/${activeReference.imageUrl}`}
+                        alt=""
+                        className="max-h-80 w-full object-contain"
+                      />
+                      {activeReference.slots.map((slot) => (
+                        <div
+                          key={slot.id}
+                          className="absolute border-2 border-emerald-400 bg-emerald-400/15"
+                          style={{
+                            left: `${slot.xPct}%`,
+                            top: `${slot.yPct}%`,
+                            width: `${slot.widthPct}%`,
+                            height: `${slot.heightPct}%`,
+                          }}
+                        >
+                          <span className="absolute left-0 top-0 max-w-full truncate bg-emerald-500 px-1 text-[10px] font-medium text-white">
+                            {slot.productSku ?? slot.label ?? t("referenceSlot")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {activeReference.slots.length === 0 ? (
+                      <p className="mt-2 text-xs text-neutral-500">{t("noReferenceSlots")}</p>
+                    ) : (
+                      <div className="mt-2 space-y-1">
+                        {activeReference.slots.map((slot) => (
+                          <div
+                            key={slot.id}
+                            className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 px-2 py-1 text-xs"
+                          >
+                            <span className="min-w-0 flex-1 truncate">
+                              {slot.productSku ? `${slot.productSku} · ` : ""}
+                              {slot.productName ?? slot.label}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => deleteReferenceSlot(activeReference.id, slot.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              {t("deleteReferenceSlot")}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
             )}
             {goldenPhotoCandidates.length === 0 ? (
@@ -503,6 +631,51 @@ export function PlanogramEditor({
                 >
                   {t("createGoldenReference")}
                 </button>
+              </div>
+            )}
+            {activeReference && placements.length > 0 && (
+              <div className="mt-3 border-t border-neutral-100 pt-3">
+                <h3 className="mb-2 text-xs font-medium text-neutral-600">{t("referenceSlot")}</h3>
+                <div className="space-y-2">
+                  <select
+                    value={slotPlacement?.id ?? ""}
+                    onChange={(e) => setSlotPlacementId(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                  >
+                    {placements.map((placement) => (
+                      <option key={placement.id} value={placement.id}>
+                        {placement.product.sku} · {placement.product.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="grid grid-cols-4 gap-2">
+                    {(["xPct", "yPct", "widthPct", "heightPct"] as const).map((field) => (
+                      <label key={field} className="block text-xs">
+                        <span className="text-neutral-500">{t(field)}</span>
+                        <input
+                          type="number"
+                          min={field === "widthPct" || field === "heightPct" ? 1 : 0}
+                          max={100}
+                          value={slotDraft[field]}
+                          onChange={(e) =>
+                            setSlotDraft((prev) => ({
+                              ...prev,
+                              [field]: Number.parseFloat(e.target.value || "0"),
+                            }))
+                          }
+                          className="block w-full rounded border border-neutral-300 px-2 py-1"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={createReferenceSlot}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
+                  >
+                    {t("addReferenceSlot")}
+                  </button>
+                </div>
               </div>
             )}
           </div>

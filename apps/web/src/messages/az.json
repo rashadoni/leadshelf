@@ -197,10 +197,18 @@
       "rejected": "Sığmadı",
       "conflict": "Qaralama paralel dəyişdirilib — səhifə yeniləndi",
       "placedUnits": "əd rəfdə",
-      "goldenReference": "Golden reference",
+      "goldenReference": "Etalon foto",
       "noGoldenReference": "Bu versiya üçün etalon foto hələ seçilməyib.",
       "noGoldenPhotoCandidates": "Bu planoqram üzrə foto-sübut hələ yoxdur.",
-      "createGoldenReference": "Etalon foto yarat"
+      "createGoldenReference": "Etalon foto yarat",
+      "referenceSlot": "Etalon sahəsi",
+      "noReferenceSlots": "Bu etalon foto üçün sahələr hələ işarələnməyib.",
+      "addReferenceSlot": "Sahəni əlavə et",
+      "deleteReferenceSlot": "Sil",
+      "xPct": "X %",
+      "yPct": "Y %",
+      "widthPct": "En %",
+      "heightPct": "Hündürlük %"
     },
     "viewer3d": {
       "title": "3D görünüş",
