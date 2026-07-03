@@ -40,6 +40,12 @@ export default async function TasksPage({
             planogram: { select: { id: true, name: true } },
           },
         },
+        comments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { body: true, createdAt: true, user: { select: { name: true } } },
+        },
+        _count: { select: { comments: true } },
       },
       orderBy: [{ createdAt: "desc" }],
       take: 100,
@@ -103,6 +109,7 @@ export default async function TasksPage({
                 <th className="px-3 py-2">{t("table.planogram")}</th>
                 <th className="px-3 py-2">{t("table.due")}</th>
                 <th className="px-3 py-2">{t("table.assignee")}</th>
+                <th className="px-3 py-2">{t("table.feedback")}</th>
                 <th className="px-3 py-2">{t("table.status")}</th>
                 <th className="px-3 py-2" />
               </tr>
@@ -133,6 +140,19 @@ export default async function TasksPage({
                       current={task.assignee?.id ?? null}
                       users={assignableUsers}
                     />
+                  </td>
+                  <td className="max-w-[240px] px-3 py-2 text-xs text-neutral-500">
+                    {task.comments[0] ? (
+                      <div>
+                        <div className="truncate text-neutral-700">{task.comments[0].body}</div>
+                        <div>
+                          {task.comments[0].user.name}
+                          {task._count.comments > 1 ? ` · +${task._count.comments - 1}` : ""}
+                        </div>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span

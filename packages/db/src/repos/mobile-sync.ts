@@ -185,7 +185,7 @@ export async function pullChanges(
 
 export interface PushOperation {
   clientOpId: string
-  kind: "task.status" | "photo.submit"
+  kind: "task.status" | "photo.submit" | "task.comment"
   payload: Record<string, unknown>
   clientCreatedAt?: string
 }
@@ -265,6 +265,29 @@ async function applyPhotoSubmit(
     : statusResult
 }
 
+async function applyTaskComment(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  payload: { taskId: string; body: string },
+): Promise<Omit<PushResult, "clientOpId">> {
+  const body = payload.body.trim()
+  if (!body) return { status: "rejected", detail: "empty_comment" }
+  const task = await prisma.task.findFirst({
+    where: { id: payload.taskId, organizationId, assigneeId: userId },
+    select: { id: true },
+  })
+  if (!task) return { status: "rejected", detail: "task_not_found_or_not_assigned" }
+  await prisma.taskComment.create({
+    data: {
+      taskId: task.id,
+      userId,
+      body,
+    },
+  })
+  return { status: "applied" }
+}
+
 export async function pushOperations(
   prisma: PrismaClient,
   organizationId: string,
@@ -303,6 +326,8 @@ export async function pushOperations(
         deviceId,
         op.payload as never,
       )
+    } else if (op.kind === "task.comment") {
+      result = await applyTaskComment(prisma, organizationId, userId, op.payload as never)
     } else {
       result = { status: "rejected", detail: "unknown_kind" }
     }

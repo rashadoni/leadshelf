@@ -32,6 +32,12 @@ export async function GET(req: NextRequest) {
         planogramVersion: {
           select: { id: true, versionNumber: true, planogram: { select: { id: true, name: true } } },
         },
+        comments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { body: true, createdAt: true, user: { select: { name: true } } },
+        },
+        _count: { select: { comments: true } },
       },
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       take: limit + 1,
@@ -56,6 +62,14 @@ export async function GET(req: NextRequest) {
             name: t.planogramVersion.planogram.name,
             versionId: t.planogramVersion.id,
             versionNumber: t.planogramVersion.versionNumber,
+          }
+        : null,
+      commentCount: t._count.comments,
+      latestComment: t.comments[0]
+        ? {
+            body: t.comments[0].body,
+            authorName: t.comments[0].user.name,
+            createdAt: t.comments[0].createdAt.toISOString(),
           }
         : null,
       createdAt: t.createdAt.toISOString(),

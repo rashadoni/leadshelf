@@ -5,6 +5,7 @@
 import * as SQLite from "expo-sqlite"
 import {
   mobilePhotoSubmitPayloadSchema,
+  mobileTaskCommentPayloadSchema,
   mobileTaskStatusPayloadSchema,
   type MobileTaskStatus,
 } from "@leadshelf/api-contracts/mobile/v1"
@@ -115,10 +116,20 @@ export const localStore: LocalStore = {
             attempts: r.attempts,
           }
         }
+        if (r.kind === "photo.submit") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "photo.submit",
+            payload: mobilePhotoSubmitPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
         return {
           clientOpId: r.clientOpId,
-          kind: "photo.submit",
-          payload: mobilePhotoSubmitPayloadSchema.parse(rawPayload),
+          kind: "task.comment",
+          payload: mobileTaskCommentPayloadSchema.parse(rawPayload),
           clientCreatedAt: r.clientCreatedAt ?? undefined,
           status: "pending",
           attempts: r.attempts,
@@ -232,4 +243,20 @@ export function enqueuePhoto(input: {
     )
     db.runSync("UPDATE tasks SET status='PHOTO_SUBMITTED' WHERE id=?", [input.taskId])
   })
+}
+
+export function enqueueTaskComment(input: {
+  clientOpId: string
+  taskId: string
+  body: string
+}): void {
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [
+      input.clientOpId,
+      "task.comment",
+      JSON.stringify({ taskId: input.taskId, body: input.body.trim() }),
+      new Date().toISOString(),
+    ],
+  )
 }

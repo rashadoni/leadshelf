@@ -9,6 +9,7 @@ import {
   publishPlanogramVersion,
   transitionTaskStatus,
 } from "../repos/publish.ts"
+import { pushOperations } from "../repos/mobile-sync.ts"
 
 const prisma = createSystemClient("publish-repo-test")
 const slug = `test-pub-${Date.now()}`
@@ -17,6 +18,8 @@ let formatId: string
 let store1: string
 let planogramId: string
 let versionId: string
+let mobileUserId: string
+let mobileDeviceId: string
 
 async function revision(vid: string): Promise<string> {
   const v = await prisma.planogramVersion.findUnique({
@@ -29,6 +32,23 @@ async function revision(vid: string): Promise<string> {
 beforeAll(async () => {
   const org = await prisma.organization.create({ data: { name: "Pub Test", slug } })
   orgId = org.id
+  const mobileUser = await prisma.user.create({
+    data: {
+      organizationId: orgId,
+      name: "Store Staff",
+      employeeCode: "MOB-1",
+      role: "STORE_STAFF",
+    },
+  })
+  mobileUserId = mobileUser.id
+  const mobileDevice = await prisma.mobileDevice.create({
+    data: {
+      userId: mobileUserId,
+      platform: "expo",
+      deviceName: "Test phone",
+    },
+  })
+  mobileDeviceId = mobileDevice.id
   const format = await prisma.storeFormat.create({
     data: { organizationId: orgId, name: "Standart" },
   })
@@ -81,6 +101,8 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await prisma.taskComment.deleteMany({ where: { user: { organizationId: orgId } } })
+  await prisma.task.deleteMany({ where: { organizationId: orgId } })
   await prisma.planogramPlacement.deleteMany({
     where: { planogramVersion: { planogram: { organizationId: orgId } } },
   })
@@ -292,5 +314,38 @@ describe("publish", () => {
     expect(summary.expired).toBeGreaterThanOrEqual(2)
     expect(summary.completed).toBeGreaterThanOrEqual(1)
     expect(summary.unassignedOpen).toBeGreaterThanOrEqual(0)
+  })
+
+  test("mobile task.comment сохраняет feedback идемпотентно", async () => {
+    const task = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        storeId: store1,
+        assigneeId: mobileUserId,
+        title: "Comment task",
+        status: "IN_PROGRESS",
+      },
+    })
+
+    const first = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [
+      {
+        clientOpId: "op-comment-0001",
+        kind: "task.comment",
+        payload: { taskId: task.id, body: "  Не хватает ценника  " },
+      },
+    ])
+    const second = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [
+      {
+        clientOpId: "op-comment-0001",
+        kind: "task.comment",
+        payload: { taskId: task.id, body: "duplicate delivery" },
+      },
+    ])
+
+    expect(first).toEqual([{ clientOpId: "op-comment-0001", status: "applied" }])
+    expect(second).toEqual(first)
+    await expect(prisma.taskComment.findMany({ where: { taskId: task.id } })).resolves.toMatchObject([
+      { body: "Не хватает ценника", userId: mobileUserId },
+    ])
   })
 })

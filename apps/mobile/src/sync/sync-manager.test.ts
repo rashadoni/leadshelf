@@ -184,6 +184,13 @@ describe("SyncManager", () => {
         status: "pending",
         attempts: 0,
       },
+      {
+        clientOpId: "op-comment-0001",
+        kind: "task.comment",
+        payload: { taskId: "t1", body: "Shelf is ready" },
+        status: "pending",
+        attempts: 0,
+      },
     )
     const pushedKinds: string[] = []
     const api = makeApi({
@@ -195,7 +202,7 @@ describe("SyncManager", () => {
     const m = new SyncManager({ api, store })
     const s = await m.runSync()
     expect(s.phase).toBe("idle")
-    expect(pushedKinds).toEqual(["task.status", "photo.submit"])
+    expect(pushedKinds).toEqual(["task.status", "photo.submit", "task.comment"])
   })
 
   test("offline: цикл не стартует, счетчики обновлены", async () => {

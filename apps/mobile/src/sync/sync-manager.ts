@@ -27,9 +27,17 @@ function toPushOperation(op: PushOperation): PushOperation {
       clientCreatedAt: op.clientCreatedAt,
     }
   }
+  if (op.kind === "photo.submit") {
+    return {
+      clientOpId: op.clientOpId,
+      kind: "photo.submit",
+      payload: op.payload,
+      clientCreatedAt: op.clientCreatedAt,
+    }
+  }
   return {
     clientOpId: op.clientOpId,
-    kind: "photo.submit",
+    kind: "task.comment",
     payload: op.payload,
     clientCreatedAt: op.clientCreatedAt,
   }

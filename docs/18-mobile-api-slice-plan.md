@@ -60,6 +60,12 @@ Use existing FSM. If current status equals `toStatus`, return `ok/already_curren
 
 Photo is deduped by `[organizationId, clientPhotoId]`. If task is expired/completed, keep the photo as evidence but return conflict and do not move task status.
 
+`task.comment` payload:
+`{ taskId, body }`
+
+Comments are appended to `TaskComment`, scoped to assigned tasks only, and
+idempotent through the same `deviceId + clientOpId` push ledger.
+
 **Pull Payload**
 Return only mobile-needed entities:
 
@@ -79,6 +85,7 @@ Cover:
 - assigned-task visibility and tenant isolation;
 - initial pull -> ack -> second pull empty;
 - task status push idempotency and conflict;
+- task comment push idempotency;
 - duplicate `clientOpId`;
 - duplicate `clientPhotoId`;
 - multipart upload -> photo.submit -> `PHOTO_SUBMITTED`;

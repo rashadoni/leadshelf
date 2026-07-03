@@ -1,10 +1,16 @@
 import { useCallback, useState } from "react"
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import * as ImagePicker from "expo-image-picker"
 import * as Crypto from "expo-crypto"
-import { enqueueTaskStatus, getBundle, getStore, getTask } from "../../../src/db/local-store"
+import {
+  enqueueTaskComment,
+  enqueueTaskStatus,
+  getBundle,
+  getStore,
+  getTask,
+} from "../../../src/db/local-store"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
@@ -18,6 +24,7 @@ export default function TaskDetailScreen() {
   const { sync } = useSync()
   const [task, setTask] = useState<TaskRow | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
+  const [comment, setComment] = useState("")
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -69,6 +76,19 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
+  function sendComment() {
+    const body = comment.trim()
+    if (!body) return
+    enqueueTaskComment({
+      clientOpId: `op-${Crypto.randomUUID()}`,
+      taskId: task!.id,
+      body,
+    })
+    setComment("")
+    Alert.alert(t("commentQueued"))
+    void sync()
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
@@ -93,6 +113,22 @@ export default function TaskDetailScreen() {
           </>
         ) : null}
         <View style={styles.actions}>
+          <Text style={styles.section}>{t("comment")}</Text>
+          <TextInput
+            value={comment}
+            onChangeText={setComment}
+            placeholder={t("commentPlaceholder")}
+            multiline
+            maxLength={2000}
+            style={styles.commentInput}
+          />
+          <Pressable
+            style={[styles.secondary, !comment.trim() && styles.disabled]}
+            disabled={!comment.trim()}
+            onPress={sendComment}
+          >
+            <Text style={styles.secondaryText}>{t("sendComment")}</Text>
+          </Pressable>
           {task.status === "NEW" && (
             <Pressable style={styles.primary} onPress={start}>
               <Text style={styles.primaryText}>{t("start")}</Text>
@@ -123,6 +159,17 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: "#737373" },
   section: { fontSize: 13, fontWeight: "600", color: "#525252" },
   actions: { gap: 8, marginTop: 8 },
+  commentInput: {
+    minHeight: 84,
+    borderWidth: 1,
+    borderColor: "#d4d4d4",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "white",
+    color: "#171717",
+    textAlignVertical: "top",
+  },
   primary: { backgroundColor: "#171717", borderRadius: 10, padding: 14, alignItems: "center" },
   primaryText: { color: "white", fontWeight: "600", fontSize: 16 },
   secondary: {
@@ -133,5 +180,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "white",
   },
+  disabled: { opacity: 0.5 },
   secondaryText: { fontWeight: "600", fontSize: 16, color: "#171717" },
 })

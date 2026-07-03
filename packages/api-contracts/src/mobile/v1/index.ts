@@ -118,6 +118,12 @@ export const mobilePhotoSubmitPayloadSchema = z.object({
 })
 export type MobilePhotoSubmitPayload = z.infer<typeof mobilePhotoSubmitPayloadSchema>
 
+export const mobileTaskCommentPayloadSchema = z.object({
+  taskId: z.string().min(1),
+  body: z.string().trim().min(1).max(2000),
+})
+export type MobileTaskCommentPayload = z.infer<typeof mobileTaskCommentPayloadSchema>
+
 export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
   z.object({
     clientOpId: z.string().min(8).max(128),
@@ -129,6 +135,12 @@ export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
     clientOpId: z.string().min(8).max(128),
     kind: z.literal("photo.submit"),
     payload: mobilePhotoSubmitPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("task.comment"),
+    payload: mobileTaskCommentPayloadSchema,
     clientCreatedAt: z.string().optional(),
   }),
 ])

@@ -208,7 +208,8 @@
       "planogram": "Planoqram",
       "due": "Müddət",
       "status": "Status",
-      "assignee": "İcraçı"
+      "assignee": "İcraçı",
+      "feedback": "Şərh"
     },
     "status": {
       "NEW": "Yeni",
