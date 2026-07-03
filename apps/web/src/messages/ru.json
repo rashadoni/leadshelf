@@ -258,9 +258,17 @@
         "metric": "Метрика",
         "current": "Текущий период",
         "previous": "Предыдущий период",
+        "currentTurnover": "Текущий оборот",
+        "previousTurnover": "Пред. оборот",
         "delta": "Дельта",
         "deltaPct": "Дельта %"
       },
+      "groups": {
+        "store": "Магазин",
+        "format": "Формат",
+        "planogram": "Планограмма"
+      },
+      "emptyBreakdown": "Нет продаж для этого разреза.",
       "metrics": {
         "turnover": "Оборот",
         "profit": "Прибыль",

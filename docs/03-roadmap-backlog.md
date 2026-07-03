@@ -332,7 +332,8 @@ Definition of Done:
 
 - Like-for-like period comparison. `[сделано: /analytics сравнивает
   последние 30 дней продаж с предыдущими 30 днями по turnover/profit/qty]`
-- Compare store/format/planogram.
+- Compare store/format/planogram. `[сделано: LFL breakdown в /analytics
+  сравнивает turnover по store, format и active assignment planogram]`
 - Metrics: turnover, profit, sales qty, turnover per meter, profit per meter, stock days, turnover ratio.
 - Space productivity: share in shelf vs share in sales/profit.
 - Shelf share by brand/category/supplier.

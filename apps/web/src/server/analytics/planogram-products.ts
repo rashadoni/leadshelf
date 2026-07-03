@@ -127,6 +127,23 @@ export type LikeForLikeSummary = {
   rows: LikeForLikeMetricRow[]
 }
 
+export type LikeForLikeBreakdownGroup = "store" | "format" | "planogram"
+
+export type LikeForLikeBreakdownRow = {
+  key: string
+  group: LikeForLikeBreakdownGroup
+  label: string
+  currentTurnover: number
+  previousTurnover: number
+  currentProfit: number
+  previousProfit: number
+  currentQuantity: number
+  previousQuantity: number
+  turnoverDeltaPct: number | null
+}
+
+export type LikeForLikeBreakdown = Record<LikeForLikeBreakdownGroup, LikeForLikeBreakdownRow[]>
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
@@ -367,6 +384,186 @@ export async function getLikeForLikeSummary(
     previousStart: dateKey(previousStart),
     previousEnd: dateKey(addDays(previousEnd, -1)),
     rows,
+  }
+}
+
+function emptyLikeForLikeBreakdownRow(
+  key: string,
+  group: LikeForLikeBreakdownGroup,
+  label: string,
+): LikeForLikeBreakdownRow {
+  return {
+    key,
+    group,
+    label,
+    currentTurnover: 0,
+    previousTurnover: 0,
+    currentProfit: 0,
+    previousProfit: 0,
+    currentQuantity: 0,
+    previousQuantity: 0,
+    turnoverDeltaPct: null,
+  }
+}
+
+function addSaleToBreakdown(
+  map: Map<string, LikeForLikeBreakdownRow>,
+  input: { key: string; group: LikeForLikeBreakdownGroup; label: string },
+  sale: { revenue: unknown; profit: unknown | null; quantity: unknown },
+  isCurrent: boolean,
+): void {
+  const row = map.get(input.key) ?? emptyLikeForLikeBreakdownRow(input.key, input.group, input.label)
+  const turnover = Number(sale.revenue)
+  const profit = sale.profit == null ? 0 : Number(sale.profit)
+  const quantity = Number(sale.quantity)
+  if (isCurrent) {
+    row.currentTurnover += turnover
+    row.currentProfit += profit
+    row.currentQuantity += quantity
+  } else {
+    row.previousTurnover += turnover
+    row.previousProfit += profit
+    row.previousQuantity += quantity
+  }
+  map.set(input.key, row)
+}
+
+function finalizeLikeForLikeBreakdown(
+  rows: Map<string, LikeForLikeBreakdownRow>,
+): LikeForLikeBreakdownRow[] {
+  return [...rows.values()]
+    .map((row) => ({
+      ...row,
+      turnoverDeltaPct:
+        row.previousTurnover !== 0
+          ? (row.currentTurnover - row.previousTurnover) / Math.abs(row.previousTurnover)
+          : null,
+    }))
+    .sort((a, b) => b.currentTurnover - a.currentTurnover || a.label.localeCompare(b.label))
+    .slice(0, 10)
+}
+
+export async function getLikeForLikeBreakdown(
+  db: TenantDb,
+  now = new Date(),
+  days = 30,
+): Promise<LikeForLikeBreakdown> {
+  const currentEnd = addDays(startOfDay(now), 1)
+  const currentStart = addDays(currentEnd, -days)
+  const previousStart = addDays(currentStart, -days)
+  const [sales, assignments] = await Promise.all([
+    db.salesSnapshot.findMany({
+      where: { date: { gte: previousStart, lt: currentEnd }, storeId: { not: null } },
+      select: {
+        date: true,
+        productId: true,
+        quantity: true,
+        revenue: true,
+        profit: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            format: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: [{ date: "asc" }],
+      take: 15000,
+    }),
+    db.planogramAssignment.findMany({
+      include: {
+        store: { select: { id: true, name: true, code: true } },
+        format: { select: { id: true } },
+        planogramVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            planogram: { select: { id: true, name: true } },
+            placements: { select: { productId: true } },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 3000,
+    }),
+  ])
+  const formatIds = [
+    ...new Set(
+      assignments.flatMap((assignment) =>
+        assignment.formatId && isAssignmentActive(assignment, now) ? [assignment.formatId] : [],
+      ),
+    ),
+  ]
+  const formatStores =
+    formatIds.length > 0
+      ? await db.store.findMany({
+          where: { isActive: true, formatId: { in: formatIds } },
+          select: { id: true, formatId: true },
+          take: 5000,
+        })
+      : []
+  const storesByFormat = new Map<string, string[]>()
+  for (const store of formatStores) {
+    if (!store.formatId) continue
+    storesByFormat.set(store.formatId, [...(storesByFormat.get(store.formatId) ?? []), store.id])
+  }
+
+  const planogramsByStore = new Map<
+    string,
+    Array<{ key: string; label: string; productIds: Set<string> }>
+  >()
+  for (const assignment of assignments) {
+    if (!isAssignmentActive(assignment, now)) continue
+    const productIds = new Set(assignment.planogramVersion.placements.map((placement) => placement.productId))
+    const label = `${assignment.planogramVersion.planogram.name} · v${assignment.planogramVersion.versionNumber}`
+    const targets = assignment.storeId
+      ? [assignment.storeId]
+      : assignment.formatId
+        ? (storesByFormat.get(assignment.formatId) ?? [])
+        : []
+    for (const storeId of targets) {
+      planogramsByStore.set(storeId, [
+        ...(planogramsByStore.get(storeId) ?? []),
+        { key: assignment.planogramVersion.id, label, productIds },
+      ])
+    }
+  }
+
+  const byStore = new Map<string, LikeForLikeBreakdownRow>()
+  const byFormat = new Map<string, LikeForLikeBreakdownRow>()
+  const byPlanogram = new Map<string, LikeForLikeBreakdownRow>()
+  for (const sale of sales) {
+    if (!sale.store) continue
+    const isCurrent = sale.date >= currentStart
+    const storeLabel = sale.store.code ? `${sale.store.name} (${sale.store.code})` : sale.store.name
+    addSaleToBreakdown(byStore, { key: sale.store.id, group: "store", label: storeLabel }, sale, isCurrent)
+
+    if (sale.store.format) {
+      addSaleToBreakdown(
+        byFormat,
+        { key: sale.store.format.id, group: "format", label: sale.store.format.name },
+        sale,
+        isCurrent,
+      )
+    }
+
+    for (const planogram of planogramsByStore.get(sale.store.id) ?? []) {
+      if (!planogram.productIds.has(sale.productId)) continue
+      addSaleToBreakdown(
+        byPlanogram,
+        { key: planogram.key, group: "planogram", label: planogram.label },
+        sale,
+        isCurrent,
+      )
+    }
+  }
+
+  return {
+    store: finalizeLikeForLikeBreakdown(byStore),
+    format: finalizeLikeForLikeBreakdown(byFormat),
+    planogram: finalizeLikeForLikeBreakdown(byPlanogram),
   }
 }
 

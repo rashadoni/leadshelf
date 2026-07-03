@@ -258,9 +258,17 @@
         "metric": "Metrika",
         "current": "Cari dövr",
         "previous": "Əvvəlki dövr",
+        "currentTurnover": "Cari dövriyyə",
+        "previousTurnover": "Əvvəlki dövriyyə",
         "delta": "Fərq",
         "deltaPct": "Fərq %"
       },
+      "groups": {
+        "store": "Mağaza",
+        "format": "Format",
+        "planogram": "Planoqram"
+      },
+      "emptyBreakdown": "Bu kəsim üçün satış datası yoxdur.",
       "metrics": {
         "turnover": "Dövriyyə",
         "profit": "Mənfəət",

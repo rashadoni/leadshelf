@@ -7,6 +7,7 @@ import {
   getAssortmentGapRows,
   getAbcRows,
   getBasicDashboardSummary,
+  getLikeForLikeBreakdown,
   getLikeForLikeSummary,
   getObsoletePlanogramRows,
   getPlanogramProductRows,
@@ -151,6 +152,7 @@ export default async function AnalyticsPage({
     taskKpiReport,
     basicDashboardSummary,
     likeForLikeSummary,
+    likeForLikeBreakdown,
   ] = await Promise.all([
     getPlanogramProductRows(db),
     getAbcRows(db),
@@ -159,6 +161,7 @@ export default async function AnalyticsPage({
     getTaskKpiReport(db),
     getBasicDashboardSummary(db),
     getLikeForLikeSummary(db),
+    getLikeForLikeBreakdown(db),
   ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
@@ -353,6 +356,48 @@ export default async function AnalyticsPage({
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="grid gap-4 border-t border-neutral-200 p-3 xl:grid-cols-3">
+          {(["store", "format", "planogram"] as const).map((group) => (
+            <div key={group} className="overflow-x-auto rounded-lg border border-neutral-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                    <th className="px-3 py-2">{t(`likeForLike.groups.${group}` as never)}</th>
+                    <th className="px-3 py-2 text-right">{t("likeForLike.columns.currentTurnover")}</th>
+                    <th className="px-3 py-2 text-right">{t("likeForLike.columns.previousTurnover")}</th>
+                    <th className="px-3 py-2 text-right">{t("likeForLike.columns.deltaPct")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {likeForLikeBreakdown[group].length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-4 text-sm text-neutral-500" colSpan={4}>
+                        {t("likeForLike.emptyBreakdown")}
+                      </td>
+                    </tr>
+                  ) : (
+                    likeForLikeBreakdown[group].map((row) => (
+                      <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                        <td className="px-3 py-2 font-medium">{row.label}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatAmount(row.currentTurnover)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatAmount(row.previousTurnover)}
+                        </td>
+                        <td
+                          className={`px-3 py-2 text-right tabular-nums ${deltaClass(row.currentTurnover - row.previousTurnover)}`}
+                        >
+                          {row.turnoverDeltaPct == null ? "—" : formatPercent(row.turnoverDeltaPct)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
       </section>
 
