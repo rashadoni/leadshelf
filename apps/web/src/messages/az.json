@@ -225,6 +225,13 @@
       "EXPIRED": "Vaxtı keçmiş",
       "EMPTY": "Boş"
     },
+    "sla": {
+      "open": "Açıq",
+      "dueToday": "Bu gün",
+      "expired": "Vaxtı keçmiş",
+      "completed": "Tamamlanan",
+      "unassignedOpen": "İcraçısız"
+    },
     "unassigned": "— təyin edilməyib —"
   },
   "emptyStates": {

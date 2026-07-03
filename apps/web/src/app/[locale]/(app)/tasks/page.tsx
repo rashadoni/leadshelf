@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server"
+import { expireOverdueTasks, getTaskSlaSummary } from "@leadshelf/db"
 import { getSession } from "@/server/auth/require-session"
-import { tenantDb } from "@/server/db/client"
+import { tenantDb, workerDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { TaskStatusActions } from "./task-status-actions"
 import { AssigneeSelect } from "./assignee-select"
@@ -25,7 +26,8 @@ export default async function TasksPage({
     : undefined
 
   const db = tenantDb(session.org)
-  const [tasks, assignableUsers] = await Promise.all([
+  await expireOverdueTasks(workerDb, session.org)
+  const [tasks, assignableUsers, sla] = await Promise.all([
     db.task.findMany({
       where: statusFilter ? { status: statusFilter } : {},
       include: {
@@ -47,11 +49,27 @@ export default async function TasksPage({
       select: { id: true, name: true, employeeCode: true },
       orderBy: { name: "asc" },
     }),
+    getTaskSlaSummary(workerDb, session.org),
   ])
 
   return (
     <div>
       <h1 className="mb-4 text-2xl font-semibold">{tNav("tasks")}</h1>
+
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {[
+          ["sla.open", sla.open],
+          ["sla.dueToday", sla.dueToday],
+          ["sla.expired", sla.expired],
+          ["sla.completed", sla.completed],
+          ["sla.unassignedOpen", sla.unassignedOpen],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
+            <div className="text-xs text-neutral-500">{t(label as never)}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+          </div>
+        ))}
+      </div>
 
       <div className="mb-4 flex flex-wrap gap-1">
         <Link

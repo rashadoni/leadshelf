@@ -390,3 +390,85 @@ export async function transitionTaskStatus(
     return { taskId: task.id, status: input.toStatus }
   })
 }
+
+const SLA_OPEN_STATUSES: TaskStatus[] = ["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"]
+
+export async function expireOverdueTasks(
+  prisma: PrismaClient,
+  organizationId: string,
+  input: { now?: Date; limit?: number; byUserId?: string } = {},
+) {
+  const now = input.now ?? new Date()
+  const limit = input.limit ?? 500
+  const candidates = await prisma.task.findMany({
+    where: {
+      organizationId,
+      dueAt: { lt: now },
+      status: { in: SLA_OPEN_STATUSES },
+    },
+    select: { id: true, status: true },
+    orderBy: [{ dueAt: "asc" }, { id: "asc" }],
+    take: limit,
+  })
+
+  const expired: Array<{ taskId: string; fromStatus: TaskStatus }> = []
+  await prisma.$transaction(async (tx) => {
+    for (const task of candidates) {
+      const updated = await tx.task.updateMany({
+        where: {
+          id: task.id,
+          organizationId,
+          status: task.status,
+          dueAt: { lt: now },
+        },
+        data: { status: "EXPIRED" },
+      })
+      if (updated.count !== 1) continue
+      await tx.taskStatusHistory.create({
+        data: {
+          taskId: task.id,
+          fromStatus: task.status,
+          toStatus: "EXPIRED",
+          byUserId: input.byUserId ?? null,
+        },
+      })
+      expired.push({ taskId: task.id, fromStatus: task.status })
+    }
+  })
+
+  return {
+    expiredCount: expired.length,
+    taskIds: expired.map((task) => task.taskId),
+    hasMore: candidates.length === limit,
+  }
+}
+
+export async function getTaskSlaSummary(
+  prisma: PrismaClient,
+  organizationId: string,
+  input: { now?: Date } = {},
+) {
+  const now = input.now ?? new Date()
+  const startOfDay = new Date(now)
+  startOfDay.setHours(0, 0, 0, 0)
+  const endOfDay = new Date(startOfDay)
+  endOfDay.setDate(endOfDay.getDate() + 1)
+
+  const [open, dueToday, expired, completed, unassignedOpen] = await Promise.all([
+    prisma.task.count({ where: { organizationId, status: { in: SLA_OPEN_STATUSES } } }),
+    prisma.task.count({
+      where: {
+        organizationId,
+        status: { in: SLA_OPEN_STATUSES },
+        dueAt: { gte: startOfDay, lt: endOfDay },
+      },
+    }),
+    prisma.task.count({ where: { organizationId, status: "EXPIRED" } }),
+    prisma.task.count({ where: { organizationId, status: "COMPLETED" } }),
+    prisma.task.count({
+      where: { organizationId, status: { in: SLA_OPEN_STATUSES }, assigneeId: null },
+    }),
+  ])
+
+  return { open, dueToday, expired, completed, unassignedOpen }
+}

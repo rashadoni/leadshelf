@@ -27,6 +27,8 @@ export {
   publishPlanogramVersion,
   createNextDraft,
   transitionTaskStatus,
+  expireOverdueTasks,
+  getTaskSlaSummary,
   type PublishTarget,
 } from "./repos/publish.ts"
 export {

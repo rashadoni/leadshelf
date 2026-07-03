@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
+import { expireOverdueTasks, getTaskSlaSummary } from "@leadshelf/db"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
-import { tenantDb } from "@/server/db/client"
+import { tenantDb, workerDb } from "@/server/db/client"
 
 export const runtime = "nodejs"
 
@@ -21,23 +22,28 @@ export async function GET(req: NextRequest) {
   const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams))
   if (!parsed.success) return NextResponse.json({ error: "invalid_query" }, { status: 400 })
   const { status, storeId, limit, cursor } = parsed.data
+  await expireOverdueTasks(workerDb, session.org)
 
-  const tasks = await tenantDb(session.org).task.findMany({
-    where: { ...(status ? { status } : {}), ...(storeId ? { storeId } : {}) },
-    include: {
-      store: { select: { id: true, name: true, code: true } },
-      planogramVersion: {
-        select: { id: true, versionNumber: true, planogram: { select: { id: true, name: true } } },
+  const [tasks, sla] = await Promise.all([
+    tenantDb(session.org).task.findMany({
+      where: { ...(status ? { status } : {}), ...(storeId ? { storeId } : {}) },
+      include: {
+        store: { select: { id: true, name: true, code: true } },
+        planogramVersion: {
+          select: { id: true, versionNumber: true, planogram: { select: { id: true, name: true } } },
+        },
       },
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-  })
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    }),
+    getTaskSlaSummary(workerDb, session.org),
+  ])
 
   const hasMore = tasks.length > limit
   const page = hasMore ? tasks.slice(0, limit) : tasks
   return NextResponse.json({
+    sla,
     tasks: page.map((t) => ({
       id: t.id,
       title: t.title,

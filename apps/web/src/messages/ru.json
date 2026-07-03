@@ -225,6 +225,13 @@
       "EXPIRED": "Просрочить",
       "EMPTY": "Пустая"
     },
+    "sla": {
+      "open": "Открытые",
+      "dueToday": "Срок сегодня",
+      "expired": "Просроченные",
+      "completed": "Выполненные",
+      "unassignedOpen": "Без исполнителя"
+    },
     "unassigned": "— не назначена —"
   },
   "emptyStates": {

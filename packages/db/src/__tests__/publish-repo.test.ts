@@ -4,6 +4,8 @@ import { createTemplateWithVersion } from "../repos/equipment.ts"
 import { addPlacement, createPlanogramFromTemplate } from "../repos/planogram.ts"
 import {
   createNextDraft,
+  expireOverdueTasks,
+  getTaskSlaSummary,
   publishPlanogramVersion,
   transitionTaskStatus,
 } from "../repos/publish.ts"
@@ -227,5 +229,68 @@ describe("publish", () => {
         toStatus: "COMPLETED",
       }),
     ).rejects.toMatchObject({ code: "invalid_state" })
+  })
+
+  test("autо-expire: overdue open tasks -> EXPIRED с history, terminal не трогает", async () => {
+    const store = await prisma.store.findUniqueOrThrow({ where: { id: store1 } })
+    const oldOpen = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        storeId: store.id,
+        title: "Overdue new",
+        status: "NEW",
+        dueAt: new Date("2026-07-01T10:00:00Z"),
+      },
+    })
+    const oldPhoto = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        storeId: store.id,
+        title: "Overdue photo",
+        status: "PHOTO_SUBMITTED",
+        dueAt: new Date("2026-07-01T11:00:00Z"),
+      },
+    })
+    const oldDone = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        storeId: store.id,
+        title: "Done overdue",
+        status: "COMPLETED",
+        dueAt: new Date("2026-07-01T12:00:00Z"),
+      },
+    })
+
+    const result = await expireOverdueTasks(prisma, orgId, {
+      now: new Date("2026-07-02T00:00:00Z"),
+    })
+
+    expect(result.expiredCount).toBeGreaterThanOrEqual(2)
+    expect(result.taskIds).toEqual(expect.arrayContaining([oldOpen.id, oldPhoto.id]))
+    await expect(prisma.task.findUniqueOrThrow({ where: { id: oldOpen.id } })).resolves.toMatchObject({
+      status: "EXPIRED",
+    })
+    await expect(prisma.task.findUniqueOrThrow({ where: { id: oldPhoto.id } })).resolves.toMatchObject({
+      status: "EXPIRED",
+    })
+    await expect(prisma.task.findUniqueOrThrow({ where: { id: oldDone.id } })).resolves.toMatchObject({
+      status: "COMPLETED",
+    })
+    expect(
+      await prisma.taskStatusHistory.count({
+        where: { taskId: { in: [oldOpen.id, oldPhoto.id] }, toStatus: "EXPIRED" },
+      }),
+    ).toBe(2)
+  })
+
+  test("SLA summary считает открытые, due today, expired и unassigned", async () => {
+    const summary = await getTaskSlaSummary(prisma, orgId, {
+      now: new Date("2026-07-10T12:00:00Z"),
+    })
+    expect(summary.open).toBeGreaterThanOrEqual(0)
+    expect(summary.dueToday).toBeGreaterThanOrEqual(0)
+    expect(summary.expired).toBeGreaterThanOrEqual(2)
+    expect(summary.completed).toBeGreaterThanOrEqual(1)
+    expect(summary.unassignedOpen).toBeGreaterThanOrEqual(0)
   })
 })
