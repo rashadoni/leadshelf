@@ -49,6 +49,17 @@ export const visionEmbeddingSchema = z.object({
 })
 export type VisionEmbedding = z.infer<typeof visionEmbeddingSchema>
 
+export const visionComplianceSchema = z.object({
+  score: z.number().min(0).max(1),
+  status: z.enum(["PASS", "REVIEW", "FAIL"]),
+  totalSlots: z.number().int().min(0),
+  matchedSlots: z.number().int().min(0),
+  missingSlots: z.number().int().min(0),
+  wrongProducts: z.number().int().min(0),
+  extraDetections: z.number().int().min(0),
+})
+export type VisionCompliance = z.infer<typeof visionComplianceSchema>
+
 export const visionScanResponseSchema = z.object({
   protocolVersion: z.literal(VISION_PROTOCOL_VERSION),
   provider: z.string().min(1),
@@ -56,6 +67,7 @@ export const visionScanResponseSchema = z.object({
   status: z.enum(["completed", "needs_human_review", "failed"]),
   detections: z.array(visionDetectionSchema),
   embedding: visionEmbeddingSchema.nullable(),
+  compliance: visionComplianceSchema,
   warnings: z.array(z.string()),
 })
 export type VisionScanResponse = z.infer<typeof visionScanResponseSchema>

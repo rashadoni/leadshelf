@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@leadshelf/api-contracts": "workspace:*",
+    "@leadshelf/core": "workspace:*",
     "zod": "^3.24.0"
   },
   "devDependencies": {

@@ -374,7 +374,8 @@ Definition of Done:
   MIME/размерам/takenAt/EXIF, сохранение qualityScore + details при mobile upload]`
 - Detector/embedding service. `[сделано: packages/api-contracts vision/v1 +
   optional services/vision HTTP boundary с stub provider, /health и /v1/scan]`
-- Compliance score.
+- Compliance score. `[сделано: core scorer slots vs detections + compliance
+  summary в vision/v1 scan response]`
 - Missing/wrong/extra products.
 - Human review queue.
 - Model/data quality dashboard.
