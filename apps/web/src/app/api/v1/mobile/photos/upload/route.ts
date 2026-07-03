@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { mobilePhotoUploadFieldsSchema } from "@leadshelf/api-contracts/mobile/v1"
+import { evaluatePhotoQuality } from "@leadshelf/core"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 import { putObject } from "@/server/storage/s3"
@@ -12,6 +13,17 @@ export const maxDuration = 120
 
 const MAX_SIZE = 15 * 1024 * 1024
 const ALLOWED: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+type JsonObject = { [key: string]: JsonValue }
+
+function asObjectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function asJsonObject(value: unknown): JsonObject {
+  return asObjectRecord(value) as JsonObject
+}
 
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
@@ -35,10 +47,17 @@ export async function POST(req: NextRequest) {
   // дедуп до записи файла
   const existing = await workerDb.photoSubmission.findFirst({
     where: { organizationId: session.org, clientPhotoId: parsed.data.clientPhotoId },
-    select: { id: true, url: true },
+    select: { id: true, url: true, qualityScore: true, exif: true },
   })
   if (existing) {
-    return NextResponse.json({ photoId: existing.id, key: existing.url, deduplicated: true })
+    const existingExif = asObjectRecord(existing.exif)
+    return NextResponse.json({
+      photoId: existing.id,
+      key: existing.url,
+      qualityScore: existing.qualityScore,
+      qualityCheck: existingExif.qualityCheck ?? null,
+      deduplicated: true,
+    })
   }
 
   const task = await workerDb.task.findFirst({
@@ -48,13 +67,33 @@ export async function POST(req: NextRequest) {
   if (!task) return NextResponse.json({ error: "task_not_found_or_not_assigned" }, { status: 404 })
 
   const key = `photos/${session.org}/${task.id}/${parsed.data.clientPhotoId}.${ext}`
-  await putObject(key, Buffer.from(await file.arrayBuffer()), file.type)
+  const bytes = Buffer.from(await file.arrayBuffer())
+  await putObject(key, bytes, file.type)
 
   let exif: object | undefined
   try {
     exif = parsed.data.exifJson ? JSON.parse(parsed.data.exifJson) : undefined
   } catch {
     exif = undefined
+  }
+  const qualityCheck = evaluatePhotoQuality({
+    bytes,
+    mimeType: file.type,
+    takenAt: new Date(parsed.data.takenAt),
+    exif,
+  })
+  const qualityDetails: JsonObject = {
+    status: qualityCheck.status,
+    score: qualityCheck.score,
+    dimensions: qualityCheck.dimensions
+      ? { width: qualityCheck.dimensions.width, height: qualityCheck.dimensions.height }
+      : null,
+    issues: qualityCheck.issues,
+    checkedAt: new Date().toISOString(),
+  }
+  const exifWithQuality: JsonObject = {
+    ...asJsonObject(exif),
+    qualityCheck: qualityDetails,
   }
 
   const photo = await workerDb.photoSubmission.create({
@@ -66,8 +105,17 @@ export async function POST(req: NextRequest) {
       url: key,
       clientPhotoId: parsed.data.clientPhotoId,
       takenAt: new Date(parsed.data.takenAt),
-      exif,
+      exif: exifWithQuality,
+      qualityScore: qualityCheck.score,
     },
   })
-  return NextResponse.json({ photoId: photo.id, key }, { status: 201 })
+  return NextResponse.json(
+    {
+      photoId: photo.id,
+      key,
+      qualityScore: qualityCheck.score,
+      qualityCheck: exifWithQuality.qualityCheck,
+    },
+    { status: 201 },
+  )
 }

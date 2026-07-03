@@ -61,6 +61,7 @@ export default async function PlanogramEditorPage({
         id: true,
         url: true,
         takenAt: true,
+        qualityScore: true,
         store: { select: { name: true, code: true } },
         user: { select: { name: true } },
       },
@@ -135,6 +136,7 @@ export default async function PlanogramEditorPage({
         id: photo.id,
         imageUrl: photo.url,
         takenAt: photo.takenAt.toISOString(),
+        qualityScore: photo.qualityScore,
         storeName: photo.store.code ? `${photo.store.name} (${photo.store.code})` : photo.store.name,
         userName: photo.user.name,
       }))}

@@ -370,7 +370,8 @@ Definition of Done:
   API/UI для создания эталонного фото из PhotoSubmission по planogram version]`
 - Reference slots. `[сделано: API create/delete + UI overlay-разметка зон
   эталонного фото в процентах изображения, привязка к placement/product]`
-- Photo quality check.
+- Photo quality check. `[сделано: core photo-proof quality scorer по
+  MIME/размерам/takenAt/EXIF, сохранение qualityScore + details при mobile upload]`
 - Detector/embedding service.
 - Compliance score.
 - Missing/wrong/extra products.

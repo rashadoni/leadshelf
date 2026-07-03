@@ -76,6 +76,7 @@ interface GoldenPhotoCandidate {
   id: string
   imageUrl: string
   takenAt: string
+  qualityScore: number | null
   storeName: string
   userName: string
 }
@@ -621,6 +622,7 @@ export function PlanogramEditor({
                   {goldenPhotoCandidates.map((photo) => (
                     <option key={photo.id} value={photo.id}>
                       {photo.storeName} · {photo.userName} · {new Date(photo.takenAt).toLocaleDateString()}
+                      {photo.qualityScore === null ? "" : ` · ${Math.round(photo.qualityScore * 100)}%`}
                     </option>
                   ))}
                 </select>
