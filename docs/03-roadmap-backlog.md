@@ -318,7 +318,8 @@ Definition of Done:
 - Obsolete in planogram but inactive in assortment. `[сделано: /analytics
   показывает SKU, оставшиеся в назначенных планограммах, но выключенные,
   истекшие или отсутствующие в активной ассортиментной логике]`
-- Task KPI report.
+- Task KPI report. `[сделано: /analytics показывает task KPI summary,
+  разрез по магазинам и планограммам, completion/on-time/photo proof метрики]`
 - Basic dashboard: stores with planograms, active planograms, placed SKUs, linear meters, turnover, profit.
 
 ## Phase 8 - Like-for-like and space productivity

@@ -72,6 +72,37 @@ export type ObsoletePlanogramRow = {
   reason: ObsoleteAssortmentReason
 }
 
+export type TaskKpiSummary = {
+  total: number
+  open: number
+  completed: number
+  expired: number
+  photoSubmitted: number
+  overdueOpen: number
+  unassignedOpen: number
+  photoSubmissions: number
+  completionRate: number
+  onTimeRate: number | null
+  avgCompletionHours: number | null
+}
+
+export type TaskKpiGroupRow = {
+  key: string
+  label: string
+  total: number
+  open: number
+  completed: number
+  expired: number
+  photoSubmissions: number
+  completionRate: number
+}
+
+export type TaskKpiReport = {
+  summary: TaskKpiSummary
+  stores: TaskKpiGroupRow[]
+  planograms: TaskKpiGroupRow[]
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
 }
@@ -94,6 +125,7 @@ function assignAbcClasses(rows: AbcRow[], metric: AbcMetric): void {
 }
 
 type TenantDb = ReturnType<typeof tenantDb>
+const OPEN_TASK_STATUSES = new Set(["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"])
 
 export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[]> {
   const placements = await db.planogramPlacement.findMany({
@@ -544,4 +576,120 @@ export async function getObsoletePlanogramRows(
     if (planogram !== 0) return planogram
     return a.sku.localeCompare(b.sku)
   })
+}
+
+function emptyTaskGroup(key: string, label: string): TaskKpiGroupRow {
+  return {
+    key,
+    label,
+    total: 0,
+    open: 0,
+    completed: 0,
+    expired: 0,
+    photoSubmissions: 0,
+    completionRate: 0,
+  }
+}
+
+function finalizeTaskGroups(groups: Map<string, TaskKpiGroupRow>): TaskKpiGroupRow[] {
+  return [...groups.values()]
+    .map((row) => ({
+      ...row,
+      completionRate: row.total > 0 ? row.completed / row.total : 0,
+    }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label))
+}
+
+export async function getTaskKpiReport(db: TenantDb, now = new Date()): Promise<TaskKpiReport> {
+  const tasks = await db.task.findMany({
+    include: {
+      store: { select: { id: true, name: true, code: true } },
+      planogramVersion: {
+        select: {
+          id: true,
+          versionNumber: true,
+          planogram: { select: { id: true, name: true } },
+        },
+      },
+      _count: { select: { photoSubmissions: true } },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 5000,
+  })
+
+  const summary: TaskKpiSummary = {
+    total: 0,
+    open: 0,
+    completed: 0,
+    expired: 0,
+    photoSubmitted: 0,
+    overdueOpen: 0,
+    unassignedOpen: 0,
+    photoSubmissions: 0,
+    completionRate: 0,
+    onTimeRate: null,
+    avgCompletionHours: null,
+  }
+  const stores = new Map<string, TaskKpiGroupRow>()
+  const planograms = new Map<string, TaskKpiGroupRow>()
+  let completedWithDue = 0
+  let completedOnTime = 0
+  let completionHoursTotal = 0
+  let completionHoursCount = 0
+
+  for (const task of tasks) {
+    const isOpen = OPEN_TASK_STATUSES.has(task.status)
+    const isCompleted = task.status === "COMPLETED"
+    const isExpired = task.status === "EXPIRED"
+    const photoCount = task._count.photoSubmissions
+
+    summary.total += 1
+    summary.photoSubmissions += photoCount
+    if (isOpen) summary.open += 1
+    if (isCompleted) summary.completed += 1
+    if (isExpired) summary.expired += 1
+    if (task.status === "PHOTO_SUBMITTED") summary.photoSubmitted += 1
+    if (isOpen && task.dueAt && task.dueAt < now) summary.overdueOpen += 1
+    if (isOpen && task.assigneeId == null) summary.unassignedOpen += 1
+    if (isCompleted && task.completedAt) {
+      completionHoursTotal += (task.completedAt.getTime() - task.createdAt.getTime()) / 3_600_000
+      completionHoursCount += 1
+      if (task.dueAt) {
+        completedWithDue += 1
+        if (task.completedAt <= task.dueAt) completedOnTime += 1
+      }
+    }
+
+    const storeLabel = task.store.code ? `${task.store.name} (${task.store.code})` : task.store.name
+    const store = stores.get(task.storeId) ?? emptyTaskGroup(task.storeId, storeLabel)
+    store.total += 1
+    store.photoSubmissions += photoCount
+    if (isOpen) store.open += 1
+    if (isCompleted) store.completed += 1
+    if (isExpired) store.expired += 1
+    stores.set(task.storeId, store)
+
+    if (task.planogramVersion) {
+      const key = task.planogramVersion.id
+      const label = `${task.planogramVersion.planogram.name} · v${task.planogramVersion.versionNumber}`
+      const planogram = planograms.get(key) ?? emptyTaskGroup(key, label)
+      planogram.total += 1
+      planogram.photoSubmissions += photoCount
+      if (isOpen) planogram.open += 1
+      if (isCompleted) planogram.completed += 1
+      if (isExpired) planogram.expired += 1
+      planograms.set(key, planogram)
+    }
+  }
+
+  summary.completionRate = summary.total > 0 ? summary.completed / summary.total : 0
+  summary.onTimeRate = completedWithDue > 0 ? completedOnTime / completedWithDue : null
+  summary.avgCompletionHours =
+    completionHoursCount > 0 ? completionHoursTotal / completionHoursCount : null
+
+  return {
+    summary,
+    stores: finalizeTaskGroups(stores),
+    planograms: finalizeTaskGroups(planograms),
+  }
 }

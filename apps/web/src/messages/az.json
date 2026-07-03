@@ -305,6 +305,34 @@
         "productInactive": "Məhsul deaktivdir"
       }
     },
+    "taskKpi": {
+      "title": "Tapşırıq KPI hesabatı",
+      "hint": "Dərc edilmiş planoqramların mağaza icrasını status, vaxtında tamamlanma və foto-sübut üzrə ölçür.",
+      "empty": "İcra tapşırığı hələ yoxdur.",
+      "byStore": "Mağaza üzrə",
+      "byPlanogram": "Planoqram üzrə",
+      "cards": {
+        "total": "Cəmi tapşırıq",
+        "open": "Açıq",
+        "completed": "Tamamlanıb",
+        "expired": "Gecikib",
+        "photoSubmitted": "Foto göndərilib",
+        "overdueOpen": "Açıq gecikmiş",
+        "unassignedOpen": "Təyin edilməyib",
+        "photoSubmissions": "Foto-sübut",
+        "completionRate": "Tamamlanma",
+        "onTimeRate": "Vaxtında",
+        "avgCompletionHours": "Orta saat"
+      },
+      "columns": {
+        "total": "Cəmi",
+        "open": "Açıq",
+        "completed": "Tamam.",
+        "expired": "Gecikib",
+        "photos": "Foto",
+        "completion": "Tamam."
+      }
+    },
     "colorOverlay": {
       "title": "Rəng qatı",
       "hint": "Planoqramı brend, təchizatçı, marja və ya stok günləri üzrə rəngləmək üçün ayrıca analitik qat.",

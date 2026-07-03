@@ -9,6 +9,7 @@ import {
   getObsoletePlanogramRows,
   getPlanogramProductRows,
   getStockCoverageByProduct,
+  getTaskKpiReport,
   type AbcClass,
 } from "@/server/analytics/planogram-products"
 
@@ -38,6 +39,10 @@ function parseVisibleColumns(raw: string | undefined): Set<OptionalColumn> {
 
 function formatAmount(value: number): string {
   return value.toFixed(2)
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`
 }
 
 function abcBadgeClass(value: AbcClass): string {
@@ -130,11 +135,12 @@ export default async function AnalyticsPage({
   const colorMode = parseColorMode(params.color)
 
   const db = tenantDb(session.org)
-  const [rows, abcRows, assortmentGapRows, obsoletePlanogramRows] = await Promise.all([
+  const [rows, abcRows, assortmentGapRows, obsoletePlanogramRows, taskKpiReport] = await Promise.all([
     getPlanogramProductRows(db),
     getAbcRows(db),
     getAssortmentGapRows(db),
     getObsoletePlanogramRows(db),
+    getTaskKpiReport(db),
   ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
@@ -631,6 +637,80 @@ export default async function AnalyticsPage({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("taskKpi.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("taskKpi.hint")}</p>
+        </div>
+        <div className="grid gap-2 border-b border-neutral-200 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            [t("taskKpi.cards.total"), taskKpiReport.summary.total],
+            [t("taskKpi.cards.open"), taskKpiReport.summary.open],
+            [t("taskKpi.cards.completed"), taskKpiReport.summary.completed],
+            [t("taskKpi.cards.expired"), taskKpiReport.summary.expired],
+            [t("taskKpi.cards.photoSubmitted"), taskKpiReport.summary.photoSubmitted],
+            [t("taskKpi.cards.overdueOpen"), taskKpiReport.summary.overdueOpen],
+            [t("taskKpi.cards.unassignedOpen"), taskKpiReport.summary.unassignedOpen],
+            [t("taskKpi.cards.photoSubmissions"), taskKpiReport.summary.photoSubmissions],
+            [t("taskKpi.cards.completionRate"), formatPercent(taskKpiReport.summary.completionRate)],
+            [
+              t("taskKpi.cards.onTimeRate"),
+              taskKpiReport.summary.onTimeRate == null ? "—" : formatPercent(taskKpiReport.summary.onTimeRate),
+            ],
+            [
+              t("taskKpi.cards.avgCompletionHours"),
+              taskKpiReport.summary.avgCompletionHours == null
+                ? "—"
+                : taskKpiReport.summary.avgCompletionHours.toFixed(1),
+            ],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+              <div className="text-xs text-neutral-500">{label}</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+            </div>
+          ))}
+        </div>
+        {taskKpiReport.summary.total === 0 ? (
+          <div className="p-10 text-center text-sm text-neutral-500">{t("taskKpi.empty")}</div>
+        ) : (
+          <div className="grid gap-4 p-3 lg:grid-cols-2">
+            {[
+              [t("taskKpi.byStore"), taskKpiReport.stores],
+              [t("taskKpi.byPlanogram"), taskKpiReport.planograms],
+            ].map(([title, groupRows]) => (
+              <div key={title as string} className="overflow-x-auto rounded-lg border border-neutral-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                      <th className="px-3 py-2">{title as string}</th>
+                      <th className="px-3 py-2 text-right">{t("taskKpi.columns.total")}</th>
+                      <th className="px-3 py-2 text-right">{t("taskKpi.columns.open")}</th>
+                      <th className="px-3 py-2 text-right">{t("taskKpi.columns.completed")}</th>
+                      <th className="px-3 py-2 text-right">{t("taskKpi.columns.expired")}</th>
+                      <th className="px-3 py-2 text-right">{t("taskKpi.columns.photos")}</th>
+                      <th className="px-3 py-2 text-right">{t("taskKpi.columns.completion")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(groupRows as typeof taskKpiReport.stores).slice(0, 10).map((row) => (
+                      <tr key={row.key} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                        <td className="px-3 py-2 font-medium">{row.label}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.total}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.open}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.completed}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.expired}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.photoSubmissions}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatPercent(row.completionRate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         )}
       </section>
