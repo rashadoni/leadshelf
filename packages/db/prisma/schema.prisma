@@ -72,6 +72,7 @@ model Organization {
   promotions         Promotion[]
   alerts             Alert[]
   auditLogs          AuditLog[]
+  goldenReferences   GoldenReference[]
 
   @@map("organizations")
 }
@@ -413,6 +414,7 @@ model Product {
   placements       PlanogramPlacement[]
   orderLines       OrderLine[]
   promotions       PromotionProduct[]
+  goldenReferenceSlots GoldenReferenceSlot[]
 
   @@unique([organizationId, sku])
   @@index([organizationId, categoryId])
@@ -868,6 +870,7 @@ model PlanogramVersion {
   placements  PlanogramPlacement[]
   assignments PlanogramAssignment[]
   tasks       Task[]
+  goldenReferences GoldenReference[]
 
   @@unique([planogramId, versionNumber])
   @@index([planogramId, state])
@@ -951,6 +954,8 @@ model PlanogramPlacement {
   stackMode            StackMode          @default(NONE)
   sortOrder            Int                @default(0)
   metadata             Json?
+
+  goldenReferenceSlots GoldenReferenceSlot[]
 
   @@index([planogramVersionId])
   @@index([productId])
@@ -1076,10 +1081,63 @@ model PhotoSubmission {
   qualityScore   Float?
   createdAt      DateTime @default(now())
 
+  goldenReferences GoldenReference[]
+
   @@unique([organizationId, clientPhotoId])
   @@index([organizationId, storeId, takenAt])
   @@index([taskId])
   @@map("photo_submissions")
+}
+
+// ---------------------------------------------------------------------------
+// AI / Vision (optional layer)
+// ---------------------------------------------------------------------------
+
+enum GoldenReferenceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model GoldenReference {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planogramVersionId String
+  planogramVersion   PlanogramVersion      @relation(fields: [planogramVersionId], references: [id], onDelete: Cascade)
+  photoSubmissionId  String?
+  photoSubmission    PhotoSubmission?      @relation(fields: [photoSubmissionId], references: [id], onDelete: SetNull)
+  imageUrl           String
+  status             GoldenReferenceStatus @default(ACTIVE)
+  createdById        String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  slots GoldenReferenceSlot[]
+
+  @@index([organizationId, planogramVersionId, status])
+  @@index([photoSubmissionId])
+  @@map("golden_references")
+}
+
+model GoldenReferenceSlot {
+  id                String          @id @default(cuid())
+  goldenReferenceId String
+  goldenReference   GoldenReference @relation(fields: [goldenReferenceId], references: [id], onDelete: Cascade)
+  placementId       String?
+  placement         PlanogramPlacement? @relation(fields: [placementId], references: [id], onDelete: SetNull)
+  productId         String?
+  product           Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  xPct              Float
+  yPct              Float
+  widthPct          Float
+  heightPct         Float
+  label             String?
+  sortOrder         Int             @default(0)
+  createdAt         DateTime        @default(now())
+
+  @@index([goldenReferenceId])
+  @@index([productId])
+  @@map("golden_reference_slots")
 }
 
 model MobileDevice {

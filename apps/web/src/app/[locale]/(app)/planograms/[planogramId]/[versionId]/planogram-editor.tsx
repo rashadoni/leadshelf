@@ -51,6 +51,21 @@ interface PickerProduct {
   widthMm: number | null
 }
 
+interface GoldenReferencePhoto {
+  id: string
+  imageUrl: string
+  status: string
+  createdAt: string
+}
+
+interface GoldenPhotoCandidate {
+  id: string
+  imageUrl: string
+  takenAt: string
+  storeName: string
+  userName: string
+}
+
 const PALETTE = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#14b8a6", "#f97316"]
 function colorFor(text: string): string {
   let hash = 0
@@ -64,12 +79,16 @@ export function PlanogramEditor({
   equipment,
   initialPlacements,
   publishOptions,
+  goldenReferences,
+  goldenPhotoCandidates,
 }: {
   planogram: { id: string; name: string }
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
   publishOptions: PublishTargetOption
+  goldenReferences: GoldenReferencePhoto[]
+  goldenPhotoCandidates: GoldenPhotoCandidate[]
 }) {
   const t = useTranslations("planograms.editor")
   const tState = useTranslations("planograms.state")
@@ -86,6 +105,8 @@ export function PlanogramEditor({
   const [message, setMessage] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
+  const [references, setReferences] = useState(goldenReferences)
+  const [selectedGoldenPhotoId, setSelectedGoldenPhotoId] = useState(goldenPhotoCandidates[0]?.id ?? "")
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
@@ -190,6 +211,27 @@ export function PlanogramEditor({
       setRevision(body.revision as string)
       setPlacements((prev) => prev.filter((p) => p.id !== id))
       setSelectedPlacementId(null)
+    }
+  }
+
+  async function createGoldenReference() {
+    if (!selectedGoldenPhotoId) return
+    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photoSubmissionId: selectedGoldenPhotoId }),
+    })
+    const body = await handleResponse(res)
+    if (body) {
+      setReferences((prev) => [
+        {
+          id: body.id as string,
+          imageUrl: body.imageUrl as string,
+          status: body.status as string,
+          createdAt: body.createdAt as string,
+        },
+        ...prev,
+      ])
     }
   }
 
@@ -421,6 +463,48 @@ export function PlanogramEditor({
                   </span>
                 </button>
               ))}
+          </div>
+
+          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+            <h2 className="mb-2 text-sm font-medium">{t("goldenReference")}</h2>
+            {references.length === 0 ? (
+              <div className="mb-3 rounded-md border border-dashed border-neutral-200 p-3 text-xs text-neutral-500">
+                {t("noGoldenReference")}
+              </div>
+            ) : (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                {references.slice(0, 4).map((ref) => (
+                  <div key={ref.id} className="overflow-hidden rounded-md border border-neutral-200">
+                    <img src={`/api/media/${ref.imageUrl}`} alt="" className="h-24 w-full object-cover" />
+                    <div className="px-2 py-1 text-xs text-neutral-500">{ref.status}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {goldenPhotoCandidates.length === 0 ? (
+              <p className="text-xs text-neutral-500">{t("noGoldenPhotoCandidates")}</p>
+            ) : (
+              <div className="space-y-2">
+                <select
+                  value={selectedGoldenPhotoId}
+                  onChange={(e) => setSelectedGoldenPhotoId(e.target.value)}
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                >
+                  {goldenPhotoCandidates.map((photo) => (
+                    <option key={photo.id} value={photo.id}>
+                      {photo.storeName} · {photo.userName} · {new Date(photo.takenAt).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={createGoldenReference}
+                  className="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+                >
+                  {t("createGoldenReference")}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Placement props */}

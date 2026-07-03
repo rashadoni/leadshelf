@@ -366,7 +366,8 @@ Definition of Done:
 
 Задачи:
 
-- Golden reference photo.
+- Golden reference photo. `[сделано: Prisma GoldenReference/Slot слой +
+  API/UI для создания эталонного фото из PhotoSubmission по planogram version]`
 - Reference slots.
 - Photo quality check.
 - Detector/embedding service.

@@ -196,7 +196,11 @@
       "remove": "Rəfdən götür",
       "rejected": "Sığmadı",
       "conflict": "Qaralama paralel dəyişdirilib — səhifə yeniləndi",
-      "placedUnits": "əd rəfdə"
+      "placedUnits": "əd rəfdə",
+      "goldenReference": "Golden reference",
+      "noGoldenReference": "Bu versiya üçün etalon foto hələ seçilməyib.",
+      "noGoldenPhotoCandidates": "Bu planoqram üzrə foto-sübut hələ yoxdur.",
+      "createGoldenReference": "Etalon foto yarat"
     },
     "viewer3d": {
       "title": "3D görünüş",

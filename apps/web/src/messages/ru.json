@@ -196,7 +196,11 @@
       "remove": "Убрать с полки",
       "rejected": "Не встало",
       "conflict": "Черновик изменён параллельно — страница обновлена",
-      "placedUnits": "шт на полке"
+      "placedUnits": "шт на полке",
+      "goldenReference": "Golden reference",
+      "noGoldenReference": "Для этой версии ещё не выбран эталонный снимок.",
+      "noGoldenPhotoCandidates": "Для этой планограммы ещё нет фото-подтверждений.",
+      "createGoldenReference": "Создать эталонный снимок"
     },
     "viewer3d": {
       "title": "3D просмотр",

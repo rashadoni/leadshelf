@@ -19,7 +19,7 @@ export default async function PlanogramEditorPage({
   if (!eq) notFound()
 
   const db = tenantDb(session.org)
-  const [formats, stores] = await Promise.all([
+  const [formats, stores, goldenReferences, goldenPhotoCandidates] = await Promise.all([
     db.storeFormat.findMany({
       select: { id: true, name: true, _count: { select: { stores: { where: { isActive: true } } } } },
       orderBy: { name: "asc" },
@@ -29,6 +29,24 @@ export default async function PlanogramEditorPage({
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
       take: 500,
+    }),
+    db.goldenReference.findMany({
+      where: { planogramVersionId: versionId },
+      select: { id: true, imageUrl: true, status: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    db.photoSubmission.findMany({
+      where: { task: { planogramVersionId: versionId } },
+      select: {
+        id: true,
+        url: true,
+        takenAt: true,
+        store: { select: { name: true, code: true } },
+        user: { select: { name: true } },
+      },
+      orderBy: { takenAt: "desc" },
+      take: 20,
     }),
   ])
 
@@ -75,6 +93,19 @@ export default async function PlanogramEditorPage({
           brandName: p.product.brand?.name ?? null,
           imageKey: p.product.images[0]?.url ?? null,
         },
+      }))}
+      goldenReferences={goldenReferences.map((ref) => ({
+        id: ref.id,
+        imageUrl: ref.imageUrl,
+        status: ref.status,
+        createdAt: ref.createdAt.toISOString(),
+      }))}
+      goldenPhotoCandidates={goldenPhotoCandidates.map((photo) => ({
+        id: photo.id,
+        imageUrl: photo.url,
+        takenAt: photo.takenAt.toISOString(),
+        storeName: photo.store.code ? `${photo.store.name} (${photo.store.code})` : photo.store.name,
+        userName: photo.user.name,
       }))}
     />
   )
