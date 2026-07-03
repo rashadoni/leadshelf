@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { listChangeSummaries, listPlacementSummaries, placementTotalUnits } from "./bundle-utils"
+import {
+  findPlacementSummaryByCode,
+  listChangeSummaries,
+  listPlacementSummaries,
+  placementTotalUnits,
+} from "./bundle-utils"
 import type { Bundle } from "./PlanogramSvg"
 
 const bundle: Bundle = {
@@ -62,6 +67,25 @@ describe("planogram bundle summaries", () => {
         placementId: "p1",
       },
     ])
+  })
+
+  test("finds a placement by normalized barcode", () => {
+    const summaries = listPlacementSummaries(bundle)
+
+    expect(findPlacementSummaryByCode(summaries, "123 456")?.placementId).toBe("p1")
+  })
+
+  test("finds a placement by SKU without case sensitivity", () => {
+    const summaries = listPlacementSummaries(bundle)
+
+    expect(findPlacementSummaryByCode(summaries, "sku-1")?.placementId).toBe("p1")
+  })
+
+  test("returns null for blank or unknown lookup codes", () => {
+    const summaries = listPlacementSummaries(bundle)
+
+    expect(findPlacementSummaryByCode(summaries, " ")).toBeNull()
+    expect(findPlacementSummaryByCode(summaries, "missing")).toBeNull()
   })
 
   test("uses explicit changed-items payload when bundle provides diff", () => {

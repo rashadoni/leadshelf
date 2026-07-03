@@ -12,7 +12,11 @@ import {
   getTask,
 } from "../../../src/db/local-store"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
-import { listChangeSummaries, listPlacementSummaries } from "../../../src/planogram/bundle-utils"
+import {
+  findPlacementSummaryByCode,
+  listChangeSummaries,
+  listPlacementSummaries,
+} from "../../../src/planogram/bundle-utils"
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
@@ -27,6 +31,8 @@ export default function TaskDetailScreen() {
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [comment, setComment] = useState("")
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null)
+  const [barcodeQuery, setBarcodeQuery] = useState("")
+  const [lastBarcodeLookup, setLastBarcodeLookup] = useState<string | null>(null)
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -42,6 +48,13 @@ export default function TaskDetailScreen() {
     [bundle],
   )
   const changeSummaries = useMemo(() => (bundle ? listChangeSummaries(bundle) : []), [bundle])
+  const barcodeLookupResult = useMemo(
+    () =>
+      lastBarcodeLookup
+        ? findPlacementSummaryByCode(placementSummaries, lastBarcodeLookup)
+        : null,
+    [lastBarcodeLookup, placementSummaries],
+  )
   const selectedPlacement =
     placementSummaries.find((p) => p.placementId === selectedPlacementId) ??
     placementSummaries[0] ??
@@ -101,6 +114,17 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
+  function findProductByCode() {
+    const query = barcodeQuery.trim()
+    if (!query) {
+      setLastBarcodeLookup(null)
+      return
+    }
+    const found = findPlacementSummaryByCode(placementSummaries, query)
+    if (found) setSelectedPlacementId(found.placementId)
+    setLastBarcodeLookup(query)
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
@@ -147,6 +171,45 @@ export default function TaskDetailScreen() {
                   <Text style={styles.detailValue}>{selectedPlacement.barcode ?? "-"}</Text>
                 </View>
               </View>
+            ) : null}
+            {placementSummaries.length > 0 ? (
+              <>
+                <Text style={styles.section}>{t("barcodeFinder")}</Text>
+                <View style={styles.finderCard}>
+                  <View style={styles.finderRow}>
+                    <TextInput
+                      value={barcodeQuery}
+                      onChangeText={(value) => {
+                        setBarcodeQuery(value)
+                        setLastBarcodeLookup(null)
+                      }}
+                      placeholder={t("barcodePlaceholder")}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      returnKeyType="search"
+                      onSubmitEditing={findProductByCode}
+                      style={styles.finderInput}
+                    />
+                    <Pressable
+                      style={[styles.finderButton, !barcodeQuery.trim() && styles.disabled]}
+                      disabled={!barcodeQuery.trim()}
+                      onPress={findProductByCode}
+                    >
+                      <Text style={styles.finderButtonText}>{t("findProduct")}</Text>
+                    </Pressable>
+                  </View>
+                  {lastBarcodeLookup ? (
+                    <Text
+                      style={[
+                        styles.finderMessage,
+                        barcodeLookupResult ? styles.finderSuccess : styles.finderError,
+                      ]}
+                    >
+                      {barcodeLookupResult ? t("barcodeFound") : t("barcodeNotFound")}
+                    </Text>
+                  ) : null}
+                </View>
+              </>
             ) : null}
             {placementSummaries.length > 0 ? (
               <>
@@ -272,6 +335,36 @@ const styles = StyleSheet.create({
   },
   detailLabel: { width: "38%", fontSize: 12, color: "#737373" },
   detailValue: { width: "62%", fontSize: 12, fontWeight: "600", color: "#404040" },
+  finderCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    backgroundColor: "white",
+    padding: 10,
+    gap: 8,
+  },
+  finderRow: { flexDirection: "row", gap: 8 },
+  finderInput: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: "#d4d4d4",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    color: "#171717",
+    backgroundColor: "#fafaf9",
+  },
+  finderButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "#171717",
+    paddingHorizontal: 12,
+  },
+  finderButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
+  finderMessage: { fontSize: 12, fontWeight: "600" },
+  finderSuccess: { color: "#166534" },
+  finderError: { color: "#991b1b" },
   productList: { borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: "#e7e5e4" },
   productRow: {
     flexDirection: "row",

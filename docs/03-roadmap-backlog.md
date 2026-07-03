@@ -267,7 +267,7 @@ camera overlay.
 - Planogram view.
 - Product detail tap. `[сделано: кликабельная SVG-позиция + карточка товара]`
 - Changed items list. `[сделано: diff/current list в mobile]`
-- Barcode scanner: find where SKU should be placed.
+- Barcode scanner: find where SKU should be placed. `[частично: ручной barcode/SKU finder по bundle; camera binding позже]`
 - Floor plan location hint.
 - Photo submit.
 - Comment/feedback.

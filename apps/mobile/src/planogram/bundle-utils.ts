@@ -22,8 +22,27 @@ export interface ChangeSummary {
   placementId: string | null
 }
 
+function normalizeLookupCode(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/[\s-]+/g, "").toLowerCase()
+}
+
 export function placementTotalUnits(p: PlanogramPlacement): number {
   return p.facingsX * p.facingsY * (p.facingsZ ?? 1)
+}
+
+export function findPlacementSummaryByCode(
+  placements: readonly PlacementSummary[],
+  query: string,
+): PlacementSummary | null {
+  const lookup = normalizeLookupCode(query)
+  if (!lookup) return null
+
+  return (
+    placements.find(
+      (p) =>
+        normalizeLookupCode(p.barcode) === lookup || normalizeLookupCode(p.sku) === lookup,
+    ) ?? null
+  )
 }
 
 export function listPlacementSummaries(bundle: Bundle): PlacementSummary[] {
