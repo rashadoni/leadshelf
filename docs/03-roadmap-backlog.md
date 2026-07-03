@@ -229,6 +229,15 @@ Definition of Done:
 
 Цель: закрыть офис -> торговая точка -> фото-подтверждение.
 
+Статус (2026-07-03): web-срез сделан — publish DRAFT->PUBLISHED c
+ревалидацией геометрии (stale-guard), заморозкой EquipmentVersion,
+assignment (формат XOR точки), авто-задачами по точкам и overlap-reject;
+next-draft клонирует выкладку в новую версию; FSM статусов задач с
+историей; DB-триггеры инвариантов (MIGRATION_NOTES п.3 закрыт); UI:
+publish-диалог в редакторе, read-only опубликованной версии, страница
+задач со статус-фильтрами и переходами. План: docs/17. Осталось: mobile
+(offline sync, фото), автопросрочка EXPIRED воркером, sla-отчеты.
+
 Задачи web:
 
 - Publish planogram to store/format.

@@ -23,3 +23,9 @@ export {
   removePlacement,
   PlanogramRepoError,
 } from "./repos/planogram.ts"
+export {
+  publishPlanogramVersion,
+  createNextDraft,
+  transitionTaskStatus,
+  type PublishTarget,
+} from "./repos/publish.ts"

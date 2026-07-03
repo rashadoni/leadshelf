@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { getSession } from "@/server/auth/require-session"
 import { getPlanogramEditor } from "@leadshelf/db"
-import { workerDb } from "@/server/db/client"
+import { tenantDb, workerDb } from "@/server/db/client"
 import { PlanogramEditor } from "./planogram-editor"
 
 export default async function PlanogramEditorPage({
@@ -18,8 +18,26 @@ export default async function PlanogramEditorPage({
   const eq = payload.version.equipment[0]
   if (!eq) notFound()
 
+  const db = tenantDb(session.org)
+  const [formats, stores] = await Promise.all([
+    db.storeFormat.findMany({
+      select: { id: true, name: true, _count: { select: { stores: { where: { isActive: true } } } } },
+      orderBy: { name: "asc" },
+    }),
+    db.store.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+      take: 500,
+    }),
+  ])
+
   return (
     <PlanogramEditor
+      publishOptions={{
+        formats: formats.map((f) => ({ id: f.id, name: f.name, storeCount: f._count.stores })),
+        stores,
+      }}
       planogram={{ id: payload.planogram.id, name: payload.planogram.name }}
       version={{
         id: payload.version.id,

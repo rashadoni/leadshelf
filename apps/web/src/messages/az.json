@@ -126,6 +126,23 @@
       "creating": "Yaradılır...",
       "noEquipment": "Əvvəlcə kitabxanada avadanlıq yaradın"
     },
+    "publish": {
+      "button": "Dərc et",
+      "title": "Planoqramın dərci",
+      "targetFormat": "Formata",
+      "targetStores": "Nöqtələrə",
+      "format": "Format",
+      "stores": "Nöqtələr",
+      "dueAt": "İcra müddəti",
+      "note": "Versiya şərhi",
+      "submit": "Dərc et",
+      "publishing": "Dərc edilir...",
+      "success": "Dərc edildi: {count} tapşırıq yaradıldı",
+      "willFreeze": "Dərc avadanlıq həndəsəsini donduracaq və nöqtələrə tapşırıq yaradacaq.",
+      "readOnly": "Versiya dərc edilib və dəyişməzdir.",
+      "nextDraft": "Yeni qaralama yarat",
+      "storesCount": "nöqtə: {count}"
+    },
     "editor": {
       "products": "Məhsullar",
       "searchProducts": "Məhsul axtar...",
@@ -143,6 +160,26 @@
       "rejected": "Sığmadı",
       "conflict": "Qaralama paralel dəyişdirilib — səhifə yeniləndi",
       "placedUnits": "əd rəfdə"
+    }
+  },
+  "tasks": {
+    "all": "Hamısı",
+    "empty": "Tapşırıq yoxdur. Planoqramı nöqtələrə dərc edin.",
+    "table": { "title": "Tapşırıq", "store": "Nöqtə", "planogram": "Planoqram", "due": "Müddət", "status": "Status" },
+    "status": {
+      "NEW": "Yeni",
+      "IN_PROGRESS": "İcradadır",
+      "PHOTO_SUBMITTED": "Foto yoxlamada",
+      "COMPLETED": "Tamamlanıb",
+      "EXPIRED": "Vaxtı keçib",
+      "EMPTY": "Boş"
+    },
+    "actions": {
+      "IN_PROGRESS": "İcraya",
+      "PHOTO_SUBMITTED": "Foto alındı",
+      "COMPLETED": "Qəbul et",
+      "EXPIRED": "Vaxtı keçmiş",
+      "EMPTY": "Boş"
     }
   },
   "emptyStates": {

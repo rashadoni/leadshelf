@@ -7,12 +7,13 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import {
   shelfSpaceForShelf,
   shelfUsage,
   type EquipmentGeometryMm,
 } from "@leadshelf/core"
+import { PublishDialog, type PublishTargetOption } from "./publish-dialog"
 
 export interface EditorProduct {
   id: string
@@ -56,14 +57,18 @@ export function PlanogramEditor({
   version,
   equipment,
   initialPlacements,
+  publishOptions,
 }: {
   planogram: { id: string; name: string }
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
+  publishOptions: PublishTargetOption
 }) {
   const t = useTranslations("planograms.editor")
   const tState = useTranslations("planograms.state")
+  const tPub = useTranslations("planograms.publish")
+  const locale = useLocale()
   const router = useRouter()
 
   const [placements, setPlacements] = useState(initialPlacements)
@@ -203,7 +208,7 @@ export function PlanogramEditor({
 
   return (
     <div>
-      <div className="mb-4 flex items-baseline gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">{planogram.name}</h1>
         <span className="text-sm text-neutral-500">{equipment.name}</span>
         <span
@@ -213,6 +218,39 @@ export function PlanogramEditor({
         >
           v{version.versionNumber} · {tState(version.state as never)}
         </span>
+        <span className="flex-1" />
+        {!readOnly && placements.length > 0 && (
+          <PublishDialog
+            options={publishOptions}
+            revision={revision}
+            publishUrl={`/api/v1/planograms/${planogram.id}/versions/${version.id}/publish`}
+            onPublished={(count) => {
+              setMessage(tPub("success", { count }))
+              router.refresh()
+            }}
+            onError={(m) => setMessage(m)}
+          />
+        )}
+        {readOnly && (
+          <>
+            <span className="text-xs text-neutral-500">{tPub("readOnly")}</span>
+            <button
+              onClick={async () => {
+                const res = await fetch(
+                  `/api/v1/planograms/${planogram.id}/versions/${version.id}/next-draft`,
+                  { method: "POST" },
+                )
+                if (res.ok) {
+                  const body = await res.json()
+                  window.location.assign(`/${locale}/planograms/${planogram.id}/${body.versionId}`)
+                }
+              }}
+              className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+            >
+              {tPub("nextDraft")}
+            </button>
+          </>
+        )}
       </div>
 
       {message && (

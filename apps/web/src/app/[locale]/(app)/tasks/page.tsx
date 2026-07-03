@@ -1,5 +1,127 @@
-import { EmptySection } from "@/components/shell/empty-section"
+import { getTranslations } from "next-intl/server"
+import { getSession } from "@/server/auth/require-session"
+import { tenantDb } from "@/server/db/client"
+import { Link } from "@/i18n/navigation"
+import { TaskStatusActions } from "./task-status-actions"
 
-export default function Page() {
-  return <EmptySection sectionKey="tasks" />
+const STATUSES = ["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED", "COMPLETED", "EXPIRED", "EMPTY"] as const
+
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const [t, tNav, session, params] = await Promise.all([
+    getTranslations("tasks"),
+    getTranslations("nav"),
+    getSession(),
+    searchParams,
+  ])
+  if (!session) return null
+
+  const statusFilter = STATUSES.includes(params.status as never)
+    ? (params.status as (typeof STATUSES)[number])
+    : undefined
+
+  const tasks = await tenantDb(session.org).task.findMany({
+    where: statusFilter ? { status: statusFilter } : {},
+    include: {
+      store: { select: { name: true, code: true } },
+      planogramVersion: {
+        select: {
+          id: true,
+          versionNumber: true,
+          planogram: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 100,
+  })
+
+  return (
+    <div>
+      <h1 className="mb-4 text-2xl font-semibold">{tNav("tasks")}</h1>
+
+      <div className="mb-4 flex flex-wrap gap-1">
+        <Link
+          href="/tasks"
+          className={`rounded-full px-3 py-1 text-sm ${!statusFilter ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"}`}
+        >
+          {t("all")}
+        </Link>
+        {STATUSES.map((s) => (
+          <Link
+            key={s}
+            href={`/tasks?status=${s}`}
+            className={`rounded-full px-3 py-1 text-sm ${statusFilter === s ? "bg-neutral-900 text-white" : "border border-neutral-200 bg-white text-neutral-600"}`}
+          >
+            {t(`status.${s}`)}
+          </Link>
+        ))}
+      </div>
+
+      {tasks.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center text-sm text-neutral-500">
+          {t("empty")}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+                <th className="px-3 py-2">{t("table.title")}</th>
+                <th className="px-3 py-2">{t("table.store")}</th>
+                <th className="px-3 py-2">{t("table.planogram")}</th>
+                <th className="px-3 py-2">{t("table.due")}</th>
+                <th className="px-3 py-2">{t("table.status")}</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((task) => (
+                <tr key={task.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                  <td className="px-3 py-2 font-medium">{task.title}</td>
+                  <td className="px-3 py-2 text-neutral-500">
+                    {task.store.name} {task.store.code && `(${task.store.code})`}
+                  </td>
+                  <td className="px-3 py-2">
+                    {task.planogramVersion && (
+                      <Link
+                        href={`/planograms/${task.planogramVersion.planogram.id}/${task.planogramVersion.id}`}
+                        className="text-neutral-600 hover:underline"
+                      >
+                        {task.planogramVersion.planogram.name} · v{task.planogramVersion.versionNumber}
+                      </Link>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-neutral-500">
+                    {task.dueAt ? new Date(task.dueAt).toLocaleDateString() : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-xs ${
+                        task.status === "COMPLETED"
+                          ? "bg-green-50 text-green-700"
+                          : task.status === "EXPIRED"
+                            ? "bg-red-50 text-red-600"
+                            : task.status === "NEW"
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {t(`status.${task.status}` as never)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <TaskStatusActions taskId={task.id} status={task.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
