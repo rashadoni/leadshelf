@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { calculateShelfComplianceScore } from "./compliance.ts"
+import { calculateShelfCompliance, calculateShelfComplianceScore } from "./compliance.ts"
 
 describe("shelf compliance score", () => {
   it("passes when all slots match with high confidence", () => {
@@ -19,7 +19,7 @@ describe("shelf compliance score", () => {
   })
 
   it("penalizes missing and wrong products", () => {
-    const result = calculateShelfComplianceScore({
+    const result = calculateShelfCompliance({
       slots: [
         { id: "slot-1", productId: "p1", productSku: "SKU1" },
         { id: "slot-2", productId: "p2", productSku: "SKU2" },
@@ -33,5 +33,12 @@ describe("shelf compliance score", () => {
     expect(result.wrongProducts).toBe(1)
     expect(result.missingSlots).toBe(1)
     expect(result.extraDetections).toBe(1)
+    expect(result.findings.wrong[0]).toMatchObject({
+      slotId: "slot-1",
+      expectedProductSku: "SKU1",
+      detectedProductSku: "SKU3",
+    })
+    expect(result.findings.missing[0]).toMatchObject({ slotId: "slot-2" })
+    expect(result.findings.extra[0]).toMatchObject({ slotId: "unknown", detectedProductSku: "SKU9" })
   })
 })

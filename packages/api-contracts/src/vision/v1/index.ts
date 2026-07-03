@@ -60,6 +60,35 @@ export const visionComplianceSchema = z.object({
 })
 export type VisionCompliance = z.infer<typeof visionComplianceSchema>
 
+export const visionComplianceFindingsSchema = z.object({
+  missing: z.array(
+    z.object({
+      slotId: z.string().min(1),
+      expectedProductId: z.string().min(1).nullable(),
+      expectedProductSku: z.string().min(1).nullable(),
+    }),
+  ),
+  wrong: z.array(
+    z.object({
+      slotId: z.string().min(1),
+      expectedProductId: z.string().min(1).nullable(),
+      expectedProductSku: z.string().min(1).nullable(),
+      detectedProductId: z.string().min(1).nullable(),
+      detectedProductSku: z.string().min(1).nullable(),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+  extra: z.array(
+    z.object({
+      slotId: z.string().min(1).nullable(),
+      detectedProductId: z.string().min(1).nullable(),
+      detectedProductSku: z.string().min(1).nullable(),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+})
+export type VisionComplianceFindings = z.infer<typeof visionComplianceFindingsSchema>
+
 export const visionScanResponseSchema = z.object({
   protocolVersion: z.literal(VISION_PROTOCOL_VERSION),
   provider: z.string().min(1),
@@ -68,6 +97,7 @@ export const visionScanResponseSchema = z.object({
   detections: z.array(visionDetectionSchema),
   embedding: visionEmbeddingSchema.nullable(),
   compliance: visionComplianceSchema,
+  findings: visionComplianceFindingsSchema,
   warnings: z.array(z.string()),
 })
 export type VisionScanResponse = z.infer<typeof visionScanResponseSchema>

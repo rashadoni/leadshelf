@@ -21,6 +21,28 @@ export interface ShelfComplianceScore {
   extraDetections: number
 }
 
+export interface ShelfComplianceFindings {
+  missing: Array<{ slotId: string; expectedProductId: string | null; expectedProductSku: string | null }>
+  wrong: Array<{
+    slotId: string
+    expectedProductId: string | null
+    expectedProductSku: string | null
+    detectedProductId: string | null
+    detectedProductSku: string | null
+    confidence: number
+  }>
+  extra: Array<{
+    slotId: string | null
+    detectedProductId: string | null
+    detectedProductSku: string | null
+    confidence: number
+  }>
+}
+
+export interface ShelfComplianceResult extends ShelfComplianceScore {
+  findings: ShelfComplianceFindings
+}
+
 function sameProduct(slot: ComplianceSlot, detection: ComplianceDetection): boolean {
   if (slot.productId && detection.productId) return slot.productId === detection.productId
   if (slot.productSku && detection.productSku) return slot.productSku === detection.productSku
@@ -31,7 +53,7 @@ function roundScore(value: number): number {
   return Math.max(0, Math.min(1, Number(value.toFixed(2))))
 }
 
-export function calculateShelfComplianceScore({
+export function calculateShelfCompliance({
   slots,
   detections,
   minConfidence = 0.5,
@@ -39,8 +61,9 @@ export function calculateShelfComplianceScore({
   slots: ComplianceSlot[]
   detections: ComplianceDetection[]
   minConfidence?: number
-}): ShelfComplianceScore {
+}): ShelfComplianceResult {
   const slotById = new Map(slots.map((slot) => [slot.id, slot]))
+  const findings: ShelfComplianceFindings = { missing: [], wrong: [], extra: [] }
   let matchedSlots = 0
   let missingSlots = 0
   let wrongProducts = 0
@@ -48,7 +71,15 @@ export function calculateShelfComplianceScore({
   let slotScoreSum = 0
 
   for (const detection of detections) {
-    if (!detection.slotId || !slotById.has(detection.slotId)) extraDetections += 1
+    if (!detection.slotId || !slotById.has(detection.slotId)) {
+      extraDetections += 1
+      findings.extra.push({
+        slotId: detection.slotId,
+        detectedProductId: detection.productId,
+        detectedProductSku: detection.productSku,
+        confidence: detection.confidence,
+      })
+    }
   }
 
   for (const slot of slots) {
@@ -58,10 +89,23 @@ export function calculateShelfComplianceScore({
     const best = candidates[0]
     if (!best || best.confidence < minConfidence) {
       missingSlots += 1
+      findings.missing.push({
+        slotId: slot.id,
+        expectedProductId: slot.productId,
+        expectedProductSku: slot.productSku,
+      })
       continue
     }
     if (!sameProduct(slot, best)) {
       wrongProducts += 1
+      findings.wrong.push({
+        slotId: slot.id,
+        expectedProductId: slot.productId,
+        expectedProductSku: slot.productSku,
+        detectedProductId: best.productId,
+        detectedProductSku: best.productSku,
+        confidence: best.confidence,
+      })
       slotScoreSum += best.confidence * 0.25
       continue
     }
@@ -78,5 +122,15 @@ export function calculateShelfComplianceScore({
     missingSlots,
     wrongProducts,
     extraDetections,
+    findings,
   }
+}
+
+export function calculateShelfComplianceScore(input: {
+  slots: ComplianceSlot[]
+  detections: ComplianceDetection[]
+  minConfidence?: number
+}): ShelfComplianceScore {
+  const { findings: _findings, ...score } = calculateShelfCompliance(input)
+  return score
 }

@@ -376,7 +376,8 @@ Definition of Done:
   optional services/vision HTTP boundary с stub provider, /health и /v1/scan]`
 - Compliance score. `[сделано: core scorer slots vs detections + compliance
   summary в vision/v1 scan response]`
-- Missing/wrong/extra products.
+- Missing/wrong/extra products. `[сделано: core compliance findings +
+  missing/wrong/extra arrays в vision/v1 scan response]`
 - Human review queue.
 - Model/data quality dashboard.
 

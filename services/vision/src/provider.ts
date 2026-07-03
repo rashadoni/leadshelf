@@ -4,7 +4,7 @@ import {
   type VisionScanRequest,
   type VisionScanResponse,
 } from "@leadshelf/api-contracts/vision/v1"
-import { calculateShelfComplianceScore } from "@leadshelf/core"
+import { calculateShelfCompliance } from "@leadshelf/core"
 
 export const STUB_PROVIDER = "leadshelf-stub"
 export const STUB_MODEL_VERSION = "stub-reference-slots-v1"
@@ -28,7 +28,7 @@ export class ReferenceSlotStubProvider implements VisionProvider {
         heightPct: slot.heightPct,
       },
     }))
-    const compliance = calculateShelfComplianceScore({
+    const complianceResult = calculateShelfCompliance({
       slots: request.slots.map((slot) => ({
         id: slot.id,
         productId: slot.productId,
@@ -44,7 +44,16 @@ export class ReferenceSlotStubProvider implements VisionProvider {
       status: request.slots.length > 0 ? "needs_human_review" : "failed",
       detections,
       embedding: null,
-      compliance,
+      compliance: {
+        score: complianceResult.score,
+        status: complianceResult.status,
+        totalSlots: complianceResult.totalSlots,
+        matchedSlots: complianceResult.matchedSlots,
+        missingSlots: complianceResult.missingSlots,
+        wrongProducts: complianceResult.wrongProducts,
+        extraDetections: complianceResult.extraDetections,
+      },
+      findings: complianceResult.findings,
       warnings: [
         request.slots.length > 0
           ? "stub_provider_uses_reference_slots_without_image_inference"
