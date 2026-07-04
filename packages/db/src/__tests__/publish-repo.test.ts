@@ -101,6 +101,17 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await prisma.notificationDelivery.deleteMany({ where: { organizationId: orgId } })
+  await prisma.alert.deleteMany({ where: { organizationId: orgId } })
+  await prisma.productEvent.deleteMany({ where: { organizationId: orgId } })
+  await prisma.outboxOperation.deleteMany({ where: { device: { user: { organizationId: orgId } } } })
+  await prisma.syncConflict.deleteMany({ where: { device: { user: { organizationId: orgId } } } })
+  await prisma.syncCursor.deleteMany({ where: { device: { user: { organizationId: orgId } } } })
+  await prisma.agentLocation.deleteMany({ where: { agent: { organizationId: orgId } } })
+  await prisma.visit.deleteMany({ where: { organizationId: orgId } })
+  await prisma.route.deleteMany({ where: { organizationId: orgId } })
+  await prisma.fieldAgent.deleteMany({ where: { organizationId: orgId } })
+  await prisma.mobileDevice.deleteMany({ where: { user: { organizationId: orgId } } })
   await prisma.taskComment.deleteMany({ where: { user: { organizationId: orgId } } })
   await prisma.photoSubmission.deleteMany({ where: { organizationId: orgId } })
   await prisma.task.deleteMany({ where: { organizationId: orgId } })
