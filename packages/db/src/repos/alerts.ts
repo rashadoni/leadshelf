@@ -30,6 +30,16 @@ export interface EmitProductEventInput {
   occurredAt?: Date
 }
 
+export interface NotificationDeliveryJob {
+  id: string
+  eventId: string | null
+  alertId: string | null
+  pushToken: string
+  title: string
+  body: string
+  payload: unknown
+}
+
 function defaultDedupeKey(input: EmitProductEventInput): string {
   return [
     input.kind,
@@ -225,6 +235,64 @@ export async function enqueueOfficeMorningDigest(
     where: { organizationId, eventId: eventResult.eventId },
   })
   return { deliveryCount: deliveries, digest, eventId: eventResult.eventId }
+}
+
+export async function claimPendingNotificationDeliveries(
+  prisma: PrismaClient,
+  organizationId: string,
+  input: { limit?: number } = {},
+): Promise<NotificationDeliveryJob[]> {
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 500)
+  const candidates = await prisma.notificationDelivery.findMany({
+    where: { organizationId, status: "PENDING" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: limit,
+    select: {
+      id: true,
+      eventId: true,
+      alertId: true,
+      pushToken: true,
+      title: true,
+      body: true,
+      payload: true,
+    },
+  })
+
+  const claimed: NotificationDeliveryJob[] = []
+  for (const delivery of candidates) {
+    const updated = await prisma.notificationDelivery.updateMany({
+      where: { id: delivery.id, organizationId, status: "PENDING" },
+      data: { status: "SENDING", error: null },
+    })
+    if (updated.count === 1) claimed.push(delivery)
+  }
+  return claimed
+}
+
+export async function markNotificationDeliverySent(
+  prisma: PrismaClient,
+  organizationId: string,
+  deliveryId: string,
+  input: { sentAt?: Date } = {},
+): Promise<boolean> {
+  const updated = await prisma.notificationDelivery.updateMany({
+    where: { id: deliveryId, organizationId, status: "SENDING" },
+    data: { status: "SENT", sentAt: input.sentAt ?? new Date(), error: null },
+  })
+  return updated.count === 1
+}
+
+export async function markNotificationDeliveryFailed(
+  prisma: PrismaClient,
+  organizationId: string,
+  deliveryId: string,
+  input: { error?: string | null } = {},
+): Promise<boolean> {
+  const updated = await prisma.notificationDelivery.updateMany({
+    where: { id: deliveryId, organizationId, status: "SENDING" },
+    data: { status: "FAILED", error: input.error?.slice(0, 1000) ?? null },
+  })
+  return updated.count === 1
 }
 
 export async function detectStockGapAlerts(

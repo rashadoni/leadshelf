@@ -48,6 +48,10 @@ export {
   emitProductEvent,
   buildOfficeMorningDigest,
   enqueueOfficeMorningDigest,
+  claimPendingNotificationDeliveries,
+  markNotificationDeliverySent,
+  markNotificationDeliveryFailed,
   detectStockGapAlerts,
+  type NotificationDeliveryJob,
   type EmitProductEventInput,
 } from "./repos/alerts.ts"

@@ -3,9 +3,12 @@ import { createSystemClient } from "../tenant-client.ts"
 import {
   AlertRepoError,
   buildOfficeMorningDigest,
+  claimPendingNotificationDeliveries,
   detectStockGapAlerts,
   emitProductEvent,
   enqueueOfficeMorningDigest,
+  markNotificationDeliveryFailed,
+  markNotificationDeliverySent,
 } from "../repos/alerts.ts"
 
 const prisma = createSystemClient("alerts-repo-test")
@@ -140,5 +143,48 @@ describe("alerts repo", () => {
         where: { organizationId: orgId, entityId: "visit-cross-tenant" },
       }),
     ).toBe(0)
+  })
+
+  test("claims and marks notification deliveries without duplicate sends", async () => {
+    const event = await emitProductEvent(prisma, orgId, {
+      kind: "task.overdue",
+      severity: "warning",
+      storeId,
+      entityType: "task",
+      entityId: "task-delivery-claim",
+      dedupeKey: "task.overdue:delivery-claim",
+      payload: { title: "Delivery claim task" },
+    })
+
+    const claimed = await claimPendingNotificationDeliveries(prisma, orgId, { limit: 20 })
+    const delivery = claimed.find((candidate) => candidate.eventId === event.eventId)
+    expect(delivery).toBeTruthy()
+    expect(await claimPendingNotificationDeliveries(prisma, orgId, { limit: 20 })).not.toContainEqual(
+      expect.objectContaining({ id: delivery!.id }),
+    )
+
+    expect(await markNotificationDeliverySent(prisma, orgId, delivery!.id, { sentAt: new Date("2026-07-04T08:00:00Z") })).toBe(true)
+    await expect(prisma.notificationDelivery.findUniqueOrThrow({ where: { id: delivery!.id } })).resolves.toMatchObject({
+      status: "SENT",
+      error: null,
+    })
+
+    const failedEvent = await emitProductEvent(prisma, orgId, {
+      kind: "import.errors",
+      severity: "warning",
+      entityType: "import",
+      entityId: "import-delivery-failed",
+      dedupeKey: "import.errors:delivery-failed",
+      payload: { title: "Failed delivery import" },
+    })
+    const failedDelivery = (await claimPendingNotificationDeliveries(prisma, orgId, { limit: 20 })).find(
+      (candidate) => candidate.eventId === failedEvent.eventId,
+    )
+    expect(failedDelivery).toBeTruthy()
+    expect(await markNotificationDeliveryFailed(prisma, orgId, failedDelivery!.id, { error: "expo rejected token" })).toBe(true)
+    await expect(prisma.notificationDelivery.findUniqueOrThrow({ where: { id: failedDelivery!.id } })).resolves.toMatchObject({
+      status: "FAILED",
+      error: "expo rejected token",
+    })
   })
 })

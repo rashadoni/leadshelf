@@ -1588,7 +1588,7 @@ model NotificationDelivery {
   title          String
   body           String
   payload        Json?
-  status         String       @default("PENDING") // PENDING | SENT | FAILED
+  status         String       @default("PENDING") // PENDING | SENDING | SENT | FAILED
   error          String?
   sentAt         DateTime?
   createdAt      DateTime     @default(now())
