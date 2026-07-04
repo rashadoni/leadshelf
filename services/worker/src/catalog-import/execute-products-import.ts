@@ -20,6 +20,7 @@ export interface ProductsImportInput {
   rows: RawCsvRow[]
   source?: string
   createdById?: string
+  batchId?: string
 }
 
 export interface ImportSummary {
@@ -219,16 +220,23 @@ export async function executeProductsImport(
   input: ProductsImportInput,
 ): Promise<ImportSummary> {
   const { organizationId, rows } = input
-  const batch = await prisma.importBatch.create({
-    data: {
-      organizationId,
-      source: input.source ?? "csv",
-      entityType: "products",
-      status: "PROCESSING",
-      startedAt: new Date(),
-      createdById: input.createdById ?? null,
-    },
-  })
+  const batch = input.batchId
+    ? await prisma.importBatch.update({
+        where: { id: input.batchId },
+        data: { status: "PROCESSING", startedAt: new Date(), createdById: input.createdById ?? null },
+        select: { id: true },
+      })
+    : await prisma.importBatch.create({
+        data: {
+          organizationId,
+          source: input.source ?? "csv",
+          entityType: "products",
+          status: "PROCESSING",
+          startedAt: new Date(),
+          createdById: input.createdById ?? null,
+        },
+        select: { id: true },
+      })
 
   const caches: RefCaches = {
     brand: new Map(),

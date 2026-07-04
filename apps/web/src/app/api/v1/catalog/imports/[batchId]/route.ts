@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
-import { tenantDb } from "@/server/db/client"
+import { workerDb } from "@/server/db/client"
 
 export const runtime = "nodejs"
 
@@ -12,8 +12,9 @@ export async function GET(
   if (!session) return unauthorized()
   const { batchId } = await params
 
-  const batch = await tenantDb(session.org).importBatch.findFirst({
-    where: { id: batchId },
+  const batch = await workerDb.importBatch.findFirst({
+    where: { id: batchId, organizationId: session.org },
+    include: { queueJob: true },
   })
   if (!batch) return NextResponse.json({ error: "not_found" }, { status: 404 })
 
@@ -26,5 +27,16 @@ export async function GET(
     startedAt: batch.startedAt?.toISOString() ?? null,
     finishedAt: batch.finishedAt?.toISOString() ?? null,
     createdAt: batch.createdAt.toISOString(),
+    queueJob: batch.queueJob
+      ? {
+          id: batch.queueJob.id,
+          status: batch.queueJob.status,
+          attempts: batch.queueJob.attempts,
+          error: batch.queueJob.error,
+          createdAt: batch.queueJob.createdAt.toISOString(),
+          startedAt: batch.queueJob.startedAt?.toISOString() ?? null,
+          finishedAt: batch.queueJob.finishedAt?.toISOString() ?? null,
+        }
+      : null,
   })
 }

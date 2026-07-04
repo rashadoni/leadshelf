@@ -4,6 +4,7 @@ import {
   executeAssortmentImport,
   executeProductsImport,
   executeSnapshotsImport,
+  enqueueCatalogImport,
   readCsvRecords,
   readXlsxRecords,
 } from "@leadshelf/worker"
@@ -11,9 +12,11 @@ import { canImport, forbidden, requireApiSession, unauthorized } from "@/server/
 import { workerDb } from "@/server/db/client"
 
 export const runtime = "nodejs"
-// импорт до ~10k строк выполняется синхронно; крупные файлы уйдут в очередь
-// (pg-boss) следующим срезом — тогда этот роут станет enqueue-only
+// Малые файлы выполняются синхронно для быстрого UX; крупные сохраняются в
+// durable queue и обрабатываются worker-ом вне request lifecycle.
 export const maxDuration = 300
+
+const SYNC_IMPORT_MAX_BYTES = Number(process.env.LEADSHELF_SYNC_IMPORT_MAX_BYTES ?? 2_000_000)
 
 const formSchema = z.object({
   entityType: z.enum(["products", "prices", "stock", "sales", "assortment"]),
@@ -46,6 +49,21 @@ export async function POST(req: NextRequest) {
   const isXlsx =
     file.name.toLowerCase().endsWith(".xlsx") ||
     file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  const source = isXlsx ? "xlsx" : "csv"
+  if (buffer.byteLength > SYNC_IMPORT_MAX_BYTES) {
+    const queued = await enqueueCatalogImport(workerDb, {
+      organizationId: session.org,
+      entityType: parsed.data.entityType,
+      buffer,
+      fileName: file.name,
+      source,
+      encoding: parsed.data.encoding,
+      delimiter: parsed.data.delimiter,
+      createdById: session.sub,
+    })
+    return NextResponse.json({ ...queued, queued: true }, { status: 202 })
+  }
+
   let rows
   try {
     rows = isXlsx
@@ -64,7 +82,7 @@ export async function POST(req: NextRequest) {
   const common = {
     organizationId: session.org,
     rows,
-    source: "csv" as const,
+    source,
     createdById: session.sub,
   }
   const { entityType } = parsed.data

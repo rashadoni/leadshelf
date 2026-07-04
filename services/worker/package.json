@@ -5,6 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
+    "import:queue": "tsx src/import-queue-runner.ts",
+    "import:queue:once": "tsx src/import-queue-runner.ts --once",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

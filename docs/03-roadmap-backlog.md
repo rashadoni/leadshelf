@@ -78,8 +78,9 @@ Definition of Done:
 - Import CSV/XLSX через staging-слой (порт парсинга из MTM lib/mtm/sku).
   `[CSV+XLSX сделано: парсеры ru/az/en + исполнители products/prices/stock/
   sales/assortment c идемпотентностью, API-роуты upload/status/errors/
-  products/data-quality, UI каталога (таблица/импорт/качество/размеры).
-  Осталось: очередь для больших файлов (pg-boss)]`
+  products/data-quality, UI каталога (таблица/импорт/качество/размеры);
+  большие файлы уходят в durable ImportQueueJob + file-backed worker queue,
+  runner `pnpm --filter @leadshelf/worker import:queue`]`
 - Product CRUD. `[сделано: POST product + PATCH metadata/status/barcode,
   create/edit/deactivate UI; delete заменен deactivate из-за исторических снапшотов]`
 - Category tree. `[сделано: normalizedPath tree используется в import и

@@ -3,3 +3,4 @@ export { executeSnapshotsImport } from "./catalog-import/execute-snapshots-impor
 export { executeAssortmentImport } from "./catalog-import/execute-assortment-import"
 export { readCsvRecords } from "./catalog-import/csv"
 export { readXlsxRecords } from "./catalog-import/xlsx"
+export { enqueueCatalogImport, processNextCatalogImportJob } from "./catalog-import/queue"

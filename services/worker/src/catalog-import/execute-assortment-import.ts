@@ -16,6 +16,7 @@ export interface AssortmentImportInput {
   rows: RawCsvRow[]
   source?: string
   createdById?: string
+  batchId?: string
 }
 
 export async function executeAssortmentImport(
@@ -23,16 +24,23 @@ export async function executeAssortmentImport(
   input: AssortmentImportInput,
 ): Promise<ImportSummary> {
   const { organizationId, rows } = input
-  const batch = await prisma.importBatch.create({
-    data: {
-      organizationId,
-      source: input.source ?? "csv",
-      entityType: "assortment",
-      status: "PROCESSING",
-      startedAt: new Date(),
-      createdById: input.createdById ?? null,
-    },
-  })
+  const batch = input.batchId
+    ? await prisma.importBatch.update({
+        where: { id: input.batchId },
+        data: { status: "PROCESSING", startedAt: new Date(), createdById: input.createdById ?? null },
+        select: { id: true },
+      })
+    : await prisma.importBatch.create({
+        data: {
+          organizationId,
+          source: input.source ?? "csv",
+          entityType: "assortment",
+          status: "PROCESSING",
+          startedAt: new Date(),
+          createdById: input.createdById ?? null,
+        },
+        select: { id: true },
+      })
 
   const maps = await loadRefMaps(prisma, organizationId)
   let totalRows = 0

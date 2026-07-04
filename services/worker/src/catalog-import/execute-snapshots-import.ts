@@ -163,6 +163,7 @@ export interface SnapshotsImportInput {
   rows: RawCsvRow[]
   source?: string
   createdById?: string
+  batchId?: string
 }
 
 export async function executeSnapshotsImport(
@@ -171,16 +172,23 @@ export async function executeSnapshotsImport(
 ): Promise<ImportSummary> {
   const { organizationId, entityType, rows } = input
   const config = CONFIGS[entityType]
-  const batch = await prisma.importBatch.create({
-    data: {
-      organizationId,
-      source: input.source ?? "csv",
-      entityType,
-      status: "PROCESSING",
-      startedAt: new Date(),
-      createdById: input.createdById ?? null,
-    },
-  })
+  const batch = input.batchId
+    ? await prisma.importBatch.update({
+        where: { id: input.batchId },
+        data: { status: "PROCESSING", startedAt: new Date(), createdById: input.createdById ?? null },
+        select: { id: true },
+      })
+    : await prisma.importBatch.create({
+        data: {
+          organizationId,
+          source: input.source ?? "csv",
+          entityType,
+          status: "PROCESSING",
+          startedAt: new Date(),
+          createdById: input.createdById ?? null,
+        },
+        select: { id: true },
+      })
 
   const maps = await loadRefMaps(prisma, organizationId)
   let totalRows = 0

@@ -60,6 +60,7 @@ model Organization {
   products           Product[]
   warehouses         Warehouse[]
   importBatches      ImportBatch[]
+  importQueueJobs    ImportQueueJob[]
   equipmentTypes     EquipmentType[]
   equipmentTemplates EquipmentTemplate[]
   equipmentAssets    EquipmentAsset[]
@@ -608,9 +609,34 @@ model ImportBatch {
   createdAt      DateTime     @default(now())
 
   errors ImportError[]
+  queueJob ImportQueueJob?
 
   @@index([organizationId, entityType, createdAt])
   @@map("import_batches")
+}
+
+model ImportQueueJob {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batchId        String       @unique
+  batch          ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  entityType     String
+  source         String
+  fileName       String
+  storagePath    String
+  encoding       String?
+  delimiter      String?
+  status         ImportStatus @default(PENDING)
+  attempts       Int          @default(0)
+  error          String?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  @@index([organizationId, status, createdAt])
+  @@map("import_queue_jobs")
 }
 
 model ImportError {
