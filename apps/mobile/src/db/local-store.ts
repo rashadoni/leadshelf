@@ -444,10 +444,18 @@ export function enqueueVisitCheckIn(input: {
 }
 
 export function enqueueVisitCheckOut(input: { clientOpId: string; visitId: string }): void {
-  db.runSync(
-    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
-    [input.clientOpId, "visit.checkout", JSON.stringify({ visitId: input.visitId }), new Date().toISOString()],
-  )
+  const now = new Date().toISOString()
+  db.withTransactionSync(() => {
+    db.runSync("UPDATE visits SET status='COMPLETED', checkOutAt=?, updatedAt=? WHERE id=?", [
+      now,
+      now,
+      input.visitId,
+    ])
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [input.clientOpId, "visit.checkout", JSON.stringify({ visitId: input.visitId }), now],
+    )
+  })
 }
 
 export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: string }): void {

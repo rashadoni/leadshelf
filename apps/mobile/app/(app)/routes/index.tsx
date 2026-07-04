@@ -6,18 +6,26 @@ import { router, useFocusEffect } from "expo-router"
 import { SyncBar } from "../../../src/components/SyncBar"
 import {
   enqueueVisitCheckIn,
+  enqueueVisitCheckOut,
   getStore,
   listRouteStops,
   listRoutes,
   listTasks,
+  listVisits,
 } from "../../../src/db/local-store"
-import type { RouteRow } from "../../../src/sync/ports"
+import type { RouteRow, VisitRow } from "../../../src/sync/ports"
+import { useSync } from "../../../src/sync/sync-context"
 import { t } from "../../../src/i18n"
 
 export default function RoutesScreen() {
+  const { sync } = useSync()
   const [routes, setRoutes] = useState<RouteRow[]>([])
+  const [visits, setVisits] = useState<VisitRow[]>([])
   const [queued, setQueued] = useState<string | null>(null)
-  const reload = useCallback(() => setRoutes(listRoutes()), [])
+  const reload = useCallback(() => {
+    setRoutes(listRoutes())
+    setVisits(listVisits())
+  }, [])
   useFocusEffect(reload)
 
   function checkIn(route: RouteRow, stopId: string, storeId: string) {
@@ -33,6 +41,17 @@ export default function RoutesScreen() {
       longitude: store.longitude,
     })
     setQueued(storeId)
+    void sync()
+  }
+
+  function checkOut(visit: VisitRow) {
+    enqueueVisitCheckOut({
+      clientOpId: `op-${Crypto.randomUUID()}`,
+      visitId: visit.id,
+    })
+    setQueued(visit.storeId)
+    reload()
+    void sync()
   }
 
   return (
@@ -55,7 +74,11 @@ export default function RoutesScreen() {
             {listRouteStops(item.id).map((stop) => {
               const store = getStore(stop.storeId)
               const tasks = listTasks().filter((task) => task.storeId === stop.storeId)
+              const stopVisits = visits.filter((visit) => visit.routeStopId === stop.id)
+              const activeVisit = stopVisits.find((visit) => visit.status === "IN_PROGRESS")
+              const completedVisit = stopVisits.find((visit) => visit.status === "COMPLETED")
               const canCheckIn = Boolean(item.agentId && store?.latitude != null && store.longitude != null)
+              const disabled = activeVisit ? false : !canCheckIn || Boolean(completedVisit)
               return (
                 <View key={stop.id} style={styles.stop}>
                   <View style={{ flex: 1 }}>
@@ -66,14 +89,25 @@ export default function RoutesScreen() {
                       {tasks.length} {t("tasksAtStore")}
                       {store?.address ? ` · ${store.address}` : ""}
                     </Text>
+                    {activeVisit ? (
+                      <Text style={styles.visitMeta}>{t("visitInProgress")}</Text>
+                    ) : completedVisit ? (
+                      <Text style={styles.visitMeta}>{t("visitCompleted")}</Text>
+                    ) : null}
                   </View>
                   <Pressable
-                    disabled={!canCheckIn}
-                    onPress={() => checkIn(item, stop.id, stop.storeId)}
-                    style={[styles.button, !canCheckIn && styles.buttonDisabled]}
+                    disabled={disabled}
+                    onPress={() => (activeVisit ? checkOut(activeVisit) : checkIn(item, stop.id, stop.storeId))}
+                    style={[styles.button, activeVisit && styles.checkoutButton, disabled && styles.buttonDisabled]}
                   >
                     <Text style={styles.buttonText}>
-                      {queued === stop.storeId ? t("queued") : t("checkIn")}
+                      {queued === stop.storeId
+                        ? t("queued")
+                        : activeVisit
+                          ? t("checkOut")
+                          : completedVisit
+                            ? t("visitCompletedShort")
+                            : t("checkIn")}
                     </Text>
                   </Pressable>
                 </View>
@@ -104,7 +138,9 @@ const styles = StyleSheet.create({
   stop: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#f5f5f4", paddingVertical: 10 },
   stopTitle: { fontSize: 14, fontWeight: "600" },
   meta: { fontSize: 12, color: "#737373", marginTop: 2 },
+  visitMeta: { fontSize: 12, color: "#166534", fontWeight: "600", marginTop: 4 },
   button: { borderRadius: 8, backgroundColor: "#171717", paddingHorizontal: 10, paddingVertical: 8 },
+  checkoutButton: { backgroundColor: "#166534" },
   buttonDisabled: { backgroundColor: "#d4d4d4" },
   buttonText: { color: "white", fontSize: 12, fontWeight: "700" },
 })

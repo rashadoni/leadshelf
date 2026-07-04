@@ -21,11 +21,18 @@ export type PullResponse = MobileSyncPullResponse
 export type PushOperation = MobilePushOperation
 export type PushResult = MobilePushResult
 
+export type SyncCursors = {
+  tasks: string | null
+  planogramBundles: string | null
+  routes?: string | null
+  visits?: string | null
+}
+
 /** Транспорт к замороженному mobile API (реализация: api/mobile-client). */
 export interface SyncApi {
-  pull(cursors: { tasks?: string | null; planogramBundles?: string | null }): Promise<PullResponse>
+  pull(cursors: Partial<SyncCursors>): Promise<PullResponse>
   push(operations: PushOperation[]): Promise<{ results: PushResult[] }>
-  ack(cursors: { tasks?: string | null; planogramBundles?: string | null }): Promise<void>
+  ack(cursors: Partial<SyncCursors>): Promise<void>
   uploadPhoto(photo: {
     clientPhotoId: string
     taskId: string
@@ -50,8 +57,8 @@ export interface PhotoQueueRow {
 /** Локальное хранилище (реализация: db/local-store на expo-sqlite). */
 export interface LocalStore {
   applyPull(data: PullResponse): Promise<void>
-  getCursors(): Promise<{ tasks: string | null; planogramBundles: string | null }>
-  setCursors(c: { tasks: string | null; planogramBundles: string | null }): Promise<void>
+  getCursors(): Promise<SyncCursors>
+  setCursors(c: SyncCursors): Promise<void>
   pendingOutbox(limit?: number): Promise<OutboxRow[]>
   markOutbox(clientOpId: string, status: OutboxRow["status"], detail?: unknown): Promise<void>
   bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
