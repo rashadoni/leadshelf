@@ -16,17 +16,17 @@ export async function DashboardShell({
   const tc = await getTranslations("common")
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-60 shrink-0 border-r border-neutral-200 bg-white">
-        <div className="border-b border-neutral-200 p-4 text-lg font-bold">
+    <div className="flex min-h-screen flex-col md:flex-row">
+      <aside className="border-b border-neutral-200 bg-white md:w-60 md:shrink-0 md:border-b-0 md:border-r">
+        <div className="border-b border-neutral-200 p-4 text-lg font-bold md:block">
           {tc("appName")}
         </div>
-        <nav className="space-y-0.5 p-2">
+        <nav className="flex gap-1 overflow-x-auto p-2 md:block md:space-y-0.5">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.key}
               href={item.href}
-              className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+              className="block whitespace-nowrap rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
             >
               {t(item.key)}
             </Link>
@@ -34,11 +34,11 @@ export async function DashboardShell({
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-white px-4 py-3 md:px-6">
           <LocaleSwitcher />
           <UserMenu email={userEmail} />
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   )

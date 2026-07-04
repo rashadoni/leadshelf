@@ -12,8 +12,8 @@ export function UserMenu({ email }: { email: string }) {
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-neutral-500">{email}</span>
+    <div className="flex min-w-0 items-center gap-3 text-sm">
+      <span className="max-w-48 truncate text-neutral-500">{email}</span>
       <button
         onClick={onLogout}
         className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100"

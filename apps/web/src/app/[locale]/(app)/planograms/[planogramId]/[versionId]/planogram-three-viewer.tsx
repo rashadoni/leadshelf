@@ -5,19 +5,11 @@ import { useTranslations } from "next-intl"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import type { EquipmentGeometryMm } from "@leadshelf/core"
-
-type ViewerPlacement = {
-  id: string
-  shelfId: string
-  xMm: number
-  widthMm: number
-  heightMm: number
-  depthMm: number
-  facingsX: number
-  facingsY: number
-  facingsZ: number
-  product: { sku: string; name: string }
-}
+import {
+  buildPlanogramThreeSceneModel,
+  type SceneBox,
+  type ThreeViewerPlacement,
+} from "./planogram-three-scene"
 
 const PALETTE = [0x0ea5e9, 0x8b5cf6, 0xf59e0b, 0x10b981, 0xef4444, 0x6366f1, 0x14b8a6, 0xf97316]
 
@@ -27,8 +19,21 @@ function colorFor(text: string): number {
   return PALETTE[Math.abs(hash) % PALETTE.length]!
 }
 
-function mm(value: number): number {
-  return value / 1000
+function applyPosition(mesh: THREE.Object3D, box: SceneBox) {
+  mesh.position.set(box.position.x, box.position.y, box.position.z)
+}
+
+function disposeScene(scene: THREE.Scene) {
+  scene.traverse((object) => {
+    if (!(object instanceof THREE.Mesh || object instanceof THREE.LineSegments)) return
+    object.geometry.dispose()
+    const material = object.material
+    if (Array.isArray(material)) {
+      for (const item of material) item.dispose()
+    } else {
+      material.dispose()
+    }
+  })
 }
 
 export function PlanogramThreeViewer({
@@ -36,7 +41,7 @@ export function PlanogramThreeViewer({
   placements,
 }: {
   equipment: EquipmentGeometryMm & { name: string }
-  placements: ViewerPlacement[]
+  placements: ThreeViewerPlacement[]
 }) {
   const t = useTranslations("planograms.viewer3d")
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -48,12 +53,10 @@ export function PlanogramThreeViewer({
 
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0xf8fafc)
+    const sceneModel = buildPlanogramThreeSceneModel(equipment, placements)
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 20)
-    const equipmentWidth = mm(equipment.widthMm)
-    const equipmentHeight = mm(equipment.heightMm)
-    const equipmentDepth = mm(equipment.depthMm)
-    camera.position.set(equipmentWidth * 0.85, equipmentHeight * 0.72, equipmentDepth * 3.2)
+    camera.position.set(sceneModel.cameraPosition.x, sceneModel.cameraPosition.y, sceneModel.cameraPosition.z)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -65,7 +68,7 @@ export function PlanogramThreeViewer({
     host.appendChild(renderer.domElement)
 
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.target.set(0, equipmentHeight * 0.45, 0)
+    controls.target.set(sceneModel.controlTarget.x, sceneModel.controlTarget.y, sceneModel.controlTarget.z)
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI * 0.48
 
@@ -81,51 +84,45 @@ export function PlanogramThreeViewer({
     const edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.36 })
 
     const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(equipmentWidth * 1.08, 0.018, equipmentDepth * 1.28),
+      new THREE.BoxGeometry(sceneModel.floor.width, sceneModel.floor.height, sceneModel.floor.depth),
       floorMaterial,
     )
-    floor.position.set(0, -0.018, 0)
+    applyPosition(floor, sceneModel.floor)
     floor.receiveShadow = true
     scene.add(floor)
 
-    for (const sideX of [-1, 1]) {
+    for (const postBox of sceneModel.posts) {
       const post = new THREE.Mesh(
-        new THREE.BoxGeometry(0.028, equipmentHeight, 0.028),
+        new THREE.BoxGeometry(postBox.width, postBox.height, postBox.depth),
         postMaterial,
       )
-      post.position.set(sideX * equipmentWidth * 0.5, equipmentHeight * 0.5, -equipmentDepth * 0.5)
+      applyPosition(post, postBox)
       post.castShadow = true
       scene.add(post)
     }
 
-    for (const shelf of equipment.shelves) {
+    for (const shelf of sceneModel.shelves) {
       const shelfMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(equipmentWidth, mm(shelf.thicknessMm), mm(shelf.depthMm)),
+        new THREE.BoxGeometry(shelf.width, shelf.height, shelf.depth),
         shelfMaterial,
       )
-      shelfMesh.position.set(0, mm(shelf.yMm + shelf.thicknessMm / 2), 0)
+      applyPosition(shelfMesh, shelf)
       shelfMesh.castShadow = true
       shelfMesh.receiveShadow = true
       scene.add(shelfMesh)
     }
 
-    for (const placement of placements) {
-      const shelf = equipment.shelves.find((item) => item.id === placement.shelfId)
-      if (!shelf) continue
-      const width = mm(placement.widthMm * placement.facingsX)
-      const height = mm(placement.heightMm * placement.facingsY)
-      const depth = mm(placement.depthMm * placement.facingsZ)
+    for (const productBox of sceneModel.products) {
       const productMaterial = new THREE.MeshStandardMaterial({
-        color: colorFor(placement.product.sku),
+        color: colorFor(productBox.sku),
         roughness: 0.55,
         metalness: 0.02,
       })
-      const product = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), productMaterial)
-      product.position.set(
-        -equipmentWidth / 2 + mm(placement.xMm) + width / 2,
-        mm(shelf.yMm + shelf.thicknessMm) + height / 2,
-        -equipmentDepth / 2 + depth / 2,
+      const product = new THREE.Mesh(
+        new THREE.BoxGeometry(productBox.width, productBox.height, productBox.depth),
+        productMaterial,
       )
+      applyPosition(product, productBox)
       product.castShadow = true
       product.receiveShadow = true
       scene.add(product)
@@ -136,7 +133,8 @@ export function PlanogramThreeViewer({
     }
 
     const resize = () => {
-      const width = Math.min(900, Math.max(320, Math.round(host.clientWidth || 640)))
+      const measuredWidth = Math.round(host.clientWidth)
+      const width = measuredWidth > 0 ? Math.min(900, measuredWidth) : 640
       const height = Math.max(300, Math.round(width * 0.46))
       renderer.setSize(width, height, true)
       camera.aspect = width / height
@@ -158,6 +156,7 @@ export function PlanogramThreeViewer({
       cancelAnimationFrame(frame)
       resizeObserver.disconnect()
       controls.dispose()
+      disposeScene(scene)
       renderer.dispose()
       rendererRef.current = null
       host.replaceChildren()
@@ -171,7 +170,9 @@ export function PlanogramThreeViewer({
     const link = document.createElement("a")
     link.href = url
     link.download = `${equipment.name.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}-3d.png`
+    document.body.appendChild(link)
     link.click()
+    link.remove()
   }
 
   return (

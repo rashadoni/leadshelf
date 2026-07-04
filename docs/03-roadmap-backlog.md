@@ -386,12 +386,19 @@ Definition of Done:
 Задачи:
 
 - 3D view from 2D planogram data. `[сделано: Three.js viewer строит
-  оборудование, полки и product blocks из текущих mm placement данных]`
+  оборудование, полки и product blocks из текущих mm placement данных;
+  scene geometry вынесена в тестируемую модель]`
 - Shelf/equipment perspective. `[сделано: orbit camera показывает глубину,
-  полки, стойки и размещение по x/y/z]`
+  полки, стойки и размещение по x/y/z; стартовая сцена центрирует
+  оборудование и ставит product blocks на видимую сторону полки]`
 - Screenshot export. `[сделано: PNG export из WebGL canvas]`
 - Store/floor plan viewer later. `[сделано: /floor-plans read-only viewer
   показывает published floor plans, equipment placement и linked planograms]`
+- Responsive visual shell. `[сделано: app shell не держит desktop sidebar на
+  mobile viewport; навигация становится горизонтальной, user email truncates]`
+- Test coverage for 3D scene geometry. `[сделано: apps/web Vitest покрывает
+  mm conversion, camera/floor/posts/shelves/products geometry и пропуск
+  placements с неизвестной shelf]`
 
 Не делать:
 
