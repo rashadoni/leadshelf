@@ -10,6 +10,7 @@ export type ThreeViewerPlacement = {
   facingsX: number
   facingsY: number
   facingsZ: number
+  compressionX?: number
   product: { sku: string; name: string }
 }
 
@@ -75,7 +76,7 @@ export function buildPlanogramThreeSceneModel(
   const products = placements.flatMap((placement) => {
     const shelf = shelvesById.get(placement.shelfId)
     if (!shelf) return []
-    const width = mm(placement.widthMm * placement.facingsX)
+    const width = mm(placement.widthMm * (placement.compressionX ?? 1) * placement.facingsX)
     const height = mm(placement.heightMm * placement.facingsY)
     const depth = mm(placement.depthMm * placement.facingsZ)
     return [

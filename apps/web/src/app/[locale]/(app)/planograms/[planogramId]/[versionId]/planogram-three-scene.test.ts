@@ -35,7 +35,7 @@ describe("planogram three scene model", () => {
 
   it("builds equipment, shelf, and product geometry from planogram placement data", () => {
     const model = buildPlanogramThreeSceneModel(equipment, [
-      placement({ id: "placement-a" }),
+      placement({ id: "placement-a", compressionX: 0.8 }),
       placement({ id: "placement-missing", shelfId: "missing-shelf" }),
     ])
 
@@ -65,11 +65,11 @@ describe("planogram three scene model", () => {
     expect(model.products[0]).toMatchObject({
       id: "placement-a",
       sku: "SKU-A",
-      width: 0.1,
+      width: 0.08,
       height: 0.3,
       depth: 0.04,
     })
-    expect(model.products[0]?.position.x).toBeCloseTo(-0.35)
+    expect(model.products[0]?.position.x).toBeCloseTo(-0.36)
     expect(model.products[0]?.position.y).toBeCloseTo(0.27)
     expect(model.products[0]?.position.z).toBeCloseTo(0.23)
   })

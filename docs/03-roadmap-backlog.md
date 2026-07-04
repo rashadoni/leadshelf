@@ -395,8 +395,9 @@ Definition of Done:
 Задачи:
 
 - 3D view from 2D planogram data. `[сделано: Three.js viewer строит
-  оборудование, полки и product blocks из текущих mm placement данных;
-  scene geometry вынесена в тестируемую модель]`
+  оборудование, полки и product blocks из текущих mm placement данных,
+  включая compressionX для soft-pack; scene geometry вынесена в тестируемую
+  модель]`
 - Shelf/equipment perspective. `[сделано: orbit camera показывает глубину,
   полки, стойки и размещение по x/y/z; стартовая сцена центрирует
   оборудование и ставит product blocks на видимую сторону полки]`
