@@ -106,6 +106,10 @@ export type TaskKpiReport = {
 export type BasicDashboardSummary = {
   storesWithPlanograms: number
   activePlanograms: number
+  placedSkus: number
+  linearMm: number
+  turnover: number
+  profit: number
 }
 
 export type LikeForLikeMetric = "turnover" | "profit" | "quantity"
@@ -375,6 +379,14 @@ type BasicDashboardAssignment = ActiveAssignment & {
   storeId: string | null
   formatId: string | null
   planogramVersionId: string
+  planogramVersion: {
+    placements: Array<{
+      productId: string
+      widthMm: number
+      compressionX: number
+      facingsX: number
+    }>
+  }
 }
 
 type AssignmentPlacementRef = {
@@ -569,6 +581,18 @@ export async function getBasicDashboardSummary(
       planogramVersionId: true,
       activeFrom: true,
       activeTo: true,
+      planogramVersion: {
+        select: {
+          placements: {
+            select: {
+              productId: true,
+              widthMm: true,
+              compressionX: true,
+              facingsX: true,
+            },
+          },
+        },
+      },
     },
     orderBy: [{ createdAt: "desc" }],
     take: 3000,
@@ -590,9 +614,35 @@ export async function getBasicDashboardSummary(
       : []
   for (const store of formatStores) directStoreIds.add(store.id)
 
+  const activeVersionIds = new Set<string>()
+  const activeProductIds = new Set<string>()
+  let linearMm = 0
+  for (const assignment of activeAssignments) {
+    if (activeVersionIds.has(assignment.planogramVersionId)) continue
+    activeVersionIds.add(assignment.planogramVersionId)
+    for (const placement of assignment.planogramVersion.placements) {
+      activeProductIds.add(placement.productId)
+      linearMm += placement.widthMm * placement.compressionX * placement.facingsX
+    }
+  }
+  const sales =
+    activeProductIds.size > 0
+      ? await db.salesSnapshot.findMany({
+          where: { productId: { in: [...activeProductIds] } },
+          select: { revenue: true, profit: true },
+          take: 10000,
+        })
+      : []
+  const turnover = sales.reduce((sum, row) => sum + Number(row.revenue), 0)
+  const profit = sales.reduce((sum, row) => sum + (row.profit == null ? 0 : Number(row.profit)), 0)
+
   return {
     storesWithPlanograms: directStoreIds.size,
-    activePlanograms: new Set(activeAssignments.map((assignment) => assignment.planogramVersionId)).size,
+    activePlanograms: activeVersionIds.size,
+    placedSkus: activeProductIds.size,
+    linearMm,
+    turnover,
+    profit,
   }
 }
 

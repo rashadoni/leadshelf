@@ -356,7 +356,8 @@ Definition of Done:
   разрез по магазинам и планограммам, completion/on-time/photo proof метрики]`
 - Basic dashboard: stores with planograms, active planograms, placed SKUs, linear meters, turnover, profit.
   `[сделано: верхний /analytics summary считает магазины под активными
-  assignment, активные версии, SKU, linear meters, turnover и profit]`
+  assignment, активные версии, SKU, compressionX-aware linear meters, turnover
+  и profit строго по активным назначениям]`
 - Test coverage for analytics calculations.
   `[сделано: apps/web Vitest покрывает ABC-классы, активные assignment,
   assortment gaps, obsolete planogram reasons и task KPI метрики; analytics

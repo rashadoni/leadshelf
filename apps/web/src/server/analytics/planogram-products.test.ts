@@ -136,41 +136,68 @@ describe("analytics planogram product helpers", () => {
     const now = new Date("2026-07-04T10:00:00.000Z")
     const db = asDb({
       planogramAssignment: {
-            findMany: async (args: unknown) => {
-              expectOrganizationScope(args)
-              return [
-          {
-            storeId: "store-direct",
-            formatId: null,
-            planogramVersionId: "version-a",
-            activeFrom: new Date("2026-07-01T00:00:00.000Z"),
-            activeTo: null,
-          },
-          {
-            storeId: null,
-            formatId: "format-a",
-            planogramVersionId: "version-a",
-            activeFrom: new Date("2026-07-01T00:00:00.000Z"),
-            activeTo: null,
-          },
-          {
-            storeId: "store-expired",
-            formatId: null,
-            planogramVersionId: "version-expired",
-            activeFrom: new Date("2026-06-01T00:00:00.000Z"),
-            activeTo: new Date("2026-06-30T00:00:00.000Z"),
-          },
-              ]
+        findMany: async (args: unknown) => {
+          expectOrganizationScope(args)
+          return [
+            {
+              storeId: "store-direct",
+              formatId: null,
+              planogramVersionId: "version-a",
+              activeFrom: new Date("2026-07-01T00:00:00.000Z"),
+              activeTo: null,
+              planogramVersion: {
+                placements: [
+                  { productId: "product-a", widthMm: 100, compressionX: 0.9, facingsX: 2 },
+                  { productId: "product-b", widthMm: 50, compressionX: 1, facingsX: 1 },
+                ],
+              },
             },
+            {
+              storeId: null,
+              formatId: "format-a",
+              planogramVersionId: "version-a",
+              activeFrom: new Date("2026-07-01T00:00:00.000Z"),
+              activeTo: null,
+              planogramVersion: {
+                placements: [
+                  { productId: "product-a", widthMm: 100, compressionX: 0.9, facingsX: 2 },
+                  { productId: "product-b", widthMm: 50, compressionX: 1, facingsX: 1 },
+                ],
+              },
+            },
+            {
+              storeId: "store-expired",
+              formatId: null,
+              planogramVersionId: "version-expired",
+              activeFrom: new Date("2026-06-01T00:00:00.000Z"),
+              activeTo: new Date("2026-06-30T00:00:00.000Z"),
+              planogramVersion: {
+                placements: [
+                  { productId: "product-expired", widthMm: 1000, compressionX: 1, facingsX: 1 },
+                ],
+              },
+            },
+          ]
+        },
       },
       store: {
         findMany: async () => [{ id: "store-format-1" }, { id: "store-format-2" }],
+      },
+      salesSnapshot: {
+        findMany: async () => [
+          { revenue: 100, profit: 30 },
+          { revenue: 40, profit: null },
+        ],
       },
     })
 
     await expect(getBasicDashboardSummary(db, asAssignmentDb(db), "org-a", now)).resolves.toEqual({
       storesWithPlanograms: 3,
       activePlanograms: 1,
+      placedSkus: 2,
+      linearMm: 230,
+      turnover: 140,
+      profit: 30,
     })
   })
 

@@ -179,17 +179,7 @@ export default async function AnalyticsPage({
     rows.map((row) => row.productId),
   )
   const abcByProductId = new Map(abcRows.map((row) => [row.productId, row]))
-  const placedProductIds = new Set(rows.map((r) => r.productId))
-  const uniqueProducts = new Set(rows.map((r) => r.sku)).size
   const totalLinearMm = rows.reduce((sum, r) => sum + r.linearMm, 0)
-  const dashboardTurnover = abcRows.reduce(
-    (sum, row) => (placedProductIds.has(row.productId) ? sum + row.turnover : sum),
-    0,
-  )
-  const dashboardProfit = abcRows.reduce(
-    (sum, row) => (placedProductIds.has(row.productId) ? sum + row.profit : sum),
-    0,
-  )
   const phase8Metrics = getPhase8MetricRows({
     likeForLikeSummary,
     totalLinearMm,
@@ -323,10 +313,10 @@ export default async function AnalyticsPage({
         {[
           [t("kpi.storesWithPlanograms"), basicDashboardSummary.storesWithPlanograms],
           [t("kpi.activePlanograms"), basicDashboardSummary.activePlanograms],
-          [t("kpi.products"), uniqueProducts],
-          [t("kpi.linearMeters"), formatMeters(totalLinearMm)],
-          [t("kpi.turnover"), formatAmount(dashboardTurnover)],
-          [t("kpi.profit"), formatAmount(dashboardProfit)],
+          [t("kpi.products"), basicDashboardSummary.placedSkus],
+          [t("kpi.linearMeters"), formatMeters(basicDashboardSummary.linearMm)],
+          [t("kpi.turnover"), formatAmount(basicDashboardSummary.turnover)],
+          [t("kpi.profit"), formatAmount(basicDashboardSummary.profit)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
             <div className="text-xs text-neutral-500">{label}</div>
