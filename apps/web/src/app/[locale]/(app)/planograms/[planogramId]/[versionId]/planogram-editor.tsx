@@ -218,6 +218,8 @@ export function PlanogramEditor({
     supplierId: "",
     sortBy: "turnover",
     facingsBy: "quantity",
+    excludeSkus: "",
+    maxBrandSharePct: 60,
     limit: 20,
   })
   const [autoLog, setAutoLog] = useState<string | null>(null)
@@ -457,6 +459,11 @@ export function PlanogramEditor({
         supplierId: autoRule.supplierId || null,
         sortBy: autoRule.sortBy,
         facingsBy: autoRule.facingsBy,
+        excludeSkus: autoRule.excludeSkus
+          .split(/[,\n]/)
+          .map((sku) => sku.trim())
+          .filter(Boolean),
+        maxBrandSharePct: autoRule.maxBrandSharePct,
         limit: autoRule.limit,
       }),
     })
@@ -1037,6 +1044,30 @@ export function PlanogramEditor({
                       max={100}
                       value={autoRule.limit}
                       onChange={(e) => setAutoRule((prev) => ({ ...prev, limit: Number.parseInt(e.target.value || "1", 10) }))}
+                      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block text-xs">
+                    <span className="text-neutral-500">{t("excludeSkus")}</span>
+                    <input
+                      value={autoRule.excludeSkus}
+                      onChange={(e) => setAutoRule((prev) => ({ ...prev, excludeSkus: e.target.value }))}
+                      placeholder="SKU1, SKU2"
+                      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+                    />
+                  </label>
+                  <label className="block text-xs">
+                    <span className="text-neutral-500">{t("maxBrandShare")}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={autoRule.maxBrandSharePct}
+                      onChange={(e) =>
+                        setAutoRule((prev) => ({ ...prev, maxBrandSharePct: Number.parseInt(e.target.value || "100", 10) }))
+                      }
                       className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                     />
                   </label>

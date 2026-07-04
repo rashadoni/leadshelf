@@ -236,14 +236,16 @@ Definition of Done:
 - Sorting rules: ABC, turnover, brand, price, product name, height.
   `[сделано: turnover/profit/quantity/name/height; ABC/brand/price позже,
   когда появится отдельная ABC materialization/price picker]`
-- Exclusions.
+- Exclusions. `[сделано: autofill принимает excludeSkus и UI поле
+  исключений]`
 - Auto-facing based on sales/profit/quantity. `[сделано: facingsBy
   turnover/profit/quantity; placement metadata хранит score/reason]`
-- Brand share percentage.
+- Brand share percentage. `[сделано: maxBrandSharePct cap в autofill rule]`
 - Load into zone. `[сделано: POST zone autofill создает placements
   внутри зоны с physical validation и explainable log]`
 - Auto spacing. `[сделано: sequential free-slot spacing внутри zone range]`
-- Auto compression for soft packs.
+- Auto compression for soft packs. `[осталось: нужен явный product
+  attribute/flag soft-pack, иначе compression будет гаданием]`
 
 Важно:
 

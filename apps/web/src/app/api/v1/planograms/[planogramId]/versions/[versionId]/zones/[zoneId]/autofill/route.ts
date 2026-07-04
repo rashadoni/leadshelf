@@ -19,6 +19,8 @@ const schema = z.object({
   supplierId: z.string().min(1).nullable().optional(),
   sortBy: z.enum(["turnover", "profit", "quantity", "name", "height"]).default("turnover"),
   facingsBy: z.enum(["turnover", "profit", "quantity"]).default("quantity"),
+  excludeSkus: z.array(z.string().trim().min(1).max(120)).max(200).default([]),
+  maxBrandSharePct: z.number().int().min(1).max(100).nullable().optional(),
   limit: z.number().int().min(1).max(100).default(30),
 })
 
@@ -81,6 +83,7 @@ export async function POST(
       id: true,
       sku: true,
       name: true,
+      brandId: true,
       widthMm: true,
       heightMm: true,
       depthMm: true,
@@ -103,11 +106,14 @@ export async function POST(
     return decimalNumber(row?.quantity)
   }
 
+  const excludedSkus = new Set(data.excludeSkus.map((sku) => sku.toLowerCase()))
   const sorted = products
+    .filter((product) => !excludedSkus.has(product.sku.toLowerCase()))
     .map((product) => ({
       id: product.id,
       sku: product.sku,
       name: product.name,
+      brandId: product.brandId,
       imageKey: product.images[0]?.url ?? null,
       widthMm: product.widthMm!,
       heightMm: product.heightMm!,
@@ -123,6 +129,11 @@ export async function POST(
     .sort((a, b) => {
       if (data.sortBy === "name") return a.name.localeCompare(b.name)
       return b.sortScore - a.sortScore || a.name.localeCompare(b.name)
+    })
+    .filter((product, _index, array) => {
+      if (!data.maxBrandSharePct || !product.brandId) return true
+      const maxPerBrand = Math.max(1, Math.floor((data.limit * data.maxBrandSharePct) / 100))
+      return array.filter((candidate) => candidate.brandId === product.brandId).indexOf(product) < maxPerBrand
     })
 
   const equipment: EquipmentGeometryMm = {
@@ -184,6 +195,8 @@ export async function POST(
               zoneId: zone.id,
               sortBy: data.sortBy,
               facingsBy: data.facingsBy,
+              excludeSkus: data.excludeSkus,
+              maxBrandSharePct: data.maxBrandSharePct ?? null,
               score: item.score,
               reason: item.reason,
             },

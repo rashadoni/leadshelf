@@ -262,6 +262,8 @@
       "sortBy": "Сортировка",
       "facingsBy": "Фейсы по",
       "limit": "Лимит",
+      "excludeSkus": "Исключить SKU",
+      "maxBrandShare": "Макс. доля бренда %",
       "runAutoPlacement": "Заполнить зону",
       "autoLog": "Размещено: {placed}; не поместилось: {rejected}",
       "abcClass": "ABC",
