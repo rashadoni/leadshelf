@@ -432,6 +432,8 @@ Definition of Done:
   `[сделано: pure core check с APPROVED/EXCEEDED/BLOCKED, explicit overLimit
   payload для mobile/API]`
 - Invoice generation.
+  `[сделано: pure core invoice document + HTML template для PDF job,
+  totals/discount/tax в cents, deterministic invoice number, HTML escaping]`
 - Offline-заказ через outbox (идемпотентность deviceId+clientOpId).
 
 ## Phase 13 - Алерты и активность
