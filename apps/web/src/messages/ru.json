@@ -493,8 +493,10 @@
     "createRoute": "Создать маршрут",
     "emptyAgents": "Полевые агенты пока не созданы.",
     "emptyRoutes": "Маршруты пока не созданы.",
+    "emptyVisits": "Визитов пока нет.",
     "active": "Активен",
     "inactive": "Неактивен",
+    "geofenceOutside": "Вне геозоны",
     "cards": {
       "agents": "Агенты",
       "teams": "Команды",
@@ -513,6 +515,19 @@
       "agent": "Агент",
       "stops": "Точки",
       "status": "Статус"
+    },
+    "visitsTable": {
+      "agent": "Агент",
+      "store": "Точка",
+      "checkIn": "Check-in",
+      "status": "Статус",
+      "anomaly": "Аномалии"
+    },
+    "visitStatus": {
+      "PLANNED": "Запланирован",
+      "IN_PROGRESS": "В процессе",
+      "COMPLETED": "Завершён",
+      "SKIPPED": "Пропущен"
     }
   },
   "emptyStates": {

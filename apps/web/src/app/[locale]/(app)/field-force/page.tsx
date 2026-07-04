@@ -13,7 +13,7 @@ export default async function FieldForcePage() {
   if (!session) return null
 
   const db = tenantDb(session.org)
-  const [agents, teams, users, stores, routes] = await Promise.all([
+  const [agents, teams, users, stores, routes, visits] = await Promise.all([
     db.fieldAgent.findMany({
       include: {
         user: { select: { name: true, email: true, employeeCode: true, role: true } },
@@ -53,6 +53,14 @@ export default async function FieldForcePage() {
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
+    db.visit.findMany({
+      include: {
+        agent: { select: { user: { select: { name: true } } } },
+        store: { select: { name: true, code: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
   ])
 
   return (
@@ -67,7 +75,7 @@ export default async function FieldForcePage() {
           ["cards.agents", agents.length],
           ["cards.teams", teams.length],
           ["cards.activeRoutes", routes.filter((route) => route.isActive).length],
-          ["cards.activeVisits", agents.reduce((sum, agent) => sum + agent.visits.filter((visit) => visit.status === "IN_PROGRESS").length, 0)],
+          ["cards.activeVisits", visits.filter((visit) => visit.status === "IN_PROGRESS").length],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
             <div className="text-xs text-neutral-500">{t(label as never)}</div>
@@ -123,6 +131,57 @@ export default async function FieldForcePage() {
                   </td>
                 </tr>
               ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mb-4 overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+              <th className="px-3 py-2">{t("visitsTable.agent")}</th>
+              <th className="px-3 py-2">{t("visitsTable.store")}</th>
+              <th className="px-3 py-2">{t("visitsTable.checkIn")}</th>
+              <th className="px-3 py-2">{t("visitsTable.status")}</th>
+              <th className="px-3 py-2">{t("visitsTable.anomaly")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visits.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-8 text-center text-sm text-neutral-500">
+                  {t("emptyVisits")}
+                </td>
+              </tr>
+            ) : (
+              visits.map((visit) => {
+                const flags = visit.anomalyFlags as { geofence?: { outside?: boolean; distanceM?: number | null } } | null
+                const outside = flags?.geofence?.outside === true
+                return (
+                  <tr key={visit.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                    <td className="px-3 py-2 font-medium">{visit.agent.user.name}</td>
+                    <td className="px-3 py-2 text-neutral-600">
+                      {visit.store.name}
+                      {visit.store.code ? ` (${visit.store.code})` : ""}
+                    </td>
+                    <td className="px-3 py-2 text-neutral-500">
+                      {visit.checkInAt ? visit.checkInAt.toLocaleString() : "—"}
+                    </td>
+                    <td className="px-3 py-2">{t(`visitStatus.${visit.status}`)}</td>
+                    <td className="px-3 py-2">
+                      {outside ? (
+                        <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600">
+                          {t("geofenceOutside")}
+                          {typeof flags?.geofence?.distanceM === "number" ? ` · ${flags.geofence.distanceM}m` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-neutral-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

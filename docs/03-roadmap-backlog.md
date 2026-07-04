@@ -402,6 +402,8 @@ Definition of Done:
 - Routes + RouteStop, привязка к магазинам. `[сделано: API создания route
   с ordered RouteStop по storeIds + /field-force routes table/form]`
 - Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
+  `[сделано: core geofence helper + check-in/check-out API + recent visits
+  anomaly table в /field-force]`
 - AgentLocation + live map в web.
 - Territory scoping (порт в packages/core).
 - Мобильный флоу визита: маршрут дня -> точка -> чек-ин -> задачи точки.

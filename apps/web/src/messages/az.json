@@ -493,8 +493,10 @@
     "createRoute": "Marşrut yarat",
     "emptyAgents": "Sahə agentləri hələ yaradılmayıb.",
     "emptyRoutes": "Marşrut hələ yaradılmayıb.",
+    "emptyVisits": "Vizit hələ yoxdur.",
     "active": "Aktiv",
     "inactive": "Deaktiv",
+    "geofenceOutside": "Geozonadan kənar",
     "cards": {
       "agents": "Agentlər",
       "teams": "Komandalar",
@@ -513,6 +515,19 @@
       "agent": "Agent",
       "stops": "Nöqtələr",
       "status": "Status"
+    },
+    "visitsTable": {
+      "agent": "Agent",
+      "store": "Nöqtə",
+      "checkIn": "Check-in",
+      "status": "Status",
+      "anomaly": "Anomaliya"
+    },
+    "visitStatus": {
+      "PLANNED": "Planlanıb",
+      "IN_PROGRESS": "İcradadır",
+      "COMPLETED": "Tamamlanıb",
+      "SKIPPED": "Buraxılıb"
     }
   },
   "emptyStates": {
