@@ -102,6 +102,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.taskComment.deleteMany({ where: { user: { organizationId: orgId } } })
+  await prisma.photoSubmission.deleteMany({ where: { organizationId: orgId } })
   await prisma.task.deleteMany({ where: { organizationId: orgId } })
   await prisma.planogramPlacement.deleteMany({
     where: { planogramVersion: { planogram: { organizationId: orgId } } },
@@ -395,5 +396,67 @@ describe("publish", () => {
     await expect(prisma.taskComment.findMany({ where: { taskId: task.id } })).resolves.toMatchObject([
       { body: "Не хватает ценника", userId: mobileUserId },
     ])
+  })
+
+  test("mobile push переживает потерянный ответ без дублей status/photo/comment", async () => {
+    const task = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        storeId: store1,
+        assigneeId: mobileUserId,
+        title: "Offline proof task",
+        status: "NEW",
+      },
+    })
+    await prisma.photoSubmission.create({
+      data: {
+        organizationId: orgId,
+        storeId: store1,
+        taskId: task.id,
+        userId: mobileUserId,
+        url: `photos/${orgId}/${task.id}/photo-lost-response-0001.jpg`,
+        clientPhotoId: "photo-lost-response-0001",
+        takenAt: new Date("2026-07-04T08:00:00Z"),
+      },
+    })
+
+    const operations = [
+      {
+        clientOpId: "op-lost-status-0001",
+        kind: "task.status" as const,
+        payload: { taskId: task.id, expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      },
+      {
+        clientOpId: "op-lost-photo-0001",
+        kind: "photo.submit" as const,
+        payload: { clientPhotoId: "photo-lost-response-0001", taskId: task.id },
+      },
+      {
+        clientOpId: "op-lost-comment-0001",
+        kind: "task.comment" as const,
+        payload: { taskId: task.id, body: "  Offline proof uploaded  " },
+      },
+    ]
+
+    const first = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, operations)
+    const second = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, operations)
+
+    expect(second).toEqual(first)
+    expect(first).toEqual([
+      { clientOpId: "op-lost-status-0001", status: "applied" },
+      { clientOpId: "op-lost-photo-0001", status: "applied" },
+      { clientOpId: "op-lost-comment-0001", status: "applied" },
+    ])
+    await expect(prisma.task.findUnique({ where: { id: task.id }, select: { status: true } })).resolves.toEqual({
+      status: "PHOTO_SUBMITTED",
+    })
+    await expect(prisma.taskComment.count({ where: { taskId: task.id } })).resolves.toBe(1)
+    await expect(prisma.photoSubmission.count({ where: { taskId: task.id } })).resolves.toBe(1)
+    await expect(prisma.taskStatusHistory.count({ where: { taskId: task.id } })).resolves.toBe(2)
+    await expect(
+      prisma.outboxOperation.count({
+        where: { deviceId: mobileDeviceId, clientOpId: { in: operations.map((operation) => operation.clientOpId) } },
+      }),
+    ).resolves.toBe(3)
   })
 })

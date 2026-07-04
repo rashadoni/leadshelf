@@ -25,6 +25,7 @@ export const TENANT_MODELS = new Set([
   "StockSnapshot",
   "SalesSnapshot",
   "ImportBatch",
+  "ImportQueueJob",
   "ExternalIdMap",
   "EquipmentType",
   "EquipmentTemplate",

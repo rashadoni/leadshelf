@@ -298,8 +298,10 @@ floor-plan location hint и camera overlay сделаны. Остатки Phase 
 - Barcode scanner: find where SKU should be placed. `[сделано: ручной barcode/SKU finder + expo-camera scanner binding]`
 - Floor plan location hint. `[сделано: store-aware task locationHint из published floor plan + fallback в mobile]`
 - Photo submit. `[сделано: offline queue + CameraView proof overlay]`
-- Comment/feedback.
-- Offline outbox.
+- Comment/feedback. `[сделано: mobile task.comment outbox + web tasks
+  feedback column + DB idempotency test]`
+- Offline outbox. `[сделано: SQLite outbox, retry counters, sync-manager
+  ordering tests; DB e2e lost-response replay for status/photo/comment]`
 
 Требования из docs/11 (архитектура):
 
@@ -325,6 +327,8 @@ Definition of Done:
 - Пользователь отправляет фото.
 - Офис видит задачу как выполненную/на проверке.
 - e2e-тест sync переживает обрыв сети посреди пуша без дублей и потерь.
+  `[сделано: repo integration test повторяет потерянный ответ push batch
+  status/photo/comment и проверяет отсутствие дублей]`
 
 ## Phase 7 - Analytics v1
 
