@@ -399,7 +399,8 @@ Definition of Done:
 
 - Teams/FieldAgent поверх User. `[сделано: FieldAgent tenant scope +
   /field-force agents dashboard + API добавления агента из User]`
-- Routes + RouteStop, привязка к магазинам.
+- Routes + RouteStop, привязка к магазинам. `[сделано: API создания route
+  с ordered RouteStop по storeIds + /field-force routes table/form]`
 - Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
 - AgentLocation + live map в web.
 - Territory scoping (порт в packages/core).

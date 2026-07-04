@@ -486,8 +486,15 @@
     "addAgent": "Agent əlavə et",
     "noUserCandidates": "Sahə komandası üçün aktiv istifadəçi yoxdur.",
     "noTeam": "Komandasız",
+    "noStores": "Marşrut üçün aktiv satış nöqtəsi yoxdur.",
     "phone": "Telefon",
+    "routeName": "Marşrut adı",
+    "unassigned": "Agentsiz",
+    "createRoute": "Marşrut yarat",
     "emptyAgents": "Sahə agentləri hələ yaradılmayıb.",
+    "emptyRoutes": "Marşrut hələ yaradılmayıb.",
+    "active": "Aktiv",
+    "inactive": "Deaktiv",
     "cards": {
       "agents": "Agentlər",
       "teams": "Komandalar",
@@ -500,6 +507,12 @@
       "routes": "Marşrutlar",
       "visits": "Vizitlər",
       "lastLocation": "Son geolokasiya"
+    },
+    "routesTable": {
+      "route": "Marşrut",
+      "agent": "Agent",
+      "stops": "Nöqtələr",
+      "status": "Status"
     }
   },
   "emptyStates": {

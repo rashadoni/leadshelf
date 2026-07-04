@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { AgentCreateForm } from "./agent-create-form"
+import { RouteCreateForm } from "./route-create-form"
 
 export default async function FieldForcePage() {
   const [t, tNav, session] = await Promise.all([
@@ -12,7 +13,7 @@ export default async function FieldForcePage() {
   if (!session) return null
 
   const db = tenantDb(session.org)
-  const [agents, teams, users] = await Promise.all([
+  const [agents, teams, users, stores, routes] = await Promise.all([
     db.fieldAgent.findMany({
       include: {
         user: { select: { name: true, email: true, employeeCode: true, role: true } },
@@ -35,6 +36,23 @@ export default async function FieldForcePage() {
       orderBy: { name: "asc" },
       take: 100,
     }),
+    db.store.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+      take: 300,
+    }),
+    db.route.findMany({
+      include: {
+        agent: { select: { user: { select: { name: true } } } },
+        stops: {
+          orderBy: { sortOrder: "asc" },
+          select: { sortOrder: true, store: { select: { name: true, code: true } } },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
   ])
 
   return (
@@ -48,7 +66,7 @@ export default async function FieldForcePage() {
         {[
           ["cards.agents", agents.length],
           ["cards.teams", teams.length],
-          ["cards.activeRoutes", agents.reduce((sum, agent) => sum + agent.routes.length, 0)],
+          ["cards.activeRoutes", routes.filter((route) => route.isActive).length],
           ["cards.activeVisits", agents.reduce((sum, agent) => sum + agent.visits.filter((visit) => visit.status === "IN_PROGRESS").length, 0)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
@@ -61,6 +79,53 @@ export default async function FieldForcePage() {
       <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-medium">{t("addAgent")}</h2>
         <AgentCreateForm users={users} teams={teams} />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-medium">{t("createRoute")}</h2>
+        <RouteCreateForm
+          agents={agents.map((agent) => ({ id: agent.id, name: agent.user.name }))}
+          stores={stores}
+        />
+      </div>
+
+      <div className="mb-4 overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
+              <th className="px-3 py-2">{t("routesTable.route")}</th>
+              <th className="px-3 py-2">{t("routesTable.agent")}</th>
+              <th className="px-3 py-2">{t("routesTable.stops")}</th>
+              <th className="px-3 py-2">{t("routesTable.status")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {routes.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-8 text-center text-sm text-neutral-500">
+                  {t("emptyRoutes")}
+                </td>
+              </tr>
+            ) : (
+              routes.map((route) => (
+                <tr key={route.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                  <td className="px-3 py-2 font-medium">{route.name}</td>
+                  <td className="px-3 py-2 text-neutral-600">{route.agent?.user.name ?? "—"}</td>
+                  <td className="max-w-[520px] px-3 py-2 text-xs text-neutral-500">
+                    {route.stops
+                      .map((stop) => `${stop.sortOrder}. ${stop.store.name}${stop.store.code ? ` (${stop.store.code})` : ""}`)
+                      .join(" -> ")}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`rounded px-1.5 py-0.5 text-xs ${route.isActive ? "bg-green-50 text-green-700" : "bg-neutral-100 text-neutral-500"}`}>
+                      {route.isActive ? t("active") : t("inactive")}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {agents.length === 0 ? (
