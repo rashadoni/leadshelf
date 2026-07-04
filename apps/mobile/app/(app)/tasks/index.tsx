@@ -54,9 +54,14 @@ export default function TasksScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("tasks")}</Text>
-        <Pressable onPress={logout}>
-          <Text style={styles.logout}>{t("logout")}</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => router.push("/(app)/routes" as never)}>
+            <Text style={styles.logout}>{t("routes")}</Text>
+          </Pressable>
+          <Pressable onPress={logout}>
+            <Text style={styles.logout}>{t("logout")}</Text>
+          </Pressable>
+        </View>
       </View>
       <SyncBar />
       <FlatList
@@ -107,6 +112,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   title: { fontSize: 24, fontWeight: "700" },
+  headerActions: { flexDirection: "row", gap: 12 },
   logout: { color: "#737373", fontSize: 13 },
   emptyWrap: { flex: 1, justifyContent: "center" },
   empty: { textAlign: "center", color: "#a3a3a3", paddingHorizontal: 40 },

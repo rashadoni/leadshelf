@@ -58,6 +58,8 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
 const EMPTY_PULL: PullResponse = {
   tasks: [],
   stores: [],
+  routes: [],
+  visits: [],
   planogramBundles: [],
   cursors: { tasks: "c1", planogramBundles: "c2" },
 }

@@ -48,6 +48,8 @@ export type MobileRefreshRequest = z.infer<typeof mobileRefreshRequestSchema>
 export const mobileSyncCursorsSchema = z.object({
   tasks: z.string().nullable().optional(),
   planogramBundles: z.string().nullable().optional(),
+  routes: z.string().nullable().optional(),
+  visits: z.string().nullable().optional(),
 })
 export type MobileSyncCursors = z.infer<typeof mobileSyncCursorsSchema>
 
@@ -89,8 +91,45 @@ export const mobileStoreRowSchema = z.object({
   name: z.string(),
   code: z.string().nullable(),
   address: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
 })
 export type MobileStoreRow = z.infer<typeof mobileStoreRowSchema>
+
+export const mobileRouteStopRowSchema = z.object({
+  id: z.string(),
+  routeId: z.string(),
+  storeId: z.string(),
+  sortOrder: z.number().int(),
+  plannedAt: z.string().nullable(),
+})
+export type MobileRouteStopRow = z.infer<typeof mobileRouteStopRowSchema>
+
+export const mobileRouteRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  agentId: z.string().nullable(),
+  isActive: z.boolean(),
+  updatedAt: z.string(),
+  stops: z.array(mobileRouteStopRowSchema),
+})
+export type MobileRouteRow = z.infer<typeof mobileRouteRowSchema>
+
+export const mobileVisitStatusSchema = z.enum(["PLANNED", "IN_PROGRESS", "COMPLETED", "SKIPPED"])
+export type MobileVisitStatus = z.infer<typeof mobileVisitStatusSchema>
+
+export const mobileVisitRowSchema = z.object({
+  id: z.string(),
+  agentId: z.string(),
+  storeId: z.string(),
+  routeStopId: z.string().nullable(),
+  status: mobileVisitStatusSchema,
+  checkInAt: z.string().nullable(),
+  checkOutAt: z.string().nullable(),
+  anomalyFlags: z.unknown().nullable(),
+  updatedAt: z.string(),
+})
+export type MobileVisitRow = z.infer<typeof mobileVisitRowSchema>
 
 export const mobilePlanogramBundleSchema = z
   .object({
@@ -108,10 +147,14 @@ export type MobileSyncPullRequest = z.infer<typeof mobileSyncPullRequestSchema>
 export const mobileSyncPullResponseSchema = z.object({
   tasks: z.array(mobileTaskRowSchema),
   stores: z.array(mobileStoreRowSchema),
+  routes: z.array(mobileRouteRowSchema).default([]),
+  visits: z.array(mobileVisitRowSchema).default([]),
   planogramBundles: z.array(mobilePlanogramBundleSchema),
   cursors: z.object({
     tasks: z.string().nullable(),
     planogramBundles: z.string().nullable(),
+    routes: z.string().nullable().optional(),
+    visits: z.string().nullable().optional(),
   }),
 })
 export type MobileSyncPullResponse = z.infer<typeof mobileSyncPullResponseSchema>
@@ -136,6 +179,30 @@ export const mobileTaskCommentPayloadSchema = z.object({
 })
 export type MobileTaskCommentPayload = z.infer<typeof mobileTaskCommentPayloadSchema>
 
+export const mobileVisitCheckInPayloadSchema = z.object({
+  agentId: z.string().min(1),
+  storeId: z.string().min(1),
+  routeStopId: z.string().min(1).nullable().optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  geofenceLimitM: z.number().int().min(25).max(2000).optional(),
+})
+export type MobileVisitCheckInPayload = z.infer<typeof mobileVisitCheckInPayloadSchema>
+
+export const mobileVisitCheckOutPayloadSchema = z.object({
+  visitId: z.string().min(1),
+})
+export type MobileVisitCheckOutPayload = z.infer<typeof mobileVisitCheckOutPayloadSchema>
+
+export const mobileLocationUpdatePayloadSchema = z.object({
+  agentId: z.string().min(1),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracyM: z.number().min(0).max(5000).nullable().optional(),
+  recordedAt: z.string().datetime().optional(),
+})
+export type MobileLocationUpdatePayload = z.infer<typeof mobileLocationUpdatePayloadSchema>
+
 export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
   z.object({
     clientOpId: z.string().min(8).max(128),
@@ -153,6 +220,24 @@ export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
     clientOpId: z.string().min(8).max(128),
     kind: z.literal("task.comment"),
     payload: mobileTaskCommentPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("visit.checkin"),
+    payload: mobileVisitCheckInPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("visit.checkout"),
+    payload: mobileVisitCheckOutPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("location.update"),
+    payload: mobileLocationUpdatePayloadSchema,
     clientCreatedAt: z.string().optional(),
   }),
 ])

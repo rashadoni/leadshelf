@@ -4,13 +4,19 @@
 import type {
   MobilePushOperation,
   MobilePushResult,
+  MobileRouteRow,
+  MobileRouteStopRow,
   MobileStoreRow,
   MobileSyncPullResponse,
   MobileTaskRow,
+  MobileVisitRow,
 } from "@leadshelf/api-contracts/mobile/v1"
 
 export type TaskRow = MobileTaskRow
 export type StoreRow = MobileStoreRow
+export type RouteRow = MobileRouteRow
+export type RouteStopRow = MobileRouteStopRow
+export type VisitRow = MobileVisitRow
 export type PullResponse = MobileSyncPullResponse
 export type PushOperation = MobilePushOperation
 export type PushResult = MobilePushResult

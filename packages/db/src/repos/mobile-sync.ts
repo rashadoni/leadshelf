@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, TaskStatus } from "@prisma/client"
+import { evaluateVisitGeofence } from "@leadshelf/core"
 import { transitionTaskStatus } from "./publish.ts"
 import { PlanogramRepoError } from "./planogram.ts"
 
@@ -80,14 +81,34 @@ export async function pullChanges(
     where: { organizationId, assigneeId: userId },
     select: { storeId: true, planogramVersionId: true },
   })
-  const storeIds = [...new Set(allAssigned.map((t) => t.storeId))]
+  const fieldAgent = await prisma.fieldAgent.findFirst({
+    where: { organizationId, userId },
+    select: { id: true },
+  })
+  const routes = fieldAgent
+    ? await prisma.route.findMany({
+        where: { organizationId, agentId: fieldAgent.id, isActive: true },
+        orderBy: [{ createdAt: "desc" }],
+        take: 50,
+        include: { stops: { orderBy: { sortOrder: "asc" } } },
+      })
+    : []
+  const routeStoreIds = routes.flatMap((route) => route.stops.map((stop) => stop.storeId))
+  const storeIds = [...new Set([...allAssigned.map((t) => t.storeId), ...routeStoreIds])]
   const versionIds = [
     ...new Set(allAssigned.map((t) => t.planogramVersionId).filter((v): v is string => !!v)),
   ]
+  const visits = fieldAgent
+    ? await prisma.visit.findMany({
+        where: { organizationId, agentId: fieldAgent.id },
+        orderBy: [{ updatedAt: "desc" }],
+        take: 100,
+      })
+    : []
 
   const stores = await prisma.store.findMany({
     where: { id: { in: storeIds } },
-    select: { id: true, name: true, code: true, address: true, formatId: true },
+    select: { id: true, name: true, code: true, address: true, latitude: true, longitude: true, formatId: true },
   })
   const storeFormatById = new Map(stores.map((s) => [s.id, s.formatId]))
   const formatIds = [...new Set(stores.map((s) => s.formatId).filter((id): id is string => !!id))]
@@ -230,6 +251,31 @@ export async function pullChanges(
       }
     }),
     stores: stores.map(({ formatId: _formatId, ...store }) => store),
+    routes: routes.map((route) => ({
+      id: route.id,
+      name: route.name,
+      agentId: route.agentId,
+      isActive: route.isActive,
+      updatedAt: route.updatedAt.toISOString(),
+      stops: route.stops.map((stop) => ({
+        id: stop.id,
+        routeId: stop.routeId,
+        storeId: stop.storeId,
+        sortOrder: stop.sortOrder,
+        plannedAt: stop.plannedAt?.toISOString() ?? null,
+      })),
+    })),
+    visits: visits.map((visit) => ({
+      id: visit.id,
+      agentId: visit.agentId,
+      storeId: visit.storeId,
+      routeStopId: visit.routeStopId,
+      status: visit.status,
+      checkInAt: visit.checkInAt?.toISOString() ?? null,
+      checkOutAt: visit.checkOutAt?.toISOString() ?? null,
+      anomalyFlags: visit.anomalyFlags,
+      updatedAt: visit.updatedAt.toISOString(),
+    })),
     planogramBundles: versions.map((v) => ({
       versionId: v.id,
       versionNumber: v.versionNumber,
@@ -271,13 +317,13 @@ export async function pullChanges(
         },
       })),
     })),
-    cursors: { tasks: nextTaskCursor, planogramBundles: nextBundleCursor },
+    cursors: { tasks: nextTaskCursor, planogramBundles: nextBundleCursor, routes: null, visits: null },
   }
 }
 
 export interface PushOperation {
   clientOpId: string
-  kind: "task.status" | "photo.submit" | "task.comment"
+  kind: "task.status" | "photo.submit" | "task.comment" | "visit.checkin" | "visit.checkout" | "location.update"
   payload: Record<string, unknown>
   clientCreatedAt?: string
 }
@@ -380,6 +426,108 @@ async function applyTaskComment(
   return { status: "applied" }
 }
 
+async function findUserAgent(prisma: PrismaClient, organizationId: string, userId: string) {
+  return prisma.fieldAgent.findFirst({
+    where: { organizationId, userId },
+    select: { id: true, userId: true },
+  })
+}
+
+async function applyVisitCheckIn(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  payload: {
+    agentId: string
+    storeId: string
+    routeStopId?: string | null
+    latitude: number
+    longitude: number
+    geofenceLimitM?: number
+  },
+): Promise<Omit<PushResult, "clientOpId">> {
+  const agent = await findUserAgent(prisma, organizationId, userId)
+  if (!agent || agent.id !== payload.agentId) return { status: "rejected", detail: "agent_not_found_or_not_self" }
+  const store = await prisma.store.findFirst({
+    where: { id: payload.storeId, organizationId, isActive: true },
+    select: { id: true, latitude: true, longitude: true },
+  })
+  if (!store) return { status: "rejected", detail: "store_not_found" }
+  const routeStop = payload.routeStopId
+    ? await prisma.routeStop.findFirst({
+        where: { id: payload.routeStopId, storeId: payload.storeId, route: { organizationId, agentId: agent.id } },
+        select: { id: true },
+      })
+    : null
+  if (payload.routeStopId && !routeStop) return { status: "rejected", detail: "route_stop_not_found" }
+
+  const geofence = evaluateVisitGeofence({
+    store: store.latitude !== null && store.longitude !== null ? { latitude: store.latitude, longitude: store.longitude } : null,
+    checkIn: { latitude: payload.latitude, longitude: payload.longitude },
+    limitM: payload.geofenceLimitM ?? 150,
+  })
+  const visit = await prisma.visit.create({
+    data: {
+      organizationId,
+      agentId: agent.id,
+      storeId: store.id,
+      routeStopId: routeStop?.id,
+      status: "IN_PROGRESS",
+      checkInAt: new Date(),
+      checkInLat: payload.latitude,
+      checkInLng: payload.longitude,
+      anomalyFlags: { geofence: { distanceM: geofence.distanceM, limitM: geofence.limitM, outside: geofence.outside } },
+    },
+    select: { id: true, anomalyFlags: true },
+  })
+  await prisma.agentLocation.create({
+    data: { agentId: agent.id, latitude: payload.latitude, longitude: payload.longitude, recordedAt: new Date() },
+  })
+  return { status: "applied", detail: { visitId: visit.id, anomalyFlags: visit.anomalyFlags } }
+}
+
+async function applyVisitCheckOut(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  payload: { visitId: string },
+): Promise<Omit<PushResult, "clientOpId">> {
+  const agent = await findUserAgent(prisma, organizationId, userId)
+  if (!agent) return { status: "rejected", detail: "agent_not_found" }
+  const visit = await prisma.visit.findFirst({
+    where: { id: payload.visitId, organizationId, agentId: agent.id },
+    select: { id: true, status: true },
+  })
+  if (!visit) return { status: "rejected", detail: "visit_not_found" }
+  if (visit.status === "COMPLETED") return { status: "already_applied", detail: { serverStatus: visit.status } }
+  if (visit.status !== "IN_PROGRESS") return { status: "conflict", detail: { serverStatus: visit.status } }
+  await prisma.visit.update({
+    where: { id: visit.id },
+    data: { status: "COMPLETED", checkOutAt: new Date() },
+  })
+  return { status: "applied" }
+}
+
+async function applyLocationUpdate(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  payload: { agentId: string; latitude: number; longitude: number; accuracyM?: number | null; recordedAt?: string },
+): Promise<Omit<PushResult, "clientOpId">> {
+  const agent = await findUserAgent(prisma, organizationId, userId)
+  if (!agent || agent.id !== payload.agentId) return { status: "rejected", detail: "agent_not_found_or_not_self" }
+  await prisma.agentLocation.create({
+    data: {
+      agentId: agent.id,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      accuracyM: payload.accuracyM ?? null,
+      recordedAt: payload.recordedAt ? new Date(payload.recordedAt) : new Date(),
+    },
+  })
+  return { status: "applied" }
+}
+
 export async function pushOperations(
   prisma: PrismaClient,
   organizationId: string,
@@ -420,6 +568,12 @@ export async function pushOperations(
       )
     } else if (op.kind === "task.comment") {
       result = await applyTaskComment(prisma, organizationId, userId, op.payload as never)
+    } else if (op.kind === "visit.checkin") {
+      result = await applyVisitCheckIn(prisma, organizationId, userId, op.payload as never)
+    } else if (op.kind === "visit.checkout") {
+      result = await applyVisitCheckOut(prisma, organizationId, userId, op.payload as never)
+    } else if (op.kind === "location.update") {
+      result = await applyLocationUpdate(prisma, organizationId, userId, op.payload as never)
     } else {
       result = { status: "rejected", detail: "unknown_kind" }
     }

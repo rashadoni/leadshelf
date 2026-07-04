@@ -35,12 +35,7 @@ function toPushOperation(op: PushOperation): PushOperation {
       clientCreatedAt: op.clientCreatedAt,
     }
   }
-  return {
-    clientOpId: op.clientOpId,
-    kind: "task.comment",
-    payload: op.payload,
-    clientCreatedAt: op.clientCreatedAt,
-  }
+  return op
 }
 
 export class SyncManager {

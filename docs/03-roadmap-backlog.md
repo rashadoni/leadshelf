@@ -409,6 +409,8 @@ Definition of Done:
 - Territory scoping (порт в packages/core). `[сделано: pure core
   territory-scope helper + tests для all-store/store/region доступа]`
 - Мобильный флоу визита: маршрут дня -> точка -> чек-ин -> задачи точки.
+  `[сделано: mobile sync routes/visits + visit/location outbox ops +
+  mobile routes screen со stop/task view и queued check-in]`
 
 Definition of Done:
 

@@ -5,8 +5,11 @@
 import * as SQLite from "expo-sqlite"
 import {
   mobilePhotoSubmitPayloadSchema,
+  mobileLocationUpdatePayloadSchema,
   mobileTaskCommentPayloadSchema,
   mobileTaskStatusPayloadSchema,
+  mobileVisitCheckInPayloadSchema,
+  mobileVisitCheckOutPayloadSchema,
   type MobileTaskStatus,
 } from "@leadshelf/api-contracts/mobile/v1"
 import type {
@@ -14,8 +17,11 @@ import type {
   OutboxRow,
   PhotoQueueRow,
   PullResponse,
+  RouteRow,
+  RouteStopRow,
   StoreRow,
   TaskRow,
+  VisitRow,
 } from "../sync/ports"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
@@ -28,10 +34,20 @@ export function initDb(): void {
       storeId TEXT, planogramVersionId TEXT, locationHint TEXT, updatedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS stores (
-      id TEXT PRIMARY KEY, name TEXT, code TEXT, address TEXT
+      id TEXT PRIMARY KEY, name TEXT, code TEXT, address TEXT, latitude REAL, longitude REAL
     );
     CREATE TABLE IF NOT EXISTS planogram_bundles (
       versionId TEXT PRIMARY KEY, json TEXT
+    );
+    CREATE TABLE IF NOT EXISTS routes (
+      id TEXT PRIMARY KEY, name TEXT, agentId TEXT, isActive INTEGER, updatedAt TEXT
+    );
+    CREATE TABLE IF NOT EXISTS route_stops (
+      id TEXT PRIMARY KEY, routeId TEXT, storeId TEXT, sortOrder INTEGER, plannedAt TEXT
+    );
+    CREATE TABLE IF NOT EXISTS visits (
+      id TEXT PRIMARY KEY, agentId TEXT, storeId TEXT, routeStopId TEXT,
+      status TEXT, checkInAt TEXT, checkOutAt TEXT, anomalyFlags TEXT, updatedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS cursors (k TEXT PRIMARY KEY, v TEXT);
     CREATE TABLE IF NOT EXISTS outbox_ops (
@@ -47,6 +63,13 @@ export function initDb(): void {
   const taskColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(tasks)")
   if (!taskColumns.some((c) => c.name === "locationHint")) {
     db.execSync("ALTER TABLE tasks ADD COLUMN locationHint TEXT")
+  }
+  const storeColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(stores)")
+  if (!storeColumns.some((c) => c.name === "latitude")) {
+    db.execSync("ALTER TABLE stores ADD COLUMN latitude REAL")
+  }
+  if (!storeColumns.some((c) => c.name === "longitude")) {
+    db.execSync("ALTER TABLE stores ADD COLUMN longitude REAL")
   }
 }
 
@@ -75,9 +98,10 @@ export const localStore: LocalStore = {
       }
       for (const s of data.stores) {
         db.runSync(
-          `INSERT INTO stores (id, name, code, address) VALUES (?,?,?,?)
-           ON CONFLICT(id) DO UPDATE SET name=excluded.name, code=excluded.code, address=excluded.address`,
-          [s.id, s.name, s.code, s.address],
+          `INSERT INTO stores (id, name, code, address, latitude, longitude) VALUES (?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET name=excluded.name, code=excluded.code, address=excluded.address,
+             latitude=excluded.latitude, longitude=excluded.longitude`,
+          [s.id, s.name, s.code, s.address, s.latitude, s.longitude],
         )
       }
       for (const b of data.planogramBundles) {
@@ -85,6 +109,41 @@ export const localStore: LocalStore = {
           `INSERT INTO planogram_bundles (versionId, json) VALUES (?,?)
            ON CONFLICT(versionId) DO UPDATE SET json=excluded.json`,
           [b.versionId, JSON.stringify(b)],
+        )
+      }
+      for (const route of data.routes) {
+        db.runSync(
+          `INSERT INTO routes (id, name, agentId, isActive, updatedAt) VALUES (?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET name=excluded.name, agentId=excluded.agentId,
+             isActive=excluded.isActive, updatedAt=excluded.updatedAt`,
+          [route.id, route.name, route.agentId, route.isActive ? 1 : 0, route.updatedAt],
+        )
+        for (const stop of route.stops) {
+          db.runSync(
+            `INSERT INTO route_stops (id, routeId, storeId, sortOrder, plannedAt) VALUES (?,?,?,?,?)
+             ON CONFLICT(id) DO UPDATE SET routeId=excluded.routeId, storeId=excluded.storeId,
+               sortOrder=excluded.sortOrder, plannedAt=excluded.plannedAt`,
+            [stop.id, stop.routeId, stop.storeId, stop.sortOrder, stop.plannedAt],
+          )
+        }
+      }
+      for (const visit of data.visits) {
+        db.runSync(
+          `INSERT INTO visits (id, agentId, storeId, routeStopId, status, checkInAt, checkOutAt, anomalyFlags, updatedAt)
+           VALUES (?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET status=excluded.status, checkInAt=excluded.checkInAt,
+             checkOutAt=excluded.checkOutAt, anomalyFlags=excluded.anomalyFlags, updatedAt=excluded.updatedAt`,
+          [
+            visit.id,
+            visit.agentId,
+            visit.storeId,
+            visit.routeStopId,
+            visit.status,
+            visit.checkInAt,
+            visit.checkOutAt,
+            visit.anomalyFlags == null ? null : JSON.stringify(visit.anomalyFlags),
+            visit.updatedAt,
+          ],
         )
       }
     })
@@ -135,6 +194,36 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "photo.submit",
             payload: mobilePhotoSubmitPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "visit.checkin") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "visit.checkin",
+            payload: mobileVisitCheckInPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "visit.checkout") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "visit.checkout",
+            payload: mobileVisitCheckOutPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "location.update") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "location.update",
+            payload: mobileLocationUpdatePayloadSchema.parse(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -216,6 +305,32 @@ export function getBundle(versionId: string): Record<string, unknown> | null {
   return row ? (JSON.parse(row.json) as Record<string, unknown>) : null
 }
 
+export function listRoutes(): RouteRow[] {
+  return db
+    .getAllSync<Omit<RouteRow, "stops" | "isActive"> & { isActive: number }>(
+      "SELECT id, name, agentId, isActive, updatedAt FROM routes WHERE isActive=1 ORDER BY name",
+    )
+    .map((route) => ({ ...route, isActive: Boolean(route.isActive), stops: listRouteStops(route.id) }))
+}
+
+export function listRouteStops(routeId: string): RouteStopRow[] {
+  return db.getAllSync<RouteStopRow>(
+    "SELECT id, routeId, storeId, sortOrder, plannedAt FROM route_stops WHERE routeId=? ORDER BY sortOrder",
+    [routeId],
+  )
+}
+
+export function listVisits(): VisitRow[] {
+  return db
+    .getAllSync<VisitRow & { anomalyFlags: string | null }>(
+      "SELECT * FROM visits ORDER BY checkInAt DESC, updatedAt DESC",
+    )
+    .map((visit) => ({
+      ...visit,
+      anomalyFlags: visit.anomalyFlags ? JSON.parse(visit.anomalyFlags) : null,
+    }))
+}
+
 /** Оптимистичное локальное обновление + постановка в outbox одной транзакцией. */
 export function enqueueTaskStatus(input: {
   clientOpId: string
@@ -284,5 +399,37 @@ export function enqueueTaskComment(input: {
       JSON.stringify({ taskId: input.taskId, body: input.body.trim() }),
       new Date().toISOString(),
     ],
+  )
+}
+
+export function enqueueVisitCheckIn(input: {
+  clientOpId: string
+  agentId: string
+  storeId: string
+  routeStopId?: string | null
+  latitude: number
+  longitude: number
+}): void {
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [
+      input.clientOpId,
+      "visit.checkin",
+      JSON.stringify({
+        agentId: input.agentId,
+        storeId: input.storeId,
+        routeStopId: input.routeStopId ?? null,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      }),
+      new Date().toISOString(),
+    ],
+  )
+}
+
+export function enqueueVisitCheckOut(input: { clientOpId: string; visitId: string }): void {
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [input.clientOpId, "visit.checkout", JSON.stringify({ visitId: input.visitId }), new Date().toISOString()],
   )
 }
