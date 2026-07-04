@@ -18,7 +18,11 @@ export default async function EquipmentLibraryPage() {
       versions: {
         orderBy: { versionNumber: "desc" },
         take: 1,
-        include: { shelves: { orderBy: { shelfIndex: "asc" } } },
+        include: {
+          shelves: { orderBy: { shelfIndex: "asc" } },
+          cells: { orderBy: [{ yMm: "asc" }, { xMm: "asc" }] },
+          hooks: { orderBy: [{ yMm: "asc" }, { xMm: "asc" }] },
+        },
       },
     },
     orderBy: [{ name: "asc" }],
@@ -57,6 +61,8 @@ export default async function EquipmentLibraryPage() {
                       widthMm={v.widthMm}
                       heightMm={v.heightMm}
                       shelves={v.shelves}
+                      cells={v.cells}
+                      hooks={v.hooks}
                       maxPx={140}
                     />
                   )}

@@ -12,6 +12,7 @@ export { listImportErrorsForBatch } from "./repos/import.ts"
 export {
   createTemplateWithVersion,
   saveVersion,
+  copyTemplate,
   renameTemplate,
   EquipmentRepoError,
 } from "./repos/equipment.ts"

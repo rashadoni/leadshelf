@@ -9,6 +9,20 @@ export const runtime = "nodejs"
 
 const EDIT_ROLES = new Set(["OWNER", "ADMIN", "CATEGORY_MANAGER", "MERCHANDISER"])
 
+const cellSchema = z.object({
+  xMm: z.number().int().min(0),
+  yMm: z.number().int().min(0),
+  widthMm: z.number().int().min(1),
+  heightMm: z.number().int().min(1),
+  depthMm: z.number().int().min(1),
+})
+
+const hookSchema = z.object({
+  xMm: z.number().int().min(0),
+  yMm: z.number().int().min(0),
+  lengthMm: z.number().int().min(1),
+})
+
 const saveSchema = z.object({
   expectedVersionNumber: z.number().int().min(1),
   widthMm: z.number().int().min(1).max(10000),
@@ -26,6 +40,8 @@ const saveSchema = z.object({
     )
     .max(200)
     .default([]),
+  cells: z.array(cellSchema).max(500).default([]),
+  hooks: z.array(hookSchema).max(500).default([]),
 })
 
 // Save-семантика (docs/15): draft обновляется на месте, frozen -> новая версия.
@@ -43,7 +59,7 @@ export async function PUT(
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 400 })
   }
-  const { expectedVersionNumber, shelves, ...geometry } = parsed.data
+  const { expectedVersionNumber, shelves, cells, hooks, ...geometry } = parsed.data
 
   const shelfIssues = validateShelfList(shelves, geometry)
   if (shelfIssues.length > 0) {
@@ -55,6 +71,8 @@ export async function PUT(
       expectedVersionNumber,
       geometry,
       shelves,
+      cells,
+      hooks,
     })
     return NextResponse.json(saved)
   } catch (e) {

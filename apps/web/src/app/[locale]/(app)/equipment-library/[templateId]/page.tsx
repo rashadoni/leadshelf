@@ -25,7 +25,11 @@ export default async function EquipmentDetailPage({
         versions: {
           orderBy: { versionNumber: "desc" },
           take: 1,
-          include: { shelves: { orderBy: { shelfIndex: "asc" } } },
+          include: {
+            shelves: { orderBy: { shelfIndex: "asc" } },
+            cells: { orderBy: [{ yMm: "asc" }, { xMm: "asc" }] },
+            hooks: { orderBy: [{ yMm: "asc" }, { xMm: "asc" }] },
+          },
         },
       },
     }),
@@ -69,6 +73,8 @@ export default async function EquipmentDetailPage({
           shelfDepthMm: firstShelf?.depthMm ?? v.depthMm,
           bottomOffsetMm: firstShelf?.yMm ?? 50,
           topOffsetMm: 0,
+          cells: v.cells,
+          hooks: v.hooks,
         }}
       />
     </div>

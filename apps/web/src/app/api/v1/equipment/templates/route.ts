@@ -17,6 +17,20 @@ const shelfSchema = z.object({
   maxLoadKg: z.number().int().positive().nullable().optional(),
 })
 
+const cellSchema = z.object({
+  xMm: z.number().int().min(0),
+  yMm: z.number().int().min(0),
+  widthMm: z.number().int().min(1),
+  heightMm: z.number().int().min(1),
+  depthMm: z.number().int().min(1),
+})
+
+const hookSchema = z.object({
+  xMm: z.number().int().min(0),
+  yMm: z.number().int().min(0),
+  lengthMm: z.number().int().min(1),
+})
+
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
   typeId: z.string().min(1),
@@ -24,6 +38,8 @@ const createSchema = z.object({
   heightMm: z.number().int().min(1).max(10000),
   depthMm: z.number().int().min(1).max(5000),
   shelves: z.array(shelfSchema).max(200).default([]),
+  cells: z.array(cellSchema).max(500).default([]),
+  hooks: z.array(hookSchema).max(500).default([]),
 })
 
 export async function GET(req: NextRequest) {
@@ -75,7 +91,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 400 })
   }
-  const { name, typeId, shelves, ...geometry } = parsed.data
+  const { name, typeId, shelves, cells, hooks, ...geometry } = parsed.data
 
   const shelfIssues = validateShelfList(shelves, geometry)
   if (shelfIssues.length > 0) {
@@ -88,6 +104,8 @@ export async function POST(req: NextRequest) {
       typeId,
       geometry,
       shelves,
+      cells,
+      hooks,
     })
     return NextResponse.json(created, { status: 201 })
   } catch (e) {

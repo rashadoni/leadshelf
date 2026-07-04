@@ -121,21 +121,25 @@ Definition of Done:
 семантикой (draft на месте / frozen -> клон, optimistic lock), API
 templates/types/save-version, UI: библиотека карточками с SVG-превью,
 конструктор с shelf fill tool и живым превью (az/ru). DoD пройден вживую.
-План: docs/15. Осталось: cells/hooks (перфорация/ячейки), copy template.
+План: docs/15. Cells/hooks и copy template закрыты в Phase 2 follow-up.
 
 Задачи:
 
 - Equipment template library.
 - Equipment dimensions.
 - Shelves/rows.
-- Cells/containers.
-- Hooks/perforated rack support.
+- Cells/containers. `[сделано: EquipmentCell сохраняется в version,
+  UI генерирует grid cells и preview показывает ячейки]`
+- Hooks/perforated rack support. `[сделано: EquipmentHook сохраняется в
+  version, UI генерирует hook row и preview показывает крючки]`
 - Pallet/table/freezer/fridge basic types.
 - Shelf fill tool: count, shelf thickness, depth, row gap, top/bottom offsets.
 - Seating places/facings settings.
 - Auto seating toggle.
 - Auto compression toggle.
 - Save to library.
+- Copy template. `[сделано: API copy latest geometry/shelves/cells/hooks +
+  кнопка copy в форме шаблона]`
 - Preview in 2D.
 
 Definition of Done:

@@ -30,6 +30,8 @@ interface InitialData {
   shelfDepthMm: number
   bottomOffsetMm: number
   topOffsetMm: number
+  cells: Array<{ xMm: number; yMm: number; widthMm: number; heightMm: number; depthMm: number }>
+  hooks: Array<{ xMm: number; yMm: number; lengthMm: number }>
 }
 
 export function EquipmentForm({
@@ -58,6 +60,16 @@ export function EquipmentForm({
     bottomOffsetMm: initial?.bottomOffsetMm ?? 50,
     topOffsetMm: initial?.topOffsetMm ?? 0,
   })
+  const initialCellColumns = initial?.cells.length
+    ? new Set(initial.cells.map((cell) => cell.xMm)).size
+    : 0
+  const initialCellRows = initial?.cells.length ? new Set(initial.cells.map((cell) => cell.yMm)).size : 0
+  const [cells, setCells] = useState({ columns: initialCellColumns, rows: initialCellRows })
+  const [hooks, setHooks] = useState({
+    count: initial?.hooks.length ?? 0,
+    yMm: initial?.hooks[0]?.yMm ?? Math.round((initial?.heightMm ?? 1800) * 0.65),
+    lengthMm: initial?.hooks[0]?.lengthMm ?? 180,
+  })
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -75,6 +87,31 @@ export function EquipmentForm({
     () => (issues.length === 0 ? layoutEqualShelves(layoutInput) : null),
     [issues, layoutInput],
   )
+  const generatedCells = useMemo(() => {
+    if (cells.columns <= 0 || cells.rows <= 0) return []
+    const width = Math.floor(geom.widthMm / cells.columns)
+    const height = Math.floor(geom.heightMm / cells.rows)
+    return Array.from({ length: cells.columns * cells.rows }, (_, index) => {
+      const col = index % cells.columns
+      const row = Math.floor(index / cells.columns)
+      return {
+        xMm: col * width,
+        yMm: row * height,
+        widthMm: col === cells.columns - 1 ? geom.widthMm - col * width : width,
+        heightMm: row === cells.rows - 1 ? geom.heightMm - row * height : height,
+        depthMm: geom.depthMm,
+      }
+    })
+  }, [cells.columns, cells.rows, geom.depthMm, geom.heightMm, geom.widthMm])
+  const generatedHooks = useMemo(() => {
+    if (hooks.count <= 0) return []
+    const step = geom.widthMm / (hooks.count + 1)
+    return Array.from({ length: hooks.count }, (_, index) => ({
+      xMm: Math.round(step * (index + 1)),
+      yMm: hooks.yMm,
+      lengthMm: hooks.lengthMm,
+    }))
+  }, [geom.widthMm, hooks.count, hooks.lengthMm, hooks.yMm])
 
   async function save() {
     if (!layout) return
@@ -89,12 +126,14 @@ export function EquipmentForm({
             expectedVersionNumber: initial.expectedVersionNumber,
             ...geom,
             shelves,
+            cells: generatedCells,
+            hooks: generatedHooks,
           }),
         })
       : await fetch("/api/v1/equipment/templates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, typeId, ...geom, shelves }),
+          body: JSON.stringify({ name, typeId, ...geom, shelves, cells: generatedCells, hooks: generatedHooks }),
         })
     setPending(false)
     if (res.ok) {
@@ -110,6 +149,21 @@ export function EquipmentForm({
     } else {
       const body = await res.json().catch(() => ({}))
       setMessage(body.error ?? `HTTP ${res.status}`)
+    }
+  }
+
+  async function copy() {
+    if (!initial) return
+    setPending(true)
+    const res = await fetch(`/api/v1/equipment/templates/${initial.templateId}/copy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `${initial.name} copy` }),
+    })
+    setPending(false)
+    if (res.ok) {
+      const body = await res.json()
+      window.location.assign(`/${locale}/equipment-library/${body.templateId}`)
     }
   }
 
@@ -194,6 +248,20 @@ export function EquipmentForm({
           ))}
         </fieldset>
 
+        <fieldset className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
+          <legend className="px-1 text-sm font-medium">{t("cellsHooks")}</legend>
+          <div className="flex flex-wrap gap-3">
+            {numField(t("cellColumns"), cells.columns, (n) => setCells((c) => ({ ...c, columns: n })), { min: 0 })}
+            {numField(t("cellRows"), cells.rows, (n) => setCells((c) => ({ ...c, rows: n })), { min: 0 })}
+            {numField(t("hookCount"), hooks.count, (n) => setHooks((h) => ({ ...h, count: n })), { min: 0 })}
+            {numField(t("hookY"), hooks.yMm, (n) => setHooks((h) => ({ ...h, yMm: n })), { min: 0 })}
+            {numField(t("hookLength"), hooks.lengthMm, (n) => setHooks((h) => ({ ...h, lengthMm: n })), { min: 1 })}
+          </div>
+          <p className="text-xs text-neutral-500">
+            {generatedCells.length} cells · {generatedHooks.length} hooks
+          </p>
+        </fieldset>
+
         {initial?.isFrozen && <p className="text-sm text-amber-600">{t("frozenHint")}</p>}
 
         <div className="flex items-center gap-3">
@@ -204,6 +272,15 @@ export function EquipmentForm({
           >
             {pending ? t("saving") : t("save")}
           </button>
+          {initial && (
+            <button
+              onClick={copy}
+              disabled={pending}
+              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100 disabled:opacity-50"
+            >
+              {t("copy")}
+            </button>
+          )}
           {message && <span className="text-sm text-neutral-600">{message}</span>}
         </div>
       </div>
@@ -214,6 +291,8 @@ export function EquipmentForm({
           widthMm={geom.widthMm}
           heightMm={geom.heightMm}
           shelves={layout?.shelves ?? []}
+          cells={generatedCells}
+          hooks={generatedHooks}
         />
         <p className="text-center text-xs text-neutral-400">
           {geom.widthMm}×{geom.heightMm}×{geom.depthMm} mm
