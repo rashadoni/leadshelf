@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
+import { CopyToStoreButton } from "./copy-to-store-button"
 import { FloorPlanForm } from "./floor-plan-form"
 
 function formatTarget(floorPlan: {
@@ -108,6 +109,11 @@ export default async function FloorPlansPage() {
                       </span>
                     ) : null}
                   </div>
+                  {floorPlan.format ? (
+                    <div className="mt-3">
+                      <CopyToStoreButton floorPlanId={floorPlan.id} stores={stores} />
+                    </div>
+                  ) : null}
                 </div>
                 {!version ? (
                   <div className="p-10 text-center text-sm text-neutral-500">{t("noPublished")}</div>

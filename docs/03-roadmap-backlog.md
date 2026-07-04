@@ -163,7 +163,8 @@ Definition of Done:
 - Lock/unlock. `[сделано: isLocked в create form/API]`
 - Labels. `[сделано: label в create form/API и viewer]`
 - Assign floor plan to store or format. `[сделано: storeId XOR formatId in API/form]`
-- Copy plan from format to store.
+- Copy plan from format to store. `[сделано: API copy-to-store копирует
+  latest version/equipment из format plan в store plan + кнопка в карточке]`
 
 Не делать в MVP:
 
