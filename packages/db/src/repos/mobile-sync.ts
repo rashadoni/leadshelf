@@ -476,6 +476,20 @@ async function applyVisitCheckIn(
     checkIn: { latitude: payload.latitude, longitude: payload.longitude },
     limitM: payload.geofenceLimitM ?? 150,
   })
+  const activeVisit = await prisma.visit.findFirst({
+    where: {
+      organizationId,
+      agentId: agent.id,
+      storeId: store.id,
+      routeStopId: routeStop?.id ?? null,
+      status: "IN_PROGRESS",
+    },
+    select: { id: true, anomalyFlags: true },
+  })
+  if (activeVisit) {
+    return { status: "already_applied", detail: { visitId: activeVisit.id, anomalyFlags: activeVisit.anomalyFlags } }
+  }
+
   const visit = await prisma.visit.create({
     data: {
       organizationId,

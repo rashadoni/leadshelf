@@ -461,7 +461,8 @@ Definition of Done:
   с ordered RouteStop по storeIds + /field-force routes table/form]`
 - Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
   `[сделано: core geofence helper + check-in/check-out API + recent visits
-  anomaly table в /field-force]`
+  anomaly table в /field-force; web/mobile check-in не создает дубль для
+  уже активного visit по тому же agent/store/routeStop]`
 - AgentLocation + live map в web. `[сделано: location ingest API +
   /field-force live map panel по последней AgentLocation каждого агента]`
 - Territory scoping (порт в packages/core). `[сделано: pure core

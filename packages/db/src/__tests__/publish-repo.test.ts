@@ -542,10 +542,23 @@ describe("publish", () => {
     }
     const firstCheckIn = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [checkInOp])
     const replayedCheckIn = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [checkInOp])
+    const duplicateActiveCheckIn = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [
+      {
+        ...checkInOp,
+        clientOpId: "op-visit-checkin-0002",
+      },
+    ])
     const visitId = (firstCheckIn[0]?.detail as { visitId?: string } | undefined)?.visitId
 
     expect(visitId).toBeTruthy()
     expect(replayedCheckIn).toEqual(firstCheckIn)
+    expect(duplicateActiveCheckIn).toEqual([
+      expect.objectContaining({
+        clientOpId: "op-visit-checkin-0002",
+        status: "already_applied",
+        detail: expect.objectContaining({ visitId }),
+      }),
+    ])
     await expect(prisma.visit.count({ where: { organizationId: orgId, agentId: agent.id, routeStopId: stop.id } })).resolves.toBe(1)
     await expect(prisma.agentLocation.count({ where: { agentId: agent.id } })).resolves.toBe(1)
 

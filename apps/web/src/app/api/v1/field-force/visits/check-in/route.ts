@@ -68,6 +68,18 @@ export async function POST(req: NextRequest) {
       outside: geofence.outside,
     },
   }
+  const activeVisit = await workerDb.visit.findFirst({
+    where: {
+      organizationId: session.org,
+      agentId: agent.id,
+      storeId: store.id,
+      routeStopId: routeStop?.id ?? null,
+      status: "IN_PROGRESS",
+    },
+    select: { id: true, status: true, anomalyFlags: true },
+  })
+  if (activeVisit) return NextResponse.json(activeVisit)
+
   const visit = await workerDb.visit.create({
     data: {
       organizationId: session.org,
