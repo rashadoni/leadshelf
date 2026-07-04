@@ -79,10 +79,13 @@ Definition of Done:
   `[CSV+XLSX сделано: парсеры ru/az/en + исполнители products/prices/stock/
   sales/assortment c идемпотентностью, API-роуты upload/status/errors/
   products/data-quality, UI каталога (таблица/импорт/качество/размеры).
-  Осталось: очередь для больших файлов (pg-boss), фото товаров, CRUD-форма]`
-- Product CRUD.
-- Category tree.
-- Brand/supplier/manufacturer attributes.
+  Осталось: очередь для больших файлов (pg-boss)]`
+- Product CRUD. `[сделано: POST product + PATCH metadata/status/barcode,
+  create/edit/deactivate UI; delete заменен deactivate из-за исторических снапшотов]`
+- Category tree. `[сделано: normalizedPath tree используется в import и
+  catalog create/edit selector]`
+- Brand/supplier/manufacturer attributes. `[сделано: поля Product +
+  import upsert + catalog create/edit selectors]`
 - Product dimensions: width, height, depth, weight + UI ручного
   ввода/коррекции + фильтр «без размеров». `[сделано: inline-редактор в
   таблице каталога + PATCH API + фильтр]`
