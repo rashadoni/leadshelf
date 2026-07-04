@@ -142,7 +142,7 @@ export async function emitProductEvent(
       const devices = await tx.mobileDevice.findMany({
         where: {
           pushToken: { not: null },
-          user: { organizationId, role: { in: [...OFFICE_PUSH_ROLES] } },
+          user: { organizationId, isActive: true, role: { in: [...OFFICE_PUSH_ROLES] } },
         },
         select: { id: true, pushToken: true },
       })

@@ -516,8 +516,9 @@ Definition of Done:
   (geofence), import.errors (worker imports), stock.gap detector]`
 - Push через MobileDevice.pushToken.
   `[сделано: office-role devices OWNER/ADMIN/SUPERVISOR with pushToken
-  get PENDING NotificationDelivery rows; repo-level claim переводит PENDING
-  -> SENDING и markSent/markFailed закрывают delivery lifecycle без дублей]`
+  get PENDING NotificationDelivery rows only for active users; repo-level claim
+  переводит PENDING -> SENDING и markSent/markFailed закрывают delivery
+  lifecycle без дублей]`
 - Утренний дайджест офису (Tier 3 UX из docs/10).
   `[сделано: buildOfficeMorningDigest + enqueueOfficeMorningDigest]`
 

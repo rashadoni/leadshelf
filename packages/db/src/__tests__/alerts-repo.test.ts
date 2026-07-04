@@ -34,6 +34,18 @@ beforeAll(async () => {
   await prisma.mobileDevice.create({
     data: { userId: admin.id, platform: "ios", pushToken: "ExponentPushToken[test]" },
   })
+  const inactiveAdmin = await prisma.user.create({
+    data: {
+      organizationId: orgId,
+      name: "Inactive Admin",
+      role: "ADMIN",
+      email: `${slug}-inactive@example.com`,
+      isActive: false,
+    },
+  })
+  await prisma.mobileDevice.create({
+    data: { userId: inactiveAdmin.id, platform: "ios", pushToken: "ExponentPushToken[inactive]" },
+  })
   const store = await prisma.store.create({ data: { organizationId: orgId, name: "Apteka Alert", code: "AL1" } })
   storeId = store.id
   const product = await prisma.product.create({
@@ -93,6 +105,12 @@ describe("alerts repo", () => {
       title: "Visit anomalies",
       status: "PENDING",
     })
+    expect(await prisma.notificationDelivery.count({ where: { organizationId: orgId, eventId: first.eventId } })).toBe(1)
+    expect(
+      await prisma.notificationDelivery.count({
+        where: { organizationId: orgId, eventId: first.eventId, pushToken: "ExponentPushToken[inactive]" },
+      }),
+    ).toBe(0)
   })
 
   test("detects stock gaps from active store assortment", async () => {
