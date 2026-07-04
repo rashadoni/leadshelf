@@ -4,8 +4,14 @@ import {
   getAbcRows,
   getAssortmentGapRows,
   getBasicDashboardSummary,
+  getLikeForLikeBreakdown,
+  getLikeForLikeSummary,
   getObsoletePlanogramRows,
+  getPhase8MetricRows,
   getTaskKpiReport,
+  getShelfShareGroups,
+  getSpaceProductivityRows,
+  type ProductRow,
 } from "./planogram-products"
 
 type AnalyticsDb = Parameters<typeof getAssortmentGapRows>[0]
@@ -28,6 +34,26 @@ function product(overrides: {
     brand: { name: "Brand" },
     category: { name: "Category" },
     supplier: { name: "Supplier" },
+  }
+}
+
+function productRow(overrides: Partial<ProductRow> & Pick<ProductRow, "productId" | "sku" | "linearMm">): ProductRow {
+  return {
+    key: `${overrides.productId}:row`,
+    productId: overrides.productId,
+    planogramId: "planogram-a",
+    versionId: "version-a",
+    planogramName: "Planogram A",
+    versionNumber: 1,
+    state: "PUBLISHED",
+    sku: overrides.sku,
+    productName: overrides.productName ?? overrides.sku,
+    category: overrides.category === undefined ? "Category" : overrides.category,
+    brand: overrides.brand === undefined ? "Brand" : overrides.brand,
+    supplier: overrides.supplier === undefined ? "Supplier" : overrides.supplier,
+    placements: overrides.placements ?? 1,
+    units: overrides.units ?? 1,
+    linearMm: overrides.linearMm,
   }
 }
 
@@ -417,6 +443,206 @@ describe("analytics planogram product helpers", () => {
     expect(report.planograms.map((row) => [row.label, row.total, row.completionRate])).toEqual([
       ["Planogram A · v1", 2, 0.5],
       ["Planogram B · v2", 1, 1],
+    ])
+  })
+
+  it("compares like-for-like periods by turnover, profit, and quantity", async () => {
+    const now = new Date("2026-07-04T10:00:00.000Z")
+    const db = asDb({
+      salesSnapshot: {
+        findMany: async () => [
+          {
+            date: new Date("2026-07-01T00:00:00.000Z"),
+            quantity: 10,
+            revenue: 100,
+            profit: 30,
+          },
+          {
+            date: new Date("2026-06-01T00:00:00.000Z"),
+            quantity: 4,
+            revenue: 50,
+            profit: 10,
+          },
+        ],
+      },
+    })
+
+    const summary = await getLikeForLikeSummary(db, now, 30)
+
+    expect(summary).toEqual({
+      days: 30,
+      currentStart: "2026-06-05",
+      currentEnd: "2026-07-04",
+      previousStart: "2026-05-06",
+      previousEnd: "2026-06-04",
+      rows: [
+        { metric: "turnover", current: 100, previous: 50, delta: 50, deltaPct: 1 },
+        { metric: "profit", current: 30, previous: 10, delta: 20, deltaPct: 2 },
+        { metric: "quantity", current: 10, previous: 4, delta: 6, deltaPct: 1.5 },
+      ],
+    })
+  })
+
+  it("breaks like-for-like turnover down by store, format, and active planogram", async () => {
+    const now = new Date("2026-07-04T10:00:00.000Z")
+    const db = asDb({
+      salesSnapshot: {
+        findMany: async () => [
+          {
+            date: new Date("2026-07-01T00:00:00.000Z"),
+            productId: "product-a",
+            quantity: 10,
+            revenue: 100,
+            profit: 30,
+            store: {
+              id: "store-a",
+              name: "Store A",
+              code: "A001",
+              format: { id: "format-a", name: "Format A" },
+            },
+          },
+          {
+            date: new Date("2026-06-01T00:00:00.000Z"),
+            productId: "product-a",
+            quantity: 4,
+            revenue: 50,
+            profit: 10,
+            store: {
+              id: "store-a",
+              name: "Store A",
+              code: "A001",
+              format: { id: "format-a", name: "Format A" },
+            },
+          },
+        ],
+      },
+      planogramAssignment: {
+        findMany: async () => [
+          {
+            storeId: "store-a",
+            formatId: null,
+            activeFrom: new Date("2026-07-01T00:00:00.000Z"),
+            activeTo: null,
+            store: { id: "store-a", name: "Store A", code: "A001" },
+            format: null,
+            planogramVersion: {
+              id: "version-a",
+              versionNumber: 1,
+              planogram: { id: "planogram-a", name: "Planogram A" },
+              placements: [{ productId: "product-a" }],
+            },
+          },
+        ],
+      },
+    })
+
+    const breakdown = await getLikeForLikeBreakdown(db, now, 30)
+
+    expect(breakdown.store).toMatchObject([
+      {
+        key: "store-a",
+        label: "Store A (A001)",
+        currentTurnover: 100,
+        previousTurnover: 50,
+        turnoverDeltaPct: 1,
+      },
+    ])
+    expect(breakdown.format).toMatchObject([
+      {
+        key: "format-a",
+        label: "Format A",
+        currentTurnover: 100,
+        previousTurnover: 50,
+        turnoverDeltaPct: 1,
+      },
+    ])
+    expect(breakdown.planogram).toMatchObject([
+      {
+        key: "version-a",
+        label: "Planogram A · v1",
+        currentTurnover: 100,
+        previousTurnover: 50,
+        turnoverDeltaPct: 1,
+      },
+    ])
+  })
+
+  it("calculates phase 8 per-meter metrics and stock days from unique placed products", () => {
+    const metrics = getPhase8MetricRows({
+      likeForLikeSummary: {
+        days: 30,
+        currentStart: "2026-06-05",
+        currentEnd: "2026-07-04",
+        previousStart: "2026-05-06",
+        previousEnd: "2026-06-04",
+        rows: [
+          { metric: "turnover", current: 300, previous: 150, delta: 150, deltaPct: 1 },
+          { metric: "profit", current: 90, previous: 45, delta: 45, deltaPct: 1 },
+          { metric: "quantity", current: 30, previous: 10, delta: 20, deltaPct: 2 },
+        ],
+      },
+      totalLinearMm: 3000,
+      stockCoverageByProduct: new Map([
+        ["product-a", { productId: "product-a", latestStockQty: 50, avgDailySalesQty: 10, stockDays: 5 }],
+        ["product-b", { productId: "product-b", latestStockQty: 30, avgDailySalesQty: 2, stockDays: 15 }],
+      ]),
+      productIds: ["product-a", "product-a", "product-b"],
+    })
+
+    expect(metrics).toEqual([
+      { key: "turnover", value: 300 },
+      { key: "profit", value: 90 },
+      { key: "quantity", value: 30 },
+      { key: "turnoverPerMeter", value: 100 },
+      { key: "profitPerMeter", value: 30 },
+      { key: "stockDays", value: 10 },
+      { key: "turnoverRatio", value: 2 },
+    ])
+  })
+
+  it("calculates space productivity gaps and shelf share groups", () => {
+    const rows = [
+      productRow({ productId: "product-a", sku: "A", brand: "Brand A", supplier: "Supplier A", linearMm: 200 }),
+      productRow({ productId: "product-a", sku: "A", brand: "Brand A", supplier: "Supplier A", linearMm: 100 }),
+      productRow({ productId: "product-b", sku: "B", brand: null, supplier: "Supplier B", linearMm: 700 }),
+    ]
+    const abcRows = [
+      {
+        productId: "product-a",
+        sku: "A",
+        productName: "A",
+        brand: "Brand A",
+        category: "Category",
+        turnover: 80,
+        cost: 90,
+        profit: -10,
+        quantity: 8,
+        classes: { turnover: "A", cost: "A", profit: "C", quantity: "A" },
+      },
+      {
+        productId: "product-b",
+        sku: "B",
+        productName: "B",
+        brand: null,
+        category: "Category",
+        turnover: 20,
+        cost: 10,
+        profit: 50,
+        quantity: 2,
+        classes: { turnover: "B", cost: "B", profit: "A", quantity: "B" },
+      },
+    ] as const
+
+    const productivityRows = getSpaceProductivityRows(rows, [...abcRows])
+    const shelfShareGroups = getShelfShareGroups(rows, "Unassigned")
+
+    expect(productivityRows.map((row) => [row.sku, row.shelfShare, row.salesShare, row.profitShare])).toEqual([
+      ["A", 0.3, 0.8, 0],
+      ["B", 0.7, 0.2, 1],
+    ])
+    expect(shelfShareGroups.find((group) => group.dimension === "brand")?.rows).toEqual([
+      { label: "Unassigned", productCount: 1, linearMm: 700, shelfShare: 0.7 },
+      { label: "Brand A", productCount: 1, linearMm: 300, shelfShare: 0.3 },
     ])
   })
 })

@@ -9,11 +9,15 @@ import {
   getBasicDashboardSummary,
   getLikeForLikeBreakdown,
   getLikeForLikeSummary,
+  getPhase8MetricRows,
   getObsoletePlanogramRows,
   getPlanogramProductRows,
+  getShelfShareGroups,
+  getSpaceProductivityRows,
   getStockCoverageByProduct,
   getTaskKpiReport,
   type AbcClass,
+  type Phase8MetricRow,
 } from "@/server/analytics/planogram-products"
 
 type GroupRow = {
@@ -46,6 +50,13 @@ function formatAmount(value: number): string {
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`
+}
+
+function formatPhase8MetricValue(metric: Phase8MetricRow): string {
+  if (metric.value == null) return "—"
+  if (metric.key === "stockDays") return metric.value.toFixed(1)
+  if (metric.key === "turnoverRatio") return metric.value.toFixed(2)
+  return formatAmount(metric.value)
 }
 
 function deltaClass(value: number): string {
@@ -179,97 +190,14 @@ export default async function AnalyticsPage({
     (sum, row) => (placedProductIds.has(row.productId) ? sum + row.profit : sum),
     0,
   )
-  const likeForLikeMetricByKey = new Map(likeForLikeSummary.rows.map((row) => [row.metric, row]))
-  const currentTurnover = likeForLikeMetricByKey.get("turnover")?.current ?? 0
-  const previousTurnover = likeForLikeMetricByKey.get("turnover")?.previous ?? 0
-  const currentProfit = likeForLikeMetricByKey.get("profit")?.current ?? 0
-  const currentQuantity = likeForLikeMetricByKey.get("quantity")?.current ?? 0
-  const linearMeters = totalLinearMm / 1000
-  const stockDayValues = [...new Set(rows.map((row) => row.productId))]
-    .map((productId) => stockCoverageByProduct.get(productId)?.stockDays ?? null)
-    .filter((value): value is number => value != null)
-  const avgStockDays =
-    stockDayValues.length > 0
-      ? stockDayValues.reduce((sum, value) => sum + value, 0) / stockDayValues.length
-      : null
-  const phase8Metrics = [
-    { key: "turnover", value: formatAmount(currentTurnover) },
-    { key: "profit", value: formatAmount(currentProfit) },
-    { key: "quantity", value: formatAmount(currentQuantity) },
-    { key: "turnoverPerMeter", value: linearMeters > 0 ? formatAmount(currentTurnover / linearMeters) : "—" },
-    { key: "profitPerMeter", value: linearMeters > 0 ? formatAmount(currentProfit / linearMeters) : "—" },
-    { key: "stockDays", value: avgStockDays == null ? "—" : avgStockDays.toFixed(1) },
-    { key: "turnoverRatio", value: previousTurnover !== 0 ? (currentTurnover / previousTurnover).toFixed(2) : "—" },
-  ] as const
-  const productShareRows = [
-    ...rows
-      .reduce((map, row) => {
-        const existing = map.get(row.productId)
-        if (existing) {
-          existing.linearMm += row.linearMm
-        } else {
-          const sales = abcByProductId.get(row.productId)
-          map.set(row.productId, {
-            productId: row.productId,
-            sku: row.sku,
-            productName: row.productName,
-            brand: row.brand,
-            category: row.category,
-            linearMm: row.linearMm,
-            turnover: sales?.turnover ?? 0,
-            profit: sales?.profit ?? 0,
-          })
-        }
-        return map
-      }, new Map<string, { productId: string; sku: string; productName: string; brand: string | null; category: string | null; linearMm: number; turnover: number; profit: number }>())
-      .values(),
-  ]
-  const productShareTotalLinear = productShareRows.reduce((sum, row) => sum + row.linearMm, 0)
-  const productShareTotalTurnover = productShareRows.reduce((sum, row) => sum + Math.max(0, row.turnover), 0)
-  const productShareTotalProfit = productShareRows.reduce((sum, row) => sum + Math.max(0, row.profit), 0)
-  const spaceProductivityRows = productShareRows
-    .map((row) => {
-      const shelfShare = productShareTotalLinear > 0 ? row.linearMm / productShareTotalLinear : 0
-      const salesShare =
-        productShareTotalTurnover > 0 ? Math.max(0, row.turnover) / productShareTotalTurnover : 0
-      const profitShare = productShareTotalProfit > 0 ? Math.max(0, row.profit) / productShareTotalProfit : 0
-      return {
-        ...row,
-        shelfShare,
-        salesShare,
-        profitShare,
-        salesGap: salesShare - shelfShare,
-        profitGap: profitShare - shelfShare,
-      }
-    })
-    .sort((a, b) => Math.abs(b.salesGap) - Math.abs(a.salesGap) || a.sku.localeCompare(b.sku))
-    .slice(0, 15)
-  const shelfShareGroups = (["brand", "category", "supplier"] as const).map((dimension) => {
-    const groupMap = rows.reduce(
-      (map, row) => {
-        const label = row[dimension] ?? t("grouping.empty")
-        const existing = map.get(label)
-        if (existing) {
-          existing.products.add(row.sku)
-          existing.linearMm += row.linearMm
-        } else {
-          map.set(label, { label, products: new Set([row.sku]), linearMm: row.linearMm })
-        }
-        return map
-      },
-      new Map<string, { label: string; products: Set<string>; linearMm: number }>(),
-    )
-    return {
-      dimension,
-      rows: [...groupMap.values()]
-        .map((row) => ({
-          ...row,
-          shelfShare: totalLinearMm > 0 ? row.linearMm / totalLinearMm : 0,
-        }))
-        .sort((a, b) => b.linearMm - a.linearMm || a.label.localeCompare(b.label))
-        .slice(0, 10),
-    }
+  const phase8Metrics = getPhase8MetricRows({
+    likeForLikeSummary,
+    totalLinearMm,
+    stockCoverageByProduct,
+    productIds: rows.map((row) => row.productId),
   })
+  const spaceProductivityRows = getSpaceProductivityRows(rows, abcRows)
+  const shelfShareGroups = getShelfShareGroups(rows, t("grouping.empty"))
   const groupRows = groupBy
     ? [
         ...rows
@@ -503,7 +431,7 @@ export default async function AnalyticsPage({
               <div className="text-xs text-neutral-500">
                 {t(`phase8Metrics.items.${metric.key}` as never)}
               </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums">{metric.value}</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">{formatPhase8MetricValue(metric)}</div>
             </div>
           ))}
         </div>
@@ -583,7 +511,7 @@ export default async function AnalyticsPage({
                     group.rows.map((row) => (
                       <tr key={row.label} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
                         <td className="px-3 py-2 font-medium">{row.label}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.products.size}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.productCount}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatMeters(row.linearMm)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatPercent(row.shelfShare)}</td>
                       </tr>

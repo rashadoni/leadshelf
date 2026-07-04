@@ -375,6 +375,9 @@ Definition of Done:
   /analytics показывает SKU imbalance table: shelf share vs sales/profit share]`
 - Shelf share by brand/category/supplier. `[сделано: /analytics показывает
   shelf share breakdown по brand/category/supplier]`
+- Test coverage and deterministic period math. `[сделано: apps/web Vitest
+  покрывает LFL periods/breakdown, per-meter metrics, space productivity и
+  shelf share; периодные даты считаются по UTC-day arithmetic без timezone drift]`
 
 ## Phase 9 - 3D viewer
 

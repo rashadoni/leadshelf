@@ -144,8 +144,166 @@ export type LikeForLikeBreakdownRow = {
 
 export type LikeForLikeBreakdown = Record<LikeForLikeBreakdownGroup, LikeForLikeBreakdownRow[]>
 
+export type Phase8MetricKey =
+  | "turnover"
+  | "profit"
+  | "quantity"
+  | "turnoverPerMeter"
+  | "profitPerMeter"
+  | "stockDays"
+  | "turnoverRatio"
+
+export type Phase8MetricRow = {
+  key: Phase8MetricKey
+  value: number | null
+}
+
+export type SpaceProductivityRow = {
+  productId: string
+  sku: string
+  productName: string
+  brand: string | null
+  category: string | null
+  linearMm: number
+  turnover: number
+  profit: number
+  shelfShare: number
+  salesShare: number
+  profitShare: number
+  salesGap: number
+  profitGap: number
+}
+
+export type ShelfShareDimension = "brand" | "category" | "supplier"
+
+export type ShelfShareGroupRow = {
+  label: string
+  productCount: number
+  linearMm: number
+  shelfShare: number
+}
+
+export type ShelfShareGroup = {
+  dimension: ShelfShareDimension
+  rows: ShelfShareGroupRow[]
+}
+
 export function formatMeters(mm: number): string {
   return (mm / 1000).toFixed(2)
+}
+
+export function getPhase8MetricRows(input: {
+  likeForLikeSummary: LikeForLikeSummary
+  totalLinearMm: number
+  stockCoverageByProduct: Map<string, StockCoverage>
+  productIds: string[]
+}): Phase8MetricRow[] {
+  const likeForLikeMetricByKey = new Map(input.likeForLikeSummary.rows.map((row) => [row.metric, row]))
+  const currentTurnover = likeForLikeMetricByKey.get("turnover")?.current ?? 0
+  const previousTurnover = likeForLikeMetricByKey.get("turnover")?.previous ?? 0
+  const currentProfit = likeForLikeMetricByKey.get("profit")?.current ?? 0
+  const currentQuantity = likeForLikeMetricByKey.get("quantity")?.current ?? 0
+  const linearMeters = input.totalLinearMm / 1000
+  const stockDayValues = [...new Set(input.productIds)]
+    .map((productId) => input.stockCoverageByProduct.get(productId)?.stockDays ?? null)
+    .filter((value): value is number => value != null)
+  const avgStockDays =
+    stockDayValues.length > 0
+      ? stockDayValues.reduce((sum, value) => sum + value, 0) / stockDayValues.length
+      : null
+
+  return [
+    { key: "turnover", value: currentTurnover },
+    { key: "profit", value: currentProfit },
+    { key: "quantity", value: currentQuantity },
+    { key: "turnoverPerMeter", value: linearMeters > 0 ? currentTurnover / linearMeters : null },
+    { key: "profitPerMeter", value: linearMeters > 0 ? currentProfit / linearMeters : null },
+    { key: "stockDays", value: avgStockDays },
+    { key: "turnoverRatio", value: previousTurnover !== 0 ? currentTurnover / previousTurnover : null },
+  ]
+}
+
+export function getSpaceProductivityRows(
+  rows: ProductRow[],
+  abcRows: AbcRow[],
+  limit = 15,
+): SpaceProductivityRow[] {
+  const abcByProductId = new Map(abcRows.map((row) => [row.productId, row]))
+  const productShareRows = [
+    ...rows
+      .reduce((map, row) => {
+        const existing = map.get(row.productId)
+        if (existing) {
+          existing.linearMm += row.linearMm
+        } else {
+          const sales = abcByProductId.get(row.productId)
+          map.set(row.productId, {
+            productId: row.productId,
+            sku: row.sku,
+            productName: row.productName,
+            brand: row.brand,
+            category: row.category,
+            linearMm: row.linearMm,
+            turnover: sales?.turnover ?? 0,
+            profit: sales?.profit ?? 0,
+          })
+        }
+        return map
+      }, new Map<string, Omit<SpaceProductivityRow, "shelfShare" | "salesShare" | "profitShare" | "salesGap" | "profitGap">>())
+      .values(),
+  ]
+  const totalLinear = productShareRows.reduce((sum, row) => sum + row.linearMm, 0)
+  const totalTurnover = productShareRows.reduce((sum, row) => sum + Math.max(0, row.turnover), 0)
+  const totalProfit = productShareRows.reduce((sum, row) => sum + Math.max(0, row.profit), 0)
+
+  return productShareRows
+    .map((row) => {
+      const shelfShare = totalLinear > 0 ? row.linearMm / totalLinear : 0
+      const salesShare = totalTurnover > 0 ? Math.max(0, row.turnover) / totalTurnover : 0
+      const profitShare = totalProfit > 0 ? Math.max(0, row.profit) / totalProfit : 0
+      return {
+        ...row,
+        shelfShare,
+        salesShare,
+        profitShare,
+        salesGap: salesShare - shelfShare,
+        profitGap: profitShare - shelfShare,
+      }
+    })
+    .sort((a, b) => Math.abs(b.salesGap) - Math.abs(a.salesGap) || a.sku.localeCompare(b.sku))
+    .slice(0, limit)
+}
+
+export function getShelfShareGroups(rows: ProductRow[], emptyLabel: string): ShelfShareGroup[] {
+  const totalLinearMm = rows.reduce((sum, row) => sum + row.linearMm, 0)
+  return (["brand", "category", "supplier"] as const).map((dimension) => {
+    const groupMap = rows.reduce(
+      (map, row) => {
+        const label = row[dimension] ?? emptyLabel
+        const existing = map.get(label)
+        if (existing) {
+          existing.products.add(row.sku)
+          existing.linearMm += row.linearMm
+        } else {
+          map.set(label, { label, products: new Set([row.sku]), linearMm: row.linearMm })
+        }
+        return map
+      },
+      new Map<string, { label: string; products: Set<string>; linearMm: number }>(),
+    )
+    return {
+      dimension,
+      rows: [...groupMap.values()]
+        .map((row) => ({
+          label: row.label,
+          productCount: row.products.size,
+          linearMm: row.linearMm,
+          shelfShare: totalLinearMm > 0 ? row.linearMm / totalLinearMm : 0,
+        }))
+        .sort((a, b) => b.linearMm - a.linearMm || a.label.localeCompare(b.label))
+        .slice(0, 10),
+    }
+  })
 }
 
 function emptyClasses(): Record<AbcMetric, AbcClass> {
@@ -169,14 +327,12 @@ type TenantDb = ReturnType<typeof tenantDb>
 const OPEN_TASK_STATUSES = new Set(["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"])
 
 function startOfDay(date: Date): Date {
-  const result = new Date(date)
-  result.setHours(0, 0, 0, 0)
-  return result
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
 }
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date)
-  result.setDate(result.getDate() + days)
+  result.setUTCDate(result.getUTCDate() + days)
   return result
 }
 
