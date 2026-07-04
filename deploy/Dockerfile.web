@@ -22,6 +22,12 @@ FROM builder AS migrate
 WORKDIR /app/packages/db
 CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
 
+# --- фоновые worker-задачи ---
+FROM builder AS worker
+WORKDIR /app
+ENV NODE_ENV=production
+CMD ["pnpm", "--filter", "@leadshelf/worker", "import:queue"]
+
 # --- рантайм ---
 FROM node:20-alpine AS runner
 WORKDIR /app

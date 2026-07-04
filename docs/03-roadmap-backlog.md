@@ -550,7 +550,8 @@ Definition of Done:
   `[сделано: office-role devices OWNER/ADMIN/SUPERVISOR with pushToken
   get PENDING NotificationDelivery rows only for active users; repo-level claim
   переводит PENDING -> SENDING и markSent/markFailed закрывают delivery
-  lifecycle без дублей]`
+  lifecycle без дублей; worker notifications runner отправляет через Expo
+  sender abstraction и помечает SENT/FAILED]`
 - Утренний дайджест офису (Tier 3 UX из docs/10).
   `[сделано: buildOfficeMorningDigest + enqueueOfficeMorningDigest]`
 

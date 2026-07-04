@@ -7,6 +7,8 @@
   "scripts": {
     "import:queue": "tsx src/import-queue-runner.ts",
     "import:queue:once": "tsx src/import-queue-runner.ts --once",
+    "notifications": "tsx src/notification-delivery-runner.ts",
+    "notifications:once": "tsx src/notification-delivery-runner.ts --once",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -50,8 +50,8 @@
 11. ~~Barcode scanning~~ **[решено]:** expo-camera scanner binding для Phase 6;
     VisionCamera/MLKit не нужен для MVP.
 12. ~~Push-уведомления~~ **[решено v0]:** MobileDevice.pushToken +
-    NotificationDelivery outbox/lifecycle. Конкретный внешний sender
-    подключается через worker после выдачи production push credentials.
+    NotificationDelivery outbox/lifecycle + worker Expo sender abstraction.
+    Реальные production tokens выдаются мобильной сборкой/Expo credentials.
 13. ~~PDF/Excel экспорт~~ **[решено v1]:** SpreadsheetML `.xls` для аналитики;
     PDF-планограмма остается UX backlog, не DoD Phase 1-13.
 14. **Observability**: Sentry (web+mobile+API), структурные логи, uptime.
