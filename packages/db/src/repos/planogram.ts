@@ -101,6 +101,7 @@ export async function getPlanogramEditor(
           },
         },
       },
+      zones: { orderBy: [{ name: "asc" }, { id: "asc" }] },
       placements: {
         orderBy: [{ shelfId: "asc" }, { xMm: "asc" }],
         include: {

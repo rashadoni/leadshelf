@@ -81,6 +81,16 @@ interface VersionHistoryItem {
   placements: VersionHistoryPlacement[]
 }
 
+interface EditorZone {
+  id: string
+  name: string
+  color: string | null
+  xMm: number
+  yMm: number
+  widthMm: number
+  heightMm: number
+}
+
 interface DiffEntry {
   kind: "added" | "removed" | "moved"
   sku: string
@@ -132,6 +142,7 @@ export function PlanogramEditor({
   version,
   equipment,
   initialPlacements,
+  initialZones,
   versionHistory,
   publishOptions,
   goldenReferences,
@@ -141,6 +152,7 @@ export function PlanogramEditor({
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
+  initialZones: EditorZone[]
   versionHistory: VersionHistoryItem[]
   publishOptions: PublishTargetOption
   goldenReferences: GoldenReferencePhoto[]
@@ -154,6 +166,7 @@ export function PlanogramEditor({
   const svgRef = useRef<SVGSVGElement | null>(null)
 
   const [placements, setPlacements] = useState(initialPlacements)
+  const [zones, setZones] = useState(initialZones)
   const [revision, setRevision] = useState(version.revision)
   const [selectedShelfId, setSelectedShelfId] = useState<string | null>(
     equipment.shelves[0]?.id ?? null,
@@ -168,6 +181,14 @@ export function PlanogramEditor({
   const [slotPlacementId, setSlotPlacementId] = useState(initialPlacements[0]?.id ?? "")
   const [slotDraft, setSlotDraft] = useState({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
   const [drag, setDrag] = useState<DragState | null>(null)
+  const [zoneDraft, setZoneDraft] = useState({
+    name: "",
+    color: "#f59e0b",
+    xMm: 0,
+    yMm: 0,
+    widthMm: Math.min(1000, equipment.widthMm),
+    heightMm: Math.min(600, equipment.heightMm),
+  })
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
@@ -347,6 +368,43 @@ export function PlanogramEditor({
         ref.id === referenceId ? { ...ref, slots: ref.slots.filter((slot) => slot.id !== slotId) } : ref,
       ),
     )
+  }
+
+  async function createZone() {
+    if (readOnly) return
+    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedRevision: revision, ...zoneDraft }),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+    setRevision(body.revision as string)
+    setZones((prev) => [
+      ...prev,
+      {
+        id: body.id as string,
+        name: body.name as string,
+        color: body.color as string | null,
+        xMm: body.xMm as number,
+        yMm: body.yMm as number,
+        widthMm: body.widthMm as number,
+        heightMm: body.heightMm as number,
+      },
+    ])
+    setZoneDraft((prev) => ({ ...prev, name: "" }))
+  }
+
+  async function deleteZone(zoneId: string) {
+    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${zoneId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedRevision: revision }),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+    setRevision(body.revision as string)
+    setZones((prev) => prev.filter((zone) => zone.id !== zoneId))
   }
 
   // --- SVG geometry ---
@@ -578,6 +636,28 @@ export function PlanogramEditor({
             onPointerUp={() => void finishDrag()}
             onPointerCancel={() => setDrag(null)}
           >
+            {zones.map((zone) => {
+              const color = zone.color ?? "#f59e0b"
+              return (
+                <g key={zone.id} style={{ pointerEvents: "none" }}>
+                  <rect
+                    x={zone.xMm * k}
+                    y={H - (zone.yMm + zone.heightMm) * k}
+                    width={zone.widthMm * k}
+                    height={zone.heightMm * k}
+                    fill={color}
+                    opacity={0.12}
+                    stroke={color}
+                    strokeDasharray="5 4"
+                    strokeWidth={1.5}
+                  />
+                  <text x={zone.xMm * k + 4} y={H - (zone.yMm + zone.heightMm) * k + 14} fontSize={10} fill={color}>
+                    {zone.name}
+                  </text>
+                </g>
+              )
+            })}
+
             {shelfInfos.map(({ shelf, space }) => {
               const yTop = H - (shelf.yMm + shelf.thicknessMm) * k
               const selected = shelf.id === selectedShelfId
@@ -724,6 +804,69 @@ export function PlanogramEditor({
             ) : (
               <p className="text-xs text-neutral-500">{t("diffFirstVersion")}</p>
             )}
+          </div>
+
+          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+            <h2 className="mb-2 text-sm font-medium">{t("zones")}</h2>
+            {zones.length === 0 ? (
+              <p className="mb-2 text-xs text-neutral-500">{t("noZones")}</p>
+            ) : (
+              <div className="mb-3 space-y-1">
+                {zones.map((zone) => (
+                  <div key={zone.id} className="flex items-center gap-2 rounded-md bg-neutral-50 px-2 py-1 text-xs">
+                    <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: zone.color ?? "#f59e0b" }} />
+                    <span className="min-w-0 flex-1 truncate">{zone.name}</span>
+                    <span className="text-neutral-400">
+                      {zone.widthMm}×{zone.heightMm}
+                    </span>
+                    {!readOnly ? (
+                      <button type="button" onClick={() => deleteZone(zone.id)} className="text-red-600 hover:text-red-700">
+                        {t("deleteReferenceSlot")}
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!readOnly ? (
+              <div className="space-y-2 border-t border-neutral-100 pt-3">
+                <input
+                  value={zoneDraft.name}
+                  onChange={(e) => setZoneDraft((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder={t("zoneName")}
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+                <div className="grid grid-cols-5 gap-2">
+                  <input
+                    type="color"
+                    value={zoneDraft.color}
+                    onChange={(e) => setZoneDraft((prev) => ({ ...prev, color: e.target.value }))}
+                    className="h-8 w-full rounded border border-neutral-300"
+                  />
+                  {(["xMm", "yMm", "widthMm", "heightMm"] as const).map((field) => (
+                    <input
+                      key={field}
+                      type="number"
+                      min={field === "widthMm" || field === "heightMm" ? 1 : 0}
+                      value={zoneDraft[field]}
+                      onChange={(e) =>
+                        setZoneDraft((prev) => ({ ...prev, [field]: Number.parseInt(e.target.value || "0", 10) }))
+                      }
+                      className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                      title={field}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={!zoneDraft.name.trim()}
+                  onClick={createZone}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  {t("addZone")}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {!readOnly && (

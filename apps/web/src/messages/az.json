@@ -249,7 +249,11 @@
         "added": "Əlavə edildi",
         "removed": "Silindi",
         "moved": "Dəyişdi"
-      }
+      },
+      "zones": "Zonalar",
+      "noZones": "Zona hələ yaradılmayıb.",
+      "zoneName": "Zona adı",
+      "addZone": "Zona əlavə et"
     },
     "viewer3d": {
       "title": "3D görünüş",

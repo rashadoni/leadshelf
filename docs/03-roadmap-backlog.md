@@ -199,7 +199,8 @@ click-to-place с авто-позицией, пикер товаров (без �
 - Shelf capacity validation.
 - Manual override.
 - Product details panel: name, SKU, barcode, dimensions, current price, stock.
-- Zone creation on equipment.
+- Zone creation on equipment. `[сделано: DRAFT-only zone API с
+  revision-lock/bounds-check + SVG overlay и панель создания/удаления зон]`
 - Save draft.
 - Version history. `[сделано: боковая история версий + diff к предыдущей
   версии по added/removed/moved, цветовая подсветка current placements]`

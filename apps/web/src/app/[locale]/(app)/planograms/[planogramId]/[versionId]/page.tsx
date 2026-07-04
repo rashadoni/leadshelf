@@ -109,6 +109,15 @@ export default async function PlanogramEditorPage({
         state: payload.version.state,
         revision: payload.version.updatedAt.toISOString(),
       }}
+      initialZones={payload.version.zones.map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        color: zone.color,
+        xMm: zone.xMm,
+        yMm: zone.yMm,
+        widthMm: zone.widthMm,
+        heightMm: zone.heightMm,
+      }))}
       equipment={{
         name: eq.equipmentVersion.template.name,
         widthMm: eq.equipmentVersion.widthMm,
