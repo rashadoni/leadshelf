@@ -8,6 +8,7 @@ import {
   getLikeForLikeSummary,
   getObsoletePlanogramRows,
   getPhase8MetricRows,
+  getPlanogramProductRows,
   getTaskKpiReport,
   getShelfShareGroups,
   getSpaceProductivityRows,
@@ -15,9 +16,36 @@ import {
 } from "./planogram-products"
 
 type AnalyticsDb = Parameters<typeof getAssortmentGapRows>[0]
+type PlanogramPlacementDb = Parameters<typeof getPlanogramProductRows>[0]
+type PlanogramAssignmentDb = Parameters<typeof getBasicDashboardSummary>[1]
 
 function asDb(db: unknown): AnalyticsDb {
   return db as AnalyticsDb
+}
+
+function asPlacementDb(db: unknown): PlanogramPlacementDb {
+  return db as PlanogramPlacementDb
+}
+
+function asAssignmentDb(db: unknown): PlanogramAssignmentDb {
+  return db as PlanogramAssignmentDb
+}
+
+function expectOrganizationScope(args: unknown, organizationId = "org-a"): void {
+  const scoped = args as {
+    where?: { planogramVersion?: { planogram?: { organizationId?: string } } }
+  }
+  expect(scoped.where?.planogramVersion?.planogram?.organizationId).toBe(organizationId)
+}
+
+function expectFormatScope(args: unknown, organizationId = "org-a"): void {
+  const scoped = args as { where?: { format?: { organizationId?: string } } }
+  expect(scoped.where?.format?.organizationId).toBe(organizationId)
+}
+
+function expectStoreScope(args: unknown, organizationId = "org-a"): void {
+  const scoped = args as { where?: { store?: { organizationId?: string } } }
+  expect(scoped.where?.store?.organizationId).toBe(organizationId)
 }
 
 function product(overrides: {
@@ -58,11 +86,58 @@ function productRow(overrides: Partial<ProductRow> & Pick<ProductRow, "productId
 }
 
 describe("analytics planogram product helpers", () => {
+  it("reads placements through an organization-scoped parent path", async () => {
+    const db = {
+      planogramPlacement: {
+        findMany: async (args: {
+          where: { planogramVersion: { planogram: { organizationId: string } } }
+        }) => {
+          expectOrganizationScope(args)
+          return [
+            {
+              planogramVersionId: "version-a",
+              productId: "product-a",
+              facingsX: 2,
+              facingsY: 1,
+              facingsZ: 3,
+              widthMm: 75,
+              sortOrder: 1,
+              planogramVersion: {
+                id: "version-a",
+                versionNumber: 1,
+                state: "PUBLISHED",
+                planogram: { id: "planogram-a", name: "Planogram A" },
+              },
+              product: {
+                id: "product-a",
+                sku: "SKU-A",
+                name: "Product A",
+                category: { name: "Category" },
+                brand: { name: "Brand" },
+                supplier: { name: "Supplier" },
+              },
+            },
+          ]
+        },
+      },
+    }
+
+    await expect(getPlanogramProductRows(asPlacementDb(db), "org-a")).resolves.toEqual([
+      expect.objectContaining({
+        key: "version-a:product-a",
+        units: 6,
+        linearMm: 150,
+      }),
+    ])
+  })
+
   it("counts active dashboard assignments through direct stores and formats", async () => {
     const now = new Date("2026-07-04T10:00:00.000Z")
     const db = asDb({
       planogramAssignment: {
-        findMany: async () => [
+            findMany: async (args: unknown) => {
+              expectOrganizationScope(args)
+              return [
           {
             storeId: "store-direct",
             formatId: null,
@@ -84,14 +159,15 @@ describe("analytics planogram product helpers", () => {
             activeFrom: new Date("2026-06-01T00:00:00.000Z"),
             activeTo: new Date("2026-06-30T00:00:00.000Z"),
           },
-        ],
+              ]
+            },
       },
       store: {
         findMany: async () => [{ id: "store-format-1" }, { id: "store-format-2" }],
       },
     })
 
-    await expect(getBasicDashboardSummary(db, now)).resolves.toEqual({
+    await expect(getBasicDashboardSummary(db, asAssignmentDb(db), "org-a", now)).resolves.toEqual({
       storesWithPlanograms: 3,
       activePlanograms: 1,
     })
@@ -145,60 +221,68 @@ describe("analytics planogram product helpers", () => {
     const now = new Date("2026-07-04T10:00:00.000Z")
     const db = asDb({
       assortmentMatrix: {
-        findMany: async () => [
-          {
-            formatId: "format-a",
-            productId: "product-placed",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-            format: { id: "format-a", name: "Format A" },
-            product: product({ id: "product-placed", sku: "PLACED" }),
-          },
-          {
-            formatId: "format-a",
-            productId: "product-gap",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-            format: { id: "format-a", name: "Format A" },
-            product: product({ id: "product-gap", sku: "GAP" }),
-          },
-          {
-            formatId: "format-a",
-            productId: "product-future",
-            isActive: true,
-            validFrom: new Date("2026-08-01T00:00:00.000Z"),
-            validTo: null,
-            format: { id: "format-a", name: "Format A" },
-            product: product({ id: "product-future", sku: "FUTURE" }),
-          },
-        ],
+        findMany: async (args: unknown) => {
+          expectFormatScope(args)
+          return [
+            {
+              formatId: "format-a",
+              productId: "product-placed",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+              format: { id: "format-a", name: "Format A" },
+              product: product({ id: "product-placed", sku: "PLACED" }),
+            },
+            {
+              formatId: "format-a",
+              productId: "product-gap",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+              format: { id: "format-a", name: "Format A" },
+              product: product({ id: "product-gap", sku: "GAP" }),
+            },
+            {
+              formatId: "format-a",
+              productId: "product-future",
+              isActive: true,
+              validFrom: new Date("2026-08-01T00:00:00.000Z"),
+              validTo: null,
+              format: { id: "format-a", name: "Format A" },
+              product: product({ id: "product-future", sku: "FUTURE" }),
+            },
+          ]
+        },
       },
       storeAssortment: {
-        findMany: async () => [
-          {
-            storeId: "store-a",
-            productId: "product-store-placed",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-            store: { id: "store-a", name: "Store A" },
-            product: product({ id: "product-store-placed", sku: "STORE-PLACED" }),
-          },
-          {
-            storeId: "store-a",
-            productId: "product-store-gap",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-            store: { id: "store-a", name: "Store A" },
-            product: product({ id: "product-store-gap", sku: "STORE-GAP" }),
-          },
-        ],
+        findMany: async (args: unknown) => {
+          expectStoreScope(args)
+          return [
+            {
+              storeId: "store-a",
+              productId: "product-store-placed",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+              store: { id: "store-a", name: "Store A" },
+              product: product({ id: "product-store-placed", sku: "STORE-PLACED" }),
+            },
+            {
+              storeId: "store-a",
+              productId: "product-store-gap",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+              store: { id: "store-a", name: "Store A" },
+              product: product({ id: "product-store-gap", sku: "STORE-GAP" }),
+            },
+          ]
+        },
       },
       planogramAssignment: {
-        findMany: async () => [
+        findMany: async (args: unknown) => {
+          expectOrganizationScope(args)
+          return [
           {
             formatId: "format-a",
             storeId: null,
@@ -220,11 +304,12 @@ describe("analytics planogram product helpers", () => {
             activeTo: new Date("2026-06-30T00:00:00.000Z"),
             planogramVersion: { placements: [{ productId: "product-gap" }] },
           },
-        ],
+          ]
+        },
       },
     })
 
-    const rows = await getAssortmentGapRows(db, now)
+    const rows = await getAssortmentGapRows(db, asAssignmentDb(db), "org-a", now)
 
     expect(rows.map((row) => row.key)).toEqual([
       "format:format-a:product-gap",
@@ -236,50 +321,58 @@ describe("analytics planogram product helpers", () => {
     const now = new Date("2026-07-04T10:00:00.000Z")
     const db = asDb({
       assortmentMatrix: {
-        findMany: async () => [
-          {
-            formatId: "format-a",
-            productId: "product-active",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-          },
-          {
-            formatId: "format-a",
-            productId: "product-inactive",
-            isActive: false,
-            validFrom: null,
-            validTo: null,
-          },
-          {
-            formatId: "format-a",
-            productId: "product-expired",
-            isActive: true,
-            validFrom: null,
-            validTo: new Date("2026-06-30T00:00:00.000Z"),
-          },
-          {
-            formatId: "format-a",
-            productId: "product-not-active",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-          },
-        ],
+        findMany: async (args: unknown) => {
+          expectFormatScope(args)
+          return [
+            {
+              formatId: "format-a",
+              productId: "product-active",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+            },
+            {
+              formatId: "format-a",
+              productId: "product-inactive",
+              isActive: false,
+              validFrom: null,
+              validTo: null,
+            },
+            {
+              formatId: "format-a",
+              productId: "product-expired",
+              isActive: true,
+              validFrom: null,
+              validTo: new Date("2026-06-30T00:00:00.000Z"),
+            },
+            {
+              formatId: "format-a",
+              productId: "product-not-active",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+            },
+          ]
+        },
       },
       storeAssortment: {
-        findMany: async () => [
-          {
-            storeId: "store-a",
-            productId: "product-store-override",
-            isActive: true,
-            validFrom: null,
-            validTo: null,
-          },
-        ],
+        findMany: async (args: unknown) => {
+          expectStoreScope(args)
+          return [
+            {
+              storeId: "store-a",
+              productId: "product-store-override",
+              isActive: true,
+              validFrom: null,
+              validTo: null,
+            },
+          ]
+        },
       },
       planogramAssignment: {
-        findMany: async () => [
+        findMany: async (args: unknown) => {
+          expectOrganizationScope(args)
+          return [
           {
             id: "assignment-format",
             formatId: "format-a",
@@ -325,11 +418,12 @@ describe("analytics planogram product helpers", () => {
               ],
             },
           },
-        ],
+          ]
+        },
       },
     })
 
-    const rows = await getObsoletePlanogramRows(db, now)
+    const rows = await getObsoletePlanogramRows(db, asAssignmentDb(db), "org-a", now)
 
     expect(rows.map((row) => [row.sku, row.reason, row.placements])).toEqual([
       ["EXPIRED", "expired", 1],
@@ -517,7 +611,9 @@ describe("analytics planogram product helpers", () => {
         ],
       },
       planogramAssignment: {
-        findMany: async () => [
+        findMany: async (args: unknown) => {
+          expectOrganizationScope(args)
+          return [
           {
             storeId: "store-a",
             formatId: null,
@@ -532,11 +628,12 @@ describe("analytics planogram product helpers", () => {
               placements: [{ productId: "product-a" }],
             },
           },
-        ],
+          ]
+        },
       },
     })
 
-    const breakdown = await getLikeForLikeBreakdown(db, now, 30)
+    const breakdown = await getLikeForLikeBreakdown(db, asAssignmentDb(db), "org-a", now, 30)
 
     expect(breakdown.store).toMatchObject([
       {

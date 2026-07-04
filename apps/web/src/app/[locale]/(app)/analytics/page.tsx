@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server"
 import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
-import { tenantDb } from "@/server/db/client"
+import { tenantDb, workerDb } from "@/server/db/client"
 import {
   formatMeters,
   getAssortmentGapRows,
@@ -165,14 +165,14 @@ export default async function AnalyticsPage({
     likeForLikeSummary,
     likeForLikeBreakdown,
   ] = await Promise.all([
-    getPlanogramProductRows(db),
+    getPlanogramProductRows(workerDb, session.org),
     getAbcRows(db),
-    getAssortmentGapRows(db),
-    getObsoletePlanogramRows(db),
+    getAssortmentGapRows(db, workerDb, session.org),
+    getObsoletePlanogramRows(db, workerDb, session.org),
     getTaskKpiReport(db),
-    getBasicDashboardSummary(db),
+    getBasicDashboardSummary(db, workerDb, session.org),
     getLikeForLikeSummary(db),
-    getLikeForLikeBreakdown(db),
+    getLikeForLikeBreakdown(db, workerDb, session.org),
   ])
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,

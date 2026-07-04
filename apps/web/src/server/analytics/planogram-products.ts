@@ -324,7 +324,148 @@ function assignAbcClasses(rows: AbcRow[], metric: AbcMetric): void {
 }
 
 type TenantDb = ReturnType<typeof tenantDb>
+type PlanogramPlacementDb = {
+  planogramPlacement: {
+    findMany(args: unknown): Promise<unknown[]>
+  }
+}
+type PlanogramAssignmentDb = {
+  planogramAssignment: {
+    findMany(args: unknown): Promise<unknown[]>
+  }
+  assortmentMatrix: {
+    findMany(args: unknown): Promise<unknown[]>
+  }
+  storeAssortment: {
+    findMany(args: unknown): Promise<unknown[]>
+  }
+}
 const OPEN_TASK_STATUSES = new Set(["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"])
+
+type PlanogramProductPlacement = {
+  planogramVersionId: string
+  productId: string
+  facingsX: number
+  facingsY: number
+  facingsZ: number
+  widthMm: number
+  planogramVersion: {
+    id: string
+    versionNumber: number
+    state: string
+    planogram: { id: string; name: string }
+  }
+  product: {
+    id: string
+    sku: string
+    name: string
+    category: { name: string } | null
+    brand: { name: string } | null
+    supplier: { name: string } | null
+  }
+}
+
+type ActiveAssignment = {
+  activeFrom: Date
+  activeTo: Date | null
+}
+
+type BasicDashboardAssignment = ActiveAssignment & {
+  storeId: string | null
+  formatId: string | null
+  planogramVersionId: string
+}
+
+type AssignmentPlacementRef = {
+  productId: string
+}
+
+type LikeForLikeAssignment = ActiveAssignment & {
+  storeId: string | null
+  formatId: string | null
+  planogramVersion: {
+    id: string
+    versionNumber: number
+    planogram: { id: string; name: string }
+    placements: AssignmentPlacementRef[]
+  }
+}
+
+type AssortmentGapAssignment = ActiveAssignment & {
+  storeId: string | null
+  formatId: string | null
+  planogramVersion: {
+    placements: AssignmentPlacementRef[]
+  }
+}
+
+type ObsoleteAssignment = ActiveAssignment & {
+  id: string
+  storeId: string | null
+  formatId: string | null
+  format: { id: string; name: string } | null
+  store: { id: string; name: string; formatId: string | null } | null
+  planogramVersion: {
+    id: string
+    versionNumber: number
+    planogram: { id: string; name: string }
+    placements: Array<{
+      productId: string
+      product: {
+        id: string
+        sku: string
+        name: string
+        isActive: boolean
+        brand: { name: string } | null
+        category: { name: string } | null
+      }
+    }>
+  }
+}
+
+type AssortmentProduct = {
+  id: string
+  sku: string
+  name: string
+  brand: { name: string } | null
+  category: { name: string } | null
+  supplier: { name: string } | null
+}
+
+type FormatAssortmentGapItem = {
+  formatId: string
+  productId: string
+  isActive: boolean
+  validFrom: Date | null
+  validTo: Date | null
+  format: { id: string; name: string }
+  product: AssortmentProduct
+}
+
+type StoreAssortmentGapItem = {
+  storeId: string
+  productId: string
+  isActive: boolean
+  validFrom: Date | null
+  validTo: Date | null
+  store: { id: string; name: string }
+  product: AssortmentProduct
+}
+
+type AssortmentStatusItem = {
+  productId: string
+  isActive: boolean
+  validFrom: Date | null
+  validTo: Date | null
+}
+
+type FormatAssortmentStatusItem = AssortmentStatusItem & {
+  formatId: string
+}
+
+type StoreAssortmentStatusItem = AssortmentStatusItem & {
+  storeId: string
+}
 
 function startOfDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
@@ -340,9 +481,17 @@ function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[]> {
-  const placements = await db.planogramPlacement.findMany({
-    where: { planogramVersion: { state: { in: ["DRAFT", "PUBLISHED"] } } },
+export async function getPlanogramProductRows(
+  db: PlanogramPlacementDb,
+  organizationId: string,
+): Promise<ProductRow[]> {
+  const placements = (await db.planogramPlacement.findMany({
+    where: {
+      planogramVersion: {
+        state: { in: ["DRAFT", "PUBLISHED"] },
+        planogram: { organizationId },
+      },
+    },
     include: {
       planogramVersion: {
         select: {
@@ -365,7 +514,7 @@ export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[
     },
     orderBy: [{ planogramVersionId: "asc" }, { productId: "asc" }, { sortOrder: "asc" }],
     take: 2000,
-  })
+  })) as PlanogramProductPlacement[]
 
   const rowsByKey = new Map<string, ProductRow>()
   for (const placement of placements) {
@@ -407,9 +556,12 @@ export async function getPlanogramProductRows(db: TenantDb): Promise<ProductRow[
 
 export async function getBasicDashboardSummary(
   db: TenantDb,
+  parentDb: PlanogramAssignmentDb,
+  organizationId: string,
   now = new Date(),
 ): Promise<BasicDashboardSummary> {
-  const assignments = await db.planogramAssignment.findMany({
+  const assignments = (await parentDb.planogramAssignment.findMany({
+    where: { planogramVersion: { planogram: { organizationId } } },
     select: {
       storeId: true,
       formatId: true,
@@ -419,7 +571,7 @@ export async function getBasicDashboardSummary(
     },
     orderBy: [{ createdAt: "desc" }],
     take: 3000,
-  })
+  })) as BasicDashboardAssignment[]
   const activeAssignments = assignments.filter((assignment) => isAssignmentActive(assignment, now))
   const directStoreIds = new Set(
     activeAssignments.flatMap((assignment) => (assignment.storeId ? [assignment.storeId] : [])),
@@ -601,6 +753,8 @@ function finalizeLikeForLikeBreakdown(
 
 export async function getLikeForLikeBreakdown(
   db: TenantDb,
+  parentDb: PlanogramAssignmentDb,
+  organizationId: string,
   now = new Date(),
   days = 30,
 ): Promise<LikeForLikeBreakdown> {
@@ -628,7 +782,8 @@ export async function getLikeForLikeBreakdown(
       orderBy: [{ date: "asc" }],
       take: 15000,
     }),
-    db.planogramAssignment.findMany({
+    parentDb.planogramAssignment.findMany({
+      where: { planogramVersion: { planogram: { organizationId } } },
       include: {
         store: { select: { id: true, name: true, code: true } },
         format: { select: { id: true } },
@@ -643,7 +798,7 @@ export async function getLikeForLikeBreakdown(
       },
       orderBy: [{ createdAt: "desc" }],
       take: 3000,
-    }),
+    }) as Promise<LikeForLikeAssignment[]>,
   ])
   const formatIds = [
     ...new Set(
@@ -812,10 +967,15 @@ function obsoleteReasonForAssortment(
   return null
 }
 
-export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Promise<AssortmentGapRow[]> {
+export async function getAssortmentGapRows(
+  db: TenantDb,
+  parentDb: PlanogramAssignmentDb,
+  organizationId: string,
+  now = new Date(),
+): Promise<AssortmentGapRow[]> {
   const [formatAssortment, storeAssortment, assignments] = await Promise.all([
-    db.assortmentMatrix.findMany({
-      where: { isActive: true },
+    parentDb.assortmentMatrix.findMany({
+      where: { isActive: true, format: { organizationId } },
       include: {
         format: { select: { id: true, name: true } },
         product: {
@@ -831,9 +991,9 @@ export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Prom
       },
       orderBy: [{ formatId: "asc" }, { productId: "asc" }],
       take: 3000,
-    }),
-    db.storeAssortment.findMany({
-      where: { isActive: true },
+    }) as Promise<FormatAssortmentGapItem[]>,
+    parentDb.storeAssortment.findMany({
+      where: { isActive: true, store: { organizationId } },
       include: {
         store: { select: { id: true, name: true } },
         product: {
@@ -849,8 +1009,9 @@ export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Prom
       },
       orderBy: [{ storeId: "asc" }, { productId: "asc" }],
       take: 3000,
-    }),
-    db.planogramAssignment.findMany({
+    }) as Promise<StoreAssortmentGapItem[]>,
+    parentDb.planogramAssignment.findMany({
+      where: { planogramVersion: { planogram: { organizationId } } },
       include: {
         planogramVersion: {
           select: {
@@ -861,7 +1022,7 @@ export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Prom
       },
       orderBy: [{ createdAt: "desc" }],
       take: 3000,
-    }),
+    }) as Promise<AssortmentGapAssignment[]>,
   ])
 
   const placedProductsByFormat = new Map<string, Set<string>>()
@@ -925,10 +1086,13 @@ export async function getAssortmentGapRows(db: TenantDb, now = new Date()): Prom
 
 export async function getObsoletePlanogramRows(
   db: TenantDb,
+  parentDb: PlanogramAssignmentDb,
+  organizationId: string,
   now = new Date(),
 ): Promise<ObsoletePlanogramRow[]> {
   const [formatAssortment, storeAssortment, assignments] = await Promise.all([
-    db.assortmentMatrix.findMany({
+    parentDb.assortmentMatrix.findMany({
+      where: { format: { organizationId } },
       select: {
         formatId: true,
         productId: true,
@@ -938,8 +1102,9 @@ export async function getObsoletePlanogramRows(
       },
       orderBy: [{ formatId: "asc" }, { productId: "asc" }],
       take: 5000,
-    }),
-    db.storeAssortment.findMany({
+    }) as Promise<FormatAssortmentStatusItem[]>,
+    parentDb.storeAssortment.findMany({
+      where: { store: { organizationId } },
       select: {
         storeId: true,
         productId: true,
@@ -949,8 +1114,9 @@ export async function getObsoletePlanogramRows(
       },
       orderBy: [{ storeId: "asc" }, { productId: "asc" }],
       take: 5000,
-    }),
-    db.planogramAssignment.findMany({
+    }) as Promise<StoreAssortmentStatusItem[]>,
+    parentDb.planogramAssignment.findMany({
+      where: { planogramVersion: { planogram: { organizationId } } },
       include: {
         format: { select: { id: true, name: true } },
         store: { select: { id: true, name: true, formatId: true } },
@@ -979,7 +1145,7 @@ export async function getObsoletePlanogramRows(
       },
       orderBy: [{ createdAt: "desc" }],
       take: 3000,
-    }),
+    }) as Promise<ObsoleteAssignment[]>,
   ])
 
   const formatAssortmentByProduct = new Map<

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
-import { tenantDb } from "@/server/db/client"
+import { workerDb } from "@/server/db/client"
 import { formatMeters, getPlanogramProductRows } from "@/server/analytics/planogram-products"
 
 function xml(value: string | number): string {
@@ -18,7 +18,7 @@ function cell(value: string | number, type: "String" | "Number" = "String"): str
 export async function GET(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  const rows = await getPlanogramProductRows(tenantDb(session.org))
+  const rows = await getPlanogramProductRows(workerDb, session.org)
   const header = [
     "Planogram",
     "Version",

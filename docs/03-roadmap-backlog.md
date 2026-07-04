@@ -356,7 +356,9 @@ Definition of Done:
   assignment, активные версии, SKU, linear meters, turnover и profit]`
 - Test coverage for analytics calculations.
   `[сделано: apps/web Vitest покрывает ABC-классы, активные assignment,
-  assortment gaps, obsolete planogram reasons и task KPI метрики]`
+  assortment gaps, obsolete planogram reasons и task KPI метрики; analytics
+  child-модели без organizationId читаются через parent-path workerDb с
+  organizationId-фильтрами, /az/analytics и Excel export smoke = 200]`
 
 ## Phase 8 - Like-for-like and space productivity
 
