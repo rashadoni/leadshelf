@@ -164,8 +164,9 @@ Definition of Done:
 
 Задачи:
 
-- Stores list. `[сделано: Store model, seed/demo stores и floor-plan/mobile
-  consumers; отдельная /stores страница пока empty shell]`
+- Stores list. `[сделано: Store model, seed/demo stores, floor-plan/mobile
+  consumers и /stores page со списком точек/форматов, counts по планам,
+  assignments, tasks, routes/visits]`
 - Formats list. `[сделано: StoreFormat model, seed/demo format и floor-plan
   target selector]`
 - Create/edit floor plan. `[сделано: POST /api/v1/floor-plans создает

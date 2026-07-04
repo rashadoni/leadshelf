@@ -297,6 +297,39 @@
       "screenshot": "PNG ixracı"
     }
   },
+  "stores": {
+    "title": "Satış nöqtələri",
+    "subtitle": "Mağaza və formatların əməliyyat siyahısı: zal planları, planoqram təyinatları, tapşırıqlar və marşrutlar.",
+    "storesTitle": "Mağazalar",
+    "formatsTitle": "Formatlar",
+    "emptyStores": "Hələ satış nöqtəsi yaradılmayıb.",
+    "emptyFormats": "Hələ format yaradılmayıb.",
+    "active": "Aktiv",
+    "inactive": "Deaktiv",
+    "routeVisitCount": "marşrut: {routes} · vizit: {visits}",
+    "cards": {
+      "stores": "Cəmi nöqtə",
+      "activeStores": "Aktiv",
+      "formats": "Formatlar",
+      "assignments": "Təyinatlar"
+    },
+    "table": {
+      "store": "Nöqtə",
+      "format": "Format",
+      "region": "Region",
+      "floorPlans": "Planlar",
+      "assignments": "Planoqramlar",
+      "tasks": "Tapşırıqlar",
+      "routes": "Marşrut/vizit",
+      "status": "Status"
+    },
+    "formatMetrics": {
+      "stores": "Nöqtələr",
+      "floorPlans": "Planlar",
+      "assignments": "Təyinatlar",
+      "assortment": "Assortiment"
+    }
+  },
   "floorPlans": {
     "title": "Zal planları",
     "subtitle": "Mağaza və formatlar üçün dərc edilmiş zal planları: avadanlıq yerləşimi və bağlı planoqramlar.",

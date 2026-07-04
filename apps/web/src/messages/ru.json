@@ -297,6 +297,39 @@
       "screenshot": "Экспорт PNG"
     }
   },
+  "stores": {
+    "title": "Торговые точки",
+    "subtitle": "Операционный список магазинов и форматов: планы залов, назначения планограмм, задачи и маршруты.",
+    "storesTitle": "Магазины",
+    "formatsTitle": "Форматы",
+    "emptyStores": "Торговые точки пока не созданы.",
+    "emptyFormats": "Форматы пока не созданы.",
+    "active": "Активна",
+    "inactive": "Неактивна",
+    "routeVisitCount": "маршруты: {routes} · визиты: {visits}",
+    "cards": {
+      "stores": "Всего точек",
+      "activeStores": "Активные",
+      "formats": "Форматы",
+      "assignments": "Назначения"
+    },
+    "table": {
+      "store": "Точка",
+      "format": "Формат",
+      "region": "Регион",
+      "floorPlans": "Планы",
+      "assignments": "Планограммы",
+      "tasks": "Задачи",
+      "routes": "Маршруты/визиты",
+      "status": "Статус"
+    },
+    "formatMetrics": {
+      "stores": "Точки",
+      "floorPlans": "Планы",
+      "assignments": "Назначения",
+      "assortment": "Ассортимент"
+    }
+  },
   "floorPlans": {
     "title": "Планы зала",
     "subtitle": "Опубликованные планы для магазинов и форматов: размещение оборудования и связанные планограммы.",
