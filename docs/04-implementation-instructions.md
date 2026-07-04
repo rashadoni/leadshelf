@@ -18,7 +18,7 @@ Auth/Tenant
   -> Catalog import
   -> Equipment library
   -> Planogram editor manual placement
-  -> Publish task stub
+  -> Publish execution task
 ```
 
 Mobile и AI подключать после того, как планограмма реально создается в web.

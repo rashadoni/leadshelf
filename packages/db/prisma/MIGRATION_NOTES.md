@@ -12,10 +12,13 @@ Prisma не выражает эти констрейнты — их нужно �
 > **Статус (2026-07-02, испр.):** миграция `0_init` применена, но п.1 в неё
 > НЕ вошел (в отличие от заявленного ранее — интеграционный тест это поймал);
 > unique-ключи снапшотов добавлены отдельной миграцией
-> `20260702*_snapshot_natural_keys`. П.2 (CHECK на assignment) — в `0_init`. Триггеры п.3 (publish-
-> инварианты) и п.4 (граф-целостность) ОТЛОЖЕНЫ отдельной миграцией в
-> Phase 4-6 — таблицы пусты, пишущего кода ещё нет, инварианты пока держит
-> app-слой (packages/core). П.5 (tenant-изоляция) — **реализован**:
+> `20260702*_snapshot_natural_keys`. П.2 (CHECK на assignment) — в `0_init`.
+> П.3 (publish-инварианты) реализован миграцией
+> `20260703093945_publish_invariant_triggers` и DB regression tests. П.4
+> (граф-целостность) в v0 держится parent-path репозиториями и core validation:
+> placement shelf/zone проходят через DRAFT-only repo/API с revision guard;
+> если потребуется прямой SQL/write bypass, добавить DB triggers отдельной
+> миграцией. П.5 (tenant-изоляция) — **реализован**:
 > `src/tenant-client.ts` (createTenantClient/createSystemClient) + 10
 > интеграционных тестов изоляции в `src/__tests__/`. П.6 — отложено осознанно.
 
