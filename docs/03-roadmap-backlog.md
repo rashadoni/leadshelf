@@ -493,7 +493,8 @@ Definition of Done:
 - Credit limit проверка при создании заказа.
   `[сделано: pure core check с APPROVED/EXCEEDED/BLOCKED, explicit overLimit
   payload для mobile/API; DB test изолированно фиксирует, что rejected order
-  не увеличивает usedAmount]`
+  не увеличивает usedAmount; createOrder резервирует usedAmount через atomic
+  conditional increment и DB regression фиксирует конкурентные заказы]`
 - Invoice generation.
   `[сделано: pure core invoice document + HTML template для PDF job,
   totals/discount/tax в cents, deterministic invoice number, HTML escaping]`

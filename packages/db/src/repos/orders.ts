@@ -238,6 +238,66 @@ function summarizeOrder(order: {
   }
 }
 
+type CreditLimitRow = {
+  id: string
+  limitAmount: Prisma.Decimal
+  usedAmount: Prisma.Decimal
+  currency: string
+}
+
+function creditLimitError(result: ReturnType<typeof checkCreditLimit>): OrderRepoError | null {
+  if (result.status === "EXCEEDED") {
+    return new OrderRepoError("credit_limit_exceeded", "credit_limit_exceeded", result)
+  }
+  if (result.status === "BLOCKED") {
+    return new OrderRepoError("credit_account_blocked", "credit_account_blocked", result)
+  }
+  return null
+}
+
+async function reserveCreditLimit(
+  tx: Prisma.TransactionClient,
+  credit: CreditLimitRow,
+  orderTotalCents: number,
+): Promise<void> {
+  let currentCredit = credit
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const creditResult = checkCreditLimit({
+      limitCents: decimalToCents(currentCredit.limitAmount),
+      usedCents: decimalToCents(currentCredit.usedAmount),
+      orderTotalCents,
+      currency: currentCredit.currency,
+    })
+    const error = creditLimitError(creditResult)
+    if (error) throw error
+
+    const updated = await tx.creditLimit.updateMany({
+      where: {
+        id: currentCredit.id,
+        usedAmount: { lte: centsToDecimal(creditResult.limitCents - creditResult.orderTotalCents) },
+      },
+      data: { usedAmount: { increment: centsToDecimal(orderTotalCents) } },
+    })
+    if (updated.count === 1) return
+
+    const latestCredit = await tx.creditLimit.findUnique({
+      where: { id: currentCredit.id },
+      select: { id: true, limitAmount: true, usedAmount: true, currency: true },
+    })
+    if (!latestCredit) return
+    currentCredit = latestCredit
+  }
+
+  const creditResult = checkCreditLimit({
+    limitCents: decimalToCents(currentCredit.limitAmount),
+    usedCents: decimalToCents(currentCredit.usedAmount),
+    orderTotalCents,
+    currency: currentCredit.currency,
+  })
+  throw creditLimitError(creditResult) ?? new OrderRepoError("credit_limit_exceeded", "credit_limit_exceeded", creditResult)
+}
+
 export async function createOrder(
   prisma: PrismaClient,
   organizationId: string,
@@ -326,24 +386,12 @@ export async function createOrder(
       if (existingInTx) return summarizeOrder(existingInTx)
     }
 
-    const credit = await tx.creditLimit.findFirst({ where: { storeId: store.id } })
+    const credit = await tx.creditLimit.findFirst({
+      where: { storeId: store.id },
+      select: { id: true, limitAmount: true, usedAmount: true, currency: true },
+    })
     if (credit) {
-      const creditResult = checkCreditLimit({
-        limitCents: decimalToCents(credit.limitAmount),
-        usedCents: decimalToCents(credit.usedAmount),
-        orderTotalCents: pricing.totalCents,
-        currency: credit.currency,
-      })
-      if (creditResult.status === "EXCEEDED") {
-        throw new OrderRepoError("credit_limit_exceeded", "credit_limit_exceeded", creditResult)
-      }
-      if (creditResult.status === "BLOCKED") {
-        throw new OrderRepoError("credit_account_blocked", "credit_account_blocked", creditResult)
-      }
-      await tx.creditLimit.update({
-        where: { id: credit.id },
-        data: { usedAmount: centsToDecimal(creditResult.projectedUsedCents) },
-      })
+      await reserveCreditLimit(tx, credit, pricing.totalCents)
     }
 
     const sequence = await tx.order.count({ where: { organizationId } })

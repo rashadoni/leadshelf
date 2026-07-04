@@ -147,4 +147,39 @@ describe("orders repo", () => {
     const credit = await prisma.creditLimit.findUniqueOrThrow({ where: { storeId } })
     expect(Number(credit.usedAmount)).toBe(5)
   })
+
+  test("reserves credit atomically for concurrent orders", async () => {
+    await prisma.creditLimit.update({ where: { storeId }, data: { limitAmount: 20, usedAmount: 0 } })
+
+    const results = await Promise.allSettled([
+      createOrder(prisma, orgId, {
+        storeId,
+        visitId,
+        userId,
+        deviceId,
+        clientOpId: "order-op-race-a",
+        lines: [{ productId, quantity: 2 }],
+      }),
+      createOrder(prisma, orgId, {
+        storeId,
+        visitId,
+        userId,
+        deviceId,
+        clientOpId: "order-op-race-b",
+        lines: [{ productId, quantity: 2 }],
+      }),
+    ])
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
+    const rejected = results.find((result) => result.status === "rejected")
+    expect(rejected).toMatchObject({ reason: { code: "credit_limit_exceeded" } })
+
+    const credit = await prisma.creditLimit.findUniqueOrThrow({ where: { storeId } })
+    expect(Number(credit.usedAmount)).toBe(18)
+    const createdOrders = await prisma.order.count({
+      where: { organizationId: orgId, clientOpId: { in: ["order-op-race-a", "order-op-race-b"] } },
+    })
+    expect(createdOrders).toBe(1)
+  })
 })
