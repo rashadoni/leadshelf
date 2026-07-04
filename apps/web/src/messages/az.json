@@ -268,10 +268,12 @@
       "autoCompressSoftPacks": "Yumşaq paketləri sıx",
       "runAutoPlacement": "Zonanı doldur",
       "autoLog": "Yerləşdirildi: {placed}; sığmadı: {rejected}",
+      "barcode": "Barkod",
       "abcClass": "ABC",
       "turnoverPerDay": "Dövriyyə/gün",
       "profitPerDay": "Mənfəət/gün",
       "stockDays": "Stok günü",
+      "stockQty": "Qalıq",
       "shelfShare": "Rəf payı",
       "currentPrice": "Cari qiymət",
       "auto": {

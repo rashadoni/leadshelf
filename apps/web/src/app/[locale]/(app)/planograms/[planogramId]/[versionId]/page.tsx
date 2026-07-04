@@ -233,6 +233,7 @@ export default async function PlanogramEditorPage({
         product: {
           id: p.product.id,
           sku: p.product.sku,
+          barcode: p.product.barcodes[0]?.barcode ?? null,
           name: p.product.name,
           brandName: p.product.brand?.name ?? null,
           imageKey: p.product.images[0]?.url ?? null,

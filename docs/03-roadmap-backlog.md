@@ -219,9 +219,8 @@ click-to-place с авто-позицией, пикер товаров (без �
 - Manual override. `[сделано: selected placement panel позволяет вручную
   менять shelf/x/facings через PATCH с revision guard]`
 - Product details panel: name, SKU, barcode, dimensions, current price, stock.
-  `[частично сделано: selected placement panel показывает SKU/brand/dimensions/
-  units и live turnover/stock-days metrics; barcode/current price отдельным
-  полем в panel ещё не подтверждены]`
+  `[сделано: selected placement panel показывает name/SKU/primary barcode/
+  brand/dimensions/units/current price/stock qty/stock days и live metrics]`
 - Zone creation on equipment. `[сделано: DRAFT-only zone API с
   revision-lock/bounds-check + SVG overlay и панель создания/удаления зон]`
 - Save draft. `[сделано: DRAFT versions редактируются in-place с revision lock,

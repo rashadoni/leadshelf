@@ -24,6 +24,7 @@ const PlanogramThreeViewer = dynamic(
 export interface EditorProduct {
   id: string
   sku: string
+  barcode: string | null
   name: string
   brandName: string | null
   imageKey: string | null
@@ -46,6 +47,7 @@ export interface EditorPlacement {
 interface PickerProduct {
   id: string
   sku: string
+  barcode: string | null
   name: string
   imageKey: string | null
   hasDimensions: boolean
@@ -306,6 +308,7 @@ export function PlanogramEditor({
           product: {
             id: product.id,
             sku: product.sku,
+            barcode: product.barcode,
             name: product.name,
             brandName: null,
             imageKey: product.imageKey,
@@ -1318,6 +1321,7 @@ export function PlanogramEditor({
               <div className="text-sm font-medium">{selectedPlacement.product.name}</div>
               <div className="text-xs text-neutral-500">
                 {selectedPlacement.product.sku}
+                {selectedPlacement.product.barcode ? ` · ${t("barcode")}: ${selectedPlacement.product.barcode}` : ""}
                 {selectedPlacement.product.brandName ? ` · ${selectedPlacement.product.brandName}` : ""}
               </div>
               <div className="text-xs text-neutral-500">
@@ -1339,6 +1343,8 @@ export function PlanogramEditor({
                         <span className="text-right tabular-nums">{formatMoney(metric.profitPerDay, metric.currency)}</span>
                         <span className="text-neutral-500">{t("stockDays")}</span>
                         <span className="text-right tabular-nums">{formatDays(metric.stockDays)}</span>
+                        <span className="text-neutral-500">{t("stockQty")}</span>
+                        <span className="text-right tabular-nums">{metric.stockQty == null ? "—" : metric.stockQty.toFixed(0)}</span>
                         <span className="text-neutral-500">{t("shelfShare")}</span>
                         <span className="text-right tabular-nums">{(metric.shelfShare * 100).toFixed(1)}%</span>
                         <span className="text-neutral-500">{t("currentPrice")}</span>

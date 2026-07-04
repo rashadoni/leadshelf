@@ -268,10 +268,12 @@
       "autoCompressSoftPacks": "Сжимать мягкие упаковки",
       "runAutoPlacement": "Заполнить зону",
       "autoLog": "Размещено: {placed}; не поместилось: {rejected}",
+      "barcode": "Штрих-код",
       "abcClass": "ABC",
       "turnoverPerDay": "Оборот/день",
       "profitPerDay": "Прибыль/день",
       "stockDays": "Дни запаса",
+      "stockQty": "Остаток",
       "shelfShare": "Доля полки",
       "currentPrice": "Текущая цена",
       "auto": {

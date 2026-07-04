@@ -110,6 +110,7 @@ export async function getPlanogramEditor(
               id: true,
               sku: true,
               name: true,
+              barcodes: { where: { isPrimary: true }, take: 1, select: { barcode: true } },
               brand: { select: { name: true } },
               images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
             },
