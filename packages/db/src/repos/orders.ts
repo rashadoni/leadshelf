@@ -255,6 +255,15 @@ function creditLimitError(result: ReturnType<typeof checkCreditLimit>): OrderRep
   return null
 }
 
+function isClientOperationConflict(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false
+  const target = error.meta?.target
+  if (Array.isArray(target)) {
+    return target.includes("clientDeviceId") && target.includes("clientOpId")
+  }
+  return typeof target === "string" && target.includes("clientDeviceId") && target.includes("clientOpId")
+}
+
 async function reserveCreditLimit(
   tx: Prisma.TransactionClient,
   credit: CreditLimitRow,
@@ -378,86 +387,96 @@ export async function createOrder(
     : null
   if (existing) return summarizeOrder(existing)
 
-  return prisma.$transaction(async (tx) => {
-    if (input.deviceId && input.clientOpId) {
-      const existingInTx = await tx.order.findFirst({
-        where: { organizationId, clientDeviceId: input.deviceId, clientOpId: input.clientOpId },
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (input.deviceId && input.clientOpId) {
+        const existingInTx = await tx.order.findFirst({
+          where: { organizationId, clientDeviceId: input.deviceId, clientOpId: input.clientOpId },
+        })
+        if (existingInTx) return summarizeOrder(existingInTx)
+      }
+
+      const credit = await tx.creditLimit.findFirst({
+        where: { storeId: store.id },
+        select: { id: true, limitAmount: true, usedAmount: true, currency: true },
       })
-      if (existingInTx) return summarizeOrder(existingInTx)
-    }
+      if (credit) {
+        await reserveCreditLimit(tx, credit, pricing.totalCents)
+      }
 
-    const credit = await tx.creditLimit.findFirst({
-      where: { storeId: store.id },
-      select: { id: true, limitAmount: true, usedAmount: true, currency: true },
-    })
-    if (credit) {
-      await reserveCreditLimit(tx, credit, pricing.totalCents)
-    }
-
-    const sequence = await tx.order.count({ where: { organizationId } })
-    const invoiceNumber = buildInvoiceNumber({ issuedAt: now, sequence: sequence + 1 })
-    const invoiceDraft = generateInvoice({
-      invoiceNumber,
-      orderId: "pending",
-      issuedAt: now,
-      seller: { name: org?.name ?? "LeadShelf" },
-      buyer: { name: store.name, taxId: store.code },
-      lines: pricing.lines.map((line) => {
-        const product = productById.get(line.productId)!
-        return {
-          lineId: line.lineId,
-          sku: product.sku,
-          name: product.name,
-          quantity: line.quantity,
-          unitPriceCents: line.unitPriceCents,
-          discountCents: line.discountCents,
-        }
-      }),
-    })
-
-    const order = await tx.order.create({
-      data: {
-        organizationId,
-        storeId: store.id,
-        agentId: agent?.id,
-        visitId: visit?.id,
-        status: "SUBMITTED",
-        currency: invoiceDraft.currency,
-        subtotalAmount: centsToDecimal(invoiceDraft.subtotalCents),
-        discountAmount: centsToDecimal(invoiceDraft.discountCents),
-        taxAmount: centsToDecimal(invoiceDraft.taxCents),
-        totalAmount: centsToDecimal(invoiceDraft.totalCents),
-        appliedPromotions: pricing.appliedPromotions as object,
+      const sequence = await tx.order.count({ where: { organizationId } })
+      const invoiceNumber = buildInvoiceNumber({ issuedAt: now, sequence: sequence + 1 })
+      const invoiceDraft = generateInvoice({
         invoiceNumber,
-        clientDeviceId: input.deviceId ?? null,
-        clientOpId: input.clientOpId ?? null,
-        submittedAt: now,
-      },
-    })
-    const finalInvoice = { ...invoiceDraft, orderId: order.id }
-    await tx.order.update({
-      where: { id: order.id },
-      data: { invoiceHtml: renderInvoiceHtml(finalInvoice) },
-    })
+        orderId: "pending",
+        issuedAt: now,
+        seller: { name: org?.name ?? "LeadShelf" },
+        buyer: { name: store.name, taxId: store.code },
+        lines: pricing.lines.map((line) => {
+          const product = productById.get(line.productId)!
+          return {
+            lineId: line.lineId,
+            sku: product.sku,
+            name: product.name,
+            quantity: line.quantity,
+            unitPriceCents: line.unitPriceCents,
+            discountCents: line.discountCents,
+          }
+        }),
+      })
 
-    for (const line of pricing.lines) {
-      const firstPromotion = line.appliedPromotions[0]
-      await tx.orderLine.create({
+      const order = await tx.order.create({
         data: {
-          orderId: order.id,
-          productId: line.productId,
-          quantity: new Prisma.Decimal(line.quantity),
-          unitPrice: centsToDecimal(line.unitPriceCents),
-          discountPct: line.grossCents > 0 ? (line.discountCents / line.grossCents) * 100 : 0,
-          grossAmount: centsToDecimal(line.grossCents),
-          discountAmount: centsToDecimal(line.discountCents),
-          taxAmount: centsToDecimal(0),
-          totalAmount: centsToDecimal(line.netCents),
-          promotionId: firstPromotion?.promotionId,
+          organizationId,
+          storeId: store.id,
+          agentId: agent?.id,
+          visitId: visit?.id,
+          status: "SUBMITTED",
+          currency: invoiceDraft.currency,
+          subtotalAmount: centsToDecimal(invoiceDraft.subtotalCents),
+          discountAmount: centsToDecimal(invoiceDraft.discountCents),
+          taxAmount: centsToDecimal(invoiceDraft.taxCents),
+          totalAmount: centsToDecimal(invoiceDraft.totalCents),
+          appliedPromotions: pricing.appliedPromotions as object,
+          invoiceNumber,
+          clientDeviceId: input.deviceId ?? null,
+          clientOpId: input.clientOpId ?? null,
+          submittedAt: now,
         },
       })
-    }
+      const finalInvoice = { ...invoiceDraft, orderId: order.id }
+      await tx.order.update({
+        where: { id: order.id },
+        data: { invoiceHtml: renderInvoiceHtml(finalInvoice) },
+      })
 
-    return summarizeOrder(order)
-  })
+      for (const line of pricing.lines) {
+        const firstPromotion = line.appliedPromotions[0]
+        await tx.orderLine.create({
+          data: {
+            orderId: order.id,
+            productId: line.productId,
+            quantity: new Prisma.Decimal(line.quantity),
+            unitPrice: centsToDecimal(line.unitPriceCents),
+            discountPct: line.grossCents > 0 ? (line.discountCents / line.grossCents) * 100 : 0,
+            grossAmount: centsToDecimal(line.grossCents),
+            discountAmount: centsToDecimal(line.discountCents),
+            taxAmount: centsToDecimal(0),
+            totalAmount: centsToDecimal(line.netCents),
+            promotionId: firstPromotion?.promotionId,
+          },
+        })
+      }
+
+      return summarizeOrder(order)
+    })
+  } catch (error) {
+    if (input.deviceId && input.clientOpId && isClientOperationConflict(error)) {
+      const existingAfterRace = await prisma.order.findFirst({
+        where: { organizationId, clientDeviceId: input.deviceId, clientOpId: input.clientOpId },
+      })
+      if (existingAfterRace) return summarizeOrder(existingAfterRace)
+    }
+    throw error
+  }
 }

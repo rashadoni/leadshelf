@@ -182,4 +182,35 @@ describe("orders repo", () => {
     })
     expect(createdOrders).toBe(1)
   })
+
+  test("returns existing order for concurrent mobile idempotency replay", async () => {
+    await prisma.creditLimit.update({ where: { storeId }, data: { limitAmount: 100, usedAmount: 0 } })
+
+    const [first, second] = await Promise.all([
+      createOrder(prisma, orgId, {
+        storeId,
+        visitId,
+        userId,
+        deviceId,
+        clientOpId: "order-op-replay-race",
+        lines: [{ productId, quantity: 2 }],
+      }),
+      createOrder(prisma, orgId, {
+        storeId,
+        visitId,
+        userId,
+        deviceId,
+        clientOpId: "order-op-replay-race",
+        lines: [{ productId, quantity: 2 }],
+      }),
+    ])
+
+    expect(second.id).toBe(first.id)
+    const credit = await prisma.creditLimit.findUniqueOrThrow({ where: { storeId } })
+    expect(Number(credit.usedAmount)).toBe(18)
+    const createdOrders = await prisma.order.count({
+      where: { organizationId: orgId, clientOpId: "order-op-replay-race" },
+    })
+    expect(createdOrders).toBe(1)
+  })
 })

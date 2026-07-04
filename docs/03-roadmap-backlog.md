@@ -500,7 +500,8 @@ Definition of Done:
   totals/discount/tax в cents, deterministic invoice number, HTML escaping]`
 - Offline-заказ через outbox (идемпотентность deviceId+clientOpId).
   `[сделано: mobile order.create push op + local enqueueOrderCreate +
-  server applyOrderCreate через outbox и unique Order(clientDeviceId,clientOpId)]`
+  server applyOrderCreate через outbox и unique Order(clientDeviceId,clientOpId);
+  repo ловит concurrent unique replay и возвращает существующий order]`
 
 ## Phase 13 - Алерты и активность
 
