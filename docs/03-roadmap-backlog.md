@@ -570,3 +570,12 @@ Definition of Done:
 
 Анти-scope (не делать, docs/10): AR-очки, 3D-first редактор, AI-first
 compliance.
+
+## Demo / product-readiness слой
+
+После закрытия Phase 1-13 отдельный рабочий слой — доведение live UI и
+demo-story до уверенного показа. Он зафиксирован в
+`docs/20-demo-product-readiness-plan.md` и включает dashboard, demo-data
+cleanup, floor-plan demo, photo-proof demo, table/responsive polish,
+planogram/3D consistency, task/store detail, analytics demo data и
+field-force/mobile walkthrough.
