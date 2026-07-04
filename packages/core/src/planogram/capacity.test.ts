@@ -1,6 +1,12 @@
 import { test } from "vitest"
 import assert from "node:assert/strict"
-import { maxFacingsX, shelfCapacity, placementsOverlapX, placementWidthMm } from "./capacity.ts"
+import {
+  maxFacingsX,
+  orientedProductSizeMm,
+  placementWidthMm,
+  placementsOverlapX,
+  shelfCapacity,
+} from "./capacity.ts"
 
 const shelf = { innerWidthMm: 1200, depthMm: 300, clearanceHeightMm: 350 }
 
@@ -27,6 +33,24 @@ test("shelfCapacity: too tall product does not fit", () => {
 test("placementWidthMm includes inter-facing gaps", () => {
   assert.equal(placementWidthMm({ xMm: 0, widthMm: 100, facingsX: 3, gapMm: 10 }), 320)
   assert.equal(placementWidthMm({ xMm: 0, widthMm: 100, facingsX: 3, compressionX: 0.9 }), 270)
+})
+
+test("orientation uses 90 degree bounding-box rotations", () => {
+  assert.deepEqual(
+    orientedProductSizeMm({ widthMm: 100, heightMm: 200, depthMm: 300, rotationY: 90 }),
+    { widthMm: 300, heightMm: 200, depthMm: 100, rotationY: 90 },
+  )
+  assert.equal(
+    placementWidthMm({
+      xMm: 0,
+      widthMm: 100,
+      heightMm: 200,
+      depthMm: 300,
+      facingsX: 2,
+      rotationY: 90,
+    }),
+    600,
+  )
 })
 
 test("placementsOverlapX detects collision and adjacency", () => {

@@ -212,8 +212,12 @@ click-to-place с авто-позицией, пикер товаров (без �
 - Facings X/Y/Z. `[сделано: API/UI PATCH facingsX/facingsY/facingsZ +
   core capacity/collision tests]`
 - Depth count. `[сделано: facingsZ x depth валидируется против shelf.depthMm]`
-- Rotation.
-- Stack one-on-one.
+- Rotation. `[сделано: placement API/UI принимает rotationX/Y/Z с шагом 90°,
+  core считает effective bounding box, publish/mobile/analytics используют
+  rotation-aware occupied width]`
+- Stack one-on-one. `[сделано: placement API/UI сохраняет StackMode
+  NONE/ON_TOP/LYING; вертикальная стопка валидируется физикой через facingsY
+  и просвет полки]`
 - Shelf capacity validation. `[сделано: core validatePlacementOnShelf +
   repo rejection details и UI shelf capacity panel]`
 - Manual override. `[сделано: selected placement panel позволяет вручную

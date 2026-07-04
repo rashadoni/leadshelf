@@ -10,9 +10,12 @@ import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
 import {
+  orientedProductSizeMm,
+  placementWidthMm,
   shelfSpaceForShelf,
   shelfUsage,
   type EquipmentGeometryMm,
+  type PlacementStackMode,
 } from "@leadshelf/core"
 import { PublishDialog, type PublishTargetOption } from "./publish-dialog"
 
@@ -40,6 +43,10 @@ export interface EditorPlacement {
   facingsX: number
   facingsY: number
   facingsZ: number
+  rotationX: number
+  rotationY: number
+  rotationZ: number
+  stackMode: PlacementStackMode
   compressionX?: number
   product: EditorProduct
 }
@@ -73,6 +80,10 @@ interface VersionHistoryPlacement {
   facingsX: number
   facingsY: number
   facingsZ: number
+  rotationX: number
+  rotationY: number
+  rotationZ: number
+  stackMode: PlacementStackMode
   compressionX?: number
 }
 
@@ -231,6 +242,7 @@ export function PlanogramEditor({
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
+  const selectedEffectiveSize = selectedPlacement ? orientedProductSizeMm(selectedPlacement) : null
   const metricsByProductId = useMemo(
     () => new Map(placementMetrics.map((metric) => [metric.productId, metric])),
     [placementMetrics],
@@ -305,6 +317,10 @@ export function PlanogramEditor({
           facingsX: 1,
           facingsY: 1,
           facingsZ: 1,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+          stackMode: "NONE",
           product: {
             id: product.id,
             sku: product.sku,
@@ -523,6 +539,10 @@ export function PlanogramEditor({
         item.facingsX,
         item.facingsY,
         item.facingsZ,
+        item.rotationX,
+        item.rotationY,
+        item.rotationZ,
+        item.stackMode,
         item.widthMm,
         item.heightMm,
         item.depthMm,
@@ -576,6 +596,10 @@ export function PlanogramEditor({
       item.facingsX,
       item.facingsY,
       item.facingsZ,
+      item.rotationX,
+      item.rotationY,
+      item.rotationZ,
+      item.stackMode,
       item.widthMm,
       item.heightMm,
       item.depthMm,
@@ -611,7 +635,7 @@ export function PlanogramEditor({
   }
 
   function snappedXMm(rawMm: number, placement: EditorPlacement): number {
-    const max = Math.max(0, equipment.widthMm - placement.widthMm * (placement.compressionX ?? 1) * placement.facingsX)
+    const max = Math.max(0, equipment.widthMm - placementWidthMm(placement))
     return Math.max(0, Math.min(max, Math.round(rawMm / 10) * 10))
   }
 
@@ -766,11 +790,12 @@ export function PlanogramEditor({
               const dragState = drag?.placementId === p.id ? drag : null
               const shelf = equipment.shelves.find((s) => s.id === (dragState?.shelfId ?? p.shelfId))
               if (!shelf) return null
-              const faceWidthPx = p.widthMm * (p.compressionX ?? 1) * k
+              const oriented = orientedProductSizeMm(p)
+              const faceWidthPx = oriented.widthMm * (p.compressionX ?? 1) * k
               const wPx = faceWidthPx * p.facingsX
-              const hPx = p.heightMm * p.facingsY * k
+              const hPx = oriented.heightMm * p.facingsY * k
               const x = (dragState?.xMm ?? p.xMm) * k
-              const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
+              const y = H - (shelf.yMm + shelf.thicknessMm + oriented.heightMm * p.facingsY) * k
               const isSel = p.id === selectedPlacementId
               const diffKind = diff.currentMarks.get(editorPlacementDiffKey(p))
               const metric = metricsByProductId.get(p.product.id)
@@ -1329,6 +1354,12 @@ export function PlanogramEditor({
                 {selectedPlacement.facingsX * selectedPlacement.facingsY * selectedPlacement.facingsZ}{" "}
                 {t("placedUnits")}
               </div>
+              {selectedEffectiveSize ? (
+                <div className="text-xs text-neutral-500">
+                  {t("effectiveDimensions")}: {selectedEffectiveSize.widthMm}×{selectedEffectiveSize.heightMm}×
+                  {selectedEffectiveSize.depthMm} mm
+                </div>
+              ) : null}
               {metricsByProductId.get(selectedPlacement.product.id) ? (
                 <div className="grid grid-cols-2 gap-2 rounded-md bg-neutral-50 p-2 text-xs">
                   {(() => {
@@ -1380,6 +1411,42 @@ export function PlanogramEditor({
                     }
                     className="block w-24 rounded border border-neutral-300 px-2 py-1"
                   />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["rotationX", "rotationY", "rotationZ"] as const).map((field) => (
+                  <label key={field} className="block text-xs">
+                    <span className="text-neutral-500">{t(field)}</span>
+                    <select
+                      value={selectedPlacement[field]}
+                      onChange={(e) =>
+                        patchPlacement(selectedPlacement.id, { [field]: Number.parseInt(e.target.value, 10) })
+                      }
+                      className="block w-20 rounded border border-neutral-300 px-2 py-1"
+                    >
+                      {[0, 90, 180, 270].map((value) => (
+                        <option key={value} value={value}>
+                          {value}°
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                <label className="block text-xs">
+                  <span className="text-neutral-500">{t("stackMode")}</span>
+                  <select
+                    value={selectedPlacement.stackMode}
+                    onChange={(e) =>
+                      patchPlacement(selectedPlacement.id, { stackMode: e.target.value as PlacementStackMode })
+                    }
+                    className="block w-32 rounded border border-neutral-300 px-2 py-1"
+                  >
+                    {(["NONE", "ON_TOP", "LYING"] as const).map((value) => (
+                      <option key={value} value={value}>
+                        {t(`stackMode_${value}` as never)}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
               <button

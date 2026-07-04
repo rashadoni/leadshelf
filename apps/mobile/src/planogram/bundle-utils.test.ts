@@ -47,6 +47,18 @@ describe("planogram bundle summaries", () => {
     expect(placementDisplayWidthMm({ widthMm: 100, facingsX: 3, compressionX: 0.85 })).toBe(255)
   })
 
+  test("uses rotation for rendered mobile placement width", () => {
+    expect(
+      placementDisplayWidthMm({
+        widthMm: 100,
+        heightMm: 200,
+        depthMm: 60,
+        facingsX: 2,
+        rotationY: 90,
+      }),
+    ).toBe(120)
+  })
+
   test("builds mobile product detail rows from bundle placement", () => {
     expect(listPlacementSummaries(bundle)).toMatchObject([
       {

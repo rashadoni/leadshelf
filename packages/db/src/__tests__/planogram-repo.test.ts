@@ -200,6 +200,58 @@ describe("planogram repo", () => {
     ).toBe(1)
   })
 
+  test("rotation и stackMode сохраняются и участвуют в физической валидации", async () => {
+    const editor = await getPlanogramEditor(prisma, orgId, planogramId, versionId)
+    const shelfId = editor!.version.equipment[0]!.equipmentVersion.shelves[3]!.id
+
+    const rotated = await addPlacement(prisma, orgId, {
+      planogramVersionId: versionId,
+      expectedRevision: revision,
+      shelfId,
+      productId,
+      facingsX: 2,
+      facingsY: 1,
+      facingsZ: 1,
+      rotationY: 90,
+      stackMode: "LYING",
+    })
+    expect(rotated.xMm).toBe(0)
+    revision = rotated.revision
+
+    const second = await addPlacement(prisma, orgId, {
+      planogramVersionId: versionId,
+      expectedRevision: revision,
+      shelfId,
+      productId,
+      facingsX: 1,
+      facingsY: 1,
+      facingsZ: 1,
+    })
+    expect(second.xMm).toBe(120) // rotationY swaps width/depth: 2 x 60mm, not 2 x 75mm
+    revision = second.revision
+
+    await expect(
+      updatePlacement(prisma, orgId, {
+        placementId: rotated.placementId,
+        expectedRevision: revision,
+        facingsY: 6,
+        stackMode: "ON_TOP",
+      }),
+    ).rejects.toMatchObject({ code: "placement_rejected", details: { code: "outside_height" } })
+
+    const stored = await prisma.planogramPlacement.findUniqueOrThrow({ where: { id: rotated.placementId } })
+    expect(stored.rotationY).toBe(90)
+    expect(stored.stackMode).toBe("LYING")
+
+    await expect(
+      updatePlacement(prisma, orgId, {
+        placementId: rotated.placementId,
+        expectedRevision: revision,
+        rotationY: 45,
+      }),
+    ).rejects.toMatchObject({ code: "placement_rejected", details: { code: "invalid_rotation" } })
+  })
+
   test("не-DRAFT версия закрыта для правок", async () => {
     await prisma.planogramVersion.update({
       where: { id: versionId },

@@ -1,9 +1,11 @@
 import type { PrismaClient } from "@prisma/client"
 import {
   nextFreeXMm,
+  placementWidthMm,
   shelfSpaceForShelf,
   validatePlacementOnShelf,
   type EquipmentGeometryMm,
+  type PlacementStackMode,
   type PlacementCandidateMm,
 } from "@leadshelf/core"
 
@@ -154,6 +156,13 @@ async function loadPlacementGraph(
           facingsX: true,
           facingsY: true,
           facingsZ: true,
+          rotationX: true,
+          rotationY: true,
+          rotationZ: true,
+          compressionX: true,
+          compressionY: true,
+          compressionZ: true,
+          stackMode: true,
         },
       },
     },
@@ -190,6 +199,13 @@ async function loadPlacementGraph(
       facingsX: p.facingsX,
       facingsY: p.facingsY,
       facingsZ: p.facingsZ,
+      rotationX: p.rotationX,
+      rotationY: p.rotationY,
+      rotationZ: p.rotationZ,
+      compressionX: p.compressionX,
+      compressionY: p.compressionY,
+      compressionZ: p.compressionZ,
+      stackMode: p.stackMode,
     })),
   }
 }
@@ -198,6 +214,26 @@ function assertRevision(version: { updatedAt: Date }, expected: string): void {
   if (version.updatedAt.getTime() !== new Date(expected).getTime()) {
     throw new PlanogramRepoError("version_conflict", "draft изменен параллельно — обновите")
   }
+}
+
+function normalizedRotationDeg(value: number | undefined): number {
+  const rotation = value ?? 0
+  if (!Number.isInteger(rotation) || rotation % 90 !== 0) {
+    throw new PlanogramRepoError("placement_rejected", "rotation должен быть кратен 90°", {
+      code: "invalid_rotation",
+    })
+  }
+  return ((rotation % 360) + 360) % 360
+}
+
+function normalizedStackMode(value: PlacementStackMode | undefined): PlacementStackMode {
+  const stackMode = value ?? "NONE"
+  if (!["NONE", "ON_TOP", "LYING"].includes(stackMode)) {
+    throw new PlanogramRepoError("placement_rejected", "некорректный stackMode", {
+      code: "invalid_stack_mode",
+    })
+  }
+  return stackMode
 }
 
 async function bumpRevision(prisma: PrismaClient, versionId: string): Promise<Date> {
@@ -221,6 +257,10 @@ export async function addPlacement(
     facingsX: number
     facingsY: number
     facingsZ: number
+    rotationX?: number
+    rotationY?: number
+    rotationZ?: number
+    stackMode?: PlacementStackMode
   },
 ) {
   const graph = await loadPlacementGraph(prisma, organizationId, input.planogramVersionId)
@@ -247,7 +287,13 @@ export async function addPlacement(
     heightMm: product.heightMm,
     depthMm: product.depthMm,
   }
-  const width = dims.widthMm * input.facingsX
+  const orientation = {
+    rotationX: normalizedRotationDeg(input.rotationX),
+    rotationY: normalizedRotationDeg(input.rotationY),
+    rotationZ: normalizedRotationDeg(input.rotationZ),
+    stackMode: normalizedStackMode(input.stackMode),
+  } satisfies Pick<PlacementCandidateMm, "rotationX" | "rotationY" | "rotationZ" | "stackMode">
+  const width = placementWidthMm({ xMm: 0, facingsX: input.facingsX, ...dims, ...orientation })
   const xMm =
     input.xMm ??
     nextFreeXMm({
@@ -271,6 +317,7 @@ export async function addPlacement(
     facingsY: input.facingsY,
     facingsZ: input.facingsZ,
     ...dims,
+    ...orientation,
   }
   const verdict = validatePlacementOnShelf({ shelf, candidate, existing: graph.existing })
   if (!verdict.ok) {
@@ -291,6 +338,10 @@ export async function addPlacement(
         facingsX: input.facingsX,
         facingsY: input.facingsY,
         facingsZ: input.facingsZ,
+        rotationX: orientation.rotationX,
+        rotationY: orientation.rotationY,
+        rotationZ: orientation.rotationZ,
+        stackMode: orientation.stackMode,
       },
     })
     const revision = await bumpRevision(tx as unknown as PrismaClient, graph.version.id)
@@ -309,6 +360,10 @@ export async function updatePlacement(
     facingsX?: number
     facingsY?: number
     facingsZ?: number
+    rotationX?: number
+    rotationY?: number
+    rotationZ?: number
+    stackMode?: PlacementStackMode
   },
 ) {
   const placement = await prisma.planogramPlacement.findFirst({
@@ -331,6 +386,10 @@ export async function updatePlacement(
     facingsX: input.facingsX ?? placement.facingsX,
     facingsY: input.facingsY ?? placement.facingsY,
     facingsZ: input.facingsZ ?? placement.facingsZ,
+    rotationX: normalizedRotationDeg(input.rotationX ?? placement.rotationX),
+    rotationY: normalizedRotationDeg(input.rotationY ?? placement.rotationY),
+    rotationZ: normalizedRotationDeg(input.rotationZ ?? placement.rotationZ),
+    stackMode: normalizedStackMode(input.stackMode ?? placement.stackMode),
     widthMm: placement.widthMm, // снапшот, НЕ текущие габариты товара
     heightMm: placement.heightMm,
     depthMm: placement.depthMm,
@@ -350,6 +409,10 @@ export async function updatePlacement(
         facingsX: candidate.facingsX,
         facingsY: candidate.facingsY,
         facingsZ: candidate.facingsZ,
+        rotationX: candidate.rotationX,
+        rotationY: candidate.rotationY,
+        rotationZ: candidate.rotationZ,
+        stackMode: candidate.stackMode,
       },
     })
     const revision = await bumpRevision(tx as unknown as PrismaClient, graph.version.id)

@@ -76,6 +76,13 @@ export async function publishPlanogramVersion(
     facingsX: p.facingsX,
     facingsY: p.facingsY,
     facingsZ: p.facingsZ,
+    rotationX: p.rotationX,
+    rotationY: p.rotationY,
+    rotationZ: p.rotationZ,
+    compressionX: p.compressionX,
+    compressionY: p.compressionY,
+    compressionZ: p.compressionZ,
+    stackMode: p.stackMode,
   }))
   const staleIssues: string[] = []
   for (const c of candidates) {

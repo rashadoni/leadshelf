@@ -1,4 +1,5 @@
 import type { tenantDb } from "@/server/db/client"
+import { placementWidthMm } from "@leadshelf/core"
 
 export type ProductRow = {
   key: string
@@ -362,6 +363,11 @@ type PlanogramProductPlacement = {
   facingsY: number
   facingsZ: number
   widthMm: number
+  heightMm: number
+  depthMm: number
+  rotationX: number
+  rotationY: number
+  rotationZ: number
   compressionX: number
   planogramVersion: {
     id: string
@@ -392,6 +398,11 @@ type BasicDashboardAssignment = ActiveAssignment & {
     placements: Array<{
       productId: string
       widthMm: number
+      heightMm: number
+      depthMm: number
+      rotationX: number
+      rotationY: number
+      rotationZ: number
       compressionX: number
       facingsX: number
     }>
@@ -542,7 +553,7 @@ export async function getPlanogramProductRows(
   for (const placement of placements) {
     const key = `${placement.planogramVersionId}:${placement.productId}`
     const units = placement.facingsX * placement.facingsY * placement.facingsZ
-    const linearMm = placement.widthMm * placement.compressionX * placement.facingsX
+    const linearMm = placementWidthMm({ xMm: 0, ...placement })
     const existing = rowsByKey.get(key)
     if (existing) {
       existing.placements += 1
@@ -596,6 +607,11 @@ export async function getBasicDashboardSummary(
             select: {
               productId: true,
               widthMm: true,
+              heightMm: true,
+              depthMm: true,
+              rotationX: true,
+              rotationY: true,
+              rotationZ: true,
               compressionX: true,
               facingsX: true,
             },
@@ -631,7 +647,7 @@ export async function getBasicDashboardSummary(
     activeVersionIds.add(assignment.planogramVersionId)
     for (const placement of assignment.planogramVersion.placements) {
       activeProductIds.add(placement.productId)
-      linearMm += placement.widthMm * placement.compressionX * placement.facingsX
+      linearMm += placementWidthMm({ xMm: 0, ...placement })
     }
   }
   const sales =

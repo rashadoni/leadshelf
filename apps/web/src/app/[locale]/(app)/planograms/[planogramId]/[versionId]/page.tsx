@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { placementWidthMm } from "@leadshelf/core"
 import { getSession } from "@/server/auth/require-session"
 import { getPlanogramEditor } from "@leadshelf/db"
 import { tenantDb, workerDb } from "@/server/db/client"
@@ -54,6 +55,10 @@ export default async function PlanogramEditorPage({
             facingsX: true,
             facingsY: true,
             facingsZ: true,
+            rotationX: true,
+            rotationY: true,
+            rotationZ: true,
+            stackMode: true,
             product: { select: { sku: true, name: true } },
           },
           orderBy: [{ shelfId: "asc" }, { xMm: "asc" }],
@@ -143,15 +148,12 @@ export default async function PlanogramEditorPage({
     const share = totalTurnover > 0 ? cumulativeTurnover / totalTurnover : 1
     abcClassByProductId.set(row.productId, share <= 0.8 ? "A" : share <= 0.95 ? "B" : "C")
   }
-  const totalLinearMm = payload.version.placements.reduce(
-    (sum, placement) => sum + placement.widthMm * placement.facingsX * placement.compressionX,
-    0,
-  )
+  const totalLinearMm = payload.version.placements.reduce((sum, placement) => sum + placementWidthMm(placement), 0)
   const linearByProductId = new Map<string, number>()
   for (const placement of payload.version.placements) {
     linearByProductId.set(
       placement.productId,
-      (linearByProductId.get(placement.productId) ?? 0) + placement.widthMm * placement.facingsX * placement.compressionX,
+      (linearByProductId.get(placement.productId) ?? 0) + placementWidthMm(placement),
     )
   }
 
@@ -217,6 +219,10 @@ export default async function PlanogramEditorPage({
           facingsX: placement.facingsX,
           facingsY: placement.facingsY,
           facingsZ: placement.facingsZ,
+          rotationX: placement.rotationX,
+          rotationY: placement.rotationY,
+          rotationZ: placement.rotationZ,
+          stackMode: placement.stackMode,
         })),
       }))}
       initialPlacements={payload.version.placements.map((p) => ({
@@ -230,6 +236,10 @@ export default async function PlanogramEditorPage({
         facingsX: p.facingsX,
         facingsY: p.facingsY,
         facingsZ: p.facingsZ,
+        rotationX: p.rotationX,
+        rotationY: p.rotationY,
+        rotationZ: p.rotationZ,
+        stackMode: p.stackMode,
         product: {
           id: p.product.id,
           sku: p.product.sku,

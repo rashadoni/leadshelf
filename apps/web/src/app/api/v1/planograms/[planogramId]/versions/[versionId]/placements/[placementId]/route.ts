@@ -7,6 +7,9 @@ import { workerDb } from "@/server/db/client"
 
 export const runtime = "nodejs"
 
+const rotationSchema = z.number().int().min(-270).max(270).refine((value) => value % 90 === 0)
+const stackModeSchema = z.enum(["NONE", "ON_TOP", "LYING"])
+
 const updateSchema = z.object({
   expectedRevision: z.string().datetime(),
   shelfId: z.string().min(1).optional(),
@@ -14,6 +17,10 @@ const updateSchema = z.object({
   facingsX: z.number().int().min(1).max(500).optional(),
   facingsY: z.number().int().min(1).max(100).optional(),
   facingsZ: z.number().int().min(1).max(100).optional(),
+  rotationX: rotationSchema.optional(),
+  rotationY: rotationSchema.optional(),
+  rotationZ: rotationSchema.optional(),
+  stackMode: stackModeSchema.optional(),
 })
 
 const deleteSchema = z.object({ expectedRevision: z.string().datetime() })

@@ -2,7 +2,7 @@
 // размещения цвет-боксами с SKU. Фото товаров — следующий срез (кэш медиа).
 import Svg, { G, Line, Rect, Text as SvgText } from "react-native-svg"
 import { useWindowDimensions, View } from "react-native"
-import { placementDisplayWidthMm, placementFaceWidthMm } from "./geometry"
+import { placementDisplayWidthMm, placementEffectiveSizeMm, placementFaceWidthMm } from "./geometry"
 
 interface Shelf {
   id: string
@@ -19,6 +19,10 @@ export interface PlanogramPlacement {
   heightMm: number
   depthMm?: number
   compressionX?: number | null
+  rotationX?: number | null
+  rotationY?: number | null
+  rotationZ?: number | null
+  stackMode?: "NONE" | "ON_TOP" | "LYING" | null
   facingsX: number
   facingsY: number
   facingsZ?: number
@@ -101,11 +105,12 @@ export function PlanogramSvg({
         {bundle.placements.map((p) => {
           const shelf = p.shelfId ? shelfById.get(p.shelfId) : null
           if (!shelf) return null
+          const effective = placementEffectiveSizeMm(p)
           const faceWidthPx = placementFaceWidthMm(p) * k
           const wPx = placementDisplayWidthMm(p) * k
-          const hPx = p.heightMm * p.facingsY * k
+          const hPx = (effective.heightMm ?? p.heightMm) * p.facingsY * k
           const x = p.xMm * k
-          const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
+          const y = H - (shelf.yMm + shelf.thicknessMm + (effective.heightMm ?? p.heightMm) * p.facingsY) * k
           const selected = selectedPlacementId === p.id
           return (
             <G key={p.id} onPress={() => onPlacementPress?.(p.id)}>

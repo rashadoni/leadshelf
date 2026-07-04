@@ -7,6 +7,9 @@ import { workerDb } from "@/server/db/client"
 
 export const runtime = "nodejs"
 
+const rotationSchema = z.number().int().min(-270).max(270).refine((value) => value % 90 === 0)
+const stackModeSchema = z.enum(["NONE", "ON_TOP", "LYING"])
+
 const addSchema = z.object({
   expectedRevision: z.string().datetime(),
   shelfId: z.string().min(1),
@@ -15,6 +18,10 @@ const addSchema = z.object({
   facingsX: z.number().int().min(1).max(500).default(1),
   facingsY: z.number().int().min(1).max(100).default(1),
   facingsZ: z.number().int().min(1).max(100).default(1),
+  rotationX: rotationSchema.default(0),
+  rotationY: rotationSchema.default(0),
+  rotationZ: rotationSchema.default(0),
+  stackMode: stackModeSchema.default("NONE"),
 })
 
 export async function POST(

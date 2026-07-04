@@ -3,9 +3,11 @@
 // в миллиметрах. Все проверки чистые, без Prisma/React.
 
 import {
+  orientedProductSizeMm,
   placementWidthMm,
   shelfCapacity,
   type CapacityResult,
+  type PlacementStackMode,
   type ProductSizeMm,
   type ShelfSpaceMm,
 } from "./capacity"
@@ -54,6 +56,10 @@ export interface PlacementCandidateMm extends ProductSizeMm {
   facingsX: number
   facingsY: number
   facingsZ: number
+  rotationX?: number
+  rotationY?: number
+  rotationZ?: number
+  stackMode?: PlacementStackMode
   gapMm?: number
 }
 
@@ -104,7 +110,8 @@ export function validatePlacementOnShelf(input: {
     }
   }
 
-  const depth = candidate.depthMm * candidate.facingsZ
+  const oriented = orientedProductSizeMm(candidate)
+  const depth = oriented.depthMm * candidate.facingsZ
   const compressedDepth = depth * (candidate.compressionZ ?? 1)
   if (compressedDepth > shelf.depthMm) {
     return {
@@ -114,7 +121,7 @@ export function validatePlacementOnShelf(input: {
     }
   }
 
-  const height = candidate.heightMm * candidate.facingsY
+  const height = oriented.heightMm * candidate.facingsY
   const compressedHeight = height * (candidate.compressionY ?? 1)
   if (compressedHeight > shelf.clearanceHeightMm) {
     return {
