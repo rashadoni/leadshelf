@@ -9,6 +9,16 @@ import {
 
 const OFFICE_PUSH_ROLES = ["OWNER", "ADMIN", "SUPERVISOR"] as const
 
+export class AlertRepoError extends Error {
+  constructor(
+    public code: "store_not_found",
+    message = code,
+    public detail?: unknown,
+  ) {
+    super(message)
+  }
+}
+
 export interface EmitProductEventInput {
   kind: ProductEventKind
   severity?: AlertSeverity
@@ -67,6 +77,9 @@ export async function emitProductEvent(
         select: { id: true, name: true },
       })
     : null
+  if (input.storeId && !store) {
+    throw new AlertRepoError("store_not_found", "store_not_found", { storeId: input.storeId })
+  }
   const message = buildAlertMessage({
     kind: input.kind,
     severity: input.severity,

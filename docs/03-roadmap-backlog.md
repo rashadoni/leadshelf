@@ -509,7 +509,8 @@ Definition of Done:
 - Продуктовая событийная система (не порт MtmAlert как есть).
   `[сделано: ProductEvent append-only source + Alert projection +
   NotificationDelivery push outbox, idempotent dedupeKey; P2002 race-safe
-  повтор воркера возвращает existing event]`
+  повтор воркера возвращает existing event; emitProductEvent отклоняет
+  cross-tenant storeId без записи event/alert артефактов]`
 - Типы: task.overdue, visit.anomaly, stock.gap, import.errors.
   `[сделано: emitters для task.overdue (auto-expire), visit.anomaly
   (geofence), import.errors (worker imports), stock.gap detector]`

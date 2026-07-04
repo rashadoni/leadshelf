@@ -44,6 +44,7 @@ export {
 } from "./repos/mobile-sync.ts"
 export { createOrder, OrderRepoError, type CreateOrderInput, type OrderSummary } from "./repos/orders.ts"
 export {
+  AlertRepoError,
   emitProductEvent,
   buildOfficeMorningDigest,
   enqueueOfficeMorningDigest,

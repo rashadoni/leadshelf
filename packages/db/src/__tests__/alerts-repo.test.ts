@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { createSystemClient } from "../tenant-client.ts"
 import {
+  AlertRepoError,
   buildOfficeMorningDigest,
   detectStockGapAlerts,
   emitProductEvent,
@@ -12,10 +13,18 @@ const slug = `test-alerts-${Date.now()}`
 let orgId: string
 let storeId: string
 let productId: string
+let otherOrgId: string
+let otherStoreId: string
 
 beforeAll(async () => {
   const org = await prisma.organization.create({ data: { name: "Alerts Test", slug } })
   orgId = org.id
+  const otherOrg = await prisma.organization.create({ data: { name: "Alerts Other", slug: `${slug}-other` } })
+  otherOrgId = otherOrg.id
+  const otherStore = await prisma.store.create({
+    data: { organizationId: otherOrgId, name: "Other Alert Store", code: "AL2" },
+  })
+  otherStoreId = otherStore.id
   const admin = await prisma.user.create({
     data: { organizationId: orgId, name: "Supervisor", role: "SUPERVISOR", email: `${slug}@example.com` },
   })
@@ -40,8 +49,10 @@ afterAll(async () => {
   await prisma.mobileDevice.deleteMany({ where: { user: { organizationId: orgId } } })
   await prisma.product.deleteMany({ where: { organizationId: orgId } })
   await prisma.store.deleteMany({ where: { organizationId: orgId } })
+  await prisma.store.deleteMany({ where: { organizationId: otherOrgId } })
   await prisma.user.deleteMany({ where: { organizationId: orgId } })
   await prisma.organization.delete({ where: { id: orgId } })
+  await prisma.organization.delete({ where: { id: otherOrgId } })
   await prisma.$disconnect()
 })
 
@@ -104,5 +115,30 @@ describe("alerts repo", () => {
     })
     expect(queued.deliveryCount).toBe(1)
     expect(await prisma.productEvent.count({ where: { organizationId: orgId, kind: "office.digest" } })).toBe(1)
+  })
+
+  test("rejects cross-tenant store references without writing alert artifacts", async () => {
+    await expect(
+      emitProductEvent(prisma, orgId, {
+        kind: "visit.anomaly",
+        severity: "critical",
+        storeId: otherStoreId,
+        entityType: "visit",
+        entityId: "visit-cross-tenant",
+        dedupeKey: "visit.anomaly:cross-tenant-store",
+        payload: { title: "Cross tenant store" },
+      }),
+    ).rejects.toBeInstanceOf(AlertRepoError)
+
+    expect(
+      await prisma.productEvent.count({
+        where: { organizationId: orgId, dedupeKey: "visit.anomaly:cross-tenant-store" },
+      }),
+    ).toBe(0)
+    expect(
+      await prisma.alert.count({
+        where: { organizationId: orgId, entityId: "visit-cross-tenant" },
+      }),
+    ).toBe(0)
   })
 })
