@@ -5,6 +5,7 @@ import {
   listPlacementSummaries,
   placementTotalUnits,
 } from "./bundle-utils"
+import { placementDisplayWidthMm, placementFaceWidthMm } from "./geometry"
 import type { Bundle } from "./PlanogramSvg"
 
 const bundle: Bundle = {
@@ -39,6 +40,11 @@ const bundle: Bundle = {
 describe("planogram bundle summaries", () => {
   test("counts total units across facings", () => {
     expect(placementTotalUnits(bundle.placements[0]!)).toBe(24)
+  })
+
+  test("uses compressionX for rendered mobile placement width", () => {
+    expect(placementFaceWidthMm({ widthMm: 100, facingsX: 3, compressionX: 0.85 })).toBe(85)
+    expect(placementDisplayWidthMm({ widthMm: 100, facingsX: 3, compressionX: 0.85 })).toBe(255)
   })
 
   test("builds mobile product detail rows from bundle placement", () => {

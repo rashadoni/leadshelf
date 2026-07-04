@@ -2,6 +2,7 @@
 // размещения цвет-боксами с SKU. Фото товаров — следующий срез (кэш медиа).
 import Svg, { G, Line, Rect, Text as SvgText } from "react-native-svg"
 import { useWindowDimensions, View } from "react-native"
+import { placementDisplayWidthMm, placementFaceWidthMm } from "./geometry"
 
 interface Shelf {
   id: string
@@ -17,6 +18,7 @@ export interface PlanogramPlacement {
   widthMm: number
   heightMm: number
   depthMm?: number
+  compressionX?: number | null
   facingsX: number
   facingsY: number
   facingsZ?: number
@@ -99,7 +101,8 @@ export function PlanogramSvg({
         {bundle.placements.map((p) => {
           const shelf = p.shelfId ? shelfById.get(p.shelfId) : null
           if (!shelf) return null
-          const wPx = p.widthMm * p.facingsX * k
+          const faceWidthPx = placementFaceWidthMm(p) * k
+          const wPx = placementDisplayWidthMm(p) * k
           const hPx = p.heightMm * p.facingsY * k
           const x = p.xMm * k
           const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
@@ -119,9 +122,9 @@ export function PlanogramSvg({
               {Array.from({ length: p.facingsX - 1 }, (_, i) => (
                 <Line
                   key={`${p.id}-f${i}`}
-                  x1={x + (i + 1) * p.widthMm * k}
+                  x1={x + (i + 1) * faceWidthPx}
                   y1={y}
-                  x2={x + (i + 1) * p.widthMm * k}
+                  x2={x + (i + 1) * faceWidthPx}
                   y2={y + hPx}
                   stroke="white"
                   strokeWidth={0.6}

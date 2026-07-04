@@ -89,7 +89,7 @@ beforeAll(async () => {
     where: { id: versionId },
     include: { equipment: { include: { equipmentVersion: { include: { shelves: true } } } } },
   })
-  await addPlacement(prisma, orgId, {
+  const placement = await addPlacement(prisma, orgId, {
     planogramVersionId: versionId,
     expectedRevision: await revision(versionId),
     shelfId: editor!.equipment[0]!.equipmentVersion.shelves[0]!.id,
@@ -97,6 +97,10 @@ beforeAll(async () => {
     facingsX: 4,
     facingsY: 1,
     facingsZ: 1,
+  })
+  await prisma.planogramPlacement.update({
+    where: { id: placement.placementId },
+    data: { compressionX: 0.8 },
   })
 })
 
@@ -374,6 +378,18 @@ describe("publish", () => {
       yMm: 2400,
       rotationDeg: 90,
     })
+  })
+
+  test("mobile pull сохраняет compressionX в immutable planogram bundle", async () => {
+    const task = await prisma.task.findFirstOrThrow({
+      where: { planogramVersionId: versionId, storeId: store1 },
+    })
+    await prisma.task.update({ where: { id: task.id }, data: { assigneeId: mobileUserId } })
+
+    const pulled = await pullChanges(prisma, orgId, mobileUserId, {})
+    const bundle = pulled.planogramBundles.find((item) => item.versionId === versionId)
+
+    expect(bundle?.placements[0]).toMatchObject({ compressionX: 0.8, facingsX: 4 })
   })
 
   test("mobile task.comment сохраняет feedback идемпотентно", async () => {

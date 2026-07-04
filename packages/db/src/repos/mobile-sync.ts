@@ -305,6 +305,7 @@ export async function pullChanges(
         widthMm: p.widthMm,
         heightMm: p.heightMm,
         depthMm: p.depthMm,
+        compressionX: p.compressionX,
         facingsX: p.facingsX,
         facingsY: p.facingsY,
         facingsZ: p.facingsZ,

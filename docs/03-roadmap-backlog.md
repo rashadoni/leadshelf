@@ -271,7 +271,8 @@ pull/push/ack delta-sync с per-collection курсорами, идемпоте�
 (clientOpId -> записанный результат), фото multipart + photo.submit,
 media по bearer; назначение задач в web (assignee-select). План: docs/18.
 Expo-приложение (срез 2, 2026-07-03) сделано: login, task list/detail,
-planogram view, offline status/photo/comment outbox, ручной sync retry,
+planogram view (включая compressionX из published bundle для soft-pack
+выкладки), offline status/photo/comment outbox, ручной sync retry,
 shared mobile contracts, Android export smoke. Автопросрочка EXPIRED и
 SLA-счетчики сделаны. Product detail tap сделан: кликабельная SVG-планограмма,
 карточка товара и список товаров из published bundle. Changed items list
