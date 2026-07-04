@@ -404,7 +404,8 @@ Definition of Done:
 - Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
   `[сделано: core geofence helper + check-in/check-out API + recent visits
   anomaly table в /field-force]`
-- AgentLocation + live map в web.
+- AgentLocation + live map в web. `[сделано: location ingest API +
+  /field-force live map panel по последней AgentLocation каждого агента]`
 - Territory scoping (порт в packages/core).
 - Мобильный флоу визита: маршрут дня -> точка -> чек-ин -> задачи точки.
 

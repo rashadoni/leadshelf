@@ -62,6 +62,28 @@ export default async function FieldForcePage() {
       take: 50,
     }),
   ])
+  const liveLocations = agents.flatMap((agent) => {
+    const location = agent.locations[0]
+    return location
+      ? [{
+          agentId: agent.id,
+          name: agent.user.name,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          recordedAt: location.recordedAt,
+        }]
+      : []
+  })
+  const latitudes = liveLocations.map((location) => location.latitude)
+  const longitudes = liveLocations.map((location) => location.longitude)
+  const latMin = Math.min(...latitudes)
+  const latMax = Math.max(...latitudes)
+  const lngMin = Math.min(...longitudes)
+  const lngMax = Math.max(...longitudes)
+  const pointFor = (latitude: number, longitude: number) => ({
+    x: liveLocations.length <= 1 ? 50 : 8 + ((longitude - lngMin) / Math.max(lngMax - lngMin, 0.00001)) * 84,
+    y: liveLocations.length <= 1 ? 50 : 92 - ((latitude - latMin) / Math.max(latMax - latMin, 0.00001)) * 84,
+  })
 
   return (
     <div>
@@ -95,6 +117,52 @@ export default async function FieldForcePage() {
           agents={agents.map((agent) => ({ id: agent.id, name: agent.user.name }))}
           stores={stores}
         />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium">{t("liveMap")}</h2>
+          <span className="text-xs text-neutral-500">{t("liveAgents", { count: liveLocations.length })}</span>
+        </div>
+        {liveLocations.length === 0 ? (
+          <div className="rounded-md border border-dashed border-neutral-200 p-8 text-center text-sm text-neutral-500">
+            {t("noLiveLocations")}
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
+            <svg viewBox="0 0 100 100" className="h-72 w-full rounded-md border border-neutral-200 bg-neutral-50">
+              <defs>
+                <pattern id="live-map-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e5e5e5" strokeWidth="0.4" />
+                </pattern>
+              </defs>
+              <rect width="100" height="100" fill="url(#live-map-grid)" />
+              {liveLocations.map((location) => {
+                const point = pointFor(location.latitude, location.longitude)
+                return (
+                  <g key={location.agentId}>
+                    <circle cx={point.x} cy={point.y} r="3.2" fill="#0f172a" />
+                    <circle cx={point.x} cy={point.y} r="7" fill="none" stroke="#0f172a" strokeOpacity="0.2" />
+                    <text x={Math.min(point.x + 4, 86)} y={Math.max(point.y - 4, 8)} fontSize="3" fill="#404040">
+                      {location.name}
+                    </text>
+                  </g>
+                )
+              })}
+            </svg>
+            <div className="space-y-2">
+              {liveLocations.map((location) => (
+                <div key={location.agentId} className="rounded-md border border-neutral-200 px-3 py-2 text-sm">
+                  <div className="font-medium">{location.name}</div>
+                  <div className="text-xs text-neutral-500">
+                    {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+                  </div>
+                  <div className="text-xs text-neutral-400">{location.recordedAt.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mb-4 overflow-x-auto rounded-xl border border-neutral-200 bg-white">
