@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient, TaskStatus } from "@prisma/client"
 import { evaluateVisitGeofence } from "@leadshelf/core"
+import { emitProductEvent } from "./alerts.ts"
 import { createOrder, OrderRepoError } from "./orders.ts"
 import { transitionTaskStatus } from "./publish.ts"
 import { PlanogramRepoError } from "./planogram.ts"
@@ -491,6 +492,21 @@ async function applyVisitCheckIn(
   await prisma.agentLocation.create({
     data: { agentId: agent.id, latitude: payload.latitude, longitude: payload.longitude, recordedAt: new Date() },
   })
+  if (geofence.outside) {
+    await emitProductEvent(prisma, organizationId, {
+      kind: "visit.anomaly",
+      severity: "critical",
+      storeId: store.id,
+      entityType: "visit",
+      entityId: visit.id,
+      dedupeKey: `visit.anomaly:${visit.id}:geofence`,
+      payload: {
+        title: "Geofence breach",
+        distanceM: geofence.distanceM,
+        limitM: geofence.limitM,
+      },
+    })
+  }
   return { status: "applied", detail: { visitId: visit.id, anomalyFlags: visit.anomalyFlags } }
 }
 

@@ -1,6 +1,7 @@
 export * from "./planogram/capacity.ts"
 export * from "./planogram/placement.ts"
 export * from "./catalog-import/index.ts"
+export * from "./alerts/events.ts"
 export * from "./equipment/shelves.ts"
 export * from "./field-force/geofence.ts"
 export * from "./field-force/territory-scope.ts"

@@ -6,6 +6,7 @@ import {
   type RowIssue,
 } from "@leadshelf/core"
 import type { ProductImportRowV1 } from "@leadshelf/api-contracts/import/v1"
+import { emitProductEvent } from "@leadshelf/db"
 
 // Исполнитель импорта товаров. Работает через system client ("import-worker"):
 // bulk upsert-ы по natural keys требуют операций, которые tenant client
@@ -296,6 +297,16 @@ export async function executeProductsImport(
       where: { id: batch.id },
       data: { status, finishedAt: new Date() },
     })
+    if (errorRows > 0) {
+      await emitProductEvent(prisma, organizationId, {
+        kind: "import.errors",
+        severity: "warning",
+        entityType: "importBatch",
+        entityId: batch.id,
+        dedupeKey: `import.errors:${batch.id}`,
+        payload: { title: "Product import errors", count: errorRows, source: input.source ?? null },
+      })
+    }
     return { batchId: batch.id, totalRows, errorRows, importedRows, status }
   } catch (err) {
     await prisma.importBatch.update({

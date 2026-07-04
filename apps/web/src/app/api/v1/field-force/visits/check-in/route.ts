@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { evaluateVisitGeofence } from "@leadshelf/core"
+import { emitProductEvent } from "@leadshelf/db"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 
@@ -90,6 +91,22 @@ export async function POST(req: NextRequest) {
       recordedAt: new Date(),
     },
   })
+
+  if (geofence.outside) {
+    await emitProductEvent(workerDb, session.org, {
+      kind: "visit.anomaly",
+      severity: "critical",
+      storeId: store.id,
+      entityType: "visit",
+      entityId: visit.id,
+      dedupeKey: `visit.anomaly:${visit.id}:geofence`,
+      payload: {
+        title: "Geofence breach",
+        distanceM: geofence.distanceM,
+        limitM: geofence.limitM,
+      },
+    })
+  }
 
   return NextResponse.json(visit, { status: 201 })
 }

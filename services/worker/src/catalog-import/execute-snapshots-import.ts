@@ -8,6 +8,7 @@ import {
   type RawCsvRow,
   type RowIssue,
 } from "@leadshelf/core"
+import { emitProductEvent } from "@leadshelf/db"
 import { loadRefMaps, resolveProductId, type RefMaps } from "./resolve-refs"
 import type { ImportSummary } from "./execute-products-import"
 
@@ -253,6 +254,16 @@ export async function executeSnapshotsImport(
       where: { id: batch.id },
       data: { status, finishedAt: new Date() },
     })
+    if (errorRows > 0) {
+      await emitProductEvent(prisma, organizationId, {
+        kind: "import.errors",
+        severity: "warning",
+        entityType: "importBatch",
+        entityId: batch.id,
+        dedupeKey: `import.errors:${batch.id}`,
+        payload: { title: `${input.entityType} import errors`, count: errorRows, source: input.source ?? null },
+      })
+    }
     return { batchId: batch.id, totalRows, errorRows, importedRows, status }
   } catch (err) {
     await prisma.importBatch.update({

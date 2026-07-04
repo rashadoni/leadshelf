@@ -1,5 +1,6 @@
 import type { PrismaClient, TaskStatus } from "@prisma/client"
 import { shelfSpaceForShelf, validatePlacementOnShelf } from "@leadshelf/core"
+import { emitProductEvent } from "./alerts.ts"
 import { PlanogramRepoError } from "./planogram.ts"
 
 // Публикация: DRAFT -> PUBLISHED (immutable snapshot), заморозка геометрии
@@ -355,7 +356,7 @@ export async function transitionTaskStatus(
 ) {
   const task = await prisma.task.findFirst({
     where: { id: input.taskId, organizationId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, title: true, storeId: true },
   })
   if (!task) throw new PlanogramRepoError("not_found")
   if (task.status !== input.expectedStatus) {
@@ -406,12 +407,12 @@ export async function expireOverdueTasks(
       dueAt: { lt: now },
       status: { in: SLA_OPEN_STATUSES },
     },
-    select: { id: true, status: true },
+    select: { id: true, status: true, title: true, storeId: true },
     orderBy: [{ dueAt: "asc" }, { id: "asc" }],
     take: limit,
   })
 
-  const expired: Array<{ taskId: string; fromStatus: TaskStatus }> = []
+  const expired: Array<{ taskId: string; fromStatus: TaskStatus; title: string; storeId: string }> = []
   await prisma.$transaction(async (tx) => {
     for (const task of candidates) {
       const updated = await tx.task.updateMany({
@@ -432,9 +433,24 @@ export async function expireOverdueTasks(
           byUserId: input.byUserId ?? null,
         },
       })
-      expired.push({ taskId: task.id, fromStatus: task.status })
+      expired.push({ taskId: task.id, fromStatus: task.status, title: task.title, storeId: task.storeId })
     }
   })
+
+  await Promise.all(
+    expired.map((task) =>
+      emitProductEvent(prisma, organizationId, {
+        kind: "task.overdue",
+        severity: "warning",
+        storeId: task.storeId,
+        entityType: "task",
+        entityId: task.taskId,
+        dedupeKey: `task.overdue:${task.taskId}`,
+        payload: { title: task.title, fromStatus: task.fromStatus },
+        occurredAt: now,
+      }),
+    ),
+  )
 
   return {
     expiredCount: expired.length,

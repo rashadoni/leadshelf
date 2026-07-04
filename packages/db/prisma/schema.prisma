@@ -70,7 +70,9 @@ model Organization {
   visits             Visit[]
   orders             Order[]
   promotions         Promotion[]
+  productEvents      ProductEvent[]
   alerts             Alert[]
+  notificationDeliveries NotificationDelivery[]
   auditLogs          AuditLog[]
   goldenReferences   GoldenReference[]
   humanReviews       HumanReview[]
@@ -1199,6 +1201,7 @@ model MobileDevice {
   syncCursors   SyncCursor[]
   outboxOps     OutboxOperation[]
   syncConflicts SyncConflict[]
+  notificationDeliveries NotificationDelivery[]
 
   @@index([userId])
   @@map("mobile_devices")
@@ -1499,10 +1502,34 @@ model CreditLimit {
 // Alerts
 // ---------------------------------------------------------------------------
 
+model ProductEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind           String // task.overdue | visit.anomaly | stock.gap | import.errors
+  severity       String       @default("info")
+  storeId        String?
+  entityType     String?
+  entityId       String?
+  dedupeKey      String
+  payload        Json?
+  occurredAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  alert Alert?
+  deliveries NotificationDelivery[]
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, kind, occurredAt])
+  @@map("product_events")
+}
+
 model Alert {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventId        String?      @unique
+  event          ProductEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   kind           String // task.overdue | visit.anomaly | stock.gap | ...
   severity       String       @default("info")
   storeId        String?
@@ -1513,6 +1540,32 @@ model Alert {
   resolvedAt     DateTime?
   createdAt      DateTime     @default(now())
 
+  deliveries NotificationDelivery[]
+
   @@index([organizationId, isResolved, createdAt])
   @@map("alerts")
+}
+
+model NotificationDelivery {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventId        String?
+  event          ProductEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  alertId        String?
+  alert          Alert?       @relation(fields: [alertId], references: [id], onDelete: SetNull)
+  deviceId       String
+  device         MobileDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  pushToken      String
+  title          String
+  body           String
+  payload        Json?
+  status         String       @default("PENDING") // PENDING | SENT | FAILED
+  error          String?
+  sentAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([deviceId, eventId])
+  @@index([organizationId, status, createdAt])
+  @@map("notification_deliveries")
 }

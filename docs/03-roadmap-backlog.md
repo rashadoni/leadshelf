@@ -443,9 +443,16 @@ Definition of Done:
 ## Phase 13 - Алерты и активность
 
 - Продуктовая событийная система (не порт MtmAlert как есть).
+  `[сделано: ProductEvent append-only source + Alert projection +
+  NotificationDelivery push outbox, idempotent dedupeKey]`
 - Типы: task.overdue, visit.anomaly, stock.gap, import.errors.
+  `[сделано: emitters для task.overdue (auto-expire), visit.anomaly
+  (geofence), import.errors (worker imports), stock.gap detector]`
 - Push через MobileDevice.pushToken.
+  `[сделано: office-role devices OWNER/ADMIN/SUPERVISOR with pushToken
+  get PENDING NotificationDelivery rows]`
 - Утренний дайджест офису (Tier 3 UX из docs/10).
+  `[сделано: buildOfficeMorningDigest + enqueueOfficeMorningDigest]`
 
 ## UX-бэклог (Tier 2/3 из docs/10, вплетать по фазам)
 

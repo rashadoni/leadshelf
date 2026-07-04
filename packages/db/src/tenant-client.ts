@@ -40,7 +40,9 @@ export const TENANT_MODELS = new Set([
   "Visit",
   "Order",
   "Promotion",
+  "ProductEvent",
   "Alert",
+  "NotificationDelivery",
 ])
 
 // Операции, где скоуп добавляется в where.
