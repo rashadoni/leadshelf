@@ -31,42 +31,76 @@ export default async function ReviewsPage({
     ? (params.status as (typeof STATUSES)[number])
     : "PENDING"
 
-  const reviews = await tenantDb(session.org).humanReview.findMany({
-    where: { status: statusFilter },
-    include: {
-      task: {
-        select: {
-          title: true,
-          status: true,
-          store: { select: { name: true, code: true } },
-          planogramVersion: {
-            select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+  const db = tenantDb(session.org)
+  const [reviews, summary] = await Promise.all([
+    db.humanReview.findMany({
+      where: { status: statusFilter },
+      include: {
+        task: {
+          select: {
+            title: true,
+            status: true,
+            store: { select: { name: true, code: true } },
+            planogramVersion: {
+              select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+            },
           },
         },
-      },
-      photoSubmission: {
-        select: {
-          url: true,
-          qualityScore: true,
-          takenAt: true,
-          store: { select: { name: true, code: true } },
-          user: { select: { name: true } },
+        photoSubmission: {
+          select: {
+            url: true,
+            qualityScore: true,
+            takenAt: true,
+            store: { select: { name: true, code: true } },
+            user: { select: { name: true } },
+          },
         },
+        planogramVersion: {
+          select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+        },
+        goldenReference: { select: { id: true, imageUrl: true } },
       },
-      planogramVersion: {
-        select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
-      },
-      goldenReference: { select: { id: true, imageUrl: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  })
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    Promise.all([
+      db.humanReview.count({ where: { status: "PENDING" } }),
+      db.humanReview.count({ where: { status: "APPROVED" } }),
+      db.humanReview.count({ where: { status: "REJECTED" } }),
+      db.humanReview.count({ where: { reason: "PHOTO_QUALITY" } }),
+      db.humanReview.count({ where: { reason: "VISION_COMPLIANCE" } }),
+      db.humanReview.aggregate({ _avg: { score: true } }),
+    ]).then(([pending, approved, rejected, photoQuality, visionCompliance, score]) => ({
+      pending,
+      approved,
+      rejected,
+      photoQuality,
+      visionCompliance,
+      avgScore: score._avg.score,
+    })),
+  ])
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">{tNav("reviews")}</h1>
         <span className="text-sm text-neutral-500">{t("subtitle")}</span>
+      </div>
+
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        {[
+          ["dashboard.pending", summary.pending],
+          ["dashboard.approved", summary.approved],
+          ["dashboard.rejected", summary.rejected],
+          ["dashboard.avgScore", summary.avgScore === null ? "—" : `${Math.round(summary.avgScore * 100)}%`],
+          ["dashboard.photoQuality", summary.photoQuality],
+          ["dashboard.visionCompliance", summary.visionCompliance],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
+            <div className="text-xs text-neutral-500">{t(label as never)}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+          </div>
+        ))}
       </div>
 
       <div className="mb-4 flex flex-wrap gap-1">

@@ -463,6 +463,14 @@
     "unknownStore": "Точка не указана",
     "approve": "Принять",
     "reject": "Отклонить",
+    "dashboard": {
+      "pending": "На проверке",
+      "approved": "Принято",
+      "rejected": "Отклонено",
+      "avgScore": "Средний score",
+      "photoQuality": "Качество фото",
+      "visionCompliance": "Vision compliance"
+    },
     "status": {
       "PENDING": "На проверке",
       "APPROVED": "Принято",

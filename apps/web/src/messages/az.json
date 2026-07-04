@@ -463,6 +463,14 @@
     "unknownStore": "Mağaza göstərilməyib",
     "approve": "Qəbul et",
     "reject": "Rədd et",
+    "dashboard": {
+      "pending": "Yoxlamada",
+      "approved": "Qəbul edilib",
+      "rejected": "Rədd edilib",
+      "avgScore": "Orta score",
+      "photoQuality": "Foto keyfiyyəti",
+      "visionCompliance": "Vision compliance"
+    },
     "status": {
       "PENDING": "Yoxlamada",
       "APPROVED": "Qəbul edilib",
