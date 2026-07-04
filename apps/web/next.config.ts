@@ -6,6 +6,11 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts")
 const config: NextConfig = {
   // прод-образ: самодостаточный сервер с trace-нутыми зависимостями
   output: "standalone",
+  // В monorepo эти gates запускаются отдельными командами (`pnpm lint`,
+  // `pnpm typecheck`). Встроенный Next checker может зависать после webpack
+  // compile, поэтому build не должен дублировать эти проверки.
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
   // workspace-пакеты с "main": "src/index.ts" транспилируются Next-ом
   transpilePackages: [
     "@leadshelf/db",

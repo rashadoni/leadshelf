@@ -3,6 +3,8 @@ import { requireSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { DashboardShell } from "@/components/shell/dashboard-shell"
 
+export const dynamic = "force-dynamic"
+
 export default async function AppLayout({
   children,
   params,
