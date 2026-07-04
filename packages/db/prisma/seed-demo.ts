@@ -281,13 +281,20 @@ async function ensureCatalogCompleteness(organizationId: string) {
         data: { organizationId, productId: product.id, barcode, isPrimary: true },
       })
     }
-    if (product.images.length === 0) {
+    const demoImageUrl = `products/${organizationId}/${product.id}/demo-pack.svg`
+    const demoImage = product.images.find((image) => image.url === demoImageUrl)
+    if (demoImage) {
+      await prisma.productImage.update({
+        where: { id: demoImage.id },
+        data: { sortOrder: -1, kind: "front" },
+      })
+    } else {
       await prisma.productImage.create({
         data: {
           productId: product.id,
-          url: `products/${organizationId}/${product.id}/demo-pack.svg`,
+          url: demoImageUrl,
           kind: "front",
-          sortOrder: 0,
+          sortOrder: -1,
         },
       })
     }
