@@ -481,6 +481,27 @@
       "VISION_COMPLIANCE": "Vision compliance"
     }
   },
+  "fieldForce": {
+    "subtitle": "Komandalar, agentlər, marşrutlar, vizitlər və canlı lokasiya.",
+    "addAgent": "Agent əlavə et",
+    "noUserCandidates": "Sahə komandası üçün aktiv istifadəçi yoxdur.",
+    "noTeam": "Komandasız",
+    "phone": "Telefon",
+    "emptyAgents": "Sahə agentləri hələ yaradılmayıb.",
+    "cards": {
+      "agents": "Agentlər",
+      "teams": "Komandalar",
+      "activeRoutes": "Aktiv marşrutlar",
+      "activeVisits": "Hazırkı vizitlər"
+    },
+    "table": {
+      "agent": "Agent",
+      "team": "Komanda",
+      "routes": "Marşrutlar",
+      "visits": "Vizitlər",
+      "lastLocation": "Son geolokasiya"
+    }
+  },
   "emptyStates": {
     "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",
     "catalog": "Məhsul kataloqu və 1C idxalı — Faza 1.",

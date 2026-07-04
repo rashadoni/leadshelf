@@ -481,6 +481,27 @@
       "VISION_COMPLIANCE": "Vision compliance"
     }
   },
+  "fieldForce": {
+    "subtitle": "Команды, агенты, маршруты, визиты и live location.",
+    "addAgent": "Добавить агента",
+    "noUserCandidates": "Нет активных пользователей для добавления в полевую команду.",
+    "noTeam": "Без команды",
+    "phone": "Телефон",
+    "emptyAgents": "Полевые агенты пока не созданы.",
+    "cards": {
+      "agents": "Агенты",
+      "teams": "Команды",
+      "activeRoutes": "Активные маршруты",
+      "activeVisits": "Визиты сейчас"
+    },
+    "table": {
+      "agent": "Агент",
+      "team": "Команда",
+      "routes": "Маршруты",
+      "visits": "Визиты",
+      "lastLocation": "Последняя геопозиция"
+    }
+  },
   "emptyStates": {
     "sectionPlanned": "Этот раздел появится в следующей фазе.",
     "catalog": "Каталог товаров и импорт из 1С — Фаза 1.",

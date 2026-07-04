@@ -74,6 +74,7 @@ model Organization {
   auditLogs          AuditLog[]
   goldenReferences   GoldenReference[]
   humanReviews       HumanReview[]
+  fieldAgents        FieldAgent[]
 
   @@map("organizations")
 }
@@ -1281,19 +1282,22 @@ model Team {
 }
 
 model FieldAgent {
-  id           String  @id @default(cuid())
-  userId       String  @unique
-  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  teamId       String?
-  team         Team?   @relation(fields: [teamId], references: [id])
-  phone        String?
-  employeeCode String?
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @unique
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId         String?
+  team           Team?        @relation(fields: [teamId], references: [id])
+  phone          String?
+  employeeCode   String?
 
   routes    Route[]
   visits    Visit[]
   locations AgentLocation[]
   orders    Order[]
 
+  @@index([organizationId, teamId])
   @@map("field_agents")
 }
 

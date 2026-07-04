@@ -397,7 +397,8 @@ Definition of Done:
 
 Задачи:
 
-- Teams/FieldAgent поверх User.
+- Teams/FieldAgent поверх User. `[сделано: FieldAgent tenant scope +
+  /field-force agents dashboard + API добавления агента из User]`
 - Routes + RouteStop, привязка к магазинам.
 - Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
 - AgentLocation + live map в web.
