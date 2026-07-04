@@ -11,8 +11,9 @@
 - IP: **157.90.227.191** (IPv4 + IPv6).
 - SSH: ключ `rashadrahimov@Rashads-MacBook-Air.local` (ed25519, default
   в проекте), root-доступ проверен.
-- **Демо работает: **https://hermescrm.xyz** (за Cloudflare; запасной прямой вход https://157-90-227-191.sslip.io)** —
-  sslip.io-домен с настоящим Let's Encrypt TLS, логины demo-тенанта
+- **Демо/production домен зафиксирован:** `https://hermescrm.xyz`
+  (за Cloudflare; запасной прямой вход `https://157-90-227-191.sslip.io`) —
+  оба host работают по HTTPS, логины demo-тенанта
   (пароль demo1234). Прод-стек в /opt/leadshelf/prod (compose
   leadshelf-prod: caddy+web+postgres16+minio), секреты в
   .env.production (root:600, сгенерированы на сервере).
@@ -22,8 +23,8 @@
 - TODO владельца: удалить случайный дубль `ubuntu-8gb-fsn1-1`
   (167.233.203.207, Falkenstein) — ••• -> Delete, если ещё не удален.
 - TODO: бэкапы (pg_dump + minio volume) до пилотных данных — см. Шаг 5.
-- Свой домен (опционально): A-запись на 157.90.227.191 и заменить хост
-  в deploy/Caddyfile — TLS Caddy возьмет сам.
+- Смена домена / Namecheap не планируется: задача закрыта решением владельца
+  от 2026-07-05. `hermescrm.xyz` остается production/demo доменом.
 
 ## Шаг 2. Первичная настройка (сделает Claude по SSH или руками)
 
@@ -68,8 +69,9 @@ apt install -y unattended-upgrades fail2ban
   (`leadshelf-prod_pgdata` vs `leadshelf-dev_pgdata`), перепутать нельзя.
 - Порты: prod web 3000 и dev web 3100 — только на 127.0.0.1; Postgres/MinIO
   наружу не торчат вообще (только docker-сеть). Наружу — только Caddy 80/443.
-- Caddy: `<домен>` -> prod:3000; `dev.<домен>` -> dev:3100 c basic auth
-  (или вообще не публиковать dev — доступ через SSH-туннель).
+- Caddy: `hermescrm.xyz` -> prod:3000; `157-90-227-191.sslip.io` остается
+  запасным прямым входом. Dev не публиковать наружу без отдельного решения —
+  доступ через SSH-туннель/basic auth.
 - Prod-стек: `caddy` + `web` (образ из ghcr.io) + `worker` + `postgres:16`
   + `minio`. Dev-стек: то же, но локальная сборка и отдельные volumes.
 
