@@ -121,7 +121,7 @@ describe("orders repo", () => {
   })
 
   test("rejects orders that exceed credit limit", async () => {
-    await prisma.creditLimit.update({ where: { storeId }, data: { limitAmount: 20 } })
+    await prisma.creditLimit.update({ where: { storeId }, data: { limitAmount: 20, usedAmount: 5 } })
 
     await expect(
       createOrder(prisma, orgId, {
@@ -144,5 +144,7 @@ describe("orders repo", () => {
         lines: [{ productId, quantity: 2 }],
       }),
     ).rejects.toMatchObject({ code: "credit_limit_exceeded" })
+    const credit = await prisma.creditLimit.findUniqueOrThrow({ where: { storeId } })
+    expect(Number(credit.usedAmount)).toBe(5)
   })
 })

@@ -480,7 +480,8 @@ Definition of Done:
   gift, money-in-cents, тесты на stack/bundle/category/date]`
 - Credit limit проверка при создании заказа.
   `[сделано: pure core check с APPROVED/EXCEEDED/BLOCKED, explicit overLimit
-  payload для mobile/API]`
+  payload для mobile/API; DB test изолированно фиксирует, что rejected order
+  не увеличивает usedAmount]`
 - Invoice generation.
   `[сделано: pure core invoice document + HTML template для PDF job,
   totals/discount/tax в cents, deterministic invoice number, HTML escaping]`
