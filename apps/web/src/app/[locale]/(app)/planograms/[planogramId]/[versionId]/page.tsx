@@ -19,7 +19,7 @@ export default async function PlanogramEditorPage({
   if (!eq) notFound()
 
   const db = tenantDb(session.org)
-  const [formats, stores, versionHistory, goldenReferences, goldenPhotoCandidates] = await Promise.all([
+  const [formats, stores, categories, brands, suppliers, versionHistory, goldenReferences, goldenPhotoCandidates] = await Promise.all([
     db.storeFormat.findMany({
       select: { id: true, name: true, _count: { select: { stores: { where: { isActive: true } } } } },
       orderBy: { name: "asc" },
@@ -30,6 +30,9 @@ export default async function PlanogramEditorPage({
       orderBy: { name: "asc" },
       take: 500,
     }),
+    db.category.findMany({ orderBy: { normalizedPath: "asc" }, select: { id: true, normalizedPath: true, name: true }, take: 500 }),
+    db.brand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true }, take: 500 }),
+    db.supplier.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true }, take: 500 }),
     workerDb.planogramVersion.findMany({
       where: { planogramId, planogram: { organizationId: session.org } },
       select: {
@@ -101,6 +104,14 @@ export default async function PlanogramEditorPage({
       publishOptions={{
         formats: formats.map((f) => ({ id: f.id, name: f.name, storeCount: f._count.stores })),
         stores,
+      }}
+      autoPlacementOptions={{
+        categories: categories.map((category) => ({
+          id: category.id,
+          name: category.normalizedPath || category.name,
+        })),
+        brands,
+        suppliers,
       }}
       planogram={{ id: payload.planogram.id, name: payload.planogram.name }}
       version={{

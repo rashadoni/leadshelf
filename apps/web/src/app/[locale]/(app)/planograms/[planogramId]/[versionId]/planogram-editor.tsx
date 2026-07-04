@@ -91,6 +91,12 @@ interface EditorZone {
   heightMm: number
 }
 
+interface AutoPlacementOptions {
+  categories: Array<{ id: string; name: string }>
+  brands: Array<{ id: string; name: string }>
+  suppliers: Array<{ id: string; name: string }>
+}
+
 interface DiffEntry {
   kind: "added" | "removed" | "moved"
   sku: string
@@ -144,6 +150,7 @@ export function PlanogramEditor({
   initialPlacements,
   initialZones,
   versionHistory,
+  autoPlacementOptions,
   publishOptions,
   goldenReferences,
   goldenPhotoCandidates,
@@ -154,6 +161,7 @@ export function PlanogramEditor({
   initialPlacements: EditorPlacement[]
   initialZones: EditorZone[]
   versionHistory: VersionHistoryItem[]
+  autoPlacementOptions: AutoPlacementOptions
   publishOptions: PublishTargetOption
   goldenReferences: GoldenReferencePhoto[]
   goldenPhotoCandidates: GoldenPhotoCandidate[]
@@ -189,6 +197,16 @@ export function PlanogramEditor({
     widthMm: Math.min(1000, equipment.widthMm),
     heightMm: Math.min(600, equipment.heightMm),
   })
+  const [autoRule, setAutoRule] = useState({
+    zoneId: initialZones[0]?.id ?? "",
+    categoryId: "",
+    brandId: "",
+    supplierId: "",
+    sortBy: "turnover",
+    facingsBy: "quantity",
+    limit: 20,
+  })
+  const [autoLog, setAutoLog] = useState<string | null>(null)
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
@@ -392,6 +410,7 @@ export function PlanogramEditor({
         heightMm: body.heightMm as number,
       },
     ])
+    setAutoRule((prev) => ({ ...prev, zoneId: prev.zoneId || (body.id as string) }))
     setZoneDraft((prev) => ({ ...prev, name: "" }))
   }
 
@@ -405,6 +424,31 @@ export function PlanogramEditor({
     if (!body) return
     setRevision(body.revision as string)
     setZones((prev) => prev.filter((zone) => zone.id !== zoneId))
+    setAutoRule((prev) => ({ ...prev, zoneId: prev.zoneId === zoneId ? "" : prev.zoneId }))
+  }
+
+  async function autoFillZone() {
+    if (!autoRule.zoneId || readOnly) return
+    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${autoRule.zoneId}/autofill`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expectedRevision: revision,
+        categoryId: autoRule.categoryId || null,
+        brandId: autoRule.brandId || null,
+        supplierId: autoRule.supplierId || null,
+        sortBy: autoRule.sortBy,
+        facingsBy: autoRule.facingsBy,
+        limit: autoRule.limit,
+      }),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+    setRevision(body.revision as string)
+    setPlacements((prev) => [...prev, ...((body.placements as EditorPlacement[]) ?? [])])
+    const log = body.log as { placed?: unknown[]; rejected?: unknown[] } | undefined
+    setAutoLog(t("autoLog", { placed: log?.placed?.length ?? 0, rejected: log?.rejected?.length ?? 0 }))
+    router.refresh()
   }
 
   // --- SVG geometry ---
@@ -868,6 +912,114 @@ export function PlanogramEditor({
               </div>
             ) : null}
           </div>
+
+          {!readOnly ? (
+            <div className="rounded-xl border border-neutral-200 bg-white p-4">
+              <h2 className="mb-2 text-sm font-medium">{t("autoPlacement")}</h2>
+              <div className="space-y-2">
+                <select
+                  value={autoRule.zoneId}
+                  onChange={(e) => setAutoRule((prev) => ({ ...prev, zoneId: e.target.value }))}
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">{t("selectZone")}</option>
+                  {zones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    value={autoRule.categoryId}
+                    onChange={(e) => setAutoRule((prev) => ({ ...prev, categoryId: e.target.value }))}
+                    className="min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+                  >
+                    <option value="">{t("allCategories")}</option>
+                    {autoPlacementOptions.categories.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={autoRule.brandId}
+                    onChange={(e) => setAutoRule((prev) => ({ ...prev, brandId: e.target.value }))}
+                    className="min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+                  >
+                    <option value="">{t("allBrands")}</option>
+                    {autoPlacementOptions.brands.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={autoRule.supplierId}
+                    onChange={(e) => setAutoRule((prev) => ({ ...prev, supplierId: e.target.value }))}
+                    className="min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+                  >
+                    <option value="">{t("allSuppliers")}</option>
+                    {autoPlacementOptions.suppliers.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="block text-xs">
+                    <span className="text-neutral-500">{t("sortBy")}</span>
+                    <select
+                      value={autoRule.sortBy}
+                      onChange={(e) => setAutoRule((prev) => ({ ...prev, sortBy: e.target.value }))}
+                      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+                    >
+                      {["turnover", "profit", "quantity", "name", "height"].map((value) => (
+                        <option key={value} value={value}>
+                          {t(`auto.${value}` as never)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs">
+                    <span className="text-neutral-500">{t("facingsBy")}</span>
+                    <select
+                      value={autoRule.facingsBy}
+                      onChange={(e) => setAutoRule((prev) => ({ ...prev, facingsBy: e.target.value }))}
+                      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+                    >
+                      {["turnover", "profit", "quantity"].map((value) => (
+                        <option key={value} value={value}>
+                          {t(`auto.${value}` as never)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs">
+                    <span className="text-neutral-500">{t("limit")}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={autoRule.limit}
+                      onChange={(e) => setAutoRule((prev) => ({ ...prev, limit: Number.parseInt(e.target.value || "1", 10) }))}
+                      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  disabled={!autoRule.zoneId}
+                  onClick={autoFillZone}
+                  className="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                >
+                  {t("runAutoPlacement")}
+                </button>
+                {autoLog ? <p className="text-xs text-neutral-500">{autoLog}</p> : null}
+              </div>
+            </div>
+          ) : null}
 
           {!readOnly && (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">

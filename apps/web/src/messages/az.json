@@ -253,7 +253,24 @@
       "zones": "Zonalar",
       "noZones": "Zona hələ yaradılmayıb.",
       "zoneName": "Zona adı",
-      "addZone": "Zona əlavə et"
+      "addZone": "Zona əlavə et",
+      "autoPlacement": "Avtomatik düzülüş",
+      "selectZone": "Zonanı seçin",
+      "allCategories": "Bütün kateqoriyalar",
+      "allBrands": "Bütün brendlər",
+      "allSuppliers": "Bütün təchizatçılar",
+      "sortBy": "Sıralama",
+      "facingsBy": "Feysinq meyarı",
+      "limit": "Limit",
+      "runAutoPlacement": "Zonanı doldur",
+      "autoLog": "Yerləşdirildi: {placed}; sığmadı: {rejected}",
+      "auto": {
+        "turnover": "Dövriyyə",
+        "profit": "Mənfəət",
+        "quantity": "Miqdar",
+        "name": "Ad",
+        "height": "Hündürlük"
+      }
     },
     "viewer3d": {
       "title": "3D görünüş",

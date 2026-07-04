@@ -253,7 +253,24 @@
       "zones": "Зоны",
       "noZones": "Зоны ещё не созданы.",
       "zoneName": "Название зоны",
-      "addZone": "Добавить зону"
+      "addZone": "Добавить зону",
+      "autoPlacement": "Автозаполнение",
+      "selectZone": "Выберите зону",
+      "allCategories": "Все категории",
+      "allBrands": "Все бренды",
+      "allSuppliers": "Все поставщики",
+      "sortBy": "Сортировка",
+      "facingsBy": "Фейсы по",
+      "limit": "Лимит",
+      "runAutoPlacement": "Заполнить зону",
+      "autoLog": "Размещено: {placed}; не поместилось: {rejected}",
+      "auto": {
+        "turnover": "Оборот",
+        "profit": "Прибыль",
+        "quantity": "Кол-во",
+        "name": "Название",
+        "height": "Высота"
+      }
     },
     "viewer3d": {
       "title": "3D просмотр",

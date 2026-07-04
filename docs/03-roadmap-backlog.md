@@ -227,14 +227,20 @@ Definition of Done:
 
 Задачи:
 
-- Zone rule editor.
-- Select category/brand/supplier/attributes.
+- Zone rule editor. `[сделано: editor выбирает zone + фильтры +
+  sortBy/facingsBy/limit и запускает autofill]`
+- Select category/brand/supplier/attributes. `[сделано: category/brand/
+  supplier filters; attributes оставлены после атрибутного UI]`
 - Sorting rules: ABC, turnover, brand, price, product name, height.
+  `[сделано: turnover/profit/quantity/name/height; ABC/brand/price позже,
+  когда появится отдельная ABC materialization/price picker]`
 - Exclusions.
-- Auto-facing based on sales/profit/quantity.
+- Auto-facing based on sales/profit/quantity. `[сделано: facingsBy
+  turnover/profit/quantity; placement metadata хранит score/reason]`
 - Brand share percentage.
-- Load into zone.
-- Auto spacing.
+- Load into zone. `[сделано: POST zone autofill создает placements
+  внутри зоны с physical validation и explainable log]`
+- Auto spacing. `[сделано: sequential free-slot spacing внутри zone range]`
 - Auto compression for soft packs.
 
 Важно:

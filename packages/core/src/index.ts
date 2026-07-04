@@ -1,5 +1,6 @@
 export * from "./planogram/capacity.ts"
 export * from "./planogram/placement.ts"
+export * from "./planogram/auto-placement.ts"
 export * from "./catalog-import/index.ts"
 export * from "./alerts/events.ts"
 export * from "./equipment/shelves.ts"
