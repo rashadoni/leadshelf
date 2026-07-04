@@ -354,6 +354,9 @@ Definition of Done:
 - Basic dashboard: stores with planograms, active planograms, placed SKUs, linear meters, turnover, profit.
   `[сделано: верхний /analytics summary считает магазины под активными
   assignment, активные версии, SKU, linear meters, turnover и profit]`
+- Test coverage for analytics calculations.
+  `[сделано: apps/web Vitest покрывает ABC-классы, активные assignment,
+  assortment gaps, obsolete planogram reasons и task KPI метрики]`
 
 ## Phase 8 - Like-for-like and space productivity
 
