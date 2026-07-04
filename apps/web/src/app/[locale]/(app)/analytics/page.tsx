@@ -245,12 +245,19 @@ export default async function AnalyticsPage({
   const maxHeatmapTurnover = Math.max(0, ...heatmapRows.map((row) => row.turnover))
   const phase8MetricByKey = new Map(phase8Metrics.map((metric) => [metric.key, metric.value]))
   const underSpaceRow = spaceProductivityRows.find((row) => row.salesGap > 0.015) ?? null
+  const positiveTurnoverRows = spaceProductivityRows.filter((row) => row.turnover > 0)
   const overSpaceRow =
-    spaceProductivityRows
+    (positiveTurnoverRows
       .filter((row) => row.salesGap < -0.015)
-      .sort((a, b) => a.salesGap - b.salesGap)[0] ?? null
+      .sort((a, b) => a.salesGap - b.salesGap)[0] ??
+      spaceProductivityRows
+        .filter((row) => row.salesGap < -0.015)
+        .sort((a, b) => a.salesGap - b.salesGap)[0]) ??
+    null
   const balancedRow =
-    [...spaceProductivityRows].sort((a, b) => Math.abs(a.salesGap) - Math.abs(b.salesGap))[0] ?? null
+    [...positiveTurnoverRows].sort((a, b) => Math.abs(a.salesGap) - Math.abs(b.salesGap))[0] ??
+    [...spaceProductivityRows].sort((a, b) => Math.abs(a.salesGap) - Math.abs(b.salesGap))[0] ??
+    null
   const executiveInsightCards = [
     {
       key: "underSpace",
