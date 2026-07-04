@@ -344,7 +344,7 @@ export default async function AnalyticsPage({
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[860px] text-sm">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                 <th className="px-3 py-2">{t("likeForLike.columns.metric")}</th>
@@ -374,7 +374,7 @@ export default async function AnalyticsPage({
         <div className="grid gap-4 border-t border-neutral-200 p-3 xl:grid-cols-3">
           {(["store", "format", "planogram"] as const).map((group) => (
             <div key={group} className="overflow-x-auto rounded-lg border border-neutral-200">
-              <table className="w-full text-sm">
+              <table className="min-w-[860px] text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                     <th className="px-3 py-2">{t(`likeForLike.groups.${group}` as never)}</th>
@@ -441,7 +441,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("productTable.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("productTable.columns.product")}</th>
@@ -486,7 +486,7 @@ export default async function AnalyticsPage({
         <div className="grid gap-4 p-3 xl:grid-cols-3">
           {shelfShareGroups.map((group) => (
             <div key={group.dimension} className="overflow-x-auto rounded-lg border border-neutral-200">
-              <table className="w-full text-sm">
+              <table className="min-w-[860px] text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                     <th className="px-3 py-2">{t(`productTable.columns.${group.dimension}` as never)}</th>
@@ -590,7 +590,7 @@ export default async function AnalyticsPage({
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t(`productTable.columns.${groupBy}` as never)}</th>
@@ -625,7 +625,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("abc.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("productTable.columns.product")}</th>
@@ -686,7 +686,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("productTable.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>
@@ -733,7 +733,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("heatmap.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>
@@ -784,7 +784,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("assortmentGaps.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("assortmentGaps.columns.scope")}</th>
@@ -826,7 +826,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("obsoletePlanogram.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("assortmentGaps.columns.scope")}</th>
@@ -916,7 +916,7 @@ export default async function AnalyticsPage({
               [t("taskKpi.byPlanogram"), taskKpiReport.planograms],
             ].map(([title, groupRows]) => (
               <div key={title as string} className="overflow-x-auto rounded-lg border border-neutral-200">
-                <table className="w-full text-sm">
+                <table className="min-w-[860px] text-sm">
                   <thead>
                     <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                       <th className="px-3 py-2">{title as string}</th>
@@ -958,7 +958,7 @@ export default async function AnalyticsPage({
           <div className="p-10 text-center text-sm text-neutral-500">{t("productTable.empty")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                   <th className="px-3 py-2">{t("productTable.columns.planogram")}</th>

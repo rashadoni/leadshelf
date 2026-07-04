@@ -101,7 +101,7 @@ export default async function TasksPage({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
+          <table className="min-w-[1120px] text-sm">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
                 <th className="px-3 py-2">{t("table.title")}</th>

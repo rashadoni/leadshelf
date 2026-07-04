@@ -91,7 +91,7 @@ export default async function StoresPage() {
           <div className="p-8 text-center text-sm text-neutral-500">{t("emptyStores")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[980px] text-sm">
               <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
                 <tr>
                   <th className="px-3 py-2">{t("table.store")}</th>

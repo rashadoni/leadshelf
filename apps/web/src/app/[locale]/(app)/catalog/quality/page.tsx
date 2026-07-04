@@ -65,7 +65,7 @@ export default async function CatalogQualityPage() {
 
       <h2 className="mb-2 mt-8 text-lg font-medium">{t("recentImports")}</h2>
       <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-        <table className="w-full text-sm">
+        <table className="min-w-[860px] text-sm">
           <tbody>
             {recentBatches.map((b) => (
               <tr key={b.id} className="border-b border-neutral-100 last:border-0">

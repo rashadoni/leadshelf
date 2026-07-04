@@ -47,7 +47,7 @@ export default async function PlanogramsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
+          <table className="min-w-[860px] text-sm">
             <tbody>
               {planograms.map((p) => {
                 const v = p.versions[0]

@@ -24,8 +24,39 @@
     "analytics": "Analitika"
   },
   "dashboard": {
-    "welcome": "Xoş gəlmisiniz",
-    "overviewHint": "LeadShelf idarəetmə paneli. Bölmələr fazalar üzrə aktivləşəcək."
+    "title": "Demo hazırlıq paneli",
+    "subtitle": "LeadShelf əməliyyat icmalı: kataloq, avadanlıq, zal planı, yayımlanmış planoqram, mağaza tapşırığı və foto yoxlama bir axına bağlanmalıdır.",
+    "kpi": {
+      "products": "Aktiv məhsullar",
+      "ready": "kataloq hazırlığı {value}%",
+      "stores": "Satış nöqtələri",
+      "floorPlans": "zal planları: {value}",
+      "equipment": "Avadanlıq şablonları",
+      "planograms": "planoqramlar: {value}",
+      "published": "Yayımlanıb",
+      "openTasks": "açıq tapşırıqlar: {value}",
+      "photoProof": "Foto təsdiqlər",
+      "pendingReviews": "yoxlama gözləyir: {value}"
+    },
+    "flow": {
+      "title": "Demo axını",
+      "hint": "Nümayiş zamanı izlənməli əsas ardıcıllıq.",
+      "catalog": "Məhsul kataloqu",
+      "equipment": "Avadanlıq kitabxanası",
+      "floorPlan": "Zal planı",
+      "planogram": "Yayımlanmış planoqram",
+      "task": "Mağaza tapşırığı",
+      "review": "Foto yoxlama",
+      "ready": "Göstərmək üçün data var",
+      "needsData": "Doldurmaq lazımdır"
+    },
+    "quality": {
+      "title": "Nümayişdən əvvəl yoxlanacaq",
+      "hint": "Demo tenant üçün ən görünən risklər.",
+      "missingDimensions": "Ölçüsüz məhsullar",
+      "missingImages": "Şəkilsiz məhsullar",
+      "pendingReviews": "Əl ilə yoxlamada olan fotolar"
+    }
   },
   "catalog": {
     "tabs": {
