@@ -2,7 +2,7 @@
   "name": "leadshelf",
   "private": true,
   "version": "0.0.1",
-  "packageManager": "pnpm@11.7.0",
+  "packageManager": "pnpm@10.34.4",
   "scripts": {
     "db:validate": "pnpm --filter @leadshelf/db validate",
     "db:generate": "pnpm --filter @leadshelf/db generate",
