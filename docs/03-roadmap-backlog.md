@@ -90,12 +90,16 @@ Definition of Done:
 - Product dimensions: width, height, depth, weight + UI ручного
   ввода/коррекции + фильтр «без размеров». `[сделано: inline-редактор в
   таблице каталога + PATCH API + фильтр]`
-- Barcode support.
+- Barcode support. `[сделано: ProductBarcode model + unique tenant barcode,
+  import/API create/edit/search, mobile bundle и barcode/SKU finder используют barcode]`
 - Product images: admin-загрузка + заглушка (название/бренд/цвет) для SKU
   без фото. `[сделано: MinIO/S3 storage, media-proxy с tenant-guard,
   клик-загрузка в таблице каталога, цветная заглушка, фильтр «без фото»]`
-- Stock/price/sales snapshots.
+- Stock/price/sales snapshots. `[сделано: Price/Stock/SalesSnapshot models,
+  CSV/XLSX import executors, natural-key idempotency и analytics consumers]`
 - Assortment matrix (формат) + store assortment (исключения).
+  `[сделано: AssortmentMatrix/StoreAssortment models + import executor,
+  analytics assortment gaps/obsolete и stock.gap detector используют слой]`
 - Data quality report: missing dimensions, missing barcode, missing image,
   missing category — первоклассный экран, не задворки. `[сделано: вкладка
   «Качество данных» с кликабельными карточками -> фильтры каталога +
@@ -126,22 +130,29 @@ templates/types/save-version, UI: библиотека карточками с S
 
 Задачи:
 
-- Equipment template library.
-- Equipment dimensions.
-- Shelves/rows.
+- Equipment template library. `[сделано: EquipmentTemplate/Version repo, API,
+  library page и detail editor]`
+- Equipment dimensions. `[сделано: width/height/depth geometry в versioned
+  EquipmentVersion, API/UI validation и preview]`
+- Shelves/rows. `[сделано: EquipmentShelf model, shelf fill tool, validation и preview]`
 - Cells/containers. `[сделано: EquipmentCell сохраняется в version,
   UI генерирует grid cells и preview показывает ячейки]`
 - Hooks/perforated rack support. `[сделано: EquipmentHook сохраняется в
   version, UI генерирует hook row и preview показывает крючки]`
-- Pallet/table/freezer/fridge basic types.
+- Pallet/table/freezer/fridge basic types. `[сделано: EquipmentType seed/reference
+  и type selector в equipment library]`
 - Shelf fill tool: count, shelf thickness, depth, row gap, top/bottom offsets.
-- Seating places/facings settings.
-- Auto seating toggle.
-- Auto compression toggle.
-- Save to library.
+  `[сделано: UI генерирует shelves через core layout/validation]`
+- Seating places/facings settings. `[сделано: shelf/cell/hook geometry fields
+  сохранены в version, facings управляются на уровне planogram placement]`
+- Auto seating toggle. `[сделано как rule-driven autofill в Phase 5, не как
+  отдельный глобальный toggle оборудования]`
+- Auto compression toggle. `[сделано на уровне Phase 5 autofill soft-pack
+  rule/compressionX, не как отдельный toggle оборудования]`
+- Save to library. `[сделано: createTemplateWithVersion/saveVersion API + UI save]`
 - Copy template. `[сделано: API copy latest geometry/shelves/cells/hooks +
   кнопка copy в форме шаблона]`
-- Preview in 2D.
+- Preview in 2D. `[сделано: EquipmentPreviewSvg показывает shelves/cells/hooks]`
 
 Definition of Done:
 
@@ -153,8 +164,10 @@ Definition of Done:
 
 Задачи:
 
-- Stores list.
-- Formats list.
+- Stores list. `[сделано: Store model, seed/demo stores и floor-plan/mobile
+  consumers; отдельная /stores страница пока empty shell]`
+- Formats list. `[сделано: StoreFormat model, seed/demo format и floor-plan
+  target selector]`
 - Create/edit floor plan. `[сделано: POST /api/v1/floor-plans создает
   published v1; PATCH /api/v1/floor-plans/:id создает новую published
   version с заменой оборудования; inline edit в /floor-plans]`
@@ -188,21 +201,31 @@ click-to-place с авто-позицией, пикер товаров (без �
 
 Задачи:
 
-- Open equipment as planogram canvas.
-- Product search/filter from catalog.
+- Open equipment as planogram canvas. `[сделано: planogram page открывает
+  linked EquipmentVersion с shelves и SVG canvas]`
+- Product search/filter from catalog. `[сделано: product picker/filter lists
+  active catalog SKU/category/brand/supplier refs]`
 - Drag product to shelf. `[сделано: SVG pointer drag с ghost-позицией,
   snap 10мм и сохранением через PATCH placement + серверная физика]`
-- Product placement with dimensions.
-- Facings X/Y/Z.
-- Depth count.
+- Product placement with dimensions. `[сделано: placement сохраняет snapshot
+  width/height/depth и серверная физика валидирует placement]`
+- Facings X/Y/Z. `[сделано: API/UI PATCH facingsX/facingsY/facingsZ +
+  core capacity/collision tests]`
+- Depth count. `[сделано: facingsZ x depth валидируется против shelf.depthMm]`
 - Rotation.
 - Stack one-on-one.
-- Shelf capacity validation.
-- Manual override.
+- Shelf capacity validation. `[сделано: core validatePlacementOnShelf +
+  repo rejection details и UI shelf capacity panel]`
+- Manual override. `[сделано: selected placement panel позволяет вручную
+  менять shelf/x/facings через PATCH с revision guard]`
 - Product details panel: name, SKU, barcode, dimensions, current price, stock.
+  `[частично сделано: selected placement panel показывает SKU/brand/dimensions/
+  units и live turnover/stock-days metrics; barcode/current price отдельным
+  полем в panel ещё не подтверждены]`
 - Zone creation on equipment. `[сделано: DRAFT-only zone API с
   revision-lock/bounds-check + SVG overlay и панель создания/удаления зон]`
-- Save draft.
+- Save draft. `[сделано: DRAFT versions редактируются in-place с revision lock,
+  published versions read-only и next-draft clone]`
 - Version history. `[сделано: боковая история версий + diff к предыдущей
   версии по added/removed/moved, цветовая подсветка current placements]`
 
@@ -283,19 +306,24 @@ floor-plan location hint и camera overlay сделаны. Остатки Phase 
 
 Задачи web:
 
-- Publish planogram to store/format.
-- Create execution task.
+- Publish planogram to store/format. `[сделано: publish dialog/API для FORMAT/STORES,
+  overlap reject и active assignment]`
+- Create execution task. `[сделано: publish создает задачи по store target]`
 - Task statuses: New, In Progress, Photo Submit, Completed, Expired, Empty.
-- Task assignee.
-- Due date/SLA.
-- Compare published version vs current draft.
+  `[сделано: FSM transitionTaskStatus + web/mobile status actions]`
+- Task assignee. `[сделано: web assignee-select + mobile pull только assignee tasks]`
+- Due date/SLA. `[сделано: dueAt при publish, auto-expire open tasks,
+  analytics SLA counters]`
+- Compare published version vs current draft. `[сделано: next-draft clone,
+  diff/current changed-items payload и mobile changed-items list]`
 
 Задачи mobile:
 
-- Login.
-- Store selection.
-- Task list.
-- Planogram view.
+- Login. `[сделано: mobile employeeCode/PIN auth + refresh/device binding]`
+- Store selection. `[сделано через assigned task/store context и routes stop view;
+  отдельный свободный store picker не требуется для MVP execution]`
+- Task list. `[сделано: mobile task list from local SQLite pull]`
+- Planogram view. `[сделано: mobile SVG planogram view from immutable published bundle]`
 - Product detail tap. `[сделано: кликабельная SVG-позиция + карточка товара]`
 - Changed items list. `[сделано: diff/current list в mobile]`
 - Barcode scanner: find where SKU should be placed. `[сделано: ручной barcode/SKU finder + expo-camera scanner binding]`
