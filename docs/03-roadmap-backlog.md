@@ -406,7 +406,8 @@ Definition of Done:
   anomaly table в /field-force]`
 - AgentLocation + live map в web. `[сделано: location ingest API +
   /field-force live map panel по последней AgentLocation каждого агента]`
-- Territory scoping (порт в packages/core).
+- Territory scoping (порт в packages/core). `[сделано: pure core
+  territory-scope helper + tests для all-store/store/region доступа]`
 - Мобильный флоу визита: маршрут дня -> точка -> чек-ин -> задачи точки.
 
 Definition of Done:
