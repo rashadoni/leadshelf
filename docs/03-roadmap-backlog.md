@@ -426,7 +426,11 @@ Definition of Done:
 
 - Order/OrderLine из визита или напрямую.
 - Promotion engine (скидки/бонусы/бандлы) с тестами на портированных кейсах.
+  `[сделано: pure core engine, порядок bulk -> bundle -> percent -> bogo ->
+  gift, money-in-cents, тесты на stack/bundle/category/date]`
 - Credit limit проверка при создании заказа.
+  `[сделано: pure core check с APPROVED/EXCEEDED/BLOCKED, explicit overLimit
+  payload для mobile/API]`
 - Invoice generation.
 - Offline-заказ через outbox (идемпотентность deviceId+clientOpId).
 
