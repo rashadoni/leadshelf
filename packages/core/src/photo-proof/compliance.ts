@@ -46,6 +46,7 @@ export interface ShelfComplianceResult extends ShelfComplianceScore {
 function sameProduct(slot: ComplianceSlot, detection: ComplianceDetection): boolean {
   if (slot.productId && detection.productId) return slot.productId === detection.productId
   if (slot.productSku && detection.productSku) return slot.productSku === detection.productSku
+  if (slot.productId || slot.productSku) return false
   return true
 }
 

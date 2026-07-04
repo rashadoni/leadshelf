@@ -41,4 +41,21 @@ describe("shelf compliance score", () => {
     expect(result.findings.missing[0]).toMatchObject({ slotId: "slot-2" })
     expect(result.findings.extra[0]).toMatchObject({ slotId: "unknown", detectedProductSku: "SKU9" })
   })
+
+  it("does not match an expected product slot to an unidentified detection", () => {
+    const result = calculateShelfCompliance({
+      slots: [{ id: "slot-1", productId: "p1", productSku: "SKU1" }],
+      detections: [{ slotId: "slot-1", productId: null, productSku: null, confidence: 0.95 }],
+    })
+
+    expect(result.status).toBe("FAIL")
+    expect(result.matchedSlots).toBe(0)
+    expect(result.wrongProducts).toBe(1)
+    expect(result.findings.wrong[0]).toMatchObject({
+      slotId: "slot-1",
+      expectedProductSku: "SKU1",
+      detectedProductSku: null,
+      confidence: 0.95,
+    })
+  })
 })

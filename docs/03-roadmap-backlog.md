@@ -434,7 +434,8 @@ Definition of Done:
   summary в vision/v1 scan response]`
 - Missing/wrong/extra products. `[сделано: core compliance findings +
   missing/wrong/extra arrays в vision/v1 scan response; stub provider test
-  фиксирует low-confidence detection + missing-slot finding]`
+  фиксирует low-confidence detection + missing-slot finding; core regression
+  не засчитывает unidentified detection как совпадение ожидаемого SKU]`
 - Human review queue. `[сделано: Prisma HumanReview + /reviews queue,
   approve/reject API, auto-enqueue poor/review photo quality uploads]`
 - Model/data quality dashboard. `[сделано: KPI cards в /reviews по
