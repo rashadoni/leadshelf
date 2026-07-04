@@ -210,10 +210,12 @@ UX-дифференциаторы (Tier 1 из docs/10, не «потом», а 
 - Валидация как физика: невлезающий товар не встает (ghost + причина
   «глубина 320мм > полка 300мм»); математика уже в `packages/core/capacity`.
 - Деньги в drag-preview: ABC-класс, оборот/день, дней запаса, доля полки —
-  живые данные из снапшотов в момент перетаскивания.
+  живые данные из снапшотов в момент перетаскивания. `[сделано:
+  server-side placementMetrics из Sales/Stock/Price snapshots, карточка
+  товара + drag label с ABC/turnover/day/stock days/shelf share]`
 - Diff-режим версий («git diff для полки»): added/removed/moved подсветка
   между двумя версиями + дельта метрик. `[сделано: placement diff и
-  подсветка; дельта метрик остается рядом с money-preview slice]`
+  подсветка; метрики рядом с selected/drag placement]`
 
 Definition of Done:
 

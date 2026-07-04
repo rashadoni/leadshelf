@@ -264,6 +264,12 @@
       "limit": "Лимит",
       "runAutoPlacement": "Заполнить зону",
       "autoLog": "Размещено: {placed}; не поместилось: {rejected}",
+      "abcClass": "ABC",
+      "turnoverPerDay": "Оборот/день",
+      "profitPerDay": "Прибыль/день",
+      "stockDays": "Дни запаса",
+      "shelfShare": "Доля полки",
+      "currentPrice": "Текущая цена",
       "auto": {
         "turnover": "Оборот",
         "profit": "Прибыль",

@@ -17,6 +17,7 @@ export default async function PlanogramEditorPage({
 
   const eq = payload.version.equipment[0]
   if (!eq) notFound()
+  const placementProductIds = [...new Set(payload.version.placements.map((placement) => placement.productId))]
 
   const db = tenantDb(session.org)
   const [formats, stores, categories, brands, suppliers, versionHistory, goldenReferences, goldenPhotoCandidates] = await Promise.all([
@@ -98,6 +99,57 @@ export default async function PlanogramEditorPage({
       take: 20,
     }),
   ])
+  const since = new Date()
+  since.setDate(since.getDate() - 30)
+  const [salesMetrics, stockRows, priceRows] = await Promise.all([
+    workerDb.salesSnapshot.groupBy({
+      by: ["productId"],
+      where: { organizationId: session.org, productId: { in: placementProductIds }, date: { gte: since } },
+      _sum: { quantity: true, revenue: true, profit: true },
+    }),
+    workerDb.stockSnapshot.findMany({
+      where: { organizationId: session.org, productId: { in: placementProductIds } },
+      select: { productId: true, quantity: true, date: true },
+      orderBy: [{ productId: "asc" }, { date: "desc" }],
+    }),
+    workerDb.priceSnapshot.findMany({
+      where: { organizationId: session.org, productId: { in: placementProductIds } },
+      select: { productId: true, price: true, currency: true, date: true },
+      orderBy: [{ productId: "asc" }, { date: "desc" }],
+    }),
+  ])
+  const salesByProductId = new Map(salesMetrics.map((row) => [row.productId, row._sum]))
+  const stockByProductId = new Map<string, { quantity: number; date: string }>()
+  for (const row of stockRows) {
+    if (!stockByProductId.has(row.productId)) {
+      stockByProductId.set(row.productId, { quantity: Number(row.quantity), date: row.date.toISOString() })
+    }
+  }
+  const priceByProductId = new Map<string, { price: number; currency: string; date: string }>()
+  for (const row of priceRows) {
+    if (!priceByProductId.has(row.productId)) {
+      priceByProductId.set(row.productId, { price: Number(row.price), currency: row.currency, date: row.date.toISOString() })
+    }
+  }
+  const turnoverRows = placementProductIds
+    .map((productId) => ({ productId, turnover: Number(salesByProductId.get(productId)?.revenue ?? 0) }))
+    .sort((a, b) => b.turnover - a.turnover)
+  const totalTurnover = turnoverRows.reduce((sum, row) => sum + row.turnover, 0)
+  let cumulativeTurnover = 0
+  const abcClassByProductId = new Map<string, "A" | "B" | "C">()
+  for (const row of turnoverRows) {
+    cumulativeTurnover += row.turnover
+    const share = totalTurnover > 0 ? cumulativeTurnover / totalTurnover : 1
+    abcClassByProductId.set(row.productId, share <= 0.8 ? "A" : share <= 0.95 ? "B" : "C")
+  }
+  const totalLinearMm = payload.version.placements.reduce((sum, placement) => sum + placement.widthMm * placement.facingsX, 0)
+  const linearByProductId = new Map<string, number>()
+  for (const placement of payload.version.placements) {
+    linearByProductId.set(
+      placement.productId,
+      (linearByProductId.get(placement.productId) ?? 0) + placement.widthMm * placement.facingsX,
+    )
+  }
 
   return (
     <PlanogramEditor
@@ -180,6 +232,26 @@ export default async function PlanogramEditorPage({
           imageKey: p.product.images[0]?.url ?? null,
         },
       }))}
+      placementMetrics={placementProductIds.map((productId) => {
+        const sales = salesByProductId.get(productId)
+        const quantity = Number(sales?.quantity ?? 0)
+        const turnover = Number(sales?.revenue ?? 0)
+        const profit = Number(sales?.profit ?? 0)
+        const stock = stockByProductId.get(productId)
+        const price = priceByProductId.get(productId)
+        const avgDailyQty = quantity / 30
+        return {
+          productId,
+          abcClass: abcClassByProductId.get(productId) ?? "C",
+          turnoverPerDay: turnover / 30,
+          profitPerDay: profit / 30,
+          stockQty: stock?.quantity ?? null,
+          stockDays: stock && avgDailyQty > 0 ? stock.quantity / avgDailyQty : null,
+          shelfShare: totalLinearMm > 0 ? (linearByProductId.get(productId) ?? 0) / totalLinearMm : 0,
+          currentPrice: price?.price ?? null,
+          currency: price?.currency ?? null,
+        }
+      })}
       goldenReferences={goldenReferences.map((ref) => ({
         id: ref.id,
         imageUrl: ref.imageUrl,

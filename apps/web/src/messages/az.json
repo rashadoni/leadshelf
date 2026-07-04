@@ -264,6 +264,12 @@
       "limit": "Limit",
       "runAutoPlacement": "Zonanı doldur",
       "autoLog": "Yerləşdirildi: {placed}; sığmadı: {rejected}",
+      "abcClass": "ABC",
+      "turnoverPerDay": "Dövriyyə/gün",
+      "profitPerDay": "Mənfəət/gün",
+      "stockDays": "Stok günü",
+      "shelfShare": "Rəf payı",
+      "currentPrice": "Cari qiymət",
       "auto": {
         "turnover": "Dövriyyə",
         "profit": "Mənfəət",

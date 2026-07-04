@@ -97,6 +97,18 @@ interface AutoPlacementOptions {
   suppliers: Array<{ id: string; name: string }>
 }
 
+interface PlacementMetric {
+  productId: string
+  abcClass: "A" | "B" | "C"
+  turnoverPerDay: number
+  profitPerDay: number
+  stockQty: number | null
+  stockDays: number | null
+  shelfShare: number
+  currentPrice: number | null
+  currency: string | null
+}
+
 interface DiffEntry {
   kind: "added" | "removed" | "moved"
   sku: string
@@ -148,6 +160,7 @@ export function PlanogramEditor({
   version,
   equipment,
   initialPlacements,
+  placementMetrics,
   initialZones,
   versionHistory,
   autoPlacementOptions,
@@ -159,6 +172,7 @@ export function PlanogramEditor({
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
+  placementMetrics: PlacementMetric[]
   initialZones: EditorZone[]
   versionHistory: VersionHistoryItem[]
   autoPlacementOptions: AutoPlacementOptions
@@ -210,6 +224,10 @@ export function PlanogramEditor({
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
+  const metricsByProductId = useMemo(
+    () => new Map(placementMetrics.map((metric) => [metric.productId, metric])),
+    [placementMetrics],
+  )
   const activeReference = references.find((ref) => ref.id === activeReferenceId) ?? references[0] ?? null
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
   const currentHistory = versionHistory.find((item) => item.id === version.id) ?? null
@@ -550,6 +568,15 @@ export function PlanogramEditor({
     ].join(":")
   }
 
+  function formatMoney(value: number | null, currency: string | null = "AZN") {
+    if (value == null) return "—"
+    return `${value.toFixed(2)} ${currency ?? "AZN"}`
+  }
+
+  function formatDays(value: number | null) {
+    return value == null ? "—" : value.toFixed(1)
+  }
+
   function pointInSvg(event: PointerEvent<SVGSVGElement | SVGGElement>) {
     const svg = svgRef.current
     const matrix = svg?.getScreenCTM()
@@ -731,6 +758,7 @@ export function PlanogramEditor({
               const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
               const isSel = p.id === selectedPlacementId
               const diffKind = diff.currentMarks.get(editorPlacementDiffKey(p))
+              const metric = metricsByProductId.get(p.product.id)
               return (
                 <g
                   key={p.id}
@@ -782,6 +810,11 @@ export function PlanogramEditor({
                       {p.product.sku}
                     </text>
                   )}
+                  {dragState && metric ? (
+                    <text x={x + 3} y={y + hPx + 12} fontSize={9} fill="#111827" style={{ pointerEvents: "none" }}>
+                      {metric.abcClass} · {formatMoney(metric.turnoverPerDay, metric.currency)}/d · {formatDays(metric.stockDays)}d
+                    </text>
+                  ) : null}
                 </g>
               )
             })}
@@ -1238,10 +1271,37 @@ export function PlanogramEditor({
             <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
               <div className="text-sm font-medium">{selectedPlacement.product.name}</div>
               <div className="text-xs text-neutral-500">
+                {selectedPlacement.product.sku}
+                {selectedPlacement.product.brandName ? ` · ${selectedPlacement.product.brandName}` : ""}
+              </div>
+              <div className="text-xs text-neutral-500">
                 {selectedPlacement.widthMm}×{selectedPlacement.heightMm}×{selectedPlacement.depthMm} mm ·{" "}
                 {selectedPlacement.facingsX * selectedPlacement.facingsY * selectedPlacement.facingsZ}{" "}
                 {t("placedUnits")}
               </div>
+              {metricsByProductId.get(selectedPlacement.product.id) ? (
+                <div className="grid grid-cols-2 gap-2 rounded-md bg-neutral-50 p-2 text-xs">
+                  {(() => {
+                    const metric = metricsByProductId.get(selectedPlacement.product.id)!
+                    return (
+                      <>
+                        <span className="text-neutral-500">{t("abcClass")}</span>
+                        <span className="text-right font-medium">{metric.abcClass}</span>
+                        <span className="text-neutral-500">{t("turnoverPerDay")}</span>
+                        <span className="text-right tabular-nums">{formatMoney(metric.turnoverPerDay, metric.currency)}</span>
+                        <span className="text-neutral-500">{t("profitPerDay")}</span>
+                        <span className="text-right tabular-nums">{formatMoney(metric.profitPerDay, metric.currency)}</span>
+                        <span className="text-neutral-500">{t("stockDays")}</span>
+                        <span className="text-right tabular-nums">{formatDays(metric.stockDays)}</span>
+                        <span className="text-neutral-500">{t("shelfShare")}</span>
+                        <span className="text-right tabular-nums">{(metric.shelfShare * 100).toFixed(1)}%</span>
+                        <span className="text-neutral-500">{t("currentPrice")}</span>
+                        <span className="text-right tabular-nums">{formatMoney(metric.currentPrice, metric.currency)}</span>
+                      </>
+                    )
+                  })()}
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 {(["facingsX", "facingsY", "facingsZ"] as const).map((f) => (
                   <label key={f} className="block text-xs">
