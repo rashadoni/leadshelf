@@ -457,7 +457,8 @@ Definition of Done:
   territory-scope helper + tests для all-store/store/region доступа]`
 - Мобильный флоу визита: маршрут дня -> точка -> чек-ин -> задачи точки.
   `[сделано: mobile sync routes/visits + visit/location outbox ops +
-  mobile routes screen со stop/task view и queued check-in]`
+  mobile routes screen со stop/task view и queued check-in; DB integration
+  coverage добавлено для pull route, replay-safe check-in/location и checkout]`
 
 Definition of Done:
 

@@ -459,4 +459,95 @@ describe("publish", () => {
       }),
     ).resolves.toBe(3)
   })
+
+  test("mobile routes/visits: pull route, replay check-in once, and checkout safely", async () => {
+    await prisma.store.update({
+      where: { id: store1 },
+      data: { latitude: 40.4093, longitude: 49.8671 },
+    })
+    const agent = await prisma.fieldAgent.create({
+      data: {
+        organizationId: orgId,
+        userId: mobileUserId,
+        employeeCode: "FIELD-1",
+      },
+    })
+    const route = await prisma.route.create({
+      data: {
+        organizationId: orgId,
+        agentId: agent.id,
+        name: "Morning route",
+        stops: { create: [{ storeId: store1, sortOrder: 1, plannedAt: new Date("2026-07-04T09:00:00Z") }] },
+      },
+      include: { stops: true },
+    })
+    const stop = route.stops[0]!
+
+    const pulled = await pullChanges(prisma, orgId, mobileUserId, {})
+
+    expect(pulled.routes).toEqual([
+      expect.objectContaining({
+        id: route.id,
+        agentId: agent.id,
+        stops: [
+          expect.objectContaining({
+            id: stop.id,
+            storeId: store1,
+            sortOrder: 1,
+            plannedAt: "2026-07-04T09:00:00.000Z",
+          }),
+        ],
+      }),
+    ])
+    expect(pulled.stores.some((store) => store.id === store1)).toBe(true)
+
+    const checkInOp = {
+      clientOpId: "op-visit-checkin-0001",
+      kind: "visit.checkin" as const,
+      payload: {
+        agentId: agent.id,
+        storeId: store1,
+        routeStopId: stop.id,
+        latitude: 40.40931,
+        longitude: 49.86709,
+        geofenceLimitM: 150,
+      },
+    }
+    const firstCheckIn = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [checkInOp])
+    const replayedCheckIn = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [checkInOp])
+    const visitId = (firstCheckIn[0]?.detail as { visitId?: string } | undefined)?.visitId
+
+    expect(visitId).toBeTruthy()
+    expect(replayedCheckIn).toEqual(firstCheckIn)
+    await expect(prisma.visit.count({ where: { organizationId: orgId, agentId: agent.id, routeStopId: stop.id } })).resolves.toBe(1)
+    await expect(prisma.agentLocation.count({ where: { agentId: agent.id } })).resolves.toBe(1)
+
+    const checkoutOp = {
+      clientOpId: "op-visit-checkout-0001",
+      kind: "visit.checkout" as const,
+      payload: { visitId: visitId! },
+    }
+    const firstCheckout = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [checkoutOp])
+    const replayedCheckout = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [checkoutOp])
+    const secondCheckout = await pushOperations(prisma, orgId, mobileUserId, mobileDeviceId, [
+      {
+        clientOpId: "op-visit-checkout-0002",
+        kind: "visit.checkout",
+        payload: { visitId: visitId! },
+      },
+    ])
+
+    expect(firstCheckout).toEqual([{ clientOpId: "op-visit-checkout-0001", status: "applied" }])
+    expect(replayedCheckout).toEqual(firstCheckout)
+    expect(secondCheckout).toEqual([
+      {
+        clientOpId: "op-visit-checkout-0002",
+        status: "already_applied",
+        detail: { serverStatus: "COMPLETED" },
+      },
+    ])
+    await expect(prisma.visit.findUnique({ where: { id: visitId! }, select: { status: true } })).resolves.toEqual({
+      status: "COMPLETED",
+    })
+  })
 })
