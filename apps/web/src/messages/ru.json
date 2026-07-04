@@ -715,11 +715,33 @@
     "active": "Активен",
     "inactive": "Неактивен",
     "geofenceOutside": "Вне геозоны",
+    "proofSubmitted": "Фото отправлено",
+    "officeSnapshot": {
+      "title": "Офис видит исполнение",
+      "subtitle": "Демо-цепочка: опубликованная планограмма → задача на телефоне → check-in → фото → review.",
+      "agent": "Агент",
+      "timing": "Check-in",
+      "checkout": "Check-out: {value}",
+      "proof": "Фото",
+      "proofReady": "Получено с телефона",
+      "noProof": "Фото нет",
+      "review": "Проверка офиса",
+      "noReview": "Без review",
+      "pendingCount": "Ожидает проверки: {count}",
+      "noAnomaly": "Геозона без аномалий",
+      "noVisit": "Нет визита",
+      "mobileTask": "Мобильная задача"
+    },
     "cards": {
       "agents": "Агенты",
       "teams": "Команды",
       "activeRoutes": "Активные маршруты",
-      "activeVisits": "Визиты сейчас"
+      "activeVisits": "Визиты сейчас",
+      "completedVisits": "Завершённые визиты",
+      "proofs": "Визиты с фото",
+      "pendingReviews": "Review в очереди",
+      "cleanVisits": "Без аномалий",
+      "liveLocations": "Live location"
     },
     "table": {
       "agent": "Агент",
@@ -738,14 +760,22 @@
       "agent": "Агент",
       "store": "Точка",
       "checkIn": "Check-in",
+      "checkOut": "Check-out",
       "status": "Статус",
-      "anomaly": "Аномалии"
+      "anomaly": "Аномалии",
+      "proof": "Фото"
     },
     "visitStatus": {
       "PLANNED": "Запланирован",
       "IN_PROGRESS": "В процессе",
       "COMPLETED": "Завершён",
       "SKIPPED": "Пропущен"
+    },
+    "reviewStatus": {
+      "PENDING": "Ожидает review",
+      "APPROVED": "Принято",
+      "REJECTED": "Отклонено",
+      "SKIPPED": "Пропущено"
     }
   },
   "emptyStates": {

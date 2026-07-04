@@ -31,7 +31,7 @@ export function decodeCursor(raw: string | undefined | null): SyncCursorToken | 
   }
 }
 
-function cursorWhere(token: SyncCursorToken | null): Prisma.TaskWhereInput {
+function cursorWhere(token: SyncCursorToken | null) {
   if (!token) return {}
   const at = new Date(token.u)
   return {
@@ -59,7 +59,12 @@ export async function pullChanges(
   prisma: PrismaClient,
   organizationId: string,
   userId: string,
-  cursors: { tasks?: string | null; planogramBundles?: string | null },
+  cursors: {
+    tasks?: string | null
+    planogramBundles?: string | null
+    routes?: string | null
+    visits?: string | null
+  },
 ) {
   // Пилотный скоуп: только НАЗНАЧЕННЫЕ задачи (docs/18 решение b)
   const taskCursor = decodeCursor(cursors.tasks)
@@ -87,26 +92,45 @@ export async function pullChanges(
     where: { organizationId, userId },
     select: { id: true },
   })
+  const routeCursor = decodeCursor(cursors.routes)
   const routes = fieldAgent
     ? await prisma.route.findMany({
-        where: { organizationId, agentId: fieldAgent.id, isActive: true },
-        orderBy: [{ createdAt: "desc" }],
+        where: {
+          organizationId,
+          agentId: fieldAgent.id,
+          isActive: true,
+          ...cursorWhere(routeCursor),
+        },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         take: 50,
         include: { stops: { orderBy: { sortOrder: "asc" } } },
       })
     : []
+  const lastRoute = routes[routes.length - 1]
+  const nextRouteCursor = lastRoute
+    ? encodeCursor({ u: lastRoute.updatedAt.toISOString(), id: lastRoute.id })
+    : (cursors.routes ?? null)
   const routeStoreIds = routes.flatMap((route) => route.stops.map((stop) => stop.storeId))
   const storeIds = [...new Set([...allAssigned.map((t) => t.storeId), ...routeStoreIds])]
   const versionIds = [
     ...new Set(allAssigned.map((t) => t.planogramVersionId).filter((v): v is string => !!v)),
   ]
+  const visitCursor = decodeCursor(cursors.visits)
   const visits = fieldAgent
     ? await prisma.visit.findMany({
-        where: { organizationId, agentId: fieldAgent.id },
-        orderBy: [{ updatedAt: "desc" }],
+        where: {
+          organizationId,
+          agentId: fieldAgent.id,
+          ...cursorWhere(visitCursor),
+        },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         take: 100,
       })
     : []
+  const lastVisit = visits[visits.length - 1]
+  const nextVisitCursor = lastVisit
+    ? encodeCursor({ u: lastVisit.updatedAt.toISOString(), id: lastVisit.id })
+    : (cursors.visits ?? null)
 
   const stores = await prisma.store.findMany({
     where: { id: { in: storeIds } },
@@ -326,7 +350,12 @@ export async function pullChanges(
         },
       })),
     })),
-    cursors: { tasks: nextTaskCursor, planogramBundles: nextBundleCursor, routes: null, visits: null },
+    cursors: {
+      tasks: nextTaskCursor,
+      planogramBundles: nextBundleCursor,
+      routes: nextRouteCursor,
+      visits: nextVisitCursor,
+    },
   }
 }
 

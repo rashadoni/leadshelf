@@ -616,6 +616,136 @@ async function ensureAssignmentTaskAndProof(input: {
   return { assignment, task, photo, review, goldenReference }
 }
 
+async function ensureFieldForceScenario(input: {
+  organizationId: string
+  storeId: string
+  mobileUserId: string
+  taskId: string
+  photoSubmissionId: string
+}) {
+  const team = await prisma.team.upsert({
+    where: { organizationId_name: { organizationId: input.organizationId, name: "Полевое исполнение" } },
+    update: { leadUserId: input.mobileUserId },
+    create: {
+      organizationId: input.organizationId,
+      name: "Полевое исполнение",
+      leadUserId: input.mobileUserId,
+    },
+  })
+
+  const agent = await prisma.fieldAgent.upsert({
+    where: { userId: input.mobileUserId },
+    update: {
+      organizationId: input.organizationId,
+      teamId: team.id,
+      employeeCode: "M-001",
+      phone: "+994 50 555 01 01",
+    },
+    create: {
+      organizationId: input.organizationId,
+      userId: input.mobileUserId,
+      teamId: team.id,
+      employeeCode: "M-001",
+      phone: "+994 50 555 01 01",
+    },
+  })
+
+  const routeName = "Маршрут Низами - OTC контроль"
+  const routeData = {
+    organizationId: input.organizationId,
+    name: routeName,
+    agentId: agent.id,
+    weekdays: [1, 2, 3, 4, 5],
+    isActive: true,
+  }
+  const route =
+    (await prisma.route.findFirst({ where: { organizationId: input.organizationId, name: routeName } })) ??
+    (await prisma.route.create({ data: routeData }))
+  await prisma.route.update({ where: { id: route.id }, data: routeData })
+
+  const routeStop =
+    (await prisma.routeStop.findFirst({ where: { routeId: route.id, storeId: input.storeId } })) ??
+    (await prisma.routeStop.create({
+      data: {
+        routeId: route.id,
+        storeId: input.storeId,
+        sortOrder: 1,
+        plannedAt: startOfToday(0),
+      },
+    }))
+  await prisma.routeStop.update({
+    where: { id: routeStop.id },
+    data: { sortOrder: 1, plannedAt: startOfToday(0) },
+  })
+
+  const checkInAt = new Date(Date.now() - 95 * 60 * 1000)
+  const checkOutAt = new Date(Date.now() - 35 * 60 * 1000)
+  const visitData = {
+    organizationId: input.organizationId,
+    agentId: agent.id,
+    storeId: input.storeId,
+    routeStopId: routeStop.id,
+    status: "COMPLETED" as const,
+    checkInAt,
+    checkOutAt,
+    checkInLat: 40.37772,
+    checkInLng: 49.89203,
+    anomalyFlags: {
+      geofence: { outside: false, distanceM: 8, limitM: 150 },
+      duration: { status: "ok", minutes: 60 },
+      offlineSync: { status: "ok", pendingOps: 0 },
+    },
+  }
+  const visit =
+    (await prisma.visit.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        agentId: agent.id,
+        storeId: input.storeId,
+        routeStopId: routeStop.id,
+      },
+    })) ??
+    (await prisma.visit.create({ data: visitData }))
+  await prisma.visit.update({ where: { id: visit.id }, data: visitData })
+
+  await prisma.photoSubmission.update({
+    where: { id: input.photoSubmissionId },
+    data: { visitId: visit.id },
+  })
+  const fieldComment = "Демо: агент прошёл check-in, отправил фото выкладки и закрыл визит без геоаномалий."
+  if (!(await prisma.taskComment.findFirst({ where: { taskId: input.taskId, body: fieldComment } }))) {
+    await prisma.taskComment.create({
+      data: {
+        taskId: input.taskId,
+        userId: input.mobileUserId,
+        body: fieldComment,
+      },
+    })
+  }
+
+  await prisma.agentLocation.deleteMany({ where: { agentId: agent.id } })
+  await prisma.agentLocation.createMany({
+    data: [
+      {
+        agentId: agent.id,
+        latitude: 40.37772,
+        longitude: 49.89203,
+        accuracyM: 12,
+        recordedAt: new Date(Date.now() - 25 * 60 * 1000),
+      },
+      {
+        agentId: agent.id,
+        latitude: 40.3781,
+        longitude: 49.89175,
+        accuracyM: 18,
+        recordedAt: new Date(Date.now() - 65 * 60 * 1000),
+      },
+    ],
+  })
+
+  return { team, agent, route, routeStop, visit }
+}
+
 async function ensureFloorPlan(input: {
   organizationId: string
   storeId: string
@@ -794,17 +924,18 @@ async function main() {
 
   // Полевой сотрудник: вход с телефона по employeeCode + PIN (docs/18)
   const MOBILE_PIN = "1234"
+  const mobilePasswordHash = await hash(MOBILE_PIN, ARGON_OPTS)
   const mobileUser = await prisma.user.upsert({
     where: {
       organizationId_employeeCode: { organizationId: org.id, employeeCode: "M-001" },
     },
-    update: { name: "Полевой мерчендайзер", role: "MERCHANDISER" },
+    update: { name: "Полевой мерчендайзер", role: "MERCHANDISER", passwordHash: mobilePasswordHash },
     create: {
       organizationId: org.id,
       employeeCode: "M-001",
       name: "Полевой мерчендайзер",
       role: "MERCHANDISER",
-      passwordHash: await hash(MOBILE_PIN, ARGON_OPTS),
+      passwordHash: mobilePasswordHash,
     },
   })
 
@@ -830,13 +961,20 @@ async function main() {
     equipmentVersionId: equipmentVersion.id,
     planogramId: planogram.id,
   })
-  await ensureAssignmentTaskAndProof({
+  const proof = await ensureAssignmentTaskAndProof({
     organizationId: org.id,
     storeId: store.id,
     formatId: format.id,
     planogramId: planogram.id,
     planogramVersionId: planogramVersion.id,
     mobileUserId: mobileUser.id,
+  })
+  await ensureFieldForceScenario({
+    organizationId: org.id,
+    storeId: store.id,
+    mobileUserId: mobileUser.id,
+    taskId: proof.task.id,
+    photoSubmissionId: proof.photo.id,
   })
   await ensureAnalyticsSnapshots({
     organizationId: org.id,
@@ -852,6 +990,9 @@ async function main() {
     db.planogram.count(),
     db.task.count(),
     db.humanReview.count(),
+    db.fieldAgent.count(),
+    db.route.count(),
+    db.visit.count(),
     db.salesSnapshot.count(),
     db.stockSnapshot.count(),
     db.priceSnapshot.count(),

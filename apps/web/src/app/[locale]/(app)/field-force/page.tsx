@@ -4,6 +4,10 @@ import { tenantDb } from "@/server/db/client"
 import { AgentCreateForm } from "./agent-create-form"
 import { RouteCreateForm } from "./route-create-form"
 
+function formatDateTime(value: Date | null | undefined): string {
+  return value ? value.toLocaleString() : "—"
+}
+
 export default async function FieldForcePage() {
   const [t, tNav, session] = await Promise.all([
     getTranslations("fieldForce"),
@@ -57,6 +61,21 @@ export default async function FieldForcePage() {
       include: {
         agent: { select: { user: { select: { name: true } } } },
         store: { select: { name: true, code: true } },
+        photoSubmissions: {
+          orderBy: { takenAt: "desc" },
+          take: 3,
+          select: {
+            id: true,
+            takenAt: true,
+            qualityScore: true,
+            task: { select: { title: true, status: true } },
+            humanReviews: {
+              orderBy: { createdAt: "desc" },
+              take: 2,
+              select: { status: true, reason: true, score: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       take: 50,
@@ -80,6 +99,23 @@ export default async function FieldForcePage() {
   const latMax = Math.max(...latitudes)
   const lngMin = Math.min(...longitudes)
   const lngMax = Math.max(...longitudes)
+  const completedVisits = visits.filter((visit) => visit.status === "COMPLETED").length
+  const visitsWithProof = visits.filter((visit) => visit.photoSubmissions.length > 0).length
+  const openReviews = visits.reduce(
+    (sum, visit) =>
+      sum +
+      visit.photoSubmissions.reduce(
+        (photoSum, photo) => photoSum + photo.humanReviews.filter((review) => review.status === "PENDING").length,
+        0,
+      ),
+    0,
+  )
+  const cleanVisits = visits.filter((visit) => {
+    const flags = visit.anomalyFlags as { geofence?: { outside?: boolean } } | null
+    return visit.status === "COMPLETED" && flags?.geofence?.outside !== true
+  }).length
+  const demoVisit = visits.find((visit) => visit.photoSubmissions.length > 0) ?? visits[0]
+  const demoProof = demoVisit?.photoSubmissions[0]
   const pointFor = (latitude: number, longitude: number) => ({
     x: liveLocations.length <= 1 ? 50 : 8 + ((longitude - lngMin) / Math.max(lngMax - lngMin, 0.00001)) * 84,
     y: liveLocations.length <= 1 ? 50 : 92 - ((latitude - latMin) / Math.max(latMax - latMin, 0.00001)) * 84,
@@ -97,13 +133,72 @@ export default async function FieldForcePage() {
           ["cards.agents", agents.length],
           ["cards.teams", teams.length],
           ["cards.activeRoutes", routes.filter((route) => route.isActive).length],
-          ["cards.activeVisits", visits.filter((visit) => visit.status === "IN_PROGRESS").length],
+          ["cards.completedVisits", completedVisits],
+          ["cards.proofs", visitsWithProof],
+          ["cards.pendingReviews", openReviews],
+          ["cards.cleanVisits", cleanVisits],
+          ["cards.liveLocations", liveLocations.length],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
             <div className="text-xs text-neutral-500">{t(label as never)}</div>
             <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-medium">{t("officeSnapshot.title")}</h2>
+            <p className="mt-1 text-xs text-neutral-500">{t("officeSnapshot.subtitle")}</p>
+          </div>
+          <span className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white">
+            {demoVisit ? t(`visitStatus.${demoVisit.status}`) : t("officeSnapshot.noVisit")}
+          </span>
+        </div>
+        {demoVisit ? (
+          <div className="grid gap-3 lg:grid-cols-4">
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs uppercase text-neutral-500">{t("officeSnapshot.agent")}</div>
+              <div className="mt-1 text-sm font-semibold">{demoVisit.agent.user.name}</div>
+              <div className="mt-1 text-xs text-neutral-500">
+                {demoVisit.store.name}
+                {demoVisit.store.code ? ` (${demoVisit.store.code})` : ""}
+              </div>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs uppercase text-neutral-500">{t("officeSnapshot.timing")}</div>
+              <div className="mt-1 text-sm font-semibold">{formatDateTime(demoVisit.checkInAt)}</div>
+              <div className="mt-1 text-xs text-neutral-500">{t("officeSnapshot.checkout", { value: formatDateTime(demoVisit.checkOutAt) })}</div>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs uppercase text-neutral-500">{t("officeSnapshot.proof")}</div>
+              <div className="mt-1 text-sm font-semibold">
+                {demoProof ? t("officeSnapshot.proofReady") : t("officeSnapshot.noProof")}
+              </div>
+              <div className="mt-1 text-xs text-neutral-500">
+                {demoProof?.task?.title ?? t("officeSnapshot.mobileTask")}
+              </div>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs uppercase text-neutral-500">{t("officeSnapshot.review")}</div>
+              <div className="mt-1 text-sm font-semibold">
+                {demoProof?.humanReviews[0]
+                  ? t(`reviewStatus.${demoProof.humanReviews[0].status}` as never)
+                  : t("officeSnapshot.noReview")}
+              </div>
+              <div className="mt-1 text-xs text-neutral-500">
+                {openReviews > 0
+                  ? `${t("officeSnapshot.pendingCount", { count: openReviews })} · ${t("officeSnapshot.noAnomaly")}`
+                  : t("officeSnapshot.noAnomaly")}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed border-neutral-200 p-8 text-center text-sm text-neutral-500">
+            {t("emptyVisits")}
+          </div>
+        )}
       </div>
 
       <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4">
@@ -211,14 +306,16 @@ export default async function FieldForcePage() {
               <th className="px-3 py-2">{t("visitsTable.agent")}</th>
               <th className="px-3 py-2">{t("visitsTable.store")}</th>
               <th className="px-3 py-2">{t("visitsTable.checkIn")}</th>
+              <th className="px-3 py-2">{t("visitsTable.checkOut")}</th>
               <th className="px-3 py-2">{t("visitsTable.status")}</th>
               <th className="px-3 py-2">{t("visitsTable.anomaly")}</th>
+              <th className="px-3 py-2">{t("visitsTable.proof")}</th>
             </tr>
           </thead>
           <tbody>
             {visits.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-sm text-neutral-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-sm text-neutral-500">
                   {t("emptyVisits")}
                 </td>
               </tr>
@@ -226,6 +323,7 @@ export default async function FieldForcePage() {
               visits.map((visit) => {
                 const flags = visit.anomalyFlags as { geofence?: { outside?: boolean; distanceM?: number | null } } | null
                 const outside = flags?.geofence?.outside === true
+                const proof = visit.photoSubmissions[0]
                 return (
                   <tr key={visit.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
                     <td className="px-3 py-2 font-medium">{visit.agent.user.name}</td>
@@ -234,8 +332,9 @@ export default async function FieldForcePage() {
                       {visit.store.code ? ` (${visit.store.code})` : ""}
                     </td>
                     <td className="px-3 py-2 text-neutral-500">
-                      {visit.checkInAt ? visit.checkInAt.toLocaleString() : "—"}
+                      {formatDateTime(visit.checkInAt)}
                     </td>
+                    <td className="px-3 py-2 text-neutral-500">{formatDateTime(visit.checkOutAt)}</td>
                     <td className="px-3 py-2">{t(`visitStatus.${visit.status}`)}</td>
                     <td className="px-3 py-2">
                       {outside ? (
@@ -245,6 +344,19 @@ export default async function FieldForcePage() {
                         </span>
                       ) : (
                         <span className="text-xs text-neutral-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-neutral-600">
+                      {proof ? (
+                        <div>
+                          <div className="font-medium text-neutral-800">{t("proofSubmitted")}</div>
+                          <div className="text-neutral-500">
+                            {formatDateTime(proof.takenAt)}
+                            {typeof proof.qualityScore === "number" ? ` · ${Math.round(proof.qualityScore * 100)}%` : ""}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-neutral-400">—</span>
                       )}
                     </td>
                   </tr>

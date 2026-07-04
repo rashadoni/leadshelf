@@ -462,7 +462,7 @@ export default function TaskDetailScreen() {
               <Text style={styles.primaryText}>{t("start")}</Text>
             </Pressable>
           )}
-          {(task.status === "IN_PROGRESS" || task.status === "NEW") && (
+          {(task.status === "IN_PROGRESS" || task.status === "NEW" || task.status === "PHOTO_SUBMITTED") && (
             <Pressable style={styles.secondary} onPress={takePhoto}>
               <Text style={styles.secondaryText}>📷 {t("takePhoto")}</Text>
             </Pressable>

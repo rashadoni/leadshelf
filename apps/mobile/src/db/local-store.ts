@@ -153,7 +153,12 @@ export const localStore: LocalStore = {
   async getCursors() {
     const rows = db.getAllSync<{ k: string; v: string }>("SELECT k, v FROM cursors")
     const map = Object.fromEntries(rows.map((r) => [r.k, r.v]))
-    return { tasks: map.tasks ?? null, planogramBundles: map.planogramBundles ?? null }
+    return {
+      tasks: map.tasks ?? null,
+      planogramBundles: map.planogramBundles ?? null,
+      routes: map.routes ?? null,
+      visits: map.visits ?? null,
+    }
   },
 
   async setCursors(c) {

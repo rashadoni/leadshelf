@@ -715,11 +715,33 @@
     "active": "Aktiv",
     "inactive": "Deaktiv",
     "geofenceOutside": "Geozonadan kənar",
+    "proofSubmitted": "Foto göndərilib",
+    "officeSnapshot": {
+      "title": "Ofis icranı görür",
+      "subtitle": "Demo zənciri: yayımlanmış planoqram → telefonda tapşırıq → check-in → foto → review.",
+      "agent": "Agent",
+      "timing": "Check-in",
+      "checkout": "Check-out: {value}",
+      "proof": "Foto",
+      "proofReady": "Telefondan alındı",
+      "noProof": "Foto yoxdur",
+      "review": "Ofis yoxlaması",
+      "noReview": "Review yoxdur",
+      "pendingCount": "Yoxlama gözləyir: {count}",
+      "noAnomaly": "Geozona anomaliyasızdır",
+      "noVisit": "Vizit yoxdur",
+      "mobileTask": "Mobil tapşırıq"
+    },
     "cards": {
       "agents": "Agentlər",
       "teams": "Komandalar",
       "activeRoutes": "Aktiv marşrutlar",
-      "activeVisits": "Hazırkı vizitlər"
+      "activeVisits": "Hazırkı vizitlər",
+      "completedVisits": "Tamamlanmış vizitlər",
+      "proofs": "Fotolu vizitlər",
+      "pendingReviews": "Review növbəsi",
+      "cleanVisits": "Anomaliyasız",
+      "liveLocations": "Canlı lokasiya"
     },
     "table": {
       "agent": "Agent",
@@ -738,13 +760,21 @@
       "agent": "Agent",
       "store": "Nöqtə",
       "checkIn": "Check-in",
+      "checkOut": "Check-out",
       "status": "Status",
-      "anomaly": "Anomaliya"
+      "anomaly": "Anomaliya",
+      "proof": "Foto"
     },
     "visitStatus": {
       "PLANNED": "Planlanıb",
       "IN_PROGRESS": "İcradadır",
       "COMPLETED": "Tamamlanıb",
+      "SKIPPED": "Buraxılıb"
+    },
+    "reviewStatus": {
+      "PENDING": "Review gözləyir",
+      "APPROVED": "Qəbul edilib",
+      "REJECTED": "Rədd edilib",
       "SKIPPED": "Buraxılıb"
     }
   },
