@@ -417,11 +417,14 @@ Definition of Done:
 - Photo quality check. `[сделано: core photo-proof quality scorer по
   MIME/размерам/takenAt/EXIF, сохранение qualityScore + details при mobile upload]`
 - Detector/embedding service. `[сделано: packages/api-contracts vision/v1 +
-  optional services/vision HTTP boundary с stub provider, /health и /v1/scan]`
+  optional services/vision HTTP boundary с stub provider, /health и /v1/scan;
+  покрыто services/vision Vitest: health, invalid scan, schema-valid scan,
+  no-reference-slots failure]`
 - Compliance score. `[сделано: core scorer slots vs detections + compliance
   summary в vision/v1 scan response]`
 - Missing/wrong/extra products. `[сделано: core compliance findings +
-  missing/wrong/extra arrays в vision/v1 scan response]`
+  missing/wrong/extra arrays в vision/v1 scan response; stub provider test
+  фиксирует low-confidence detection + missing-slot finding]`
 - Human review queue. `[сделано: Prisma HumanReview + /reviews queue,
   approve/reject API, auto-enqueue poor/review photo quality uploads]`
 - Model/data quality dashboard. `[сделано: KPI cards в /reviews по

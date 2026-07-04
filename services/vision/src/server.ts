@@ -1,14 +1,20 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+import { pathToFileURL } from "node:url"
 import {
   VISION_PROTOCOL_VERSION,
   visionHealthResponseSchema,
   visionScanRequestSchema,
   visionScanResponseSchema,
 } from "@leadshelf/api-contracts/vision/v1"
-import { ReferenceSlotStubProvider, STUB_MODEL_VERSION, STUB_PROVIDER } from "./provider"
+import { ReferenceSlotStubProvider, STUB_MODEL_VERSION, STUB_PROVIDER, type VisionProvider } from "./provider"
 
 const provider = new ReferenceSlotStubProvider()
 const port = Number.parseInt(process.env.PORT ?? "4010", 10)
+
+export type VisionHttpResult = {
+  status: number
+  body: unknown
+}
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -24,39 +30,66 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body))
 }
 
-const server = createServer(async (req, res) => {
-  try {
-    if (req.method === "GET" && req.url === "/health") {
-      return sendJson(
-        res,
-        200,
-        visionHealthResponseSchema.parse({
-          ok: true,
-          provider: STUB_PROVIDER,
-          modelVersion: STUB_MODEL_VERSION,
-          protocolVersion: VISION_PROTOCOL_VERSION,
-        }),
-      )
+export async function handleVisionHttpRequest(input: {
+  method: string | undefined
+  url: string | undefined
+  body: unknown
+  provider?: VisionProvider
+}): Promise<VisionHttpResult> {
+  if (input.method === "GET" && input.url === "/health") {
+    return {
+      status: 200,
+      body: visionHealthResponseSchema.parse({
+        ok: true,
+        provider: STUB_PROVIDER,
+        modelVersion: STUB_MODEL_VERSION,
+        protocolVersion: VISION_PROTOCOL_VERSION,
+      }),
     }
-
-    if (req.method === "POST" && req.url === "/v1/scan") {
-      const parsed = visionScanRequestSchema.safeParse(await readJson(req))
-      if (!parsed.success) {
-        return sendJson(res, 400, { error: "invalid_request", details: parsed.error.flatten() })
-      }
-      const result = await provider.scan(parsed.data)
-      return sendJson(res, 200, visionScanResponseSchema.parse(result))
-    }
-
-    return sendJson(res, 404, { error: "not_found" })
-  } catch (error) {
-    return sendJson(res, 500, {
-      error: "vision_service_error",
-      message: error instanceof Error ? error.message : "unknown_error",
-    })
   }
-})
 
-server.listen(port, () => {
-  console.log(`LeadShelf vision service listening on :${port}`)
-})
+  if (input.method === "POST" && input.url === "/v1/scan") {
+    const parsed = visionScanRequestSchema.safeParse(input.body)
+    if (!parsed.success) {
+      return {
+        status: 400,
+        body: { error: "invalid_request", details: parsed.error.flatten() },
+      }
+    }
+    const result = await (input.provider ?? provider).scan(parsed.data)
+    return { status: 200, body: visionScanResponseSchema.parse(result) }
+  }
+
+  return { status: 404, body: { error: "not_found" } }
+}
+
+export function createVisionServer(visionProvider: VisionProvider = provider) {
+  return createServer(async (req, res) => {
+    try {
+      const body = req.method === "POST" ? await readJson(req) : null
+      const result = await handleVisionHttpRequest({
+        method: req.method,
+        url: req.url,
+        body,
+        provider: visionProvider,
+      })
+      return sendJson(res, result.status, result.body)
+    } catch (error) {
+      return sendJson(res, 500, {
+        error: "vision_service_error",
+        message: error instanceof Error ? error.message : "unknown_error",
+      })
+    }
+  })
+}
+
+function isMainModule(): boolean {
+  return process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false
+}
+
+if (isMainModule()) {
+  const server = createVisionServer()
+  server.listen(port, () => {
+    console.log(`LeadShelf vision service listening on :${port}`)
+  })
+}
