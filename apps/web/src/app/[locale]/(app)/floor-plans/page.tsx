@@ -22,8 +22,8 @@ export default async function FloorPlansPage() {
   const [floorPlans, stores, formats, templates, planograms] = await Promise.all([
     db.floorPlan.findMany({
     include: {
-      store: { select: { name: true, code: true } },
-      format: { select: { name: true } },
+              store: { select: { name: true, code: true } },
+              format: { select: { name: true } },
       versions: {
         where: { isPublished: true },
         orderBy: [{ versionNumber: "desc" }],
@@ -34,6 +34,7 @@ export default async function FloorPlansPage() {
               planogram: { select: { name: true } },
               equipmentVersion: {
                 select: {
+                  id: true,
                   widthMm: true,
                   depthMm: true,
                   template: { select: { name: true } },
@@ -94,6 +95,25 @@ export default async function FloorPlansPage() {
             const scale = version ? Math.min(760 / version.widthMm, 420 / version.depthMm) : 1
             const width = version ? Math.max(320, Math.round(version.widthMm * scale)) : 480
             const height = version ? Math.max(220, Math.round(version.depthMm * scale)) : 260
+            const initial =
+              version && (floorPlan.store || floorPlan.format)
+                ? {
+                    name: floorPlan.name,
+                    targetType: floorPlan.store ? ("store" as const) : ("format" as const),
+                    targetId: floorPlan.storeId ?? floorPlan.formatId ?? "",
+                    widthMm: version.widthMm,
+                    depthMm: version.depthMm,
+                    equipment: version.equipment.map((item) => ({
+                      equipmentVersionId: item.equipmentVersion.id,
+                      planogramId: item.planogramId ?? "",
+                      label: item.label ?? item.equipmentVersion.template.name,
+                      xMm: item.xMm,
+                      yMm: item.yMm,
+                      rotationDeg: item.rotationDeg,
+                      isLocked: item.isLocked,
+                    })),
+                  }
+                : null
 
             return (
               <section key={floorPlan.id} className="rounded-xl border border-neutral-200 bg-white">
@@ -163,6 +183,22 @@ export default async function FloorPlansPage() {
                     </div>
                   </div>
                 )}
+                {initial ? (
+                  <details>
+                    <summary className="cursor-pointer border-t border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+                      {t("form.edit")}
+                    </summary>
+                    <FloorPlanForm
+                      floorPlanId={floorPlan.id}
+                      initial={initial}
+                      variant="inline"
+                      stores={stores}
+                      formats={formats}
+                      equipment={equipment}
+                      planograms={planograms}
+                    />
+                  </details>
+                ) : null}
               </section>
             )
           })}

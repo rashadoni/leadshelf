@@ -154,8 +154,9 @@ Definition of Done:
 
 - Stores list.
 - Formats list.
-- Create/edit floor plan. `[create сделано: POST /api/v1/floor-plans +
-  /floor-plans form создает published v1; edit остается отдельным slice]`
+- Create/edit floor plan. `[сделано: POST /api/v1/floor-plans создает
+  published v1; PATCH /api/v1/floor-plans/:id создает новую published
+  version с заменой оборудования; inline edit в /floor-plans]`
 - Place equipment instances on canvas. `[сделано: form rows create
   FloorPlanEquipment instances with linked latest equipment version]`
 - Rotate/move/resize. `[move/rotate сделано через x/y/rotationDeg fields;

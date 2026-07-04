@@ -29,12 +29,27 @@ interface EquipmentRow {
   isLocked: boolean
 }
 
+interface FloorPlanInitial {
+  name: string
+  targetType: "store" | "format"
+  targetId: string
+  widthMm: number
+  depthMm: number
+  equipment: EquipmentRow[]
+}
+
 export function FloorPlanForm({
+  floorPlanId,
+  initial,
+  variant = "create",
   stores,
   formats,
   equipment,
   planograms,
 }: {
+  floorPlanId?: string
+  initial?: FloorPlanInitial
+  variant?: "create" | "inline"
   stores: StoreOption[]
   formats: Option[]
   equipment: EquipmentOption[]
@@ -42,12 +57,12 @@ export function FloorPlanForm({
 }) {
   const t = useTranslations("floorPlans.form")
   const router = useRouter()
-  const [targetType, setTargetType] = useState<"store" | "format">("store")
-  const [targetId, setTargetId] = useState(stores[0]?.id ?? formats[0]?.id ?? "")
-  const [name, setName] = useState("")
-  const [widthMm, setWidthMm] = useState(12000)
-  const [depthMm, setDepthMm] = useState(8000)
-  const [rows, setRows] = useState<EquipmentRow[]>([])
+  const [targetType, setTargetType] = useState<"store" | "format">(initial?.targetType ?? "store")
+  const [targetId, setTargetId] = useState(initial?.targetId ?? stores[0]?.id ?? formats[0]?.id ?? "")
+  const [name, setName] = useState(initial?.name ?? "")
+  const [widthMm, setWidthMm] = useState(initial?.widthMm ?? 12000)
+  const [depthMm, setDepthMm] = useState(initial?.depthMm ?? 8000)
+  const [rows, setRows] = useState<EquipmentRow[]>(initial?.equipment ?? [])
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,8 +91,8 @@ export function FloorPlanForm({
     event.preventDefault()
     setPending(true)
     setError(null)
-    const response = await fetch("/api/v1/floor-plans", {
-      method: "POST",
+    const response = await fetch(floorPlanId ? `/api/v1/floor-plans/${floorPlanId}` : "/api/v1/floor-plans", {
+      method: floorPlanId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
@@ -99,15 +114,21 @@ export function FloorPlanForm({
       setError(body.error ?? `HTTP ${response.status}`)
       return
     }
-    setName("")
-    setRows([])
+    if (!floorPlanId) {
+      setName("")
+      setRows([])
+    }
     router.refresh()
   }
 
   const targets = targetType === "store" ? stores : formats
+  const formClassName =
+    variant === "inline"
+      ? "grid gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-3"
+      : "mb-5 grid gap-3 border-y border-neutral-200 bg-white py-3"
 
   return (
-    <form onSubmit={submit} className="mb-5 grid gap-3 border-y border-neutral-200 bg-white py-3">
+    <form onSubmit={submit} className={formClassName}>
       <div className="flex flex-wrap items-center gap-2">
         <input
           required
@@ -157,7 +178,7 @@ export function FloorPlanForm({
           {t("addEquipment")}
         </button>
         <button disabled={pending || !targetId} className="rounded-md bg-neutral-900 px-3 py-1 text-sm text-white disabled:opacity-50">
-          {pending ? t("saving") : t("save")}
+          {pending ? t("saving") : floorPlanId ? t("update") : t("save")}
         </button>
         {error && <span className="text-xs text-red-600">{error}</span>}
       </div>
