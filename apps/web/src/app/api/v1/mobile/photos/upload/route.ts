@@ -96,18 +96,33 @@ export async function POST(req: NextRequest) {
     qualityCheck: qualityDetails,
   }
 
-  const photo = await workerDb.photoSubmission.create({
-    data: {
-      organizationId: session.org,
-      storeId: task.storeId,
-      taskId: task.id,
-      userId: session.sub,
-      url: key,
-      clientPhotoId: parsed.data.clientPhotoId,
-      takenAt: new Date(parsed.data.takenAt),
-      exif: exifWithQuality,
-      qualityScore: qualityCheck.score,
-    },
+  const { photo, reviewId } = await workerDb.$transaction(async (tx) => {
+    const photo = await tx.photoSubmission.create({
+      data: {
+        organizationId: session.org,
+        storeId: task.storeId,
+        taskId: task.id,
+        userId: session.sub,
+        url: key,
+        clientPhotoId: parsed.data.clientPhotoId,
+        takenAt: new Date(parsed.data.takenAt),
+        exif: exifWithQuality,
+        qualityScore: qualityCheck.score,
+      },
+    })
+    if (qualityCheck.status === "GOOD") return { photo, reviewId: null }
+    const review = await tx.humanReview.create({
+      data: {
+        organizationId: session.org,
+        reason: "PHOTO_QUALITY",
+        taskId: task.id,
+        photoSubmissionId: photo.id,
+        score: qualityCheck.score,
+        findings: { qualityCheck: exifWithQuality.qualityCheck },
+      },
+      select: { id: true },
+    })
+    return { photo, reviewId: review.id }
   })
   return NextResponse.json(
     {
@@ -115,6 +130,7 @@ export async function POST(req: NextRequest) {
       key,
       qualityScore: qualityCheck.score,
       qualityCheck: exifWithQuality.qualityCheck,
+      reviewId,
     },
     { status: 201 },
   )

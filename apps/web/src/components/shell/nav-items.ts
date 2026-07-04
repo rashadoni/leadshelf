@@ -7,6 +7,7 @@ export const NAV_ITEMS = [
   { key: "floorPlans", href: "/floor-plans" },
   { key: "planograms", href: "/planograms" },
   { key: "tasks", href: "/tasks" },
+  { key: "reviews", href: "/reviews" },
   { key: "fieldForce", href: "/field-force" },
   { key: "analytics", href: "/analytics" },
 ] as const

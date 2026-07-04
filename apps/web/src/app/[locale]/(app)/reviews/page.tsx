@@ -1,0 +1,165 @@
+import { getTranslations } from "next-intl/server"
+import { getSession } from "@/server/auth/require-session"
+import { tenantDb } from "@/server/db/client"
+import { Link } from "@/i18n/navigation"
+import { ReviewActions } from "./review-actions"
+
+const STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const
+
+function qualityIssues(findings: unknown): string[] {
+  if (!findings || typeof findings !== "object" || Array.isArray(findings)) return []
+  const qualityCheck = (findings as { qualityCheck?: unknown }).qualityCheck
+  if (!qualityCheck || typeof qualityCheck !== "object" || Array.isArray(qualityCheck)) return []
+  const issues = (qualityCheck as { issues?: unknown }).issues
+  return Array.isArray(issues) ? issues.filter((issue): issue is string => typeof issue === "string") : []
+}
+
+export default async function ReviewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const [t, tNav, session, params] = await Promise.all([
+    getTranslations("reviews"),
+    getTranslations("nav"),
+    getSession(),
+    searchParams,
+  ])
+  if (!session) return null
+
+  const statusFilter = STATUSES.includes(params.status as never)
+    ? (params.status as (typeof STATUSES)[number])
+    : "PENDING"
+
+  const reviews = await tenantDb(session.org).humanReview.findMany({
+    where: { status: statusFilter },
+    include: {
+      task: {
+        select: {
+          title: true,
+          status: true,
+          store: { select: { name: true, code: true } },
+          planogramVersion: {
+            select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+          },
+        },
+      },
+      photoSubmission: {
+        select: {
+          url: true,
+          qualityScore: true,
+          takenAt: true,
+          store: { select: { name: true, code: true } },
+          user: { select: { name: true } },
+        },
+      },
+      planogramVersion: {
+        select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+      },
+      goldenReference: { select: { id: true, imageUrl: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  })
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold">{tNav("reviews")}</h1>
+        <span className="text-sm text-neutral-500">{t("subtitle")}</span>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-1">
+        {STATUSES.map((status) => (
+          <Link
+            key={status}
+            href={`/reviews?status=${status}`}
+            className={`rounded-full px-3 py-1 text-sm ${
+              statusFilter === status
+                ? "bg-neutral-900 text-white"
+                : "border border-neutral-200 bg-white text-neutral-600"
+            }`}
+          >
+            {t(`status.${status}`)}
+          </Link>
+        ))}
+      </div>
+
+      {reviews.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center text-sm text-neutral-500">
+          {t("empty")}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {reviews.map((review) => {
+            const photo = review.photoSubmission
+            const issues = qualityIssues(review.findings)
+            const store = photo?.store ?? review.task?.store ?? null
+            const planogramVersion = review.task?.planogramVersion ?? review.planogramVersion
+            return (
+              <div key={review.id} className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-3 md:grid-cols-[160px_1fr_auto]">
+                <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                  {photo ? (
+                    <img src={`/api/media/${photo.url}`} alt="" className="h-36 w-full object-cover" />
+                  ) : (
+                    <div className="flex h-36 items-center justify-center text-xs text-neutral-400">
+                      {t("noPhoto")}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                      {t(`reason.${review.reason}`)}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      {new Date(review.createdAt).toLocaleString()}
+                    </span>
+                    {review.score !== null && (
+                      <span className="text-xs font-medium tabular-nums">
+                        {Math.round(review.score * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-medium">
+                    {review.task?.title ?? planogramVersion?.planogram.name ?? t("untitled")}
+                  </div>
+                  <div className="mt-1 text-sm text-neutral-500">
+                    {store ? `${store.name}${store.code ? ` (${store.code})` : ""}` : t("unknownStore")}
+                    {photo ? ` · ${photo.user.name} · ${photo.takenAt.toLocaleDateString()}` : ""}
+                  </div>
+                  {planogramVersion && (
+                    <Link
+                      href={`/planograms/${planogramVersion.planogram.id}/${planogramVersion.id}`}
+                      className="mt-1 inline-block text-sm text-neutral-600 hover:underline"
+                    >
+                      {planogramVersion.planogram.name} · v{planogramVersion.versionNumber}
+                    </Link>
+                  )}
+                  {issues.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {issues.map((issue) => (
+                        <span key={issue} className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600">
+                          {issue}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-start justify-end">
+                  {review.status === "PENDING" ? (
+                    <ReviewActions reviewId={review.id} />
+                  ) : (
+                    <span className="rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-600">
+                      {t(`status.${review.status}`)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}

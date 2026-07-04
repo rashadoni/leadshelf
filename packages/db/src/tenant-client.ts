@@ -33,6 +33,7 @@ export const TENANT_MODELS = new Set([
   "Task",
   "PhotoSubmission",
   "GoldenReference",
+  "HumanReview",
   "Team",
   "Route",
   "Visit",

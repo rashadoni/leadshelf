@@ -19,6 +19,7 @@
     "floorPlans": "Zal planları",
     "planograms": "Planoqramlar",
     "tasks": "Tapşırıqlar",
+    "reviews": "Foto yoxlama",
     "fieldForce": "Saha komandası",
     "analytics": "Analitika"
   },
@@ -454,6 +455,24 @@
       }
     }
   },
+  "reviews": {
+    "subtitle": "Foto və AI/vision nəticələri üçün əl ilə yoxlama növbəsi.",
+    "empty": "Bu növbədə qeyd yoxdur.",
+    "noPhoto": "Foto yoxdur",
+    "untitled": "Adsız",
+    "unknownStore": "Mağaza göstərilməyib",
+    "approve": "Qəbul et",
+    "reject": "Rədd et",
+    "status": {
+      "PENDING": "Yoxlamada",
+      "APPROVED": "Qəbul edilib",
+      "REJECTED": "Rədd edilib"
+    },
+    "reason": {
+      "PHOTO_QUALITY": "Foto keyfiyyəti",
+      "VISION_COMPLIANCE": "Vision compliance"
+    }
+  },
   "emptyStates": {
     "sectionPlanned": "Bu bölmə növbəti fazada hazırlanacaq.",
     "catalog": "Məhsul kataloqu və 1C idxalı — Faza 1.",
@@ -462,6 +481,7 @@
     "floorPlans": "Zal planı konstruktoru — Faza 3.",
     "planograms": "Planoqram redaktoru — Faza 4.",
     "tasks": "Tapşırıqlar və icra nəzarəti — Faza 6.",
+    "reviews": "Əl ilə yoxlama növbəsi — Faza 10.",
     "fieldForce": "Marşrutlar, vizitlər, canlı xəritə — Faza 11.",
     "analytics": "Analitika və hesabatlar — Faza 7."
   }

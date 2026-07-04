@@ -378,7 +378,8 @@ Definition of Done:
   summary в vision/v1 scan response]`
 - Missing/wrong/extra products. `[сделано: core compliance findings +
   missing/wrong/extra arrays в vision/v1 scan response]`
-- Human review queue.
+- Human review queue. `[сделано: Prisma HumanReview + /reviews queue,
+  approve/reject API, auto-enqueue poor/review photo quality uploads]`
 - Model/data quality dashboard.
 
 Рекомендация:

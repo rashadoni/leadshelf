@@ -73,6 +73,7 @@ model Organization {
   alerts             Alert[]
   auditLogs          AuditLog[]
   goldenReferences   GoldenReference[]
+  humanReviews       HumanReview[]
 
   @@map("organizations")
 }
@@ -403,17 +404,17 @@ model Product {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  barcodes         ProductBarcode[]
-  images           ProductImage[]
-  attributeValues  ProductAttributeValue[]
-  assortmentMatrix AssortmentMatrix[]
-  assortment       StoreAssortment[]
-  priceSnapshots   PriceSnapshot[]
-  stockSnapshots   StockSnapshot[]
-  salesSnapshots   SalesSnapshot[]
-  placements       PlanogramPlacement[]
-  orderLines       OrderLine[]
-  promotions       PromotionProduct[]
+  barcodes             ProductBarcode[]
+  images               ProductImage[]
+  attributeValues      ProductAttributeValue[]
+  assortmentMatrix     AssortmentMatrix[]
+  assortment           StoreAssortment[]
+  priceSnapshots       PriceSnapshot[]
+  stockSnapshots       StockSnapshot[]
+  salesSnapshots       SalesSnapshot[]
+  placements           PlanogramPlacement[]
+  orderLines           OrderLine[]
+  promotions           PromotionProduct[]
   goldenReferenceSlots GoldenReferenceSlot[]
 
   @@unique([organizationId, sku])
@@ -865,12 +866,13 @@ model PlanogramVersion {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
-  equipment   PlanogramEquipment[]
-  zones       PlanogramZone[]
-  placements  PlanogramPlacement[]
-  assignments PlanogramAssignment[]
-  tasks       Task[]
+  equipment        PlanogramEquipment[]
+  zones            PlanogramZone[]
+  placements       PlanogramPlacement[]
+  assignments      PlanogramAssignment[]
+  tasks            Task[]
   goldenReferences GoldenReference[]
+  humanReviews     HumanReview[]
 
   @@unique([planogramId, versionNumber])
   @@index([planogramId, state])
@@ -1027,6 +1029,7 @@ model Task {
   statusHistory    TaskStatusHistory[]
   comments         TaskComment[]
   photoSubmissions PhotoSubmission[]
+  humanReviews     HumanReview[]
 
   @@index([organizationId, status, dueAt])
   @@index([storeId, status])
@@ -1082,6 +1085,7 @@ model PhotoSubmission {
   createdAt      DateTime @default(now())
 
   goldenReferences GoldenReference[]
+  humanReviews     HumanReview[]
 
   @@unique([organizationId, clientPhotoId])
   @@index([organizationId, storeId, takenAt])
@@ -1098,6 +1102,17 @@ enum GoldenReferenceStatus {
   ARCHIVED
 }
 
+enum HumanReviewReason {
+  PHOTO_QUALITY
+  VISION_COMPLIANCE
+}
+
+enum HumanReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model GoldenReference {
   id                 String                @id @default(cuid())
   organizationId     String
@@ -1112,28 +1127,58 @@ model GoldenReference {
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
-  slots GoldenReferenceSlot[]
+  slots        GoldenReferenceSlot[]
+  humanReviews HumanReview[]
 
   @@index([organizationId, planogramVersionId, status])
   @@index([photoSubmissionId])
   @@map("golden_references")
 }
 
+model HumanReview {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reason             HumanReviewReason
+  status             HumanReviewStatus @default(PENDING)
+  taskId             String?
+  task               Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  photoSubmissionId  String?
+  photoSubmission    PhotoSubmission?  @relation(fields: [photoSubmissionId], references: [id], onDelete: SetNull)
+  planogramVersionId String?
+  planogramVersion   PlanogramVersion? @relation(fields: [planogramVersionId], references: [id], onDelete: SetNull)
+  goldenReferenceId  String?
+  goldenReference    GoldenReference?  @relation(fields: [goldenReferenceId], references: [id], onDelete: SetNull)
+  score              Float?
+  findings           Json?
+  note               String?
+  reviewedById       String?
+  reviewedAt         DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([taskId])
+  @@index([photoSubmissionId])
+  @@index([planogramVersionId])
+  @@map("human_reviews")
+}
+
 model GoldenReferenceSlot {
-  id                String          @id @default(cuid())
+  id                String              @id @default(cuid())
   goldenReferenceId String
-  goldenReference   GoldenReference @relation(fields: [goldenReferenceId], references: [id], onDelete: Cascade)
+  goldenReference   GoldenReference     @relation(fields: [goldenReferenceId], references: [id], onDelete: Cascade)
   placementId       String?
   placement         PlanogramPlacement? @relation(fields: [placementId], references: [id], onDelete: SetNull)
   productId         String?
-  product           Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  product           Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
   xPct              Float
   yPct              Float
   widthPct          Float
   heightPct         Float
   label             String?
-  sortOrder         Int             @default(0)
-  createdAt         DateTime        @default(now())
+  sortOrder         Int                 @default(0)
+  createdAt         DateTime            @default(now())
 
   @@index([goldenReferenceId])
   @@index([productId])
