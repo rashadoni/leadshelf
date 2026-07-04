@@ -29,6 +29,17 @@ function defaultDedupeKey(input: EmitProductEventInput): string {
   ].join(":")
 }
 
+async function findExistingEvent(prisma: PrismaClient, organizationId: string, dedupeKey: string) {
+  return prisma.productEvent.findFirst({
+    where: { organizationId, dedupeKey },
+    include: { alert: true },
+  })
+}
+
+function isUniqueConflict(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002")
+}
+
 function payloadString(payload: Record<string, unknown> | null | undefined, key: string): string | null {
   const value = payload?.[key]
   return typeof value === "string" && value.trim() ? value : null
@@ -45,10 +56,7 @@ export async function emitProductEvent(
   input: EmitProductEventInput,
 ) {
   const dedupeKey = input.dedupeKey ?? defaultDedupeKey(input)
-  const existing = await prisma.productEvent.findFirst({
-    where: { organizationId, dedupeKey },
-    include: { alert: true },
-  })
+  const existing = await findExistingEvent(prisma, organizationId, dedupeKey)
   if (existing) {
     return { eventId: existing.id, alertId: existing.alert?.id ?? null, created: false }
   }
@@ -67,71 +75,85 @@ export async function emitProductEvent(
     count: payloadNumber(input.payload, "count"),
   })
 
-  return prisma.$transaction(async (tx) => {
-    const event = await tx.productEvent.create({
-      data: {
-        organizationId,
-        kind: input.kind,
-        severity: message.severity,
-        storeId: store?.id ?? input.storeId ?? null,
-        entityType: input.entityType ?? null,
-        entityId: input.entityId ?? null,
-        dedupeKey,
-        payload: (input.payload ?? {}) as Prisma.InputJsonObject,
-        occurredAt: input.occurredAt ?? new Date(),
-      },
-    })
-    const alert = await tx.alert.create({
-      data: {
-        organizationId,
-        eventId: event.id,
-        kind: input.kind,
-        severity: message.severity,
-        storeId: store?.id ?? input.storeId ?? null,
-        entityType: input.entityType ?? null,
-        entityId: input.entityId ?? null,
-        payload: {
-          ...(input.payload ?? {}),
-          title: message.title,
-          body: message.body,
-        } as Prisma.InputJsonObject,
-      },
-    })
-
-    const push = buildPushPayload({
-      eventId: event.id,
-      alertId: alert.id,
-      kind: input.kind,
-      severity: message.severity,
-      storeName: store?.name ?? null,
-      entityTitle: payloadString(input.payload, "title"),
-      count: payloadNumber(input.payload, "count"),
-    })
-    const devices = await tx.mobileDevice.findMany({
-      where: {
-        pushToken: { not: null },
-        user: { organizationId, role: { in: [...OFFICE_PUSH_ROLES] } },
-      },
-      select: { id: true, pushToken: true },
-    })
-    for (const device of devices) {
-      if (!device.pushToken) continue
-      await tx.notificationDelivery.create({
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const event = await tx.productEvent.create({
+        data: {
+          organizationId,
+          kind: input.kind,
+          severity: message.severity,
+          storeId: store?.id ?? input.storeId ?? null,
+          entityType: input.entityType ?? null,
+          entityId: input.entityId ?? null,
+          dedupeKey,
+          payload: (input.payload ?? {}) as Prisma.InputJsonObject,
+          occurredAt: input.occurredAt ?? new Date(),
+        },
+      })
+      const alert = await tx.alert.create({
         data: {
           organizationId,
           eventId: event.id,
-          alertId: alert.id,
-          deviceId: device.id,
-          pushToken: device.pushToken,
-          title: push.title,
-          body: push.body,
-          payload: push.data as Prisma.InputJsonObject,
+          kind: input.kind,
+          severity: message.severity,
+          storeId: store?.id ?? input.storeId ?? null,
+          entityType: input.entityType ?? null,
+          entityId: input.entityId ?? null,
+          payload: {
+            ...(input.payload ?? {}),
+            title: message.title,
+            body: message.body,
+          } as Prisma.InputJsonObject,
         },
       })
-    }
 
-    return { eventId: event.id, alertId: alert.id, created: true }
-  })
+      const push = buildPushPayload({
+        eventId: event.id,
+        alertId: alert.id,
+        kind: input.kind,
+        severity: message.severity,
+        storeName: store?.name ?? null,
+        entityTitle: payloadString(input.payload, "title"),
+        count: payloadNumber(input.payload, "count"),
+      })
+      const devices = await tx.mobileDevice.findMany({
+        where: {
+          pushToken: { not: null },
+          user: { organizationId, role: { in: [...OFFICE_PUSH_ROLES] } },
+        },
+        select: { id: true, pushToken: true },
+      })
+      for (const device of devices) {
+        if (!device.pushToken) continue
+        await tx.notificationDelivery.create({
+          data: {
+            organizationId,
+            eventId: event.id,
+            alertId: alert.id,
+            deviceId: device.id,
+            pushToken: device.pushToken,
+            title: push.title,
+            body: push.body,
+            payload: push.data as Prisma.InputJsonObject,
+          },
+        })
+      }
+
+      return { eventId: event.id, alertId: alert.id, created: true }
+    })
+  } catch (error) {
+    if (isUniqueConflict(error)) {
+      const existingAfterRace = await findExistingEvent(prisma, organizationId, dedupeKey)
+      if (existingAfterRace) {
+        return {
+          eventId: existingAfterRace.id,
+          alertId: existingAfterRace.alert?.id ?? null,
+          created: false,
+        }
+      }
+    }
+    throw error
+  }
 }
 
 export async function buildOfficeMorningDigest(
