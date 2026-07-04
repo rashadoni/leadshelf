@@ -1,7 +1,10 @@
 {
   "common": {
     "appName": "LeadShelf",
-    "loading": "Загрузка..."
+    "loading": "Загрузка...",
+    "workspace": "Операционный контур полки",
+    "demoTenant": "Demo tenant готов",
+    "details": "Детали"
   },
   "auth": {
     "title": "Вход",

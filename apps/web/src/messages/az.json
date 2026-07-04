@@ -1,7 +1,10 @@
 {
   "common": {
     "appName": "LeadShelf",
-    "loading": "Yüklənir..."
+    "loading": "Yüklənir...",
+    "workspace": "Rəf əməliyyat konturu",
+    "demoTenant": "Demo tenant hazırdır",
+    "details": "Detallar"
   },
   "auth": {
     "title": "Daxil ol",
