@@ -104,6 +104,15 @@ const DEMO_PRODUCTS = [
   },
 ] as const
 
+const ANALYTICS_PROFILES = {
+  "OTC-001": { price: 3.9, cost: 2.45, previousQty: 7.2, currentQty: 8.1, stockQty: 120 },
+  "OTC-002": { price: 4.4, cost: 2.75, previousQty: 8.0, currentQty: 8.3, stockQty: 130 },
+  "OTC-003": { price: 8.8, cost: 4.95, previousQty: 11.8, currentQty: 15.2, stockQty: 45 },
+  "OTC-004": { price: 6.6, cost: 3.7, previousQty: 6.4, currentQty: 7.1, stockQty: 105 },
+  "OTC-005": { price: 7.4, cost: 4.15, previousQty: 8.7, currentQty: 10.5, stockQty: 75 },
+  "OTC-006": { price: 5.9, cost: 3.45, previousQty: 2.3, currentQty: 2.5, stockQty: 430 },
+} as const
+
 function startOfToday(offsetDays = 0) {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -671,6 +680,102 @@ async function ensureFloorPlan(input: {
   return { floorPlan, version }
 }
 
+async function ensureAnalyticsSnapshots(input: {
+  organizationId: string
+  storeId: string
+  products: Awaited<ReturnType<typeof ensureCatalog>>
+}) {
+  const productIds = input.products.map((product) => product.id)
+  const windowStart = startOfToday(-65)
+  await Promise.all([
+    prisma.salesSnapshot.deleteMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: { in: productIds },
+        date: { gte: windowStart },
+      },
+    }),
+    prisma.stockSnapshot.deleteMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: { in: productIds },
+        date: { gte: windowStart },
+      },
+    }),
+    prisma.priceSnapshot.deleteMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: { in: productIds },
+        date: { gte: windowStart },
+      },
+    }),
+  ])
+
+  const weekdayFactor = [0.9, 1.04, 1.0, 1.08, 1.13, 1.18, 0.86]
+  const salesRows = []
+  const stockRows = []
+  const priceRows = []
+
+  for (const product of input.products) {
+    const profile = ANALYTICS_PROFILES[product.sku as keyof typeof ANALYTICS_PROFILES]
+    if (!profile) continue
+
+    priceRows.push({
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId: product.id,
+      date: startOfToday(0),
+      price: profile.price,
+      costPrice: profile.cost,
+      currency: "AZN",
+    })
+
+    for (const offset of [-60, -45, -30, -15, 0]) {
+      const age = Math.abs(offset)
+      stockRows.push({
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: product.id,
+        date: startOfToday(offset),
+        quantity: Math.max(0, profile.stockQty + Math.round(age * profile.currentQty * 0.18)),
+      })
+    }
+
+    for (let offset = -59; offset <= 0; offset += 1) {
+      const date = startOfToday(offset)
+      const baseQty = offset >= -29 ? profile.currentQty : profile.previousQty
+      const factor = weekdayFactor[date.getUTCDay()] ?? 1
+      const quantity = Math.max(0.1, Math.round(baseQty * factor * 10) / 10)
+      const revenue = Math.round(quantity * profile.price * 100) / 100
+      const profit = Math.round(quantity * (profile.price - profile.cost) * 100) / 100
+      salesRows.push({
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: product.id,
+        date,
+        quantity,
+        revenue,
+        profit,
+      })
+    }
+  }
+
+  await Promise.all([
+    salesRows.length ? prisma.salesSnapshot.createMany({ data: salesRows }) : Promise.resolve(),
+    stockRows.length ? prisma.stockSnapshot.createMany({ data: stockRows }) : Promise.resolve(),
+    priceRows.length ? prisma.priceSnapshot.createMany({ data: priceRows }) : Promise.resolve(),
+  ])
+
+  return {
+    salesRows: salesRows.length,
+    stockRows: stockRows.length,
+    priceRows: priceRows.length,
+  }
+}
+
 async function main() {
   const org = await prisma.organization.upsert({
     where: { slug: "demo" },
@@ -733,6 +838,11 @@ async function main() {
     planogramVersionId: planogramVersion.id,
     mobileUserId: mobileUser.id,
   })
+  await ensureAnalyticsSnapshots({
+    organizationId: org.id,
+    storeId: store.id,
+    products,
+  })
 
   // Smoke-check через tenant client: если скоуп сломан, seed падает здесь.
   await Promise.all([
@@ -742,6 +852,9 @@ async function main() {
     db.planogram.count(),
     db.task.count(),
     db.humanReview.count(),
+    db.salesSnapshot.count(),
+    db.stockSnapshot.count(),
+    db.priceSnapshot.count(),
   ])
 
   console.log(`Demo tenant готов: org=${org.slug} (${org.id})`)

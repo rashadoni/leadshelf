@@ -18,7 +18,7 @@ import {
   getStockCoverageByProduct,
   getTaskKpiReport,
   type AbcClass,
-  type Phase8MetricRow,
+  type SpaceProductivityRow,
 } from "@/server/analytics/planogram-products"
 
 type GroupRow = {
@@ -53,11 +53,9 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`
 }
 
-function formatPhase8MetricValue(metric: Phase8MetricRow): string {
-  if (metric.value == null) return "—"
-  if (metric.key === "stockDays") return metric.value.toFixed(1)
-  if (metric.key === "turnoverRatio") return metric.value.toFixed(2)
-  return formatAmount(metric.value)
+function formatSignedPercent(value: number): string {
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${formatPercent(value)}`
 }
 
 function deltaClass(value: number): string {
@@ -184,6 +182,12 @@ export default async function AnalyticsPage({
     rows,
     basicDashboardSummary.activePlanogramVersionIds,
   )
+  const planogramLinkByProductId = new Map(
+    activePlanogramRows.map((row) => [
+      row.productId,
+      `/planograms/${row.planogramId}/${row.versionId}`,
+    ]),
+  )
   const activeLinearMm = activePlanogramRows.reduce((sum, r) => sum + r.linearMm, 0)
   const phase8Metrics = getPhase8MetricRows({
     likeForLikeSummary,
@@ -239,6 +243,46 @@ export default async function AnalyticsPage({
       return b.turnover - a.turnover
     })
   const maxHeatmapTurnover = Math.max(0, ...heatmapRows.map((row) => row.turnover))
+  const phase8MetricByKey = new Map(phase8Metrics.map((metric) => [metric.key, metric.value]))
+  const underSpaceRow = spaceProductivityRows.find((row) => row.salesGap > 0.015) ?? null
+  const overSpaceRow =
+    spaceProductivityRows
+      .filter((row) => row.salesGap < -0.015)
+      .sort((a, b) => a.salesGap - b.salesGap)[0] ?? null
+  const balancedRow =
+    [...spaceProductivityRows].sort((a, b) => Math.abs(a.salesGap) - Math.abs(b.salesGap))[0] ?? null
+  const executiveInsightCards = [
+    {
+      key: "underSpace",
+      label: t("executive.underSpace.label"),
+      row: underSpaceRow,
+      hint: (row: SpaceProductivityRow) =>
+        t("executive.underSpace.hint", {
+          shelf: formatPercent(row.shelfShare),
+          sales: formatPercent(row.salesShare),
+        }),
+    },
+    {
+      key: "overSpace",
+      label: t("executive.overSpace.label"),
+      row: overSpaceRow,
+      hint: (row: SpaceProductivityRow) =>
+        t("executive.overSpace.hint", {
+          shelf: formatPercent(row.shelfShare),
+          sales: formatPercent(row.salesShare),
+        }),
+    },
+    {
+      key: "balanced",
+      label: t("executive.balanced.label"),
+      row: balancedRow,
+      hint: (row: SpaceProductivityRow) =>
+        t("executive.balanced.hint", {
+          shelf: formatPercent(row.shelfShare),
+          sales: formatPercent(row.salesShare),
+        }),
+    },
+  ]
   const categoryColorIndexes = new Map<string, number>()
   const colorRows = rows.map((row) => {
     const sales = abcByProductId.get(row.productId)
@@ -332,6 +376,65 @@ export default async function AnalyticsPage({
 
       <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
         <div className="border-b border-neutral-200 px-4 py-3">
+          <h2 className="font-semibold">{t("executive.title")}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{t("executive.hint")}</p>
+        </div>
+        <div className="grid gap-2 border-b border-neutral-200 p-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            ["turnover", phase8MetricByKey.get("turnover")],
+            ["profit", phase8MetricByKey.get("profit")],
+            ["quantity", phase8MetricByKey.get("quantity")],
+            ["stockDays", phase8MetricByKey.get("stockDays")],
+            ["turnoverRatio", phase8MetricByKey.get("turnoverRatio")],
+          ].map(([key, value]) => (
+            <div key={key as string} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+              <div className="text-xs text-neutral-500">{t(`phase8Metrics.items.${key}` as never)}</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">
+                {key === "stockDays"
+                  ? value == null
+                    ? "—"
+                    : Number(value).toFixed(1)
+                  : key === "turnoverRatio"
+                    ? value == null
+                      ? "—"
+                      : Number(value).toFixed(2)
+                    : value == null
+                      ? "—"
+                      : formatAmount(Number(value))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-3 p-3 lg:grid-cols-3">
+          {executiveInsightCards.map((card) => (
+            <div key={card.key} className="rounded-lg border border-neutral-200 bg-white p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-neutral-500">
+                {card.label}
+              </div>
+              {card.row ? (
+                <>
+                  <Link
+                    href={planogramLinkByProductId.get(card.row.productId) ?? "/planograms"}
+                    className="font-medium hover:underline"
+                  >
+                    {card.row.productName}
+                  </Link>
+                  <div className="mt-1 text-xs text-neutral-500">{card.row.sku}</div>
+                  <div className={`mt-3 text-2xl font-semibold tabular-nums ${deltaClass(card.row.salesGap)}`}>
+                    {formatSignedPercent(card.row.salesGap)}
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">{card.hint(card.row)}</p>
+                </>
+              ) : (
+                <p className="text-sm text-neutral-500">{t("executive.noSignal")}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-200 px-4 py-3">
           <h2 className="font-semibold">{t("likeForLike.title")}</h2>
           <p className="mt-1 text-xs text-neutral-500">
             {t("likeForLike.hint", {
@@ -410,23 +513,6 @@ export default async function AnalyticsPage({
                   )}
                 </tbody>
               </table>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
-        <div className="border-b border-neutral-200 px-4 py-3">
-          <h2 className="font-semibold">{t("phase8Metrics.title")}</h2>
-          <p className="mt-1 text-xs text-neutral-500">{t("phase8Metrics.hint")}</p>
-        </div>
-        <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-4">
-          {phase8Metrics.map((metric) => (
-            <div key={metric.key} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
-              <div className="text-xs text-neutral-500">
-                {t(`phase8Metrics.items.${metric.key}` as never)}
-              </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums">{formatPhase8MetricValue(metric)}</div>
             </div>
           ))}
         </div>

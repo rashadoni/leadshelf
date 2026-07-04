@@ -468,6 +468,23 @@
       "turnover": "Dövriyyə",
       "profit": "Mənfəət"
     },
+    "executive": {
+      "title": "Rəfdə problem nədir",
+      "hint": "İlk ekran üçün qısa qat: satış, mənfəət, stok və rəf yeri üzrə üç qərar siqnalı.",
+      "noSignal": "Siqnal üçün data kifayət deyil.",
+      "underSpace": {
+        "label": "Az yer ayrılıb",
+        "hint": "Rəf payı {shelf}, satış payı {sales}. Məhsul tutduğu yerdən daha çox satır."
+      },
+      "overSpace": {
+        "label": "Çox yer ayrılıb",
+        "hint": "Rəf payı {shelf}, satış payı {sales}. Feys sayını azaltmaq üçün namizəddir."
+      },
+      "balanced": {
+        "label": "Balanslıdır",
+        "hint": "Rəf payı {shelf}, satış payı {sales}. Təcili dəyişiklik tələb etmir."
+      }
+    },
     "state": {
       "DRAFT": "Qaralama",
       "PUBLISHED": "Dərc edilib",
