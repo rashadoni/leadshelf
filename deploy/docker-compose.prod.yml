@@ -42,6 +42,17 @@ services:
         condition: service_healthy
     profiles: ["tools"] # только docker compose run --rm migrate
 
+  seed-demo:
+    build:
+      context: ./app
+      dockerfile: deploy/Dockerfile.web
+      target: seed-demo
+    env_file: .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"] # только docker compose run --rm seed-demo
+
   worker-import:
     build:
       context: ./app

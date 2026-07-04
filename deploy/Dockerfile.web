@@ -22,6 +22,11 @@ FROM builder AS migrate
 WORKDIR /app/packages/db
 CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
 
+# --- одноразовый demo seed (docker compose run --rm seed-demo) ---
+FROM builder AS seed-demo
+WORKDIR /app
+CMD ["pnpm", "--filter", "@leadshelf/db", "seed:demo"]
+
 # --- фоновые worker-задачи ---
 FROM builder AS worker
 WORKDIR /app

@@ -81,8 +81,9 @@ jobs:
             cp deploy/docker-compose.prod.yml ../docker-compose.yml
             cp deploy/Caddyfile ../Caddyfile
             cd /opt/leadshelf/prod
-            docker compose build web migrate worker-import worker-notifications
+            docker compose build web migrate seed-demo worker-import worker-notifications
             docker compose run --rm migrate
+            docker compose run --rm seed-demo
             docker compose up -d web caddy worker-import worker-notifications
             docker image prune -f > /dev/null
           '
