@@ -252,7 +252,18 @@
     "subtitle": "Mağaza və formatlar üçün dərc edilmiş zal planları: avadanlıq yerləşimi və bağlı planoqramlar.",
     "empty": "Hələ zal planı yoxdur.",
     "noPublished": "Dərc edilmiş versiya yoxdur.",
-    "equipmentCount": "avadanlıq: {count}"
+    "equipmentCount": "avadanlıq: {count}",
+    "form": {
+      "name": "Plan adı",
+      "store": "Nöqtə",
+      "format": "Format",
+      "addEquipment": "Avadanlıq əlavə et",
+      "save": "Planı saxla",
+      "saving": "Saxlanılır...",
+      "noPlanogram": "Planoqramsız",
+      "locked": "Kilidli",
+      "remove": "Sil"
+    }
   },
   "tasks": {
     "all": "Hamısı",

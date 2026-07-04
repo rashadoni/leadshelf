@@ -154,12 +154,15 @@ Definition of Done:
 
 - Stores list.
 - Formats list.
-- Create/edit floor plan.
-- Place equipment instances on canvas.
-- Rotate/move/resize.
-- Lock/unlock.
-- Labels.
-- Assign floor plan to store or format.
+- Create/edit floor plan. `[create сделано: POST /api/v1/floor-plans +
+  /floor-plans form создает published v1; edit остается отдельным slice]`
+- Place equipment instances on canvas. `[сделано: form rows create
+  FloorPlanEquipment instances with linked latest equipment version]`
+- Rotate/move/resize. `[move/rotate сделано через x/y/rotationDeg fields;
+  resize не делаем для versioned equipment, меняется через equipment library]`
+- Lock/unlock. `[сделано: isLocked в create form/API]`
+- Labels. `[сделано: label в create form/API и viewer]`
+- Assign floor plan to store or format. `[сделано: storeId XOR formatId in API/form]`
 - Copy plan from format to store.
 
 Не делать в MVP:

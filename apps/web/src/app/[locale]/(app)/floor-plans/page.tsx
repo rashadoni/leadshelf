@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
+import { FloorPlanForm } from "./floor-plan-form"
 
 function formatTarget(floorPlan: {
   store: { name: string; code: string | null } | null
@@ -16,7 +17,9 @@ export default async function FloorPlansPage() {
   const [t, session] = await Promise.all([getTranslations("floorPlans"), getSession()])
   if (!session) return null
 
-  const floorPlans = await tenantDb(session.org).floorPlan.findMany({
+  const db = tenantDb(session.org)
+  const [floorPlans, stores, formats, templates, planograms] = await Promise.all([
+    db.floorPlan.findMany({
     include: {
       store: { select: { name: true, code: true } },
       format: { select: { name: true } },
@@ -43,6 +46,32 @@ export default async function FloorPlansPage() {
     },
     orderBy: { name: "asc" },
     take: 100,
+    }),
+    db.store.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true, code: true },
+    }),
+    db.storeFormat.findMany({ orderBy: [{ name: "asc" }], select: { id: true, name: true } }),
+    db.equipmentTemplate.findMany({
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        versions: {
+          orderBy: { versionNumber: "desc" },
+          take: 1,
+          select: { id: true, widthMm: true, depthMm: true },
+        },
+      },
+    }),
+    db.planogram.findMany({ orderBy: [{ name: "asc" }], select: { id: true, name: true } }),
+  ])
+  const equipment = templates.flatMap((template) => {
+    const version = template.versions[0]
+    return version
+      ? [{ id: template.id, name: template.name, versionId: version.id, widthMm: version.widthMm, depthMm: version.depthMm }]
+      : []
   })
 
   return (
@@ -51,6 +80,7 @@ export default async function FloorPlansPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="mt-1 max-w-3xl text-sm text-neutral-500">{t("subtitle")}</p>
       </div>
+      <FloorPlanForm stores={stores} formats={formats} equipment={equipment} planograms={planograms} />
 
       {floorPlans.length === 0 ? (
         <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center text-sm text-neutral-500">
