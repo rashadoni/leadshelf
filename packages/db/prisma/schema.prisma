@@ -1457,6 +1457,7 @@ model Order {
   lines OrderLine[]
 
   @@unique([clientDeviceId, clientOpId])
+  @@unique([organizationId, invoiceNumber])
   @@index([organizationId, status, createdAt])
   @@index([storeId])
   @@map("orders")

@@ -497,7 +497,8 @@ Definition of Done:
   conditional increment и DB regression фиксирует конкурентные заказы]`
 - Invoice generation.
   `[сделано: pure core invoice document + HTML template для PDF job,
-  totals/discount/tax в cents, deterministic invoice number, HTML escaping]`
+  totals/discount/tax в cents, deterministic invoice number, HTML escaping,
+  org-scoped invoiceNumber unique index + repo retry на concurrent collision]`
 - Offline-заказ через outbox (идемпотентность deviceId+clientOpId).
   `[сделано: mobile order.create push op + local enqueueOrderCreate +
   server applyOrderCreate через outbox и unique Order(clientDeviceId,clientOpId);

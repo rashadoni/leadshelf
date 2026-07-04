@@ -213,4 +213,34 @@ describe("orders repo", () => {
     })
     expect(createdOrders).toBe(1)
   })
+
+  test("retries invoice number collisions for concurrent orders", async () => {
+    await prisma.creditLimit.update({ where: { storeId }, data: { limitAmount: 100, usedAmount: 0 } })
+
+    const [first, second] = await Promise.all([
+      createOrder(prisma, orgId, {
+        storeId,
+        visitId,
+        userId,
+        deviceId,
+        clientOpId: "order-op-invoice-race-a",
+        lines: [{ productId, quantity: 2 }],
+      }),
+      createOrder(prisma, orgId, {
+        storeId,
+        visitId,
+        userId,
+        deviceId,
+        clientOpId: "order-op-invoice-race-b",
+        lines: [{ productId, quantity: 2 }],
+      }),
+    ])
+
+    expect(first.id).not.toBe(second.id)
+    expect(first.invoiceNumber).toBeTruthy()
+    expect(second.invoiceNumber).toBeTruthy()
+    expect(first.invoiceNumber).not.toBe(second.invoiceNumber)
+    const credit = await prisma.creditLimit.findUniqueOrThrow({ where: { storeId } })
+    expect(Number(credit.usedAmount)).toBe(36)
+  })
 })
