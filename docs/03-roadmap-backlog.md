@@ -376,11 +376,14 @@ Definition of Done:
   сравнивает turnover по store, format и active assignment planogram]`
 - Metrics: turnover, profit, sales qty, turnover per meter, profit per meter, stock days, turnover ratio.
   `[сделано: /analytics показывает current LFL turnover/profit/qty,
-  turnover per meter, profit per meter, avg stock days и turnover ratio]`
+  turnover per meter, profit per meter, avg stock days и turnover ratio по
+  активным assignment versions]`
 - Space productivity: share in shelf vs share in sales/profit. `[сделано:
-  /analytics показывает SKU imbalance table: shelf share vs sales/profit share]`
+  /analytics показывает SKU imbalance table: shelf share vs sales/profit share
+  по активным assignment versions]`
 - Shelf share by brand/category/supplier. `[сделано: /analytics показывает
-  shelf share breakdown по brand/category/supplier]`
+  shelf share breakdown по brand/category/supplier по активным assignment
+  versions]`
 - Test coverage and deterministic period math. `[сделано: apps/web Vitest
   покрывает LFL periods/breakdown, per-meter metrics, space productivity и
   shelf share; периодные даты считаются по UTC-day arithmetic без timezone drift]`

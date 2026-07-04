@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb, workerDb } from "@/server/db/client"
 import {
+  filterRowsByPlanogramVersions,
   formatMeters,
   getAssortmentGapRows,
   getAbcRows,
@@ -179,15 +180,19 @@ export default async function AnalyticsPage({
     rows.map((row) => row.productId),
   )
   const abcByProductId = new Map(abcRows.map((row) => [row.productId, row]))
-  const totalLinearMm = rows.reduce((sum, r) => sum + r.linearMm, 0)
+  const activePlanogramRows = filterRowsByPlanogramVersions(
+    rows,
+    basicDashboardSummary.activePlanogramVersionIds,
+  )
+  const activeLinearMm = activePlanogramRows.reduce((sum, r) => sum + r.linearMm, 0)
   const phase8Metrics = getPhase8MetricRows({
     likeForLikeSummary,
-    totalLinearMm,
+    totalLinearMm: activeLinearMm,
     stockCoverageByProduct,
-    productIds: rows.map((row) => row.productId),
+    productIds: activePlanogramRows.map((row) => row.productId),
   })
-  const spaceProductivityRows = getSpaceProductivityRows(rows, abcRows)
-  const shelfShareGroups = getShelfShareGroups(rows, t("grouping.empty"))
+  const spaceProductivityRows = getSpaceProductivityRows(activePlanogramRows, abcRows)
+  const shelfShareGroups = getShelfShareGroups(activePlanogramRows, t("grouping.empty"))
   const groupRows = groupBy
     ? [
         ...rows

@@ -106,6 +106,7 @@ export type TaskKpiReport = {
 export type BasicDashboardSummary = {
   storesWithPlanograms: number
   activePlanograms: number
+  activePlanogramVersionIds: string[]
   placedSkus: number
   linearMm: number
   turnover: number
@@ -225,6 +226,14 @@ export function getPhase8MetricRows(input: {
     { key: "stockDays", value: avgStockDays },
     { key: "turnoverRatio", value: previousTurnover !== 0 ? currentTurnover / previousTurnover : null },
   ]
+}
+
+export function filterRowsByPlanogramVersions(
+  rows: ProductRow[],
+  planogramVersionIds: string[],
+): ProductRow[] {
+  const activeVersionIds = new Set(planogramVersionIds)
+  return rows.filter((row) => activeVersionIds.has(row.versionId))
 }
 
 export function getSpaceProductivityRows(
@@ -639,6 +648,7 @@ export async function getBasicDashboardSummary(
   return {
     storesWithPlanograms: directStoreIds.size,
     activePlanograms: activeVersionIds.size,
+    activePlanogramVersionIds: [...activeVersionIds],
     placedSkus: activeProductIds.size,
     linearMm,
     turnover,

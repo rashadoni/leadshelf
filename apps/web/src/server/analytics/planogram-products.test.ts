@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  filterRowsByPlanogramVersions,
   getAbcRows,
   getAssortmentGapRows,
   getBasicDashboardSummary,
@@ -70,10 +71,10 @@ function productRow(overrides: Partial<ProductRow> & Pick<ProductRow, "productId
     key: `${overrides.productId}:row`,
     productId: overrides.productId,
     planogramId: "planogram-a",
-    versionId: "version-a",
+    versionId: overrides.versionId ?? "version-a",
     planogramName: "Planogram A",
-    versionNumber: 1,
-    state: "PUBLISHED",
+    versionNumber: overrides.versionNumber ?? 1,
+    state: overrides.state ?? "PUBLISHED",
     sku: overrides.sku,
     productName: overrides.productName ?? overrides.sku,
     category: overrides.category === undefined ? "Category" : overrides.category,
@@ -194,6 +195,7 @@ describe("analytics planogram product helpers", () => {
     await expect(getBasicDashboardSummary(db, asAssignmentDb(db), "org-a", now)).resolves.toEqual({
       storesWithPlanograms: 3,
       activePlanograms: 1,
+      activePlanogramVersionIds: ["version-a"],
       placedSkus: 2,
       linearMm: 230,
       turnover: 140,
@@ -723,6 +725,15 @@ describe("analytics planogram product helpers", () => {
       { key: "stockDays", value: 10 },
       { key: "turnoverRatio", value: 2 },
     ])
+  })
+
+  it("filters phase 8 shelf metrics to active planogram versions", () => {
+    const rows = [
+      productRow({ productId: "product-a", sku: "A", versionId: "version-active", linearMm: 200 }),
+      productRow({ productId: "product-b", sku: "B", versionId: "version-draft", state: "DRAFT", linearMm: 800 }),
+    ]
+
+    expect(filterRowsByPlanogramVersions(rows, ["version-active"]).map((row) => row.sku)).toEqual(["A"])
   })
 
   it("calculates space productivity gaps and shelf share groups", () => {
