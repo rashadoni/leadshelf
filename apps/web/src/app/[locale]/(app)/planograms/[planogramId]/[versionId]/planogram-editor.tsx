@@ -58,6 +58,38 @@ interface DragState {
   shelfId: string
 }
 
+interface VersionHistoryPlacement {
+  productId: string
+  productSku: string
+  productName: string
+  shelfId: string
+  xMm: number
+  widthMm: number
+  heightMm: number
+  depthMm: number
+  facingsX: number
+  facingsY: number
+  facingsZ: number
+}
+
+interface VersionHistoryItem {
+  id: string
+  versionNumber: number
+  state: string
+  createdAt: string
+  publishedAt: string | null
+  placements: VersionHistoryPlacement[]
+}
+
+interface DiffEntry {
+  kind: "added" | "removed" | "moved"
+  sku: string
+  name: string
+  from?: string
+  to?: string
+  currentKey?: string
+}
+
 interface GoldenReferenceSlot {
   id: string
   placementId: string | null
@@ -100,6 +132,7 @@ export function PlanogramEditor({
   version,
   equipment,
   initialPlacements,
+  versionHistory,
   publishOptions,
   goldenReferences,
   goldenPhotoCandidates,
@@ -108,6 +141,7 @@ export function PlanogramEditor({
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
+  versionHistory: VersionHistoryItem[]
   publishOptions: PublishTargetOption
   goldenReferences: GoldenReferencePhoto[]
   goldenPhotoCandidates: GoldenPhotoCandidate[]
@@ -139,6 +173,11 @@ export function PlanogramEditor({
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
   const activeReference = references.find((ref) => ref.id === activeReferenceId) ?? references[0] ?? null
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
+  const currentHistory = versionHistory.find((item) => item.id === version.id) ?? null
+  const previousHistory =
+    versionHistory
+      .filter((item) => item.versionNumber < version.versionNumber)
+      .sort((a, b) => b.versionNumber - a.versionNumber)[0] ?? null
 
   const base = `/api/v1/planograms/${planogram.id}/versions/${version.id}/placements`
   const goldenReferenceBase = `/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`
@@ -329,6 +368,86 @@ export function PlanogramEditor({
     [equipment, placements],
   )
 
+  const diff = useMemo(() => {
+    if (!currentHistory || !previousHistory) return { entries: [] as DiffEntry[], currentMarks: new Map<string, DiffEntry["kind"]>() }
+
+    const previous = previousHistory.placements
+    const current = currentHistory.placements
+    const usedPrevious = new Set<number>()
+    const entries: DiffEntry[] = []
+    const currentMarks = new Map<string, DiffEntry["kind"]>()
+
+    function label(item: VersionHistoryPlacement) {
+      const shelfIndex = equipment.shelves.find((shelf) => shelf.id === item.shelfId)?.shelfIndex
+      return `${shelfIndex == null ? "?" : shelfIndex + 1}:${item.xMm}mm`
+    }
+    function exactKey(item: VersionHistoryPlacement) {
+      return [
+        item.productId,
+        item.shelfId,
+        item.xMm,
+        item.facingsX,
+        item.facingsY,
+        item.facingsZ,
+        item.widthMm,
+        item.heightMm,
+        item.depthMm,
+      ].join(":")
+    }
+    for (const item of current) {
+      const sameIndex = previous.findIndex((candidate, index) => !usedPrevious.has(index) && exactKey(candidate) === exactKey(item))
+      if (sameIndex >= 0) {
+        usedPrevious.add(sameIndex)
+        continue
+      }
+      const movedIndex = previous.findIndex((candidate, index) => !usedPrevious.has(index) && candidate.productId === item.productId)
+      if (movedIndex >= 0) {
+        const old = previous[movedIndex]!
+        usedPrevious.add(movedIndex)
+        const entry: DiffEntry = {
+          kind: "moved",
+          sku: item.productSku,
+          name: item.productName,
+          from: label(old),
+          to: label(item),
+          currentKey: exactKey(item),
+        }
+        entries.push(entry)
+        currentMarks.set(exactKey(item), "moved")
+      } else {
+        const entry: DiffEntry = {
+          kind: "added",
+          sku: item.productSku,
+          name: item.productName,
+          to: label(item),
+          currentKey: exactKey(item),
+        }
+        entries.push(entry)
+        currentMarks.set(exactKey(item), "added")
+      }
+    }
+    previous.forEach((item, index) => {
+      if (usedPrevious.has(index)) return
+      entries.push({ kind: "removed", sku: item.productSku, name: item.productName, from: label(item) })
+    })
+
+    return { entries, currentMarks }
+  }, [currentHistory, previousHistory, equipment.shelves])
+
+  function editorPlacementDiffKey(item: EditorPlacement) {
+    return [
+      item.product.id,
+      item.shelfId,
+      item.xMm,
+      item.facingsX,
+      item.facingsY,
+      item.facingsZ,
+      item.widthMm,
+      item.heightMm,
+      item.depthMm,
+    ].join(":")
+  }
+
   function pointInSvg(event: PointerEvent<SVGSVGElement | SVGGElement>) {
     const svg = svgRef.current
     const matrix = svg?.getScreenCTM()
@@ -487,6 +606,7 @@ export function PlanogramEditor({
               const x = (dragState?.xMm ?? p.xMm) * k
               const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
               const isSel = p.id === selectedPlacementId
+              const diffKind = diff.currentMarks.get(editorPlacementDiffKey(p))
               return (
                 <g
                   key={p.id}
@@ -530,8 +650,8 @@ export function PlanogramEditor({
                     width={wPx}
                     height={hPx}
                     fill="none"
-                    stroke={isSel ? "#0f172a" : "white"}
-                    strokeWidth={isSel ? 2 : 0.8}
+                    stroke={isSel ? "#0f172a" : diffKind === "added" ? "#16a34a" : diffKind === "moved" ? "#f59e0b" : "white"}
+                    strokeWidth={isSel || diffKind ? 2 : 0.8}
                   />
                   {wPx > 34 && (
                     <text x={x + 3} y={y + 10} fontSize={9} fill="white" style={{ pointerEvents: "none" }}>
@@ -548,8 +668,64 @@ export function PlanogramEditor({
           <PlanogramThreeViewer equipment={equipment} placements={placements} />
         </div>
 
-        {/* Side panels */}
+          {/* Side panels */}
         <div className="min-w-72 max-w-sm flex-1 space-y-4">
+          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+            <h2 className="mb-2 text-sm font-medium">{t("versionHistory")}</h2>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {versionHistory.map((item) => (
+                <a
+                  key={item.id}
+                  href={`/${locale}/planograms/${planogram.id}/${item.id}`}
+                  className={`rounded border px-2 py-1 text-xs ${
+                    item.id === version.id
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  v{item.versionNumber} · {tState(item.state as never)}
+                </a>
+              ))}
+            </div>
+            {previousHistory ? (
+              <div>
+                <div className="mb-2 text-xs font-medium text-neutral-500">
+                  {t("diffAgainst", { version: previousHistory.versionNumber })}
+                </div>
+                {diff.entries.length === 0 ? (
+                  <p className="text-xs text-neutral-500">{t("diffEmpty")}</p>
+                ) : (
+                  <div className="max-h-44 space-y-1 overflow-y-auto">
+                    {diff.entries.slice(0, 12).map((entry, index) => (
+                      <div key={`${entry.kind}-${entry.sku}-${index}`} className="rounded-md bg-neutral-50 px-2 py-1 text-xs">
+                        <span
+                          className={
+                            entry.kind === "added"
+                              ? "font-medium text-green-700"
+                              : entry.kind === "moved"
+                                ? "font-medium text-amber-700"
+                                : "font-medium text-red-700"
+                          }
+                        >
+                          {t(`diff.${entry.kind}` as never)}
+                        </span>{" "}
+                        <span className="font-mono">{entry.sku}</span>{" "}
+                        <span className="text-neutral-500">
+                          {entry.from && entry.to ? `${entry.from} -> ${entry.to}` : entry.to ?? entry.from}
+                        </span>
+                      </div>
+                    ))}
+                    {diff.entries.length > 12 ? (
+                      <div className="px-2 text-xs text-neutral-400">+{diff.entries.length - 12}</div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-neutral-500">{t("diffFirstVersion")}</p>
+            )}
+          </div>
+
           {!readOnly && (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">
               <h2 className="mb-2 text-sm font-medium">{t("products")}</h2>

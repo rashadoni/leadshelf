@@ -240,7 +240,16 @@
       "xPct": "X %",
       "yPct": "Y %",
       "widthPct": "En %",
-      "heightPct": "Hündürlük %"
+      "heightPct": "Hündürlük %",
+      "versionHistory": "Versiya tarixi",
+      "diffAgainst": "v{version} ilə diff",
+      "diffEmpty": "Yerləşdirmələrdə dəyişiklik yoxdur.",
+      "diffFirstVersion": "Bu ilk versiyadır — müqayisə üçün əvvəlki versiya yoxdur.",
+      "diff": {
+        "added": "Əlavə edildi",
+        "removed": "Silindi",
+        "moved": "Dəyişdi"
+      }
     },
     "viewer3d": {
       "title": "3D görünüş",

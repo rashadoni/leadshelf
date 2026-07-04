@@ -240,7 +240,16 @@
       "xPct": "X %",
       "yPct": "Y %",
       "widthPct": "Ширина %",
-      "heightPct": "Высота %"
+      "heightPct": "Высота %",
+      "versionHistory": "История версий",
+      "diffAgainst": "Diff к v{version}",
+      "diffEmpty": "Изменений в размещениях нет.",
+      "diffFirstVersion": "Это первая версия — сравнивать пока не с чем.",
+      "diff": {
+        "added": "Добавлено",
+        "removed": "Удалено",
+        "moved": "Изменено"
+      }
     },
     "viewer3d": {
       "title": "3D просмотр",

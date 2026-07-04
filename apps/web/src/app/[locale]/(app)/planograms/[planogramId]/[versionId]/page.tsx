@@ -19,7 +19,7 @@ export default async function PlanogramEditorPage({
   if (!eq) notFound()
 
   const db = tenantDb(session.org)
-  const [formats, stores, goldenReferences, goldenPhotoCandidates] = await Promise.all([
+  const [formats, stores, versionHistory, goldenReferences, goldenPhotoCandidates] = await Promise.all([
     db.storeFormat.findMany({
       select: { id: true, name: true, _count: { select: { stores: { where: { isActive: true } } } } },
       orderBy: { name: "asc" },
@@ -29,6 +29,32 @@ export default async function PlanogramEditorPage({
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
       take: 500,
+    }),
+    workerDb.planogramVersion.findMany({
+      where: { planogramId, planogram: { organizationId: session.org } },
+      select: {
+        id: true,
+        versionNumber: true,
+        state: true,
+        createdAt: true,
+        publishedAt: true,
+        placements: {
+          select: {
+            productId: true,
+            shelfId: true,
+            xMm: true,
+            widthMm: true,
+            heightMm: true,
+            depthMm: true,
+            facingsX: true,
+            facingsY: true,
+            facingsZ: true,
+            product: { select: { sku: true, name: true } },
+          },
+          orderBy: [{ shelfId: "asc" }, { xMm: "asc" }],
+        },
+      },
+      orderBy: { versionNumber: "asc" },
     }),
     db.goldenReference.findMany({
       where: { planogramVersionId: versionId },
@@ -96,6 +122,26 @@ export default async function PlanogramEditorPage({
           depthMm: s.depthMm,
         })),
       }}
+      versionHistory={versionHistory.map((item) => ({
+        id: item.id,
+        versionNumber: item.versionNumber,
+        state: item.state,
+        createdAt: item.createdAt.toISOString(),
+        publishedAt: item.publishedAt?.toISOString() ?? null,
+        placements: item.placements.map((placement) => ({
+          productId: placement.productId,
+          productSku: placement.product.sku,
+          productName: placement.product.name,
+          shelfId: placement.shelfId ?? "",
+          xMm: placement.xMm,
+          widthMm: placement.widthMm,
+          heightMm: placement.heightMm,
+          depthMm: placement.depthMm,
+          facingsX: placement.facingsX,
+          facingsY: placement.facingsY,
+          facingsZ: placement.facingsZ,
+        })),
+      }))}
       initialPlacements={payload.version.placements.map((p) => ({
         id: p.id,
         shelfId: p.shelfId ?? "",

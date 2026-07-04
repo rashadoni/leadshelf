@@ -201,7 +201,8 @@ click-to-place с авто-позицией, пикер товаров (без �
 - Product details panel: name, SKU, barcode, dimensions, current price, stock.
 - Zone creation on equipment.
 - Save draft.
-- Version history.
+- Version history. `[сделано: боковая история версий + diff к предыдущей
+  версии по added/removed/moved, цветовая подсветка current placements]`
 
 UX-дифференциаторы (Tier 1 из docs/10, не «потом», а требования фазы):
 
@@ -210,7 +211,8 @@ UX-дифференциаторы (Tier 1 из docs/10, не «потом», а 
 - Деньги в drag-preview: ABC-класс, оборот/день, дней запаса, доля полки —
   живые данные из снапшотов в момент перетаскивания.
 - Diff-режим версий («git diff для полки»): added/removed/moved подсветка
-  между двумя версиями + дельта метрик.
+  между двумя версиями + дельта метрик. `[сделано: placement diff и
+  подсветка; дельта метрик остается рядом с money-preview slice]`
 
 Definition of Done:
 
