@@ -1,4 +1,9 @@
-import type { EquipmentGeometryMm } from "@leadshelf/core"
+import {
+  orientedProductSizeMm,
+  placementWidthMm,
+  type EquipmentGeometryMm,
+  type PlacementStackMode,
+} from "@leadshelf/core"
 
 export type ThreeViewerPlacement = {
   id: string
@@ -11,6 +16,13 @@ export type ThreeViewerPlacement = {
   facingsY: number
   facingsZ: number
   compressionX?: number
+  compressionY?: number
+  compressionZ?: number
+  gapMm?: number
+  rotationX?: number
+  rotationY?: number
+  rotationZ?: number
+  stackMode?: PlacementStackMode
   product: { sku: string; name: string }
 }
 
@@ -76,9 +88,13 @@ export function buildPlanogramThreeSceneModel(
   const products = placements.flatMap((placement) => {
     const shelf = shelvesById.get(placement.shelfId)
     if (!shelf) return []
-    const width = mm(placement.widthMm * (placement.compressionX ?? 1) * placement.facingsX)
-    const height = mm(placement.heightMm * placement.facingsY)
-    const depth = mm(placement.depthMm * placement.facingsZ)
+    const oriented = orientedProductSizeMm(placement)
+    const widthMm = placementWidthMm(placement)
+    const heightMm = oriented.heightMm * placement.facingsY * (placement.compressionY ?? 1)
+    const depthMm = oriented.depthMm * placement.facingsZ * (placement.compressionZ ?? 1)
+    const width = mm(widthMm)
+    const height = mm(heightMm)
+    const depth = mm(depthMm)
     return [
       {
         id: placement.id,
@@ -100,9 +116,9 @@ export function buildPlanogramThreeSceneModel(
     equipmentHeight,
     equipmentDepth,
     cameraPosition: {
-      x: 0,
+      x: equipmentWidth * 1.08,
       y: equipmentHeight * 0.72,
-      z: equipmentDepth * 4,
+      z: Math.max(equipmentDepth * 3.6, equipmentWidth * 1.35),
     },
     controlTarget: {
       x: 0,

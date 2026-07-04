@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server"
+import { Fragment } from "react"
 import { expireOverdueTasks, getTaskSlaSummary } from "@leadshelf/db"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb, workerDb } from "@/server/db/client"
@@ -7,6 +8,10 @@ import { TaskStatusActions } from "./task-status-actions"
 import { AssigneeSelect } from "./assignee-select"
 
 const STATUSES = ["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED", "COMPLETED", "EXPIRED", "EMPTY"] as const
+
+function formatDate(value: Date | null | undefined): string {
+  return value ? value.toLocaleDateString() : "—"
+}
 
 export default async function TasksPage({
   searchParams,
@@ -42,8 +47,28 @@ export default async function TasksPage({
         },
         comments: {
           orderBy: { createdAt: "desc" },
-          take: 1,
+          take: 3,
           select: { body: true, createdAt: true, user: { select: { name: true } } },
+        },
+        statusHistory: {
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          select: { fromStatus: true, toStatus: true, createdAt: true },
+        },
+        photoSubmissions: {
+          orderBy: { takenAt: "desc" },
+          take: 3,
+          select: {
+            url: true,
+            takenAt: true,
+            qualityScore: true,
+            user: { select: { name: true } },
+          },
+        },
+        humanReviews: {
+          orderBy: { createdAt: "desc" },
+          take: 3,
+          select: { reason: true, status: true, score: true, note: true, createdAt: true },
         },
         _count: { select: { comments: true } },
       },
@@ -116,63 +141,145 @@ export default async function TasksPage({
             </thead>
             <tbody>
               {tasks.map((task) => (
-                <tr key={task.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
-                  <td className="px-3 py-2 font-medium">{task.title}</td>
-                  <td className="px-3 py-2 text-neutral-500">
-                    {task.store.name} {task.store.code && `(${task.store.code})`}
-                  </td>
-                  <td className="px-3 py-2">
-                    {task.planogramVersion && (
-                      <Link
-                        href={`/planograms/${task.planogramVersion.planogram.id}/${task.planogramVersion.id}`}
-                        className="text-neutral-600 hover:underline"
-                      >
-                        {task.planogramVersion.planogram.name} · v{task.planogramVersion.versionNumber}
-                      </Link>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-neutral-500">
-                    {task.dueAt ? new Date(task.dueAt).toLocaleDateString() : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <AssigneeSelect
-                      taskId={task.id}
-                      current={task.assignee?.id ?? null}
-                      users={assignableUsers}
-                    />
-                  </td>
-                  <td className="max-w-[240px] px-3 py-2 text-xs text-neutral-500">
-                    {task.comments[0] ? (
-                      <div>
-                        <div className="truncate text-neutral-700">{task.comments[0].body}</div>
+                <Fragment key={task.id}>
+                  <tr className="border-b border-neutral-100 hover:bg-neutral-50">
+                    <td className="px-3 py-2 font-medium">{task.title}</td>
+                    <td className="px-3 py-2 text-neutral-500">
+                      {task.store.name} {task.store.code && `(${task.store.code})`}
+                    </td>
+                    <td className="px-3 py-2">
+                      {task.planogramVersion && (
+                        <Link
+                          href={`/planograms/${task.planogramVersion.planogram.id}/${task.planogramVersion.id}`}
+                          className="text-neutral-600 hover:underline"
+                        >
+                          {task.planogramVersion.planogram.name} · v{task.planogramVersion.versionNumber}
+                        </Link>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-neutral-500">{formatDate(task.dueAt)}</td>
+                    <td className="px-3 py-2">
+                      <AssigneeSelect
+                        taskId={task.id}
+                        current={task.assignee?.id ?? null}
+                        users={assignableUsers}
+                      />
+                    </td>
+                    <td className="max-w-[240px] px-3 py-2 text-xs text-neutral-500">
+                      {task.comments[0] ? (
                         <div>
-                          {task.comments[0].user.name}
-                          {task._count.comments > 1 ? ` · +${task._count.comments - 1}` : ""}
+                          <div className="truncate text-neutral-700">{task.comments[0].body}</div>
+                          <div>
+                            {task.comments[0].user.name}
+                            {task._count.comments > 1 ? ` · +${task._count.comments - 1}` : ""}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-xs ${
-                        task.status === "COMPLETED"
-                          ? "bg-green-50 text-green-700"
-                          : task.status === "EXPIRED"
-                            ? "bg-red-50 text-red-600"
-                            : task.status === "NEW"
-                              ? "bg-blue-50 text-blue-700"
-                              : "bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {t(`status.${task.status}` as never)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <TaskStatusActions taskId={task.id} status={task.status} />
-                  </td>
-                </tr>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-xs ${
+                          task.status === "COMPLETED"
+                            ? "bg-green-50 text-green-700"
+                            : task.status === "EXPIRED"
+                              ? "bg-red-50 text-red-600"
+                              : task.status === "NEW"
+                                ? "bg-blue-50 text-blue-700"
+                                : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {t(`status.${task.status}` as never)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <TaskStatusActions taskId={task.id} status={task.status} />
+                    </td>
+                  </tr>
+                  <tr className="border-b border-neutral-100 last:border-0 bg-neutral-50/60">
+                    <td colSpan={8} className="px-3 py-3">
+                      <details className="group">
+                        <summary className="cursor-pointer text-xs font-medium text-neutral-700 hover:text-neutral-950">
+                          {t("detail.open")}
+                        </summary>
+                        <div className="mt-3 grid gap-3 md:grid-cols-4">
+                          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+                            <div className="mb-2 text-xs font-semibold text-neutral-500">{t("detail.history")}</div>
+                            <div className="space-y-1 text-xs text-neutral-600">
+                              {task.statusHistory.length > 0 ? (
+                                task.statusHistory.map((item) => (
+                                  <div key={`${item.toStatus}-${item.createdAt.toISOString()}`}>
+                                    {item.fromStatus ? t(`status.${item.fromStatus}` as never) : "—"} →{" "}
+                                    {t(`status.${item.toStatus}` as never)}
+                                    <span className="text-neutral-400"> · {formatDate(item.createdAt)}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <div>—</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+                            <div className="mb-2 text-xs font-semibold text-neutral-500">{t("detail.photos")}</div>
+                            <div className="space-y-1 text-xs text-neutral-600">
+                              {task.photoSubmissions.length > 0 ? (
+                                task.photoSubmissions.map((photo) => (
+                                  <div key={photo.url}>
+                                    <a href={`/api/media/${photo.url}`} className="font-medium hover:underline" target="_blank" rel="noreferrer">
+                                      {formatDate(photo.takenAt)}
+                                    </a>
+                                    <span className="text-neutral-400"> · {photo.user.name}</span>
+                                    {photo.qualityScore == null ? null : (
+                                      <span className="text-neutral-400"> · {(photo.qualityScore * 100).toFixed(0)}%</span>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div>—</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+                            <div className="mb-2 text-xs font-semibold text-neutral-500">{t("detail.reviews")}</div>
+                            <div className="space-y-1 text-xs text-neutral-600">
+                              {task.humanReviews.length > 0 ? (
+                                task.humanReviews.map((review) => (
+                                  <div key={`${review.status}-${review.createdAt.toISOString()}`}>
+                                    {review.reason} · {review.status}
+                                    {review.score == null ? null : (
+                                      <span className="text-neutral-400"> · {(review.score * 100).toFixed(0)}%</span>
+                                    )}
+                                    {review.note ? <div className="text-neutral-500">{review.note}</div> : null}
+                                  </div>
+                                ))
+                              ) : (
+                                <div>—</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white p-3">
+                            <div className="mb-2 text-xs font-semibold text-neutral-500">{t("detail.comments")}</div>
+                            <div className="space-y-1 text-xs text-neutral-600">
+                              {task.comments.length > 0 ? (
+                                task.comments.map((comment) => (
+                                  <div key={`${comment.user.name}-${comment.createdAt.toISOString()}`}>
+                                    <div className="text-neutral-700">{comment.body}</div>
+                                    <div className="text-neutral-400">
+                                      {comment.user.name} · {formatDate(comment.createdAt)}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div>—</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                    </td>
+                  </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

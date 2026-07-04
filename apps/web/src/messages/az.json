@@ -215,6 +215,21 @@
     "createNew": "Yeni planoqram",
     "empty": "Hələ planoqram yoxdur.",
     "placements": "yerləşdirmə",
+    "list": {
+      "planogram": "Planoqram",
+      "preview": "Ön baxış",
+      "status": "Status/versiya",
+      "targets": "Hədəflər",
+      "tasks": "Tapşırıqlar",
+      "updated": "Yenilənib",
+      "actions": "Əməliyyatlar",
+      "noCategory": "Kateqoriyasız",
+      "openTasks": "açıq: {count}",
+      "completedTasks": "tamamlandı: {count}",
+      "published": "dərc: {date}",
+      "open": "Aç",
+      "tasksAction": "Tapşırıqlar"
+    },
     "state": {
       "DRAFT": "Qaralama",
       "PUBLISHED": "Dərc edilib",
@@ -359,6 +374,18 @@
       "floorPlans": "Planlar",
       "assignments": "Təyinatlar",
       "assortment": "Assortiment"
+    },
+    "detail": {
+      "open": "Nöqtə detalları",
+      "floorPlans": "Zal planları",
+      "assignments": "Aktiv planoqramlar",
+      "tasks": "Son tapşırıqlar",
+      "fieldWork": "Marşrut və vizitlər",
+      "photoProof": "Foto nəzarət",
+      "published": "dərc edilib",
+      "draft": "qaralama",
+      "equipmentCount": "avadanlıq: {count}",
+      "photos": "foto: {count}"
     }
   },
   "floorPlans": {
@@ -408,6 +435,18 @@
       "COMPLETED": "Qəbul et",
       "EXPIRED": "Vaxtı keçmiş",
       "EMPTY": "Boş"
+    },
+    "confirm": {
+      "COMPLETED": "Tapşırığı tamamlanmış kimi qəbul edirsiniz?",
+      "EXPIRED": "Tapşırığı vaxtı keçmiş statusuna keçirmək?",
+      "EMPTY": "Tapşırığı boş kimi bağlamaq?"
+    },
+    "detail": {
+      "open": "Tapşırıq detalları",
+      "history": "Status tarixi",
+      "photos": "Fotolar",
+      "reviews": "Yoxlamalar",
+      "comments": "Şərhlər"
     },
     "sla": {
       "open": "Açıq",

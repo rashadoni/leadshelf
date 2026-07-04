@@ -215,6 +215,21 @@
     "createNew": "Новая планограмма",
     "empty": "Планограмм пока нет.",
     "placements": "размещений",
+    "list": {
+      "planogram": "Планограмма",
+      "preview": "Превью",
+      "status": "Статус/версия",
+      "targets": "Цели",
+      "tasks": "Задачи",
+      "updated": "Обновлено",
+      "actions": "Действия",
+      "noCategory": "Без категории",
+      "openTasks": "открыто: {count}",
+      "completedTasks": "выполнено: {count}",
+      "published": "опубл. {date}",
+      "open": "Открыть",
+      "tasksAction": "Задачи"
+    },
     "state": {
       "DRAFT": "Черновик",
       "PUBLISHED": "Опубликована",
@@ -359,6 +374,18 @@
       "floorPlans": "Планы",
       "assignments": "Назначения",
       "assortment": "Ассортимент"
+    },
+    "detail": {
+      "open": "Детали точки",
+      "floorPlans": "Планы зала",
+      "assignments": "Активные планограммы",
+      "tasks": "Последние задачи",
+      "fieldWork": "Маршруты и визиты",
+      "photoProof": "Фото-контроль",
+      "published": "опубликован",
+      "draft": "черновик",
+      "equipmentCount": "оборудование: {count}",
+      "photos": "фото: {count}"
     }
   },
   "floorPlans": {
@@ -408,6 +435,18 @@
       "COMPLETED": "Принять",
       "EXPIRED": "Просрочить",
       "EMPTY": "Пустая"
+    },
+    "confirm": {
+      "COMPLETED": "Принять задачу как выполненную?",
+      "EXPIRED": "Перевести задачу в просроченные?",
+      "EMPTY": "Закрыть задачу как пустую?"
+    },
+    "detail": {
+      "open": "Детали задачи",
+      "history": "История статусов",
+      "photos": "Фото",
+      "reviews": "Проверки",
+      "comments": "Комментарии"
     },
     "sla": {
       "open": "Открытые",

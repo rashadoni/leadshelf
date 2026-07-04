@@ -42,7 +42,7 @@ describe("planogram three scene model", () => {
     expect(model.equipmentWidth).toBe(1)
     expect(model.equipmentHeight).toBe(2)
     expect(model.equipmentDepth).toBe(0.5)
-    expect(model.cameraPosition).toEqual({ x: 0, y: 1.44, z: 2 })
+    expect(model.cameraPosition).toEqual({ x: 1.08, y: 1.44, z: 1.8 })
     expect(model.controlTarget).toEqual({ x: 0, y: 0.9, z: 0 })
     expect(model.floor).toEqual({
       width: 1.08,
@@ -72,5 +72,31 @@ describe("planogram three scene model", () => {
     expect(model.products[0]?.position.x).toBeCloseTo(-0.36)
     expect(model.products[0]?.position.y).toBeCloseTo(0.27)
     expect(model.products[0]?.position.z).toBeCloseTo(0.23)
+  })
+
+  it("uses the same oriented placement width as the 2D shelf view", () => {
+    const model = buildPlanogramThreeSceneModel(equipment, [
+      placement({
+        id: "rotated",
+        widthMm: 80,
+        heightMm: 120,
+        depthMm: 35,
+        facingsX: 3,
+        facingsY: 2,
+        facingsZ: 2,
+        rotationY: 90,
+        compressionX: 0.75,
+      }),
+    ])
+
+    expect(model.products).toHaveLength(1)
+    expect(model.products[0]).toMatchObject({
+      id: "rotated",
+      width: 0.07875,
+      height: 0.24,
+      depth: 0.16,
+    })
+    expect(model.products[0]?.position.x).toBeCloseTo(-0.360625)
+    expect(model.products[0]?.position.z).toBeCloseTo(0.17)
   })
 })

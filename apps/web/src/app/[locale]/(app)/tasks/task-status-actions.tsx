@@ -16,12 +16,16 @@ const NEXT: Record<string, string[]> = {
 
 export function TaskStatusActions({ taskId, status }: { taskId: string; status: string }) {
   const t = useTranslations("tasks.actions")
+  const tConfirm = useTranslations("tasks.confirm")
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const options = NEXT[status] ?? []
   if (options.length === 0) return null
 
   async function transition(toStatus: string) {
+    if (["COMPLETED", "EXPIRED", "EMPTY"].includes(toStatus) && !window.confirm(tConfirm(toStatus as never))) {
+      return
+    }
     setPending(true)
     const res = await fetch(`/api/v1/tasks/${taskId}/status`, {
       method: "PATCH",
