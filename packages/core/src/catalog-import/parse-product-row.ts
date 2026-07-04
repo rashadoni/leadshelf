@@ -109,6 +109,18 @@ export function parseProductRow(
     }
   }
 
+  // isSoftPack: default false; only explicit true enables auto-compression.
+  let isSoftPack = false
+  const softPackRaw = get("isSoftPack")
+  if (softPackRaw != null) {
+    const parsed = parseBool(softPackRaw)
+    if (parsed == null) {
+      errors.push(issue(rowNumber, `isSoftPack: не распознано "${softPackRaw}"`, { field: "isSoftPack" }))
+    } else {
+      isSoftPack = parsed
+    }
+  }
+
   if (errors.length > 0) return { ok: false, errors, warnings }
 
   const candidate = {
@@ -123,6 +135,7 @@ export function parseProductRow(
     unit: unit!,
     ...dims,
     externalId: get("externalId"),
+    isSoftPack,
     isActive,
   }
 

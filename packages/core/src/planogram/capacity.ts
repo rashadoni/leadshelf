@@ -5,6 +5,9 @@ export interface ProductSizeMm {
   widthMm: number
   heightMm: number
   depthMm: number
+  compressionX?: number
+  compressionY?: number
+  compressionZ?: number
 }
 
 export interface ShelfSpaceMm {
@@ -56,13 +59,15 @@ export interface PlacementBoxMm {
   widthMm: number
   facingsX: number
   gapMm?: number
+  compressionX?: number
 }
 
 /** Занятая ширина размещения по X, включая зазоры между фейсингами. */
 export function placementWidthMm(p: PlacementBoxMm): number {
   const gap = p.gapMm ?? 0
   if (p.facingsX <= 0) return 0
-  return p.facingsX * p.widthMm + (p.facingsX - 1) * gap
+  const compressionX = p.compressionX ?? 1
+  return p.facingsX * p.widthMm * compressionX + (p.facingsX - 1) * gap
 }
 
 /** Пересекаются ли два размещения на одной полке по оси X. */

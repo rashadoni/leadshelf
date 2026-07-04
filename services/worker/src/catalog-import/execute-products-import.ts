@@ -150,6 +150,7 @@ async function importOneProduct(
     heightMm: row.heightMm,
     depthMm: row.depthMm,
     weightG: row.weightG,
+    isSoftPack: row.isSoftPack,
     isActive: row.isActive,
     brandId,
     supplierId,

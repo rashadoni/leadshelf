@@ -199,6 +199,7 @@ export default async function CatalogPage({
                         heightMm: p.heightMm?.toString() ?? "",
                         depthMm: p.depthMm?.toString() ?? "",
                         weightG: p.weightG?.toString() ?? "",
+                        isSoftPack: p.isSoftPack,
                         isActive: p.isActive,
                       }}
                     />

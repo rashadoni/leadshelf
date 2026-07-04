@@ -50,6 +50,7 @@ export default async function PlanogramEditorPage({
             widthMm: true,
             heightMm: true,
             depthMm: true,
+            compressionX: true,
             facingsX: true,
             facingsY: true,
             facingsZ: true,
@@ -142,12 +143,15 @@ export default async function PlanogramEditorPage({
     const share = totalTurnover > 0 ? cumulativeTurnover / totalTurnover : 1
     abcClassByProductId.set(row.productId, share <= 0.8 ? "A" : share <= 0.95 ? "B" : "C")
   }
-  const totalLinearMm = payload.version.placements.reduce((sum, placement) => sum + placement.widthMm * placement.facingsX, 0)
+  const totalLinearMm = payload.version.placements.reduce(
+    (sum, placement) => sum + placement.widthMm * placement.facingsX * placement.compressionX,
+    0,
+  )
   const linearByProductId = new Map<string, number>()
   for (const placement of payload.version.placements) {
     linearByProductId.set(
       placement.productId,
-      (linearByProductId.get(placement.productId) ?? 0) + placement.widthMm * placement.facingsX,
+      (linearByProductId.get(placement.productId) ?? 0) + placement.widthMm * placement.facingsX * placement.compressionX,
     )
   }
 
@@ -209,6 +213,7 @@ export default async function PlanogramEditorPage({
           widthMm: placement.widthMm,
           heightMm: placement.heightMm,
           depthMm: placement.depthMm,
+          compressionX: placement.compressionX,
           facingsX: placement.facingsX,
           facingsY: placement.facingsY,
           facingsZ: placement.facingsZ,
@@ -221,6 +226,7 @@ export default async function PlanogramEditorPage({
         widthMm: p.widthMm,
         heightMm: p.heightMm,
         depthMm: p.depthMm,
+        compressionX: p.compressionX,
         facingsX: p.facingsX,
         facingsY: p.facingsY,
         facingsZ: p.facingsZ,

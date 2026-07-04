@@ -349,6 +349,7 @@ type PlanogramProductPlacement = {
   facingsY: number
   facingsZ: number
   widthMm: number
+  compressionX: number
   planogramVersion: {
     id: string
     versionNumber: number
@@ -520,7 +521,7 @@ export async function getPlanogramProductRows(
   for (const placement of placements) {
     const key = `${placement.planogramVersionId}:${placement.productId}`
     const units = placement.facingsX * placement.facingsY * placement.facingsZ
-    const linearMm = placement.widthMm * placement.facingsX
+    const linearMm = placement.widthMm * placement.compressionX * placement.facingsX
     const existing = rowsByKey.get(key)
     if (existing) {
       existing.placements += 1

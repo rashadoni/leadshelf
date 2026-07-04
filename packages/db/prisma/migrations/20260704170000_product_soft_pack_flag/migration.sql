@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "isSoftPack" BOOLEAN NOT NULL DEFAULT false;

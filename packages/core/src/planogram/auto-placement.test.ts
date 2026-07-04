@@ -53,4 +53,22 @@ describe("planAutoPlacementInZone", () => {
     expect(result.placements).toHaveLength(0)
     expect(result.rejected).toEqual([{ productId: "a", reason: "no free physical slot inside zone" }])
   })
+
+  it("compresses only soft-pack products when that is required to fit", () => {
+    const result = planAutoPlacementInZone({
+      equipment,
+      zone: { id: "z1", xMm: 0, yMm: 0, widthMm: 270, heightMm: 100 },
+      existing: [],
+      products: [
+        { id: "soft", widthMm: 100, heightMm: 100, depthMm: 100, score: 100, isSoftPack: true },
+        { id: "rigid", widthMm: 100, heightMm: 100, depthMm: 100, score: 100 },
+      ],
+    })
+
+    expect(result.placements).toMatchObject([
+      { productId: "soft", facingsX: 3, compressionX: 0.9 },
+    ])
+    expect(result.placements[0]?.reason).toContain("compressionX=0.9")
+    expect(result.rejected).toEqual([{ productId: "rigid", reason: "no free physical slot inside zone" }])
+  })
 })

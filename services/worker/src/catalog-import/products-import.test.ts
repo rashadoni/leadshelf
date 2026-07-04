@@ -33,6 +33,7 @@ const ROWS: RawCsvRow[] = [
     Ширина: "45",
     Высота: "120",
     Глубина: "30",
+    "Мягкая упаковка": "да",
     id1c: "1c-guid-100",
   },
   { sku: "B-200", name: "Минимальный товар" }, // без штрих-кода и размеров -> warnings
@@ -57,6 +58,7 @@ describe("executeProductsImport", () => {
       include: { category: true, brand: true, barcodes: true },
     })
     expect(a100?.widthMm).toBe(45)
+    expect(a100?.isSoftPack).toBe(true)
     expect(a100?.unit).toBe("PCS")
     expect(a100?.category?.normalizedPath).toBe("otc/обезболивающие")
     expect(a100?.brand?.name).toBe("Авексима")

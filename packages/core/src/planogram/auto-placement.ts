@@ -1,3 +1,4 @@
+import { placementWidthMm } from "./capacity"
 import {
   shelfSpaceForShelf,
   validatePlacementOnShelf,
@@ -19,6 +20,8 @@ export interface AutoPlacementProductMm {
   heightMm: number
   depthMm: number
   score: number
+  isSoftPack?: boolean
+  minCompressionX?: number
 }
 
 export interface AutoPlacementPlan {
@@ -28,6 +31,7 @@ export interface AutoPlacementPlan {
   facingsX: number
   facingsY: number
   facingsZ: number
+  compressionX: number
   score: number
   reason: string
 }
@@ -48,7 +52,7 @@ function nextFreeInRange(input: {
     .filter((placement) => placement.shelfId === input.shelfId)
     .map((placement) => ({
       start: placement.xMm,
-      end: placement.xMm + placement.widthMm * placement.facingsX,
+      end: placement.xMm + placementWidthMm(placement),
     }))
     .sort((a, b) => a.start - b.start)
 
@@ -68,6 +72,12 @@ function facingsForScore(score: number, maxScore: number): number {
   if (ratio >= 0.66) return 3
   if (ratio >= 0.33) return 2
   return 1
+}
+
+function compressionSteps(product: AutoPlacementProductMm): number[] {
+  if (!product.isSoftPack) return [1]
+  const min = Math.max(0.75, Math.min(product.minCompressionX ?? 0.85, 1))
+  return [1, 0.95, 0.9, 0.85, 0.8, 0.75].filter((value) => value >= min)
 }
 
 export function planAutoPlacementInZone(input: {
@@ -98,39 +108,44 @@ export function planAutoPlacementInZone(input: {
       const shelf = shelfSpaceForShelf(input.equipment, shelfId)
       if (!shelf) continue
       for (let facingsX = preferredFacings; facingsX >= 1; facingsX--) {
-        const widthNeededMm = product.widthMm * facingsX
-        const xMm = nextFreeInRange({
-          shelfId,
-          widthNeededMm,
-          startMm: input.zone.xMm,
-          endMm: Math.min(zoneEnd, shelf.innerWidthMm),
-          existing,
-        })
-        if (xMm == null) continue
-        const candidate: PlacementCandidateMm = {
-          shelfId,
-          xMm,
-          widthMm: product.widthMm,
-          heightMm: product.heightMm,
-          depthMm: product.depthMm,
-          facingsX,
-          facingsY: 1,
-          facingsZ: 1,
+        for (const compressionX of compressionSteps(product)) {
+          const widthNeededMm = product.widthMm * compressionX * facingsX
+          const xMm = nextFreeInRange({
+            shelfId,
+            widthNeededMm,
+            startMm: input.zone.xMm,
+            endMm: Math.min(zoneEnd, shelf.innerWidthMm),
+            existing,
+          })
+          if (xMm == null) continue
+          const candidate: PlacementCandidateMm = {
+            shelfId,
+            xMm,
+            widthMm: product.widthMm,
+            heightMm: product.heightMm,
+            depthMm: product.depthMm,
+            compressionX,
+            facingsX,
+            facingsY: 1,
+            facingsZ: 1,
+          }
+          const verdict = validatePlacementOnShelf({ shelf, candidate, existing })
+          if (!verdict.ok) continue
+          placed = {
+            productId: product.id,
+            shelfId,
+            xMm,
+            facingsX,
+            facingsY: 1,
+            facingsZ: 1,
+            compressionX,
+            score: product.score,
+            reason: `score=${product.score}; facingsX=${facingsX}; compressionX=${compressionX}; zone=${input.zone.id}`,
+          }
+          existing.push({ ...candidate, id: `planned:${product.id}` })
+          break
         }
-        const verdict = validatePlacementOnShelf({ shelf, candidate, existing })
-        if (!verdict.ok) continue
-        placed = {
-          productId: product.id,
-          shelfId,
-          xMm,
-          facingsX,
-          facingsY: 1,
-          facingsZ: 1,
-          score: product.score,
-          reason: `score=${product.score}; facingsX=${facingsX}; zone=${input.zone.id}`,
-        }
-        existing.push({ ...candidate, id: `planned:${product.id}` })
-        break
+        if (placed) break
       }
       if (placed) break
     }

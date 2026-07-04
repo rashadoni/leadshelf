@@ -404,6 +404,7 @@ model Product {
   heightMm       Int?
   depthMm        Int?
   weightG        Int?
+  isSoftPack     Boolean       @default(false)
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

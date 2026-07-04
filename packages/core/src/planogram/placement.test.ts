@@ -87,6 +87,23 @@ describe("validatePlacementOnShelf — физика", () => {
     if (!r.ok) expect(r.message).toMatch(/100-400/)
   })
 
+  test("compressionX уменьшает занятую ширину и интервал коллизии", () => {
+    const existing = [candidate({ id: "p1", xMm: 100, facingsX: 4, compressionX: 0.8 })] // 100-340
+    const fitsAfterCompressedEnd = validatePlacementOnShelf({
+      shelf,
+      candidate: candidate({ xMm: 340 }),
+      existing,
+    })
+    const overlapsCompressedEnd = validatePlacementOnShelf({
+      shelf,
+      candidate: candidate({ xMm: 339 }),
+      existing,
+    })
+
+    expect(fitsAfterCompressedEnd.ok).toBe(true)
+    expect(overlapsCompressedEnd.ok).toBe(false)
+  })
+
   test("update: свое старое место не считается коллизией", () => {
     const existing = [candidate({ id: "p1", xMm: 100, facingsX: 4 })]
     const r = validatePlacementOnShelf({

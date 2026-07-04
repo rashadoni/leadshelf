@@ -18,6 +18,7 @@ export const productImportRowV1 = z.object({
   heightMm: positiveIntSchema.nullable(),
   depthMm: positiveIntSchema.nullable(),
   weightG: positiveIntSchema.nullable(),
+  isSoftPack: z.boolean().default(false),
   externalId: z.string().trim().min(1).max(128).nullable(),
   isActive: z.boolean(),
 })

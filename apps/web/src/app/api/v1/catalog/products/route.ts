@@ -29,6 +29,7 @@ const productCreateSchema = z.object({
   heightMm: z.number().int().positive().nullable().optional(),
   depthMm: z.number().int().positive().nullable().optional(),
   weightG: z.number().int().positive().nullable().optional(),
+  isSoftPack: z.boolean().default(false),
 })
 
 export async function GET(req: NextRequest) {
@@ -92,6 +93,7 @@ export async function GET(req: NextRequest) {
       heightMm: p.heightMm,
       depthMm: p.depthMm,
       weightG: p.weightG,
+      isSoftPack: p.isSoftPack,
       hasDimensions: p.widthMm != null && p.heightMm != null && p.depthMm != null,
       isActive: p.isActive,
     })),
@@ -145,6 +147,7 @@ export async function POST(req: NextRequest) {
           heightMm: data.heightMm ?? null,
           depthMm: data.depthMm ?? null,
           weightG: data.weightG ?? null,
+          isSoftPack: data.isSoftPack,
         },
         select: { id: true, sku: true, name: true },
       })

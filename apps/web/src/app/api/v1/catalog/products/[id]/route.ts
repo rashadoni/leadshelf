@@ -18,6 +18,7 @@ const dimensionsSchema = z
     supplierId: z.string().min(1).nullable().optional(),
     manufacturerId: z.string().min(1).nullable().optional(),
     barcode: z.string().trim().min(1).max(128).nullable().optional(),
+    isSoftPack: z.boolean().optional(),
     isActive: z.boolean().optional(),
     widthMm: z.number().int().positive().nullable().optional(),
     heightMm: z.number().int().positive().nullable().optional(),

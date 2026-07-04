@@ -32,6 +32,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   heightMm: ["height", "heightmm", "высота", "hündürlük", "hundurluk"],
   depthMm: ["depth", "depthmm", "глубина", "dərinlik", "derinlik"],
   weightG: ["weight", "weightg", "вес", "çəki", "ceki"],
+  isSoftPack: ["issoftpack", "softpack", "soft", "мягкаяупаковка", "yumşaqpaket", "yumsaqpaket"],
   externalId: ["externalid", "id1c", "код1с", "guid"],
   isActive: ["isactive", "active", "активен", "aktiv", "status"],
   price: ["price", "цена", "qiymət", "qiymet"],

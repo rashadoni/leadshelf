@@ -101,6 +101,7 @@ describe("analytics planogram product helpers", () => {
               facingsY: 1,
               facingsZ: 3,
               widthMm: 75,
+              compressionX: 0.9,
               sortOrder: 1,
               planogramVersion: {
                 id: "version-a",
@@ -126,7 +127,7 @@ describe("analytics planogram product helpers", () => {
       expect.objectContaining({
         key: "version-a:product-a",
         units: 6,
-        linearMm: 150,
+        linearMm: 135,
       }),
     ])
   })

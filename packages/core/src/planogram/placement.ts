@@ -105,20 +105,22 @@ export function validatePlacementOnShelf(input: {
   }
 
   const depth = candidate.depthMm * candidate.facingsZ
-  if (depth > shelf.depthMm) {
+  const compressedDepth = depth * (candidate.compressionZ ?? 1)
+  if (compressedDepth > shelf.depthMm) {
     return {
       ok: false,
       code: "outside_depth",
-      message: `глубина ${depth}мм > полки ${shelf.depthMm}мм`,
+      message: `глубина ${compressedDepth}мм > полки ${shelf.depthMm}мм`,
     }
   }
 
   const height = candidate.heightMm * candidate.facingsY
-  if (height > shelf.clearanceHeightMm) {
+  const compressedHeight = height * (candidate.compressionY ?? 1)
+  if (compressedHeight > shelf.clearanceHeightMm) {
     return {
       ok: false,
       code: "outside_height",
-      message: `высота ${height}мм > просвета до следующей полки ${shelf.clearanceHeightMm}мм`,
+      message: `высота ${compressedHeight}мм > просвета до следующей полки ${shelf.clearanceHeightMm}мм`,
     }
   }
 

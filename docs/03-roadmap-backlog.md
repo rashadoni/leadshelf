@@ -245,8 +245,10 @@ Definition of Done:
 - Load into zone. `[сделано: POST zone autofill создает placements
   внутри зоны с physical validation и explainable log]`
 - Auto spacing. `[сделано: sequential free-slot spacing внутри zone range]`
-- Auto compression for soft packs. `[осталось: нужен явный product
-  attribute/flag soft-pack, иначе compression будет гаданием]`
+- Auto compression for soft packs. `[сделано: явный Product.isSoftPack
+  в каталоге/import/API; autofill с autoCompressSoftPacks сжимает только
+  soft-pack SKU через compressionX; core collision/capacity и analytics
+  linear meters учитывают сжатую ширину]`
 
 Важно:
 

@@ -26,6 +26,7 @@ interface ProductInput {
   heightMm: string
   depthMm: string
   weightG: string
+  isSoftPack: boolean
   isActive?: boolean
 }
 
@@ -42,6 +43,7 @@ const emptyProduct: ProductInput = {
   heightMm: "",
   depthMm: "",
   weightG: "",
+  isSoftPack: false,
 }
 
 function toPayload(values: ProductInput) {
@@ -60,6 +62,7 @@ function toPayload(values: ProductInput) {
     heightMm: toInt(values.heightMm),
     depthMm: toInt(values.depthMm),
     weightG: toInt(values.weightG),
+    isSoftPack: values.isSoftPack,
     ...(values.isActive === undefined ? {} : { isActive: values.isActive }),
   }
 }
@@ -99,6 +102,7 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
   const [error, setError] = useState<string | null>(null)
 
   const set = (key: keyof ProductInput, value: string) => setValues((current) => ({ ...current, [key]: value }))
+  const setBool = (key: "isSoftPack", value: boolean) => setValues((current) => ({ ...current, [key]: value }))
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -167,6 +171,14 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
             className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-xs"
           />
         ))}
+        <label className="flex items-center gap-1 text-xs text-neutral-600">
+          <input
+            type="checkbox"
+            checked={values.isSoftPack}
+            onChange={(event) => setBool("isSoftPack", event.target.checked)}
+          />
+          {t("isSoftPack")}
+        </label>
         <button disabled={pending} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs text-white disabled:opacity-50">
           {pending ? t("saving") : t("create")}
         </button>
@@ -191,6 +203,8 @@ export function ProductMetaEditor({
   const [pending, setPending] = useState(false)
   const [values, setValues] = useState<ProductInput>(initial)
   const set = (key: keyof ProductInput, value: string) => setValues((current) => ({ ...current, [key]: value }))
+  const setBool = (key: "isSoftPack" | "isActive", value: boolean) =>
+    setValues((current) => ({ ...current, [key]: value }))
 
   async function save(nextActive?: boolean) {
     setPending(true)
@@ -235,6 +249,14 @@ export function ProductMetaEditor({
         <RefSelect value={values.brandId} onChange={(v) => set("brandId", v)} options={refs.brands} placeholder={t("brand")} />
         <RefSelect value={values.supplierId} onChange={(v) => set("supplierId", v)} options={refs.suppliers} placeholder={t("supplier")} />
         <RefSelect value={values.manufacturerId} onChange={(v) => set("manufacturerId", v)} options={refs.manufacturers} placeholder={t("manufacturer")} />
+        <label className="flex items-center gap-1 px-1 text-xs text-neutral-600">
+          <input
+            type="checkbox"
+            checked={values.isSoftPack}
+            onChange={(event) => setBool("isSoftPack", event.target.checked)}
+          />
+          {t("isSoftPack")}
+        </label>
         <button onClick={() => save()} disabled={pending} className="rounded bg-neutral-900 px-2 py-1 text-xs text-white disabled:opacity-50">
           {t("save")}
         </button>

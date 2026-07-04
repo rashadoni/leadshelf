@@ -26,6 +26,7 @@ test("shelfCapacity: too tall product does not fit", () => {
 
 test("placementWidthMm includes inter-facing gaps", () => {
   assert.equal(placementWidthMm({ xMm: 0, widthMm: 100, facingsX: 3, gapMm: 10 }), 320)
+  assert.equal(placementWidthMm({ xMm: 0, widthMm: 100, facingsX: 3, compressionX: 0.9 }), 270)
 })
 
 test("placementsOverlapX detects collision and adjacency", () => {

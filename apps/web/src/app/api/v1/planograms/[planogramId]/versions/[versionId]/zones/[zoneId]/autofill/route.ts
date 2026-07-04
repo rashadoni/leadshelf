@@ -21,6 +21,7 @@ const schema = z.object({
   facingsBy: z.enum(["turnover", "profit", "quantity"]).default("quantity"),
   excludeSkus: z.array(z.string().trim().min(1).max(120)).max(200).default([]),
   maxBrandSharePct: z.number().int().min(1).max(100).nullable().optional(),
+  autoCompressSoftPacks: z.boolean().default(true),
   limit: z.number().int().min(1).max(100).default(30),
 })
 
@@ -87,6 +88,7 @@ export async function POST(
       widthMm: true,
       heightMm: true,
       depthMm: true,
+      isSoftPack: true,
       images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
     },
     take: 500,
@@ -118,6 +120,7 @@ export async function POST(
       widthMm: product.widthMm!,
       heightMm: product.heightMm!,
       depthMm: product.depthMm!,
+      isSoftPack: product.isSoftPack,
       score: metric(product.id, data.facingsBy),
       sortScore:
         data.sortBy === "name"
@@ -155,6 +158,7 @@ export async function POST(
     widthMm: placement.widthMm,
     heightMm: placement.heightMm,
     depthMm: placement.depthMm,
+    compressionX: placement.compressionX,
     facingsX: placement.facingsX,
     facingsY: placement.facingsY,
     facingsZ: placement.facingsZ,
@@ -163,7 +167,10 @@ export async function POST(
     equipment,
     zone: { id: zone.id, xMm: zone.xMm, yMm: zone.yMm, widthMm: zone.widthMm, heightMm: zone.heightMm },
     existing,
-    products: sorted,
+    products: sorted.map((product) => ({
+      ...product,
+      isSoftPack: data.autoCompressSoftPacks && product.isSoftPack,
+    })),
     maxProducts: data.limit,
   })
   const productById = new Map(sorted.map((product) => [product.id, product]))
@@ -187,6 +194,7 @@ export async function POST(
           widthMm: product.widthMm,
           heightMm: product.heightMm,
           depthMm: product.depthMm,
+          compressionX: item.compressionX,
           facingsX: item.facingsX,
           facingsY: item.facingsY,
           facingsZ: item.facingsZ,
@@ -197,6 +205,8 @@ export async function POST(
               facingsBy: data.facingsBy,
               excludeSkus: data.excludeSkus,
               maxBrandSharePct: data.maxBrandSharePct ?? null,
+              autoCompressSoftPacks: data.autoCompressSoftPacks,
+              compressionX: item.compressionX,
               score: item.score,
               reason: item.reason,
             },
@@ -210,6 +220,7 @@ export async function POST(
         widthMm: placement.widthMm,
         heightMm: placement.heightMm,
         depthMm: placement.depthMm,
+        compressionX: placement.compressionX,
         facingsX: placement.facingsX,
         facingsY: placement.facingsY,
         facingsZ: placement.facingsZ,
@@ -238,12 +249,14 @@ export async function POST(
         sku: product.sku,
         score: product.score,
         sortScore: product.sortScore,
+        isSoftPack: product.isSoftPack,
       })),
       placed: plan.placements.map((placement) => ({
         productId: placement.productId,
         shelfId: placement.shelfId,
         xMm: placement.xMm,
         facingsX: placement.facingsX,
+        compressionX: placement.compressionX,
         reason: placement.reason,
       })),
       rejected: plan.rejected,

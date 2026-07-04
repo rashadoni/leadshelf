@@ -39,6 +39,7 @@ export interface EditorPlacement {
   facingsX: number
   facingsY: number
   facingsZ: number
+  compressionX?: number
   product: EditorProduct
 }
 
@@ -70,6 +71,7 @@ interface VersionHistoryPlacement {
   facingsX: number
   facingsY: number
   facingsZ: number
+  compressionX?: number
 }
 
 interface VersionHistoryItem {
@@ -220,6 +222,7 @@ export function PlanogramEditor({
     facingsBy: "quantity",
     excludeSkus: "",
     maxBrandSharePct: 60,
+    autoCompressSoftPacks: true,
     limit: 20,
   })
   const [autoLog, setAutoLog] = useState<string | null>(null)
@@ -464,6 +467,7 @@ export function PlanogramEditor({
           .map((sku) => sku.trim())
           .filter(Boolean),
         maxBrandSharePct: autoRule.maxBrandSharePct,
+        autoCompressSoftPacks: autoRule.autoCompressSoftPacks,
         limit: autoRule.limit,
       }),
     })
@@ -604,7 +608,7 @@ export function PlanogramEditor({
   }
 
   function snappedXMm(rawMm: number, placement: EditorPlacement): number {
-    const max = Math.max(0, equipment.widthMm - placement.widthMm * placement.facingsX)
+    const max = Math.max(0, equipment.widthMm - placement.widthMm * (placement.compressionX ?? 1) * placement.facingsX)
     return Math.max(0, Math.min(max, Math.round(rawMm / 10) * 10))
   }
 
@@ -759,7 +763,8 @@ export function PlanogramEditor({
               const dragState = drag?.placementId === p.id ? drag : null
               const shelf = equipment.shelves.find((s) => s.id === (dragState?.shelfId ?? p.shelfId))
               if (!shelf) return null
-              const wPx = p.widthMm * p.facingsX * k
+              const faceWidthPx = p.widthMm * (p.compressionX ?? 1) * k
+              const wPx = faceWidthPx * p.facingsX
               const hPx = p.heightMm * p.facingsY * k
               const x = (dragState?.xMm ?? p.xMm) * k
               const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
@@ -794,9 +799,9 @@ export function PlanogramEditor({
                   {Array.from({ length: p.facingsX - 1 }, (_, i) => (
                     <line
                       key={i}
-                      x1={x + (i + 1) * p.widthMm * k}
+                      x1={x + (i + 1) * faceWidthPx}
                       y1={y}
-                      x2={x + (i + 1) * p.widthMm * k}
+                      x2={x + (i + 1) * faceWidthPx}
                       y2={y + hPx}
                       stroke="white"
                       strokeWidth={0.7}
@@ -1058,19 +1063,29 @@ export function PlanogramEditor({
                       className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                     />
                   </label>
-                  <label className="block text-xs">
-                    <span className="text-neutral-500">{t("maxBrandShare")}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={autoRule.maxBrandSharePct}
-                      onChange={(e) =>
-                        setAutoRule((prev) => ({ ...prev, maxBrandSharePct: Number.parseInt(e.target.value || "100", 10) }))
-                      }
-                      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-                    />
-                  </label>
+                  <div className="grid gap-2">
+                    <label className="block text-xs">
+                      <span className="text-neutral-500">{t("maxBrandShare")}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={autoRule.maxBrandSharePct}
+                        onChange={(e) =>
+                          setAutoRule((prev) => ({ ...prev, maxBrandSharePct: Number.parseInt(e.target.value || "100", 10) }))
+                        }
+                        className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-neutral-600">
+                      <input
+                        type="checkbox"
+                        checked={autoRule.autoCompressSoftPacks}
+                        onChange={(e) => setAutoRule((prev) => ({ ...prev, autoCompressSoftPacks: e.target.checked }))}
+                      />
+                      {t("autoCompressSoftPacks")}
+                    </label>
+                  </div>
                 </div>
                 <button
                   type="button"

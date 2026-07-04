@@ -61,6 +61,7 @@ describe("parseProductRow", () => {
         Ширина: "45",
         Высота: "120",
         Глубина: "30",
+        "Мягкая упаковка": "да",
       },
       2,
     )
@@ -69,6 +70,7 @@ describe("parseProductRow", () => {
       expect(r.value.sku).toBe("A-100")
       expect(r.value.unit).toBe("PCS")
       expect(r.value.widthMm).toBe(45)
+      expect(r.value.isSoftPack).toBe(true)
       expect(r.value.barcode).toBe("4600000000017")
       expect(r.warnings).toHaveLength(0)
     }
