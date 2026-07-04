@@ -5,7 +5,7 @@
 // Каждая мутация — API-вызов; при 422 показываем физическую причину,
 // при 409 перезагружаем draft.
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState, type PointerEvent } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
@@ -49,6 +49,13 @@ interface PickerProduct {
   imageKey: string | null
   hasDimensions: boolean
   widthMm: number | null
+}
+
+interface DragState {
+  placementId: string
+  offsetMm: number
+  xMm: number
+  shelfId: string
 }
 
 interface GoldenReferenceSlot {
@@ -110,6 +117,7 @@ export function PlanogramEditor({
   const tPub = useTranslations("planograms.publish")
   const locale = useLocale()
   const router = useRouter()
+  const svgRef = useRef<SVGSVGElement | null>(null)
 
   const [placements, setPlacements] = useState(initialPlacements)
   const [revision, setRevision] = useState(version.revision)
@@ -125,6 +133,7 @@ export function PlanogramEditor({
   const [selectedGoldenPhotoId, setSelectedGoldenPhotoId] = useState(goldenPhotoCandidates[0]?.id ?? "")
   const [slotPlacementId, setSlotPlacementId] = useState(initialPlacements[0]?.id ?? "")
   const [slotDraft, setSlotDraft] = useState({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
+  const [drag, setDrag] = useState<DragState | null>(null)
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
@@ -320,6 +329,70 @@ export function PlanogramEditor({
     [equipment, placements],
   )
 
+  function pointInSvg(event: PointerEvent<SVGSVGElement | SVGGElement>) {
+    const svg = svgRef.current
+    const matrix = svg?.getScreenCTM()
+    if (!svg || !matrix) return null
+    const point = svg.createSVGPoint()
+    point.x = event.clientX
+    point.y = event.clientY
+    return point.matrixTransform(matrix.inverse())
+  }
+
+  function shelfIdForSvgY(y: number): string | null {
+    for (const { shelf, space } of shelfInfos) {
+      const shelfTop = H - (shelf.yMm + shelf.thicknessMm) * k
+      const zoneTop = shelfTop - space.clearanceHeightMm * k
+      if (y >= zoneTop && y <= shelfTop + Math.max(6, shelf.thicknessMm * k)) return shelf.id
+    }
+    return null
+  }
+
+  function snappedXMm(rawMm: number, placement: EditorPlacement): number {
+    const max = Math.max(0, equipment.widthMm - placement.widthMm * placement.facingsX)
+    return Math.max(0, Math.min(max, Math.round(rawMm / 10) * 10))
+  }
+
+  function startDrag(event: PointerEvent<SVGGElement>, placement: EditorPlacement) {
+    if (readOnly) return
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const point = pointInSvg(event)
+    if (!point) return
+    setSelectedPlacementId(placement.id)
+    setSelectedShelfId(placement.shelfId)
+    setDrag({
+      placementId: placement.id,
+      offsetMm: point.x / k - placement.xMm,
+      xMm: placement.xMm,
+      shelfId: placement.shelfId,
+    })
+  }
+
+  function moveDrag(event: PointerEvent<SVGSVGElement>) {
+    if (!drag) return
+    const point = pointInSvg(event)
+    const placement = placements.find((p) => p.id === drag.placementId)
+    if (!point || !placement) return
+    const shelfId = shelfIdForSvgY(point.y) ?? drag.shelfId
+    setDrag({
+      ...drag,
+      xMm: snappedXMm(point.x / k - drag.offsetMm, placement),
+      shelfId,
+    })
+    setSelectedShelfId(shelfId)
+  }
+
+  async function finishDrag() {
+    const state = drag
+    setDrag(null)
+    if (!state) return
+    const placement = placements.find((p) => p.id === state.placementId)
+    if (!placement) return
+    if (placement.xMm === state.xMm && placement.shelfId === state.shelfId) return
+    await patchPlacement(state.placementId, { xMm: state.xMm, shelfId: state.shelfId })
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -377,10 +450,14 @@ export function PlanogramEditor({
         {/* Canvas */}
         <div>
           <svg
+            ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
             width={W}
             height={H}
             className="rounded-md border border-neutral-300 bg-neutral-50"
+            onPointerMove={moveDrag}
+            onPointerUp={() => void finishDrag()}
+            onPointerCancel={() => setDrag(null)}
           >
             {shelfInfos.map(({ shelf, space }) => {
               const yTop = H - (shelf.yMm + shelf.thicknessMm) * k
@@ -402,22 +479,25 @@ export function PlanogramEditor({
             })}
 
             {placements.map((p) => {
-              const shelf = equipment.shelves.find((s) => s.id === p.shelfId)
+              const dragState = drag?.placementId === p.id ? drag : null
+              const shelf = equipment.shelves.find((s) => s.id === (dragState?.shelfId ?? p.shelfId))
               if (!shelf) return null
               const wPx = p.widthMm * p.facingsX * k
               const hPx = p.heightMm * p.facingsY * k
-              const x = p.xMm * k
+              const x = (dragState?.xMm ?? p.xMm) * k
               const y = H - (shelf.yMm + shelf.thicknessMm + p.heightMm * p.facingsY) * k
               const isSel = p.id === selectedPlacementId
               return (
                 <g
                   key={p.id}
+                  onPointerDown={(e) => startDrag(e, p)}
                   onClick={(e) => {
                     e.stopPropagation()
                     setSelectedPlacementId(p.id)
                     setSelectedShelfId(p.shelfId)
                   }}
-                  className="cursor-pointer"
+                  className={readOnly ? "cursor-pointer" : "cursor-move"}
+                  opacity={dragState ? 0.72 : 1}
                 >
                   {p.product.imageKey ? (
                     <image

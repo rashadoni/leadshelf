@@ -189,7 +189,8 @@ click-to-place с авто-позицией, пикер товаров (без �
 
 - Open equipment as planogram canvas.
 - Product search/filter from catalog.
-- Drag product to shelf.
+- Drag product to shelf. `[сделано: SVG pointer drag с ghost-позицией,
+  snap 10мм и сохранением через PATCH placement + серверная физика]`
 - Product placement with dimensions.
 - Facings X/Y/Z.
 - Depth count.
