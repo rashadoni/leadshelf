@@ -41,3 +41,4 @@ export {
   type PushOperation,
   type PushResult,
 } from "./repos/mobile-sync.ts"
+export { createOrder, OrderRepoError, type CreateOrderInput, type OrderSummary } from "./repos/orders.ts"

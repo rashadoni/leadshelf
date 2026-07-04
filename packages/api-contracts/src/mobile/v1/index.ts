@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { orderCreateRequestSchema } from "../../orders/v1"
 
 export const MOBILE_PROTOCOL_VERSION = 1 as const
 
@@ -238,6 +239,12 @@ export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
     clientOpId: z.string().min(8).max(128),
     kind: z.literal("location.update"),
     payload: mobileLocationUpdatePayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("order.create"),
+    payload: orderCreateRequestSchema,
     clientCreatedAt: z.string().optional(),
   }),
 ])

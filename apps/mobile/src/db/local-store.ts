@@ -12,6 +12,7 @@ import {
   mobileVisitCheckOutPayloadSchema,
   type MobileTaskStatus,
 } from "@leadshelf/api-contracts/mobile/v1"
+import { orderCreateRequestSchema, type OrderCreateRequest } from "@leadshelf/api-contracts/orders/v1"
 import type {
   LocalStore,
   OutboxRow,
@@ -229,6 +230,16 @@ export const localStore: LocalStore = {
             attempts: r.attempts,
           }
         }
+        if (r.kind === "order.create") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "order.create",
+            payload: orderCreateRequestSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
         return {
           clientOpId: r.clientOpId,
           kind: "task.comment",
@@ -431,5 +442,21 @@ export function enqueueVisitCheckOut(input: { clientOpId: string; visitId: strin
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [input.clientOpId, "visit.checkout", JSON.stringify({ visitId: input.visitId }), new Date().toISOString()],
+  )
+}
+
+export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: string }): void {
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [
+      input.clientOpId,
+      "order.create",
+      JSON.stringify({
+        storeId: input.storeId,
+        visitId: input.visitId ?? null,
+        lines: input.lines,
+      }),
+      new Date().toISOString(),
+    ],
   )
 }

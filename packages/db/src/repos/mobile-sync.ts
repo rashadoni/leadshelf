@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient, TaskStatus } from "@prisma/client"
 import { evaluateVisitGeofence } from "@leadshelf/core"
+import { createOrder, OrderRepoError } from "./orders.ts"
 import { transitionTaskStatus } from "./publish.ts"
 import { PlanogramRepoError } from "./planogram.ts"
 
@@ -323,7 +324,14 @@ export async function pullChanges(
 
 export interface PushOperation {
   clientOpId: string
-  kind: "task.status" | "photo.submit" | "task.comment" | "visit.checkin" | "visit.checkout" | "location.update"
+  kind:
+    | "task.status"
+    | "photo.submit"
+    | "task.comment"
+    | "visit.checkin"
+    | "visit.checkout"
+    | "location.update"
+    | "order.create"
   payload: Record<string, unknown>
   clientCreatedAt?: string
 }
@@ -528,6 +536,42 @@ async function applyLocationUpdate(
   return { status: "applied" }
 }
 
+async function applyOrderCreate(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  deviceId: string,
+  clientOpId: string,
+  payload: { storeId: string; visitId?: string | null; lines: Array<{ productId: string; quantity: number }> },
+): Promise<Omit<PushResult, "clientOpId">> {
+  try {
+    const order = await createOrder(prisma, organizationId, {
+      ...payload,
+      userId,
+      deviceId,
+      clientOpId,
+    })
+    return { status: "applied", detail: { order } }
+  } catch (error) {
+    if (error instanceof OrderRepoError) {
+      const rejectedCodes = new Set([
+        "store_not_found",
+        "visit_not_found",
+        "visit_store_mismatch",
+        "product_not_found",
+        "product_price_missing",
+        "credit_limit_exceeded",
+        "credit_account_blocked",
+      ])
+      return {
+        status: rejectedCodes.has(error.code) ? "rejected" : "conflict",
+        detail: { code: error.code, detail: error.detail },
+      }
+    }
+    throw error
+  }
+}
+
 export async function pushOperations(
   prisma: PrismaClient,
   organizationId: string,
@@ -574,6 +618,8 @@ export async function pushOperations(
       result = await applyVisitCheckOut(prisma, organizationId, userId, op.payload as never)
     } else if (op.kind === "location.update") {
       result = await applyLocationUpdate(prisma, organizationId, userId, op.payload as never)
+    } else if (op.kind === "order.create") {
+      result = await applyOrderCreate(prisma, organizationId, userId, deviceId, op.clientOpId, op.payload as never)
     } else {
       result = { status: "rejected", detail: "unknown_kind" }
     }

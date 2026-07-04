@@ -425,6 +425,8 @@ Definition of Done:
 Задачи:
 
 - Order/OrderLine из визита или напрямую.
+  `[сделано: Prisma totals/idempotency поля + orders/v1 contract +
+  createOrder repo + POST /api/v1/orders с visit/direct support]`
 - Promotion engine (скидки/бонусы/бандлы) с тестами на портированных кейсах.
   `[сделано: pure core engine, порядок bulk -> bundle -> percent -> bogo ->
   gift, money-in-cents, тесты на stack/bundle/category/date]`
@@ -435,6 +437,8 @@ Definition of Done:
   `[сделано: pure core invoice document + HTML template для PDF job,
   totals/discount/tax в cents, deterministic invoice number, HTML escaping]`
 - Offline-заказ через outbox (идемпотентность deviceId+clientOpId).
+  `[сделано: mobile order.create push op + local enqueueOrderCreate +
+  server applyOrderCreate через outbox и unique Order(clientDeviceId,clientOpId)]`
 
 ## Phase 13 - Алерты и активность
 

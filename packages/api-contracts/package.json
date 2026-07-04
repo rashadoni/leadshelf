@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./import/v1": "./src/import/v1/index.ts",
     "./mobile/v1": "./src/mobile/v1/index.ts",
+    "./orders/v1": "./src/orders/v1/index.ts",
     "./vision/v1": "./src/vision/v1/index.ts"
   },
   "scripts": {
