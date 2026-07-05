@@ -115,6 +115,50 @@ const ANALYTICS_PROFILES = {
   "OTC-006": { price: 5.9, cost: 3.45, previousQty: 2.3, currentQty: 2.5, stockQty: 430 },
 } as const
 
+const MARS_ROUTE_STORES = [
+  { code: "BRV-NSM", name: "Bravo Nəsimi", address: "Nizami Küçəsi 76, Bakı, Nəsimi", lat: 40.3712, lon: 49.8421, region: "Baku" },
+  { code: "BRV-YSM", name: "Bravo Yasamal", address: "Hasan bey Zardabi 88, Bakı, Yasamal", lat: 40.3925, lon: 49.8225, region: "Baku" },
+  { code: "BIZ-XTI", name: "Bizim Tarla Xətai", address: "Babək prospekti 17, Bakı, Xətai", lat: 40.3835, lon: 49.9133, region: "Baku" },
+  { code: "ARZ-SBL", name: "Araz Səbail", address: "Nizami Küçəsi 12, Bakı, Səbail", lat: 40.3633, lon: 49.8344, region: "Baku" },
+  { code: "NPT-BNG", name: "Neptun Binəqədi", address: "Binəqədi Şossesi 4, Bakı, Binəqədi", lat: 40.4521, lon: 49.8217, region: "Baku" },
+  { code: "PIR-XTI", name: "Pyramid Express Xətai", address: "Babək prospekti 22, Bakı, Xətai", lat: 40.3812, lon: 49.9215, region: "Baku" },
+  { code: "MGZ-AHM", name: "Mağaza Əhməd", address: "Hüseyn Cavid 14, Bakı, Yasamal", lat: 40.3878, lon: 49.8456, region: "Baku" },
+  { code: "MGZ-NIK", name: "Mağaza Nikbin", address: "Sahil bağı yanı, Bakı, Səbail", lat: 40.3681, lon: 49.8347, region: "Baku" },
+  { code: "MGZ-25", name: "Магазин № 25", address: "28 May küçəsi 31, Bakı", lat: 40.3795, lon: 49.8412, region: "Baku" },
+  { code: "REST-KFC1", name: "KFC Park Bulvar", address: "Park Bulvar AVM, Bakı, Səbail", lat: 40.3582, lon: 49.8458, region: "Baku" },
+  { code: "REST-MCD1", name: "McDonald's 28 May", address: "28 May metrosу yanı, Bakı", lat: 40.3789, lon: 49.8479, region: "Baku" },
+  { code: "REST-RST1", name: "Ramada Cafe", address: "Üzeyir Hacıbəyli 1, Bakı, Səbail", lat: 40.3691, lon: 49.8367, region: "Baku" },
+  { code: "BRV-GNJ1", name: "Bravo Gəncə Mərkəz", address: "Atatürk prospekti 33, Gəncə", lat: 40.6828, lon: 46.3606, region: "Ganja" },
+  { code: "ARZ-GNJ1", name: "Araz Gəncə", address: "Heydər Əliyev prospekti 8, Gəncə", lat: 40.6794, lon: 46.3589, region: "Ganja" },
+  { code: "MGZ-GNJ1", name: "Mağaza Gəncəbazar", address: "Şah İsmayıl Xətai küçəsi 24, Gəncə", lat: 40.6804, lon: 46.3578, region: "Ganja" },
+  { code: "MGZ-GNJ2", name: "Магазин Низами", address: "Nizami küçəsi 14, Gəncə", lat: 40.6831, lon: 46.3622, region: "Ganja" },
+  { code: "BIZ-SMQ1", name: "Bizim Tarla Sumqayıt", address: "Sülh küçəsi 17, Sumqayıt", lat: 40.5851, lon: 49.6473, region: "Sumqayit" },
+  { code: "NPT-SMQ1", name: "Neptun Sumqayıt", address: "28 May küçəsi 11, Sumqayıt", lat: 40.5832, lon: 49.6491, region: "Sumqayit" },
+  { code: "MGZ-SMQ1", name: "Mağaza Xəzər", address: "Cəfər Cabbarlı küçəsi 9, Sumqayıt", lat: 40.5867, lon: 49.6502, region: "Sumqayit" },
+  { code: "MGZ-SMQ2", name: "Mağaza Sahil", address: "Sahil küçəsi 22, Sumqayıt", lat: 40.5912, lon: 49.6534, region: "Sumqayit" },
+  { code: "GAS-SOC1", name: "SOCAR АЗС-12", address: "Heydar Aliyev pr. 67, Bakı", lat: 40.4012, lon: 49.8682, region: "Baku" },
+  { code: "GAS-SOC2", name: "SOCAR АЗС-44", address: "Binəqədi şossesi 88, Bakı", lat: 40.4612, lon: 49.8175, region: "Baku" },
+  { code: "CINEMA-1", name: "CinemaPlus 28 Mall", address: "28 Mall, Bakı", lat: 40.3782, lon: 49.8489, region: "Baku" },
+  { code: "AVM-GZ", name: "Gənclik AVM food court", address: "Fətəli Xan Xoyski pr., Bakı", lat: 40.3978, lon: 49.8506, region: "Baku" },
+  { code: "REST-CHX", name: "Çörək Xanası Köhnə Bazar", address: "İçəri Şəhər, Bakı", lat: 40.3661, lon: 49.8367, region: "Baku" },
+] as const
+
+const MARS_ROUTE_AGENTS = [
+  { code: "M-001", name: "Farid Aliyev", email: "farid@demo.leadshelf.local", phone: "+994 50 555 10 01", role: "SUPERVISOR" },
+  { code: "M-002", name: "Elnur Mammadov", email: "elnur@demo.leadshelf.local", phone: "+994 50 555 10 02", role: "SUPERVISOR" },
+  { code: "M-003", name: "Tural Quliyev", email: "tural@demo.leadshelf.local", phone: "+994 50 555 10 03", role: "MERCHANDISER" },
+  { code: "M-004", name: "Nigar Hüseynova", email: "nigar@demo.leadshelf.local", phone: "+994 50 555 10 04", role: "MERCHANDISER" },
+  { code: "M-005", name: "Rashad Babayev", email: "rashad@demo.leadshelf.local", phone: "+994 50 555 10 05", role: "MERCHANDISER" },
+] as const
+
+const MARS_ROUTE_SCENARIOS = [
+  { name: "Mars Baku morning execution", agentCode: "M-003", storeCodes: ["BRV-NSM", "BRV-YSM", "BIZ-XTI", "ARZ-SBL", "NPT-BNG", "PIR-XTI"], status: "IN_PROGRESS", offsetDays: 0, completedStops: 2 },
+  { name: "Mars Baku HoReCa audit", agentCode: "M-004", storeCodes: ["REST-KFC1", "REST-MCD1", "REST-RST1", "AVM-GZ", "REST-CHX"], status: "PLANNED", offsetDays: 0, completedStops: 0 },
+  { name: "Mars Ganja coverage", agentCode: "M-005", storeCodes: ["BRV-GNJ1", "ARZ-GNJ1", "MGZ-GNJ1", "MGZ-GNJ2"], status: "PLANNED", offsetDays: 0, completedStops: 0 },
+  { name: "Mars Baku completed route", agentCode: "M-003", storeCodes: ["MGZ-AHM", "MGZ-NIK", "MGZ-25", "GAS-SOC1", "CINEMA-1"], status: "COMPLETED", offsetDays: -1, completedStops: 5 },
+  { name: "Mars Sumqayit completed route", agentCode: "M-002", storeCodes: ["BIZ-SMQ1", "NPT-SMQ1", "MGZ-SMQ1", "MGZ-SMQ2"], status: "COMPLETED", offsetDays: -1, completedStops: 4 },
+] as const
+
 function startOfToday(offsetDays = 0) {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -769,134 +813,213 @@ async function ensureAssignmentTaskAndProof(input: {
   return { assignment, task, photo, review, goldenReference }
 }
 
-async function ensureFieldForceScenario(input: {
-  organizationId: string
-  storeId: string
-  mobileUserId: string
-  taskId: string
-  photoSubmissionId: string
-}) {
-  const team = await prisma.team.upsert({
-    where: { organizationId_name: { organizationId: input.organizationId, name: "Полевое исполнение" } },
-    update: { leadUserId: input.mobileUserId },
-    create: {
-      organizationId: input.organizationId,
-      name: "Полевое исполнение",
-      leadUserId: input.mobileUserId,
-    },
-  })
+async function ensureRouteRegion(organizationId: string, name: string) {
+  const existing = await prisma.region.findFirst({ where: { organizationId, name } })
+  if (existing) return existing
+  return prisma.region.create({ data: { organizationId, name } })
+}
 
-  const agent = await prisma.fieldAgent.upsert({
-    where: { userId: input.mobileUserId },
-    update: {
-      organizationId: input.organizationId,
-      teamId: team.id,
-      employeeCode: "M-001",
-      phone: "+994 50 555 01 01",
-    },
-    create: {
-      organizationId: input.organizationId,
-      userId: input.mobileUserId,
-      teamId: team.id,
-      employeeCode: "M-001",
-      phone: "+994 50 555 01 01",
-    },
-  })
+async function ensureMarsRouteStores(organizationId: string, formatId: string) {
+  const stores = new Map<string, Awaited<ReturnType<typeof prisma.store.upsert>>>()
+  const regions = new Map<string, Awaited<ReturnType<typeof ensureRouteRegion>>>()
 
-  const routeName = "Маршрут Низами - OTC контроль"
-  const routeData = {
-    organizationId: input.organizationId,
-    name: routeName,
-    agentId: agent.id,
-    weekdays: [1, 2, 3, 4, 5],
-    isActive: true,
-  }
-  const route =
-    (await prisma.route.findFirst({ where: { organizationId: input.organizationId, name: routeName } })) ??
-    (await prisma.route.create({ data: routeData }))
-  await prisma.route.update({ where: { id: route.id }, data: routeData })
-
-  const routeStop =
-    (await prisma.routeStop.findFirst({ where: { routeId: route.id, storeId: input.storeId } })) ??
-    (await prisma.routeStop.create({
-      data: {
-        routeId: route.id,
-        storeId: input.storeId,
-        sortOrder: 1,
-        plannedAt: startOfToday(0),
+  for (const row of MARS_ROUTE_STORES) {
+    let region = regions.get(row.region)
+    if (!region) {
+      region = await ensureRouteRegion(organizationId, row.region)
+      regions.set(row.region, region)
+    }
+    const store = await prisma.store.upsert({
+      where: { organizationId_code: { organizationId, code: row.code } },
+      update: {
+        name: row.name,
+        address: row.address,
+        latitude: row.lat,
+        longitude: row.lon,
+        regionId: region.id,
+        formatId,
+        isActive: true,
       },
-    }))
-  await prisma.routeStop.update({
-    where: { id: routeStop.id },
-    data: { sortOrder: 1, plannedAt: startOfToday(0) },
-  })
-
-  const checkInAt = new Date(Date.now() - 95 * 60 * 1000)
-  const checkOutAt = new Date(Date.now() - 35 * 60 * 1000)
-  const visitData = {
-    organizationId: input.organizationId,
-    agentId: agent.id,
-    storeId: input.storeId,
-    routeStopId: routeStop.id,
-    status: "COMPLETED" as const,
-    checkInAt,
-    checkOutAt,
-    checkInLat: 40.37772,
-    checkInLng: 49.89203,
-    anomalyFlags: {
-      geofence: { outside: false, distanceM: 8, limitM: 150 },
-      duration: { status: "ok", minutes: 60 },
-      offlineSync: { status: "ok", pendingOps: 0 },
-    },
-  }
-  const visit =
-    (await prisma.visit.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        agentId: agent.id,
-        storeId: input.storeId,
-        routeStopId: routeStop.id,
-      },
-    })) ??
-    (await prisma.visit.create({ data: visitData }))
-  await prisma.visit.update({ where: { id: visit.id }, data: visitData })
-
-  await prisma.photoSubmission.update({
-    where: { id: input.photoSubmissionId },
-    data: { visitId: visit.id },
-  })
-  const fieldComment = "Демо: агент прошёл check-in, отправил фото выкладки и закрыл визит без геоаномалий."
-  if (!(await prisma.taskComment.findFirst({ where: { taskId: input.taskId, body: fieldComment } }))) {
-    await prisma.taskComment.create({
-      data: {
-        taskId: input.taskId,
-        userId: input.mobileUserId,
-        body: fieldComment,
+      create: {
+        organizationId,
+        name: row.name,
+        code: row.code,
+        address: row.address,
+        latitude: row.lat,
+        longitude: row.lon,
+        regionId: region.id,
+        formatId,
+        isActive: true,
       },
     })
+    stores.set(row.code, store)
   }
 
-  await prisma.agentLocation.deleteMany({ where: { agentId: agent.id } })
+  return stores
+}
+
+async function ensureMarsRouteAgents(organizationId: string, passwordHash: string) {
+  const firstAgentCode = MARS_ROUTE_AGENTS[0]!.code
+  const firstUser = await prisma.user.findUnique({
+    where: { organizationId_employeeCode: { organizationId, employeeCode: firstAgentCode } },
+    select: { id: true },
+  })
+  const team = await prisma.team.upsert({
+    where: { organizationId_name: { organizationId, name: "Mars field execution" } },
+    update: { leadUserId: firstUser?.id ?? null },
+    create: {
+      organizationId,
+      name: "Mars field execution",
+      leadUserId: firstUser?.id ?? null,
+    },
+  })
+  const usersByCode = new Map<string, Awaited<ReturnType<typeof prisma.user.upsert>>>()
+  const agentsByCode = new Map<string, Awaited<ReturnType<typeof prisma.fieldAgent.upsert>>>()
+
+  for (const row of MARS_ROUTE_AGENTS) {
+    const user = await prisma.user.upsert({
+      where: { organizationId_employeeCode: { organizationId, employeeCode: row.code } },
+      update: {
+        email: row.email,
+        name: row.name,
+        role: row.role,
+        passwordHash,
+        isActive: true,
+      },
+      create: {
+        organizationId,
+        employeeCode: row.code,
+        email: row.email,
+        name: row.name,
+        role: row.role,
+        passwordHash,
+      },
+    })
+    const agent = await prisma.fieldAgent.upsert({
+      where: { userId: user.id },
+      update: {
+        organizationId,
+        teamId: team.id,
+        employeeCode: row.code,
+        phone: row.phone,
+      },
+      create: {
+        organizationId,
+        userId: user.id,
+        teamId: team.id,
+        employeeCode: row.code,
+        phone: row.phone,
+      },
+    })
+    usersByCode.set(row.code, user)
+    agentsByCode.set(row.code, agent)
+  }
+
+  return { team, usersByCode, agentsByCode }
+}
+
+async function ensureFieldForceScenario(input: {
+  organizationId: string
+  formatId: string
+  mobilePasswordHash: string
+}) {
+  const storesByCode = await ensureMarsRouteStores(input.organizationId, input.formatId)
+  const { team, agentsByCode } = await ensureMarsRouteAgents(input.organizationId, input.mobilePasswordHash)
+
+  await prisma.route.updateMany({
+    where: {
+      organizationId: input.organizationId,
+      name: { notIn: MARS_ROUTE_SCENARIOS.map((scenario) => scenario.name) },
+    },
+    data: { isActive: false },
+  })
+
+  const visits = []
+  for (const scenario of MARS_ROUTE_SCENARIOS) {
+    const agent = agentsByCode.get(scenario.agentCode)
+    if (!agent) continue
+    const routeData = {
+      organizationId: input.organizationId,
+      name: scenario.name,
+      agentId: agent.id,
+      weekdays: scenario.offsetDays === 0 ? [1, 2, 3, 4, 5] : [],
+      isActive: true,
+    }
+    const route =
+      (await prisma.route.findFirst({ where: { organizationId: input.organizationId, name: scenario.name } })) ??
+      (await prisma.route.create({ data: routeData }))
+    await prisma.route.update({ where: { id: route.id }, data: routeData })
+
+    for (const [index, storeCode] of scenario.storeCodes.entries()) {
+      const store = storesByCode.get(storeCode)
+      if (!store) continue
+      const plannedAt = new Date(startOfToday(scenario.offsetDays).getTime() + (9 + index) * 60 * 60 * 1000)
+      const routeStop =
+        (await prisma.routeStop.findUnique({
+          where: { routeId_sortOrder: { routeId: route.id, sortOrder: index + 1 } },
+        })) ??
+        (await prisma.routeStop.create({
+          data: {
+            routeId: route.id,
+            storeId: store.id,
+            sortOrder: index + 1,
+            plannedAt,
+          },
+        }))
+      await prisma.routeStop.update({
+        where: { id: routeStop.id },
+        data: { storeId: store.id, plannedAt },
+      })
+
+      const isCompleted = index < scenario.completedStops
+      const isCurrent = scenario.status === "IN_PROGRESS" && index === scenario.completedStops
+      const checkInAt = isCompleted || isCurrent ? new Date(plannedAt.getTime() + 8 * 60 * 1000) : null
+      const checkOutAt = isCompleted ? new Date(plannedAt.getTime() + 42 * 60 * 1000) : null
+      const status = isCurrent ? "IN_PROGRESS" : isCompleted ? "COMPLETED" : scenario.status
+      const visitData = {
+        organizationId: input.organizationId,
+        agentId: agent.id,
+        storeId: store.id,
+        routeStopId: routeStop.id,
+        status,
+        checkInAt,
+        checkOutAt,
+        checkInLat: checkInAt ? store.latitude : null,
+        checkInLng: checkInAt ? store.longitude : null,
+        anomalyFlags: checkInAt
+          ? ({
+              geofence: { outside: false, distanceM: 12 + index * 3, limitM: 150 },
+              duration: { status: checkOutAt ? "ok" : "in_progress", minutes: checkOutAt ? 34 : null },
+              offlineSync: { status: "ok", pendingOps: isCurrent ? 2 : 0 },
+            } satisfies Prisma.InputJsonObject)
+          : Prisma.JsonNull,
+      }
+      const visit =
+        (await prisma.visit.findFirst({
+          where: {
+            organizationId: input.organizationId,
+            agentId: agent.id,
+            storeId: store.id,
+            routeStopId: routeStop.id,
+          },
+        })) ??
+        (await prisma.visit.create({ data: visitData }))
+      visits.push(await prisma.visit.update({ where: { id: visit.id }, data: visitData }))
+    }
+  }
+
+  await prisma.agentLocation.deleteMany({ where: { agentId: { in: [...agentsByCode.values()].map((agent) => agent.id) } } })
   await prisma.agentLocation.createMany({
     data: [
-      {
-        agentId: agent.id,
-        latitude: 40.37772,
-        longitude: 49.89203,
-        accuracyM: 12,
-        recordedAt: new Date(Date.now() - 25 * 60 * 1000),
-      },
-      {
-        agentId: agent.id,
-        latitude: 40.3781,
-        longitude: 49.89175,
-        accuracyM: 18,
-        recordedAt: new Date(Date.now() - 65 * 60 * 1000),
-      },
+      { agentId: agentsByCode.get("M-001")!.id, latitude: 40.3712, longitude: 49.8421, accuracyM: 12, recordedAt: new Date(Date.now() - 10 * 60 * 1000) },
+      { agentId: agentsByCode.get("M-002")!.id, latitude: 40.5867, longitude: 49.6502, accuracyM: 18, recordedAt: new Date(Date.now() - 18 * 60 * 1000) },
+      { agentId: agentsByCode.get("M-003")!.id, latitude: 40.3835, longitude: 49.9133, accuracyM: 15, recordedAt: new Date(Date.now() - 5 * 60 * 1000) },
+      { agentId: agentsByCode.get("M-004")!.id, latitude: 40.3582, longitude: 49.8458, accuracyM: 20, recordedAt: new Date(Date.now() - 24 * 60 * 1000) },
+      { agentId: agentsByCode.get("M-005")!.id, latitude: 40.6828, longitude: 46.3606, accuracyM: 16, recordedAt: new Date(Date.now() - 14 * 60 * 1000) },
     ],
   })
 
-  return { team, agent, route, routeStop, visit }
+  return { team, storesByCode, agentsByCode, visits }
 }
 
 async function ensureFloorPlan(input: {
@@ -1122,13 +1245,13 @@ async function main() {
     planogramVersionId: planogramVersion.id,
     mobileUserId: mobileUser.id,
   })
-  await ensureFieldForceScenario({
+  const fieldForce = await ensureFieldForceScenario({
     organizationId: org.id,
-    storeId: store.id,
-    mobileUserId: mobileUser.id,
-    taskId: proof.task.id,
-    photoSubmissionId: proof.photo.id,
+    formatId: format.id,
+    mobilePasswordHash,
   })
+  const proofVisit = fieldForce.visits.find((visit) => visit.status === "COMPLETED") ?? fieldForce.visits[0]
+  if (proofVisit) await prisma.photoSubmission.update({ where: { id: proof.photo.id }, data: { visitId: proofVisit.id } })
   await ensureAnalyticsSnapshots({
     organizationId: org.id,
     storeId: store.id,

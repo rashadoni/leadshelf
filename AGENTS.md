@@ -44,6 +44,14 @@ The first implementation step must be a short technical plan with:
 
 Only create code after that direction is confirmed.
 
+## Truthfulness Rule
+
+Never present newly written code as a direct transfer from another project.
+If a feature is rebuilt from scratch, adapted from an idea, partially ported,
+not verified, or visually different from the reference product, say that
+explicitly. Separate facts from assumptions and clearly label work as
+"implemented", "draft", "not transferred", "not tested", or "blocked".
+
 ## MVP Order
 
 Build in this order:
