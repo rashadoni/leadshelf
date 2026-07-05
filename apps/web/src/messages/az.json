@@ -266,6 +266,30 @@
       "products": "Məhsullar",
       "searchProducts": "Məhsul axtar...",
       "noDims": "ölçü yoxdur",
+      "views": {
+        "planogram": {
+          "title": "2D planoqram",
+          "body": "Rəflər və SKU redaktəsi"
+        },
+        "three": {
+          "title": "3D baxış",
+          "body": "Eyni düzülüşün həcmli görünüşü"
+        },
+        "reference": {
+          "title": "Etalon foto",
+          "body": "Şəkil üzərində yoxlama zonaları"
+        }
+      },
+      "threeViewHint": "3D baxış 2D planoqramda yerləşdirilən eyni SKU-ları göstərir.",
+      "referenceCanvasTitle": "Düzülüş yoxlaması üçün etalon foto",
+      "referenceCanvasHint": "Foto rəfin faktiki görünüşünü göstərir; foto üzərindəki punktir konturlar SKU ilə bağlı yoxlama zonalarıdır.",
+      "referenceZoneLabel": "{sku} zonası",
+      "referenceLegendPhotoTitle": "Foto",
+      "referenceLegendPhotoBody": "Şəklin içindəki rəngli bloklar fotonun və ya demo qablaşdırmanın özüdür.",
+      "referenceLegendZoneTitle": "Punktir zona",
+      "referenceLegendZoneBody": "Bu, SKU yoxlama sahəsidir; onu hərəkət etdirmək və ölçüsünü dəyişmək olar.",
+      "referenceLegendListTitle": "Sağdakı siyahı",
+      "referenceLegendListBody": "Burada zonaların planoqram məhsullarına bağlılığı redaktə olunur.",
       "selectShelf": "Məhsula klikləyərək tez əlavə edin və ya onu birbaşa lazım olan rəfə dartın.",
       "placeSelectedProduct": "Rəfə qoy",
       "workbench": "İş paneli",
@@ -275,6 +299,10 @@
       "saving": "Saxlanılır...",
       "selectedCatalogProduct": "Kataloq məhsulu seçilib",
       "selectedCatalogProductHint": "İndi rəfdə dəqiq yerə klikləyin və ya məhsulu seçilmiş rəfə qoyun.",
+      "chooseSku": "Seç",
+      "selectedSku": "Seçilib",
+      "searchMinChars": "SKU, ad və ya barkoddan ən azı 2 simvol yazın.",
+      "noProductsFound": "Məhsul tapılmadı. SKU və ya adı yoxlayın.",
       "selectedPlacement": "Yerləşdirmə seçilib",
       "placeOnSelectedShelf": "Seçilmiş rəfə qoy",
       "placeOnShelfNumber": "{shelf}-ci rəfə əlavə et",
@@ -286,6 +314,10 @@
       "selectProductForShelfHint": "Əvvəlcə rəfi seçin, sonra məhsulu tapın. Məhsul seçiləndən sonra düymə onu məhz bu rəfə əlavə edəcək.",
       "clickShelfToPlace": "Rəf {shelf}: {sku} yerləşdirmək üçün bura klikləyin",
       "sessionExpired": "Sessiya yenilənmədi. Yenidən daxil olun və əməliyyatı təkrarlayın.",
+      "placementAdded": "Məhsul {shelf}-ci rəfə əlavə edildi. O, 2D sxemdə göründü; 3D baxış da eyni düzülüşdən qurulur.",
+      "dragRejectedHint": "bu yer başqa məhsulla tutulub. Rəfdə boş hissə seçin və ya feysinqi azaldın.",
+      "zoneOutOfBounds": "zona avadanlıq sərhədlərindən çıxır. Eni/hündürlüyü azaldın və ya zonanı stendin içinə çəkin.",
+      "zoneAdded": "«{zone}» zonası əlavə edildi.",
       "shelf": "Rəf",
       "freeWidth": "boş",
       "facings": "Feysinqlər",

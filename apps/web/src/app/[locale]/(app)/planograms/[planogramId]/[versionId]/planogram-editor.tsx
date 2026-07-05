@@ -85,6 +85,8 @@ interface ReferenceSlotDrag {
   draft: ReferenceSlotDraft
 }
 
+type EditorView = "planogram" | "three" | "reference"
+
 interface VersionHistoryPlacement {
   productId: string
   productSku: string
@@ -238,6 +240,7 @@ export function PlanogramEditor({
   const referenceSlotDragRef = useRef<ReferenceSlotDrag | null>(null)
 
   const [placements, setPlacements] = useState(initialPlacements)
+  const [activeView, setActiveView] = useState<EditorView>("planogram")
   const [zones, setZones] = useState(initialZones)
   const [revision, setRevision] = useState(version.revision)
   const [selectedShelfId, setSelectedShelfId] = useState<string | null>(
@@ -245,6 +248,7 @@ export function PlanogramEditor({
   )
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [messageTone, setMessageTone] = useState<"error" | "success">("error")
   const [search, setSearch] = useState("")
   const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
   const [selectedPickerProduct, setSelectedPickerProduct] = useState<PickerProduct | null>(null)
@@ -327,17 +331,28 @@ export function PlanogramEditor({
 
   async function handleResponse(res: Response): Promise<Record<string, unknown> | null> {
     if (res.status === 401) {
+      setMessageTone("error")
       setMessage(t("sessionExpired"))
       return null
     }
     if (res.status === 409) {
+      setMessageTone("error")
       setMessage(t("conflict"))
       router.refresh()
       return null
     }
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setMessage(`${t("rejected")}: ${body.message ?? body.error ?? res.status}`)
+      const details = body.details as { code?: string } | null | undefined
+      const raw = body.message ?? body.error ?? res.status
+      const suffix =
+        details?.code === "overlap"
+          ? t("dragRejectedHint")
+          : body.error === "zone_out_of_bounds"
+            ? t("zoneOutOfBounds")
+            : String(raw)
+      setMessageTone("error")
+      setMessage(`${t("rejected")}: ${suffix}`)
       return null
     }
     setMessage(null)
@@ -346,6 +361,7 @@ export function PlanogramEditor({
 
   async function searchProducts(q: string) {
     setSearch(q)
+    setMessage(null)
     if (q.trim().length < 2) {
       setPickerProducts([])
       return
@@ -359,6 +375,7 @@ export function PlanogramEditor({
 
   async function place(product: PickerProduct, shelfId = selectedShelfId, xMm?: number) {
     if (!shelfId || readOnly || !product.hasDimensions || isBusy) return
+    setMessage(null)
     setPendingAction("place")
     try {
       const res = await apiFetch(base, {
@@ -408,6 +425,8 @@ export function PlanogramEditor({
         setSelectedPlacementId(body.placementId as string)
         setSelectedShelfId(shelfId)
         setSelectedPickerProduct(null)
+        setMessageTone("success")
+        setMessage(t("placementAdded", { shelf: shelfNumberForId(shelfId) }))
       }
     } finally {
       setPendingAction(null)
@@ -483,6 +502,7 @@ export function PlanogramEditor({
 
   async function patchPlacement(id: string, patch: Record<string, number | string>) {
     if (readOnly || isBusy) return
+    setMessage(null)
     setPendingAction("patch")
     try {
       const res = await apiFetch(`${base}/${id}`, {
@@ -843,6 +863,7 @@ export function PlanogramEditor({
 
   async function createZone() {
     if (readOnly || isBusy) return
+    setMessage(null)
     setPendingAction("zone")
     try {
       const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones`, {
@@ -867,6 +888,8 @@ export function PlanogramEditor({
       ])
       updateAutoRule({ zoneId: autoRule.zoneId || (body.id as string) })
       setZoneDraft((prev) => ({ ...prev, name: "" }))
+      setMessageTone("success")
+      setMessage(t("zoneAdded", { zone: body.name as string }))
     } finally {
       setPendingAction(null)
     }
@@ -1115,6 +1138,7 @@ export function PlanogramEditor({
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = pointInSvg(event)
     if (!point) return
+    setMessage(null)
     setSelectedPickerProduct(null)
     setSelectedPlacementId(placement.id)
     setSelectedShelfId(placement.shelfId)
@@ -1152,6 +1176,7 @@ export function PlanogramEditor({
 
   function handleCatalogDragStart(event: DragEvent<HTMLElement>, product: PickerProduct) {
     if (!product.hasDimensions) return
+    setMessage(null)
     event.dataTransfer.setData("text/plain", product.id)
     event.dataTransfer.effectAllowed = "copy"
     setDraggingProductId(product.id)
@@ -1161,6 +1186,7 @@ export function PlanogramEditor({
 
   async function handleCatalogDrop(event: DragEvent<SVGSVGElement>) {
     event.preventDefault()
+    setMessage(null)
     const productId = event.dataTransfer.getData("text/plain") || draggingProductId
     const product = pickerProducts.find((item) => item.id === productId)
     const point = pointInSvgFromClient(event.clientX, event.clientY)
@@ -1194,6 +1220,70 @@ export function PlanogramEditor({
     await place(product, shelfId, snappedXMm(point.x / k, draftPlacement))
   }
 
+  function shelfNumberForId(shelfId: string): number {
+    const shelf = equipment.shelves.find((item) => item.id === shelfId)
+    return shelf ? shelf.shelfIndex + 1 : 0
+  }
+
+  function selectPickerProduct(product: PickerProduct) {
+    setMessage(null)
+    setSelectedPickerProduct(product)
+    setSelectedPlacementId(null)
+  }
+
+  function renderPickerProductList(layout: "compact" | "panel") {
+    if (pickerProducts.length > 0) {
+      return (
+        <div className={layout === "compact" ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2 max-h-48 space-y-1 overflow-y-auto"}>
+          {pickerProducts.map((p) => {
+            const selected = selectedPickerProduct?.id === p.id
+            return (
+              <button
+                key={p.id}
+                type="button"
+                draggable={p.hasDimensions}
+                onDragStart={(event) => handleCatalogDragStart(event, p)}
+                onDragEnd={() => setDraggingProductId(null)}
+                onClick={() => selectPickerProduct(p)}
+                disabled={!p.hasDimensions || isBusy}
+                className={
+                  layout === "compact"
+                    ? `flex min-w-64 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm disabled:opacity-40 ${
+                        selected ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-neutral-50"
+                      }`
+                    : `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-white disabled:opacity-40 ${
+                        selected ? "bg-amber-50 ring-1 ring-amber-200" : ""
+                      }`
+                }
+                title={p.hasDimensions ? p.name : t("noDims")}
+              >
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
+                  style={{ backgroundColor: colorFor(p.sku) }}
+                >
+                  {p.imageKey ? <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" /> : p.name.slice(0, 1)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-neutral-900">{p.name}</span>
+                  <span className="block truncate text-xs text-neutral-500">
+                    {p.sku} · {p.widthMm ?? "—"}×{p.heightMm ?? "—"}×{p.depthMm ?? "—"} mm
+                  </span>
+                </span>
+                <span className="shrink-0 rounded border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700">
+                  {selected ? t("selectedSku") : t("chooseSku")}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )
+    }
+    if (search.trim().length >= 2) {
+      return <p className="mt-2 rounded-md bg-neutral-50 px-2 py-2 text-xs text-neutral-500">{t("noProductsFound")}</p>
+    }
+    return <p className="mt-2 text-xs text-neutral-500">{t("searchMinChars")}</p>
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -1213,10 +1303,14 @@ export function PlanogramEditor({
             revision={revision}
             publishUrl={`/api/v1/planograms/${planogram.id}/versions/${version.id}/publish`}
             onPublished={(count) => {
+              setMessageTone("success")
               setMessage(tPub("success", { count }))
               router.refresh()
             }}
-            onError={(m) => setMessage(m)}
+            onError={(m) => {
+              setMessageTone("error")
+              setMessage(m)
+            }}
           />
         )}
         {readOnly && (
@@ -1242,27 +1336,36 @@ export function PlanogramEditor({
       </div>
 
       {message && (
-        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div
+          className={`mb-3 rounded-md border px-3 py-2 text-sm ${
+            messageTone === "success"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
           {message}
         </div>
       )}
 
-      <div className="mb-4 grid gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs text-neutral-600 md:grid-cols-4">
-        <div>
-          <div className="font-medium text-neutral-900">{t("workflow.selectShelfTitle")}</div>
-          <p className="mt-1">{t("workflow.selectShelfBody")}</p>
-        </div>
-        <div>
-          <div className="font-medium text-neutral-900">{t("workflow.addProductTitle")}</div>
-          <p className="mt-1">{t("workflow.addProductBody")}</p>
-        </div>
-        <div>
-          <div className="font-medium text-neutral-900">{t("workflow.moveProductTitle")}</div>
-          <p className="mt-1">{t("workflow.moveProductBody")}</p>
-        </div>
-        <div>
-          <div className="font-medium text-neutral-900">{t("workflow.referenceTitle")}</div>
-          <p className="mt-1">{t("workflow.referenceBody")}</p>
+      <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-2">
+        <div className="grid gap-2 md:grid-cols-3">
+          {(["planogram", "three", "reference"] as const).map((view) => (
+            <button
+              key={view}
+              type="button"
+              onClick={() => setActiveView(view)}
+              className={`rounded-lg border px-3 py-2 text-left transition ${
+                activeView === view
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-white"
+              }`}
+            >
+              <span className="block text-sm font-semibold">{t(`views.${view}.title` as never)}</span>
+              <span className={`mt-0.5 block text-xs ${activeView === view ? "text-neutral-300" : "text-neutral-500"}`}>
+                {t(`views.${view}.body` as never)}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1282,40 +1385,7 @@ export function PlanogramEditor({
             placeholder={t("searchProducts")}
             className="mt-3 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
           />
-          {pickerProducts.length > 0 ? (
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-              {pickerProducts.map((p) => (
-                <button
-                  key={p.id}
-                  draggable={p.hasDimensions}
-                  onDragStart={(event) => handleCatalogDragStart(event, p)}
-                  onDragEnd={() => setDraggingProductId(null)}
-                  onClick={() => {
-                    setSelectedPickerProduct(p)
-                    setSelectedPlacementId(null)
-                  }}
-                  disabled={!p.hasDimensions || isBusy}
-                  className={`flex min-w-52 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm disabled:opacity-40 ${
-                    selectedPickerProduct?.id === p.id ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-neutral-50"
-                  }`}
-                  title={p.hasDimensions ? p.name : t("noDims")}
-                >
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
-                    style={{ backgroundColor: colorFor(p.sku) }}
-                  >
-                    {p.imageKey ? <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" /> : p.name.slice(0, 1)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-neutral-900">{p.name}</span>
-                    <span className="block truncate text-xs text-neutral-500">
-                      {p.sku} · {p.widthMm ?? "—"}mm
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {renderPickerProductList("compact")}
           {selectedPickerProduct ? (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
               <div className="min-w-0">
@@ -1368,11 +1438,13 @@ export function PlanogramEditor({
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(760px,1fr)_420px]">
+      <div className="grid max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
         {/* Canvas */}
         <div className="min-w-0 overflow-x-auto">
-          {!readOnly ? (
-            <div className="mb-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs">
+          {activeView === "planogram" ? (
+            <>
+              {!readOnly ? (
+                <div className="mb-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="font-medium text-neutral-900">{t("targetShelf")}</span>{" "}
@@ -1421,9 +1493,9 @@ export function PlanogramEditor({
                   ? t("targetShelfHint", { shelf: selectedShelfNumber ?? 0 })
                   : t("selectProductForShelfHint")}
               </p>
-            </div>
-          ) : null}
-          <svg
+                </div>
+              ) : null}
+              <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
             width={W}
@@ -1581,16 +1653,89 @@ export function PlanogramEditor({
                 </g>
               )
             })}
-          </svg>
-          <p className="mt-1 text-center text-xs text-neutral-400">
-            {equipment.widthMm}×{equipment.heightMm}×{equipment.depthMm} mm
-          </p>
-          <PlanogramThreeViewer equipment={equipment} placements={placements} />
+              </svg>
+              <p className="mt-1 text-center text-xs text-neutral-400">
+                {equipment.widthMm}×{equipment.heightMm}×{equipment.depthMm} mm
+              </p>
+            </>
+          ) : null}
+
+          {activeView === "three" ? (
+            <div className="rounded-xl border border-neutral-200 bg-white">
+              <div className="border-b border-neutral-200 px-4 py-3">
+                <h2 className="text-sm font-semibold text-neutral-900">{t("views.three.title")}</h2>
+                <p className="mt-1 text-xs text-neutral-500">{t("threeViewHint")}</p>
+              </div>
+              <PlanogramThreeViewer equipment={equipment} placements={placements} />
+            </div>
+          ) : null}
+
+          {activeView === "reference" ? (
+            <div className="rounded-xl border border-neutral-200 bg-white p-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-neutral-900">{t("referenceCanvasTitle")}</h2>
+                  <p className="mt-1 text-xs text-neutral-500">{t("referenceCanvasHint")}</p>
+                </div>
+                <div className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800">
+                  {activeReference ? t("slotCount", { count: activeReference.slots.length }) : t("noGoldenReference")}
+                </div>
+              </div>
+              {activeReference ? (
+                <div className="overflow-auto rounded-lg border border-neutral-200 bg-neutral-100">
+                  <div className="relative min-w-full">
+                    <img
+                      src={`/api/media/${activeReference.imageUrl}`}
+                      alt=""
+                      className="block w-full object-contain"
+                      draggable={false}
+                    />
+                    {activeReference.slots.map((slot) => (
+                      <div
+                        key={slot.id}
+                        className={`absolute border-2 border-dashed bg-sky-500/10 ${
+                          selectedReferenceSlotId === slot.id ? "border-sky-700 ring-2 ring-sky-400/30" : "border-sky-500"
+                        }`}
+                        style={{
+                          left: `${slot.xPct}%`,
+                          top: `${slot.yPct}%`,
+                          width: `${slot.widthPct}%`,
+                          height: `${slot.heightPct}%`,
+                        }}
+                      >
+                        <span className="absolute left-0 top-0 max-w-full truncate bg-sky-700 px-1 text-[10px] font-medium text-white">
+                          {slot.productSku ? t("referenceZoneLabel", { sku: slot.productSku }) : slot.label ?? t("referenceSlot")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-6 text-sm text-neutral-500">
+                  {t("noGoldenReference")}
+                </div>
+              )}
+              <div className="mt-3 grid gap-2 text-xs text-neutral-600 md:grid-cols-3">
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
+                  <span className="font-medium text-neutral-900">{t("referenceLegendPhotoTitle")}</span>
+                  <span className="mt-1 block">{t("referenceLegendPhotoBody")}</span>
+                </div>
+                <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
+                  <span className="font-medium">{t("referenceLegendZoneTitle")}</span>
+                  <span className="mt-1 block">{t("referenceLegendZoneBody")}</span>
+                </div>
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
+                  <span className="font-medium text-neutral-900">{t("referenceLegendListTitle")}</span>
+                  <span className="mt-1 block">{t("referenceLegendListBody")}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
           {/* Side panels */}
         <div className="min-w-0 space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
-          {!readOnly ? (
+          {!readOnly && activeView === "planogram" ? (
             <div className="hidden rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:sticky xl:top-3 xl:z-10 xl:block">
               <h2 className="text-sm font-semibold">{t("workbench")}</h2>
               <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
@@ -1599,16 +1744,6 @@ export function PlanogramEditor({
                     <div className="text-xs font-medium text-neutral-700">{t("quickAddTitle")}</div>
                     <p className="mt-1 text-xs text-neutral-500">{t("quickAddHint")}</p>
                   </div>
-                  {selectedPickerProduct ? (
-                    <button
-                      type="button"
-                      onClick={() => void place(selectedPickerProduct)}
-                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
-                      className="shrink-0 rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                    >
-                      {pendingAction === "place" ? t("saving") : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
-                    </button>
-                  ) : null}
                 </div>
                 <input
                   type="search"
@@ -1617,40 +1752,7 @@ export function PlanogramEditor({
                   placeholder={t("searchProducts")}
                   className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm"
                 />
-                {pickerProducts.length > 0 ? (
-                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
-                    {pickerProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        draggable={p.hasDimensions}
-                        onDragStart={(event) => handleCatalogDragStart(event, p)}
-                        onDragEnd={() => setDraggingProductId(null)}
-                        onClick={() => {
-                          setSelectedPickerProduct(p)
-                          setSelectedPlacementId(null)
-                        }}
-                        disabled={!p.hasDimensions || isBusy}
-                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-white disabled:opacity-40 ${
-                          selectedPickerProduct?.id === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
-                        }`}
-                        title={p.hasDimensions ? p.name : t("noDims")}
-                      >
-                        <span
-                          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
-                          style={{ backgroundColor: colorFor(p.sku) }}
-                        >
-                          {p.imageKey ? (
-                            <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            p.name.slice(0, 1)
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                        <span className="text-[11px] text-neutral-400">{p.widthMm ?? "—"}mm</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                {renderPickerProductList("panel")}
               </div>
               {selectedPickerProduct ? (
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -1828,6 +1930,7 @@ export function PlanogramEditor({
             )}
           </div>
 
+          {activeView === "planogram" ? (
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-medium">{t("zones")}</h2>
             {zones.length === 0 ? (
@@ -1901,8 +2004,9 @@ export function PlanogramEditor({
               </div>
             ) : null}
           </div>
+          ) : null}
 
-          {!readOnly ? (
+          {!readOnly && activeView === "planogram" ? (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">
               <h2 className="text-sm font-medium">{t("autoPlacement")}</h2>
               <p className="mt-1 text-xs text-neutral-500">{t("autoPlacementHint")}</p>
@@ -2122,6 +2226,7 @@ export function PlanogramEditor({
           ) : null}
 
           {/* Shelf capacity */}
+          {activeView === "planogram" ? (
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
             {shelfInfos
               .slice()
@@ -2143,7 +2248,9 @@ export function PlanogramEditor({
                 </button>
               ))}
           </div>
+          ) : null}
 
+          {activeView === "reference" ? (
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
@@ -2236,10 +2343,10 @@ export function PlanogramEditor({
                           <div
                             key={slot.id}
                             onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "move")}
-                            className={`absolute cursor-move border-2 bg-emerald-400/15 ${
+                            className={`absolute cursor-move border-2 border-dashed bg-sky-500/10 ${
                               selectedReferenceSlotId === slot.id
-                                ? "border-emerald-500 ring-2 ring-emerald-500/25"
-                                : "border-emerald-400"
+                                ? "border-sky-700 ring-2 ring-sky-400/30"
+                                : "border-sky-500"
                             }`}
                             style={{
                               left: `${slot.xPct}%`,
@@ -2248,12 +2355,12 @@ export function PlanogramEditor({
                               height: `${slot.heightPct}%`,
                             }}
                           >
-                            <span className="absolute left-0 top-0 max-w-full truncate bg-emerald-500 px-1 text-[10px] font-medium text-white">
-                              {slot.productSku ?? slot.label ?? t("referenceSlot")}
+                            <span className="absolute left-0 top-0 max-w-full truncate bg-sky-700 px-1 text-[10px] font-medium text-white">
+                              {slot.productSku ? t("referenceZoneLabel", { sku: slot.productSku }) : slot.label ?? t("referenceSlot")}
                             </span>
                             <span
                               onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "resize")}
-                              className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize border-l border-t border-white bg-emerald-600"
+                              className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize border-l border-t border-white bg-sky-700"
                               aria-hidden="true"
                             />
                           </div>
@@ -2271,7 +2378,7 @@ export function PlanogramEditor({
                           <div
                             key={slot.id}
                             className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs ${
-                              selectedReferenceSlotId === slot.id ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-neutral-50"
+                              selectedReferenceSlotId === slot.id ? "bg-sky-50 ring-1 ring-sky-200" : "bg-neutral-50"
                             }`}
                           >
                             <button
@@ -2304,7 +2411,7 @@ export function PlanogramEditor({
                       <button
                         type="button"
                         onClick={() => void createMissingReferenceSlots()}
-                        className="mt-2 w-full rounded-md border border-emerald-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                        className="mt-2 w-full rounded-md border border-sky-200 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50"
                       >
                         {t("createMissingReferenceSlots", { count: referenceMissingPlacements.length })}
                       </button>
@@ -2439,9 +2546,10 @@ export function PlanogramEditor({
               </div>
             )}
           </div>
+          ) : null}
 
           {/* Placement props */}
-          {selectedPlacement && !readOnly && (
+          {selectedPlacement && !readOnly && activeView === "planogram" && (
             <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
               <div className="text-sm font-medium">{selectedPlacement.product.name}</div>
               <div className="text-xs text-neutral-500">
