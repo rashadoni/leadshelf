@@ -755,14 +755,26 @@
       "completedVisits": "Tamamlanmış vizitlər",
       "proofs": "Fotolu vizitlər",
       "pendingReviews": "Review növbəsi",
+      "assignedTasks": "Təyin edilmiş tapşırıqlar",
       "cleanVisits": "Anomaliyasız",
       "liveLocations": "Canlı lokasiya"
+    },
+    "workload": {
+      "title": "Marşrutlar, tapşırıqlar və agentlər",
+      "subtitle": "Ofis agent yükünü görür: aktiv marşrutlar, nöqtə tapşırıqları, foto və review.",
+      "total": "Cəmi tapşırıq: {count}",
+      "open": "açıq",
+      "assigned": "Təyin edilib",
+      "photoSubmitted": "Fotolu",
+      "pendingReview": "Review",
+      "noTasks": "Agentə hələ tapşırıq təyin edilməyib"
     },
     "table": {
       "agent": "Agent",
       "team": "Komanda",
       "routes": "Marşrutlar",
       "visits": "Vizitlər",
+      "tasks": "Tapşırıqlar",
       "lastLocation": "Son geolokasiya"
     },
     "routesTable": {

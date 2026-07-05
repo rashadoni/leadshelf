@@ -755,14 +755,26 @@
       "completedVisits": "Завершённые визиты",
       "proofs": "Визиты с фото",
       "pendingReviews": "Review в очереди",
+      "assignedTasks": "Назначенные задачи",
       "cleanVisits": "Без аномалий",
       "liveLocations": "Live location"
+    },
+    "workload": {
+      "title": "Маршруты, задачи и агенты",
+      "subtitle": "Офис видит нагрузку агента: активные маршруты, задачи по точкам, фото и review.",
+      "total": "Всего задач: {count}",
+      "open": "открыто",
+      "assigned": "Назначено",
+      "photoSubmitted": "С фото",
+      "pendingReview": "Review",
+      "noTasks": "У агента пока нет назначенных задач"
     },
     "table": {
       "agent": "Агент",
       "team": "Команда",
       "routes": "Маршруты",
       "visits": "Визиты",
+      "tasks": "Задачи",
       "lastLocation": "Последняя геопозиция"
     },
     "routesTable": {

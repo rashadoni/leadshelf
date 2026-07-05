@@ -17,7 +17,7 @@ export default async function FieldForcePage() {
   if (!session) return null
 
   const db = tenantDb(session.org)
-  const [agents, teams, users, stores, routes, visits] = await Promise.all([
+  const [agents, teams, users, stores, routes, visits, tasks] = await Promise.all([
     db.fieldAgent.findMany({
       include: {
         user: { select: { name: true, email: true, employeeCode: true, role: true } },
@@ -80,7 +80,54 @@ export default async function FieldForcePage() {
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
+    db.task.findMany({
+      where: { assigneeId: { not: null } },
+      include: {
+        assignee: { select: { id: true, name: true } },
+        store: { select: { name: true, code: true } },
+        photoSubmissions: {
+          orderBy: { takenAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            qualityScore: true,
+            humanReviews: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { status: true, reason: true, score: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
+      take: 200,
+    }),
   ])
+  const tasksByAssignee = new Map<string, typeof tasks>()
+  for (const task of tasks) {
+    if (!task.assigneeId) continue
+    const list = tasksByAssignee.get(task.assigneeId) ?? []
+    list.push(task)
+    tasksByAssignee.set(task.assigneeId, list)
+  }
+  const agentWorkload = agents.map((agent) => {
+    const assignedTasks = tasksByAssignee.get(agent.userId) ?? []
+    return {
+      agent,
+      assignedTasks,
+      openTasks: assignedTasks.filter((task) => !["COMPLETED", "EXPIRED"].includes(task.status)).length,
+      submittedTasks: assignedTasks.filter((task) => task.status === "PHOTO_SUBMITTED").length,
+      pendingReviews: assignedTasks.reduce(
+        (sum, task) =>
+          sum +
+          task.photoSubmissions.reduce(
+            (photoSum, photo) => photoSum + photo.humanReviews.filter((review) => review.status === "PENDING").length,
+            0,
+          ),
+        0,
+      ),
+    }
+  })
   const liveLocations = agents.flatMap((agent) => {
     const location = agent.locations[0]
     return location
@@ -136,6 +183,7 @@ export default async function FieldForcePage() {
           ["cards.completedVisits", completedVisits],
           ["cards.proofs", visitsWithProof],
           ["cards.pendingReviews", openReviews],
+          ["cards.assignedTasks", tasks.length],
           ["cards.cleanVisits", cleanVisits],
           ["cards.liveLocations", liveLocations.length],
         ].map(([label, value]) => (
@@ -197,6 +245,78 @@ export default async function FieldForcePage() {
         ) : (
           <div className="rounded-md border border-dashed border-neutral-200 p-8 text-center text-sm text-neutral-500">
             {t("emptyVisits")}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-medium">{t("workload.title")}</h2>
+            <p className="mt-1 text-xs text-neutral-500">{t("workload.subtitle")}</p>
+          </div>
+          <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-700">
+            {t("workload.total", { count: tasks.length })}
+          </span>
+        </div>
+        {agentWorkload.length === 0 ? (
+          <div className="rounded-md border border-dashed border-neutral-200 p-8 text-center text-sm text-neutral-500">
+            {t("emptyAgents")}
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {agentWorkload.map(({ agent, assignedTasks, openTasks, submittedTasks, pendingReviews }) => (
+              <div key={agent.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">{agent.user.name}</div>
+                    <div className="mt-1 text-xs text-neutral-500">
+                      {agent.team?.name ?? t("noTeam")} · {agent.user.employeeCode ?? agent.user.email ?? agent.user.role}
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-neutral-500">
+                    <div className="font-semibold text-neutral-900">{openTasks}</div>
+                    <div>{t("workload.open")}</div>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-md border border-neutral-200 bg-white px-2 py-1.5">
+                    <div className="font-semibold tabular-nums">{assignedTasks.length}</div>
+                    <div className="text-neutral-500">{t("workload.assigned")}</div>
+                  </div>
+                  <div className="rounded-md border border-neutral-200 bg-white px-2 py-1.5">
+                    <div className="font-semibold tabular-nums">{submittedTasks}</div>
+                    <div className="text-neutral-500">{t("workload.photoSubmitted")}</div>
+                  </div>
+                  <div className="rounded-md border border-neutral-200 bg-white px-2 py-1.5">
+                    <div className="font-semibold tabular-nums">{pendingReviews}</div>
+                    <div className="text-neutral-500">{t("workload.pendingReview")}</div>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {assignedTasks.slice(0, 3).map((task) => (
+                    <div key={task.id} className="rounded-md border border-neutral-200 bg-white px-2 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-neutral-900">{task.title}</span>
+                        <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-medium text-neutral-600">
+                          {task.status}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-neutral-500">
+                        {task.store.name}
+                        {task.store.code ? ` (${task.store.code})` : ""}
+                        {task.dueAt ? ` · ${formatDateTime(task.dueAt)}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                  {assignedTasks.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-neutral-200 bg-white px-2 py-4 text-center text-xs text-neutral-500">
+                      {t("workload.noTasks")}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -380,6 +500,7 @@ export default async function FieldForcePage() {
                 <th className="px-3 py-2">{t("table.team")}</th>
                 <th className="px-3 py-2">{t("table.routes")}</th>
                 <th className="px-3 py-2">{t("table.visits")}</th>
+                <th className="px-3 py-2">{t("table.tasks")}</th>
                 <th className="px-3 py-2">{t("table.lastLocation")}</th>
               </tr>
             </thead>
@@ -397,6 +518,7 @@ export default async function FieldForcePage() {
                     <td className="px-3 py-2 text-neutral-600">{agent.team?.name ?? "—"}</td>
                     <td className="px-3 py-2 tabular-nums">{agent.routes.length}</td>
                     <td className="px-3 py-2 tabular-nums">{agent.visits.length}</td>
+                    <td className="px-3 py-2 tabular-nums">{tasksByAssignee.get(agent.userId)?.length ?? 0}</td>
                     <td className="px-3 py-2 text-xs text-neutral-500">
                       {latestLocation
                         ? `${latestLocation.latitude.toFixed(5)}, ${latestLocation.longitude.toFixed(5)} · ${latestLocation.recordedAt.toLocaleString()}`

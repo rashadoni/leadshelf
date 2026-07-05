@@ -94,6 +94,32 @@ export default function RoutesScreen() {
                     ) : completedVisit ? (
                       <Text style={styles.visitMeta}>{t("visitCompleted")}</Text>
                     ) : null}
+                    {tasks.length > 0 ? (
+                      <View style={styles.stopTasks}>
+                        {tasks.slice(0, 4).map((task) => (
+                          <Pressable
+                            key={task.id}
+                            onPress={() => router.push(`/(app)/tasks/${task.id}` as never)}
+                            style={styles.stopTask}
+                          >
+                            <View style={styles.stopTaskBody}>
+                              <Text style={styles.stopTaskTitle} numberOfLines={1}>
+                                {task.title}
+                              </Text>
+                              <Text style={styles.stopTaskMeta}>
+                                {t("agentTask")} · {task.status}
+                              </Text>
+                            </View>
+                            <Text style={styles.openTask}>{t("openTask")}</Text>
+                          </Pressable>
+                        ))}
+                        {tasks.length > 4 ? (
+                          <Text style={styles.moreTasks}>
+                            +{tasks.length - 4} {t("moreTasks")}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ) : null}
                   </View>
                   <Pressable
                     disabled={disabled}
@@ -139,6 +165,21 @@ const styles = StyleSheet.create({
   stopTitle: { fontSize: 14, fontWeight: "600" },
   meta: { fontSize: 12, color: "#737373", marginTop: 2 },
   visitMeta: { fontSize: 12, color: "#166534", fontWeight: "600", marginTop: 4 },
+  stopTasks: { gap: 6, marginTop: 8 },
+  stopTask: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#fafaf9",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  stopTaskBody: { flex: 1 },
+  stopTaskTitle: { fontSize: 12, fontWeight: "700", color: "#171717" },
+  stopTaskMeta: { marginTop: 1, fontSize: 10, color: "#737373" },
+  openTask: { fontSize: 11, fontWeight: "800", color: "#171717" },
+  moreTasks: { fontSize: 11, color: "#737373", fontWeight: "600" },
   button: { borderRadius: 8, backgroundColor: "#171717", paddingHorizontal: 10, paddingVertical: 8 },
   checkoutButton: { backgroundColor: "#166534" },
   buttonDisabled: { backgroundColor: "#d4d4d4" },
