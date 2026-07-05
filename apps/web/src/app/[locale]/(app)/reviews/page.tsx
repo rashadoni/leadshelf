@@ -14,6 +14,58 @@ function qualityIssues(findings: unknown): string[] {
   return Array.isArray(issues) ? issues.filter((issue): issue is string => typeof issue === "string") : []
 }
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function visionDetails(findings: unknown) {
+  const vision = asRecord(asRecord(findings).vision)
+  if (Object.keys(vision).length === 0) return null
+  const compliance = asRecord(vision.compliance)
+  const nestedFindings = asRecord(vision.findings)
+  const missing = Array.isArray(nestedFindings.missing) ? nestedFindings.missing.map(asRecord) : []
+  const wrong = Array.isArray(nestedFindings.wrong) ? nestedFindings.wrong.map(asRecord) : []
+  const extra = Array.isArray(nestedFindings.extra) ? nestedFindings.extra.map(asRecord) : []
+  return {
+    provider: typeof vision.provider === "string" ? vision.provider : null,
+    modelVersion: typeof vision.modelVersion === "string" ? vision.modelVersion : null,
+    status: typeof vision.status === "string" ? vision.status : null,
+    warnings: stringList(vision.warnings),
+    compliance: {
+      status: typeof compliance.status === "string" ? compliance.status : null,
+      score: typeof compliance.score === "number" ? compliance.score : null,
+      totalSlots: typeof compliance.totalSlots === "number" ? compliance.totalSlots : null,
+      matchedSlots: typeof compliance.matchedSlots === "number" ? compliance.matchedSlots : null,
+      missingSlots: typeof compliance.missingSlots === "number" ? compliance.missingSlots : null,
+      wrongProducts: typeof compliance.wrongProducts === "number" ? compliance.wrongProducts : null,
+      extraDetections: typeof compliance.extraDetections === "number" ? compliance.extraDetections : null,
+    },
+    missing: missing
+      .map((item) => ({
+        slotId: typeof item.slotId === "string" ? item.slotId : null,
+        sku: typeof item.expectedProductSku === "string" ? item.expectedProductSku : null,
+      }))
+      .filter((item) => item.slotId || item.sku),
+    wrong: wrong
+      .map((item) => ({
+        slotId: typeof item.slotId === "string" ? item.slotId : null,
+        expectedSku: typeof item.expectedProductSku === "string" ? item.expectedProductSku : null,
+        detectedSku: typeof item.detectedProductSku === "string" ? item.detectedProductSku : null,
+      }))
+      .filter((item) => item.slotId || item.expectedSku || item.detectedSku),
+    extra: extra
+      .map((item) => ({
+        slotId: typeof item.slotId === "string" ? item.slotId : null,
+        sku: typeof item.detectedProductSku === "string" ? item.detectedProductSku : null,
+      }))
+      .filter((item) => item.slotId || item.sku),
+  }
+}
+
 export default async function ReviewsPage({
   searchParams,
 }: {
@@ -128,6 +180,7 @@ export default async function ReviewsPage({
           {reviews.map((review) => {
             const photo = review.photoSubmission
             const issues = qualityIssues(review.findings)
+            const vision = visionDetails(review.findings)
             const store = photo?.store ?? review.task?.store ?? null
             const planogramVersion = review.task?.planogramVersion ?? review.planogramVersion
             return (
@@ -177,6 +230,62 @@ export default async function ReviewsPage({
                           {issue}
                         </span>
                       ))}
+                    </div>
+                  )}
+                  {vision && (
+                    <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                        <span className="font-medium text-neutral-700">{t("vision.title")}</span>
+                        {vision.provider && <span>{vision.provider}</span>}
+                        {vision.modelVersion && <span>{vision.modelVersion}</span>}
+                        {vision.status && <span>{vision.status}</span>}
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-5">
+                        {[
+                          ["vision.score", vision.compliance.score === null ? "—" : `${Math.round(vision.compliance.score * 100)}%`],
+                          ["vision.matched", `${vision.compliance.matchedSlots ?? 0}/${vision.compliance.totalSlots ?? 0}`],
+                          ["vision.missing", vision.compliance.missingSlots ?? 0],
+                          ["vision.wrong", vision.compliance.wrongProducts ?? 0],
+                          ["vision.extra", vision.compliance.extraDetections ?? 0],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded border border-neutral-200 bg-white px-2 py-1">
+                            <div className="text-[11px] text-neutral-500">{t(label as never)}</div>
+                            <div className="text-sm font-semibold tabular-nums">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {vision.missing.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {vision.missing.slice(0, 8).map((item) => (
+                            <span key={`${item.slotId}-${item.sku}`} className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700">
+                              {t("vision.missingSku")}: {item.sku ?? item.slotId}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {vision.wrong.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {vision.wrong.slice(0, 8).map((item) => (
+                            <span key={`${item.slotId}-${item.expectedSku}-${item.detectedSku}`} className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">
+                              {t("vision.wrongSku")}: {item.expectedSku ?? item.slotId} → {item.detectedSku ?? "—"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {vision.extra.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {vision.extra.slice(0, 8).map((item) => (
+                            <span key={`${item.slotId}-${item.sku}`} className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                              {t("vision.extraSku")}: {item.sku ?? item.slotId}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {vision.warnings.length > 0 && (
+                        <div className="mt-2 text-xs text-neutral-500">
+                          {t("vision.warnings")}: {vision.warnings.join(", ")}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

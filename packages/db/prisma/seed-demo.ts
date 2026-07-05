@@ -2,6 +2,8 @@
 // Запуск: pnpm --filter @leadshelf/db seed:demo
 import "dotenv/config"
 import { hash } from "@node-rs/argon2"
+import { Prisma } from "@prisma/client"
+import { calculateShelfCompliance } from "@leadshelf/core"
 import { createSystemClient, createTenantClient } from "../src/index.ts"
 
 const ARGON_OPTS = { memoryCost: 19456, timeCost: 2, parallelism: 1 }
@@ -612,6 +614,157 @@ async function ensureAssignmentTaskAndProof(input: {
         createdById: input.mobileUserId,
       },
     }))
+
+  const slotPlacements = await prisma.planogramPlacement.findMany({
+    where: { planogramVersionId: input.planogramVersionId },
+    include: { product: { select: { sku: true, name: true } } },
+    orderBy: { sortOrder: "asc" },
+    take: 6,
+  })
+  const slotRects = [
+    { xPct: 5, yPct: 26, widthPct: 12, heightPct: 12 },
+    { xPct: 19, yPct: 26, widthPct: 12, heightPct: 12 },
+    { xPct: 33, yPct: 26, widthPct: 12, heightPct: 12 },
+    { xPct: 51, yPct: 47, widthPct: 12, heightPct: 12 },
+    { xPct: 65, yPct: 47, widthPct: 12, heightPct: 12 },
+    { xPct: 79, yPct: 47, widthPct: 12, heightPct: 12 },
+  ]
+  for (const [index, placement] of slotPlacements.entries()) {
+    const existingSlot = await prisma.goldenReferenceSlot.findFirst({
+      where: { goldenReferenceId: goldenReference.id, placementId: placement.id },
+      select: { id: true },
+    })
+    const rect = slotRects[index] ?? slotRects[slotRects.length - 1]!
+    const data = {
+      productId: placement.productId,
+      xPct: rect.xPct,
+      yPct: rect.yPct,
+      widthPct: rect.widthPct,
+      heightPct: rect.heightPct,
+      label: placement.product.name,
+      sortOrder: index,
+    }
+    if (existingSlot) {
+      await prisma.goldenReferenceSlot.update({ where: { id: existingSlot.id }, data })
+    } else {
+      await prisma.goldenReferenceSlot.create({
+        data: {
+          goldenReferenceId: goldenReference.id,
+          placementId: placement.id,
+          ...data,
+        },
+      })
+    }
+  }
+
+  const referenceSlots = await prisma.goldenReferenceSlot.findMany({
+    where: { goldenReferenceId: goldenReference.id },
+    include: { product: { select: { sku: true } } },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  })
+  const demoDetections = referenceSlots.map((slot) => ({
+    slotId: slot.id,
+    productId: slot.productId,
+    productSku: slot.product?.sku ?? null,
+    confidence: 0.35,
+  }))
+  const compliance = calculateShelfCompliance({
+    slots: referenceSlots.map((slot) => ({
+      id: slot.id,
+      productId: slot.productId,
+      productSku: slot.product?.sku ?? null,
+    })),
+    detections: demoDetections,
+  })
+  const visionFindings = {
+    vision: {
+      scannedAt: new Date().toISOString(),
+      protocolVersion: 1,
+      provider: "leadshelf-stub",
+      modelVersion: "stub-reference-slots-v1",
+      status: "needs_human_review",
+      compliance: {
+        score: compliance.score,
+        status: compliance.status,
+        totalSlots: compliance.totalSlots,
+        matchedSlots: compliance.matchedSlots,
+        missingSlots: compliance.missingSlots,
+        wrongProducts: compliance.wrongProducts,
+        extraDetections: compliance.extraDetections,
+      },
+      findings: {
+        missing: compliance.findings.missing.map((item) => ({
+          slotId: item.slotId,
+          expectedProductId: item.expectedProductId,
+          expectedProductSku: item.expectedProductSku,
+        })),
+        wrong: compliance.findings.wrong.map((item) => ({
+          slotId: item.slotId,
+          expectedProductId: item.expectedProductId,
+          expectedProductSku: item.expectedProductSku,
+          detectedProductId: item.detectedProductId,
+          detectedProductSku: item.detectedProductSku,
+          confidence: item.confidence,
+        })),
+        extra: compliance.findings.extra.map((item) => ({
+          slotId: item.slotId,
+          detectedProductId: item.detectedProductId,
+          detectedProductSku: item.detectedProductSku,
+          confidence: item.confidence,
+        })),
+      },
+      detections: referenceSlots.map((slot) => ({
+        slotId: slot.id,
+        productId: slot.productId,
+        productSku: slot.product?.sku ?? null,
+        label: slot.label,
+        confidence: 0.35,
+        bbox: {
+          xPct: slot.xPct,
+          yPct: slot.yPct,
+          widthPct: slot.widthPct,
+          heightPct: slot.heightPct,
+        },
+      })),
+      warnings: ["stub_provider_uses_reference_slots_without_image_inference"],
+    },
+  } satisfies Prisma.InputJsonObject
+  const existingVisionReview = await prisma.humanReview.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      photoSubmissionId: photo.id,
+      reason: "VISION_COMPLIANCE",
+    },
+    select: { id: true, status: true },
+  })
+  if (existingVisionReview?.status === "PENDING") {
+    await prisma.humanReview.update({
+      where: { id: existingVisionReview.id },
+      data: {
+        taskId: task.id,
+        planogramVersionId: input.planogramVersionId,
+        goldenReferenceId: goldenReference.id,
+        score: compliance.score,
+        findings: visionFindings,
+        note: "Демо: vision compliance создан на stub-провайдере и требует ручной проверки.",
+      },
+    })
+  } else if (!existingVisionReview) {
+    await prisma.humanReview.create({
+      data: {
+        organizationId: input.organizationId,
+        reason: "VISION_COMPLIANCE",
+        status: "PENDING",
+        taskId: task.id,
+        photoSubmissionId: photo.id,
+        planogramVersionId: input.planogramVersionId,
+        goldenReferenceId: goldenReference.id,
+        score: compliance.score,
+        findings: visionFindings,
+        note: "Демо: vision compliance создан на stub-провайдере и требует ручной проверки.",
+      },
+    })
+  }
 
   return { assignment, task, photo, review, goldenReference }
 }

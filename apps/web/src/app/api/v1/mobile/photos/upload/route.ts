@@ -3,6 +3,7 @@ import { mobilePhotoUploadFieldsSchema } from "@leadshelf/api-contracts/mobile/v
 import { evaluatePhotoQuality } from "@leadshelf/core"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
+import { runVisionComplianceForPhoto } from "@/server/services/vision-compliance"
 import { putObject } from "@/server/storage/s3"
 
 export const runtime = "nodejs"
@@ -51,12 +52,22 @@ export async function POST(req: NextRequest) {
   })
   if (existing) {
     const existingExif = asObjectRecord(existing.exif)
+    const visionResult = await runVisionComplianceForPhoto({
+      organizationId: session.org,
+      photoSubmissionId: existing.id,
+    }).catch((error: unknown) => ({
+      status: "skipped" as const,
+      reason: error instanceof Error ? error.message : "vision_scan_failed",
+    }))
     return NextResponse.json({
       photoId: existing.id,
       key: existing.url,
       qualityScore: existing.qualityScore,
       qualityCheck: existingExif.qualityCheck ?? null,
       deduplicated: true,
+      visionReviewId: "reviewId" in visionResult ? visionResult.reviewId : null,
+      visionStatus: visionResult.status,
+      visionReason: "reason" in visionResult ? visionResult.reason : null,
     })
   }
 
@@ -124,6 +135,13 @@ export async function POST(req: NextRequest) {
     })
     return { photo, reviewId: review.id }
   })
+  const visionResult = await runVisionComplianceForPhoto({
+    organizationId: session.org,
+    photoSubmissionId: photo.id,
+  }).catch((error: unknown) => ({
+    status: "skipped" as const,
+    reason: error instanceof Error ? error.message : "vision_scan_failed",
+  }))
   return NextResponse.json(
     {
       photoId: photo.id,
@@ -131,6 +149,9 @@ export async function POST(req: NextRequest) {
       qualityScore: qualityCheck.score,
       qualityCheck: exifWithQuality.qualityCheck,
       reviewId,
+      visionReviewId: "reviewId" in visionResult ? visionResult.reviewId : null,
+      visionStatus: visionResult.status,
+      visionReason: "reason" in visionResult ? visionResult.reason : null,
     },
     { status: 201 },
   )

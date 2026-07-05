@@ -697,6 +697,18 @@
     "reason": {
       "PHOTO_QUALITY": "Качество фото",
       "VISION_COMPLIANCE": "Vision compliance"
+    },
+    "vision": {
+      "title": "Vision compliance",
+      "score": "Score",
+      "matched": "Совпало",
+      "missing": "Нет",
+      "wrong": "Не то",
+      "extra": "Лишнее",
+      "missingSku": "Нет SKU",
+      "wrongSku": "Не тот SKU",
+      "extraSku": "Лишний SKU",
+      "warnings": "Предупреждения"
     }
   },
   "fieldForce": {
