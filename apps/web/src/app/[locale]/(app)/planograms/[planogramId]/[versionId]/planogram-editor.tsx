@@ -5,7 +5,7 @@
 // Каждая мутация — API-вызов; при 422 показываем физическую причину,
 // при 409 перезагружаем draft.
 
-import { useMemo, useRef, useState, type DragEvent, type PointerEvent } from "react"
+import { useMemo, useRef, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
@@ -231,7 +231,7 @@ export function PlanogramEditor({
   const [message, setMessage] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
-  const [selectedPickerProductId, setSelectedPickerProductId] = useState<string | null>(null)
+  const [selectedPickerProduct, setSelectedPickerProduct] = useState<PickerProduct | null>(null)
   const [draggingProductId, setDraggingProductId] = useState<string | null>(null)
   const [references, setReferences] = useState(goldenReferences)
   const [activeReferenceId, setActiveReferenceId] = useState(goldenReferences[0]?.id ?? "")
@@ -267,7 +267,6 @@ export function PlanogramEditor({
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
-  const selectedPickerProduct = pickerProducts.find((p) => p.id === selectedPickerProductId) ?? null
   const selectedEffectiveSize = selectedPlacement ? orientedProductSizeMm(selectedPlacement) : null
   const metricsByProductId = useMemo(
     () => new Map(placementMetrics.map((metric) => [metric.productId, metric])),
@@ -277,6 +276,7 @@ export function PlanogramEditor({
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
   const selectedReferenceSlot =
     activeReference?.slots.find((slot) => slot.id === selectedReferenceSlotId) ?? null
+  const activeAutoZone = zones.find((zone) => zone.id === autoRule.zoneId) ?? null
   const referenceCoveredPlacementIds = new Set(
     activeReference?.slots.map((slot) => slot.placementId).filter((id): id is string => Boolean(id)) ?? [],
   )
@@ -290,7 +290,20 @@ export function PlanogramEditor({
   const base = `/api/v1/planograms/${planogram.id}/versions/${version.id}/placements`
   const goldenReferenceBase = `/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`
 
+  async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const first = await fetch(input, init)
+    if (first.status !== 401) return first
+
+    const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
+    if (!refreshed.ok) return first
+    return fetch(input, init)
+  }
+
   async function handleResponse(res: Response): Promise<Record<string, unknown> | null> {
+    if (res.status === 401) {
+      setMessage(t("sessionExpired"))
+      return null
+    }
     if (res.status === 409) {
       setMessage(t("conflict"))
       router.refresh()
@@ -311,7 +324,7 @@ export function PlanogramEditor({
       setPickerProducts([])
       return
     }
-    const res = await fetch(`/api/v1/catalog/products?q=${encodeURIComponent(q)}&limit=8`)
+    const res = await apiFetch(`/api/v1/catalog/products?q=${encodeURIComponent(q)}&limit=8`)
     if (res.ok) {
       const body = await res.json()
       setPickerProducts(body.products)
@@ -320,7 +333,7 @@ export function PlanogramEditor({
 
   async function place(product: PickerProduct, shelfId = selectedShelfId, xMm?: number) {
     if (!shelfId || readOnly || !product.hasDimensions) return
-    const res = await fetch(base, {
+    const res = await apiFetch(base, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -366,12 +379,45 @@ export function PlanogramEditor({
       ])
       setSelectedPlacementId(body.placementId as string)
       setSelectedShelfId(shelfId)
+      setSelectedPickerProduct(null)
     }
+  }
+
+  async function placeSelectedProductAt(event: MouseEvent<SVGSVGElement | SVGGElement>, shelfId: string) {
+    if (!selectedPickerProduct?.hasDimensions || readOnly) return
+    event.preventDefault()
+    event.stopPropagation()
+    const point = pointInSvg(event)
+    if (!point) return
+    const draftPlacement: EditorPlacement = {
+      id: "draft",
+      shelfId,
+      xMm: 0,
+      widthMm: selectedPickerProduct.widthMm ?? 0,
+      heightMm: selectedPickerProduct.heightMm ?? 0,
+      depthMm: selectedPickerProduct.depthMm ?? 0,
+      facingsX: 1,
+      facingsY: 1,
+      facingsZ: 1,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      stackMode: "NONE",
+      product: {
+        id: selectedPickerProduct.id,
+        sku: selectedPickerProduct.sku,
+        barcode: selectedPickerProduct.barcode,
+        name: selectedPickerProduct.name,
+        brandName: null,
+        imageKey: selectedPickerProduct.imageKey,
+      },
+    }
+    await place(selectedPickerProduct, shelfId, snappedXMm(point.x / k, draftPlacement))
   }
 
   async function duplicatePlacement(placement: EditorPlacement) {
     if (readOnly) return
-    const res = await fetch(base, {
+    const res = await apiFetch(base, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -400,7 +446,7 @@ export function PlanogramEditor({
   }
 
   async function patchPlacement(id: string, patch: Record<string, number | string>) {
-    const res = await fetch(`${base}/${id}`, {
+    const res = await apiFetch(`${base}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expectedRevision: revision, ...patch }),
@@ -415,7 +461,7 @@ export function PlanogramEditor({
   }
 
   async function deletePlacement(id: string) {
-    const res = await fetch(`${base}/${id}`, {
+    const res = await apiFetch(`${base}/${id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expectedRevision: revision }),
@@ -430,7 +476,7 @@ export function PlanogramEditor({
 
   async function createGoldenReference() {
     if (!selectedGoldenPhotoId) return
-    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`, {
+    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ photoSubmissionId: selectedGoldenPhotoId }),
@@ -455,7 +501,7 @@ export function PlanogramEditor({
   async function deleteGoldenReference(referenceId: string) {
     const confirmed = window.confirm(t("confirmDeleteReference"))
     if (!confirmed) return
-    const res = await fetch(`${goldenReferenceBase}/${referenceId}`, { method: "DELETE" })
+    const res = await apiFetch(`${goldenReferenceBase}/${referenceId}`, { method: "DELETE" })
     const body = await handleResponse(res)
     if (!body) return
     setReferences((prev) => prev.filter((ref) => ref.id !== referenceId))
@@ -517,7 +563,7 @@ export function PlanogramEditor({
   }
 
   async function persistReferenceSlotDraft(referenceId: string, slotId: string, draft: ReferenceSlotDraft) {
-    const res = await fetch(`${goldenReferenceBase}/${referenceId}/slots/${slotId}`, {
+    const res = await apiFetch(`${goldenReferenceBase}/${referenceId}/slots/${slotId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(draft),
@@ -628,7 +674,7 @@ export function PlanogramEditor({
 
   async function createReferenceSlotForPlacement(placement: EditorPlacement, draft = slotDraft) {
     if (!activeReference) return null
-    const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots`, {
+    const res = await apiFetch(`${goldenReferenceBase}/${activeReference.id}/slots`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -673,7 +719,7 @@ export function PlanogramEditor({
 
   async function updateReferenceSlot() {
     if (!activeReference || !selectedReferenceSlot || !slotPlacement) return
-    const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots/${selectedReferenceSlot.id}`, {
+    const res = await apiFetch(`${goldenReferenceBase}/${activeReference.id}/slots/${selectedReferenceSlot.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -695,7 +741,7 @@ export function PlanogramEditor({
   }
 
   async function deleteReferenceSlot(referenceId: string, slotId: string) {
-    const res = await fetch(`${goldenReferenceBase}/${referenceId}/slots/${slotId}`, { method: "DELETE" })
+    const res = await apiFetch(`${goldenReferenceBase}/${referenceId}/slots/${slotId}`, { method: "DELETE" })
     const body = await handleResponse(res)
     if (!body) return
     setReferences((prev) =>
@@ -719,7 +765,7 @@ export function PlanogramEditor({
 
   async function createZone() {
     if (readOnly) return
-    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones`, {
+    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expectedRevision: revision, ...zoneDraft }),
@@ -744,7 +790,7 @@ export function PlanogramEditor({
   }
 
   async function deleteZone(zoneId: string) {
-    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${zoneId}`, {
+    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${zoneId}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expectedRevision: revision }),
@@ -758,7 +804,7 @@ export function PlanogramEditor({
 
   async function autoFillZone() {
     if (!autoRule.zoneId || readOnly) return
-    const res = await fetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${autoRule.zoneId}/autofill`, {
+    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${autoRule.zoneId}/autofill`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -902,7 +948,7 @@ export function PlanogramEditor({
     return value == null ? "—" : value.toFixed(1)
   }
 
-  function pointInSvg(event: PointerEvent<SVGSVGElement | SVGGElement>) {
+  function pointInSvg(event: { clientX: number; clientY: number }) {
     const svg = svgRef.current
     const matrix = svg?.getScreenCTM()
     if (!svg || !matrix) return null
@@ -942,6 +988,7 @@ export function PlanogramEditor({
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = pointInSvg(event)
     if (!point) return
+    setSelectedPickerProduct(null)
     setSelectedPlacementId(placement.id)
     setSelectedShelfId(placement.shelfId)
     setDrag({
@@ -981,7 +1028,8 @@ export function PlanogramEditor({
     event.dataTransfer.setData("text/plain", product.id)
     event.dataTransfer.effectAllowed = "copy"
     setDraggingProductId(product.id)
-    setSelectedPickerProductId(product.id)
+    setSelectedPickerProduct(product)
+    setSelectedPlacementId(null)
   }
 
   async function handleCatalogDrop(event: DragEvent<SVGSVGElement>) {
@@ -1049,7 +1097,7 @@ export function PlanogramEditor({
             <span className="text-xs text-neutral-500">{tPub("readOnly")}</span>
             <button
               onClick={async () => {
-                const res = await fetch(
+                const res = await apiFetch(
                   `/api/v1/planograms/${planogram.id}/versions/${version.id}/next-draft`,
                   { method: "POST" },
                 )
@@ -1091,18 +1139,26 @@ export function PlanogramEditor({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-6">
+      <div className="grid gap-4 xl:grid-cols-[minmax(760px,1fr)_420px]">
         {/* Canvas */}
-        <div>
+        <div className="min-w-0 overflow-x-auto">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
             width={W}
             height={H}
-            className="rounded-md border border-neutral-300 bg-neutral-50"
+            className={`rounded-md border border-neutral-300 bg-neutral-50 ${
+              selectedPickerProduct?.hasDimensions ? "cursor-crosshair" : ""
+            }`}
             onPointerMove={moveDrag}
             onPointerUp={() => void finishDrag()}
             onPointerCancel={() => setDrag(null)}
+            onClick={(event) => {
+              if (!selectedPickerProduct?.hasDimensions || readOnly) return
+              const point = pointInSvg(event)
+              const shelfId = point ? shelfIdForSvgY(point.y) ?? selectedShelfId : selectedShelfId
+              if (shelfId) void placeSelectedProductAt(event, shelfId)
+            }}
             onDragOver={(event) => {
               if (draggingProductId) event.preventDefault()
             }}
@@ -1136,9 +1192,9 @@ export function PlanogramEditor({
               return (
                 <g
                   key={shelf.id}
-                  onClick={() => {
+                  onClick={(event) => {
                     setSelectedShelfId(shelf.id)
-                    if (selectedPickerProduct?.hasDimensions) void place(selectedPickerProduct, shelf.id)
+                    if (selectedPickerProduct?.hasDimensions) void placeSelectedProductAt(event, shelf.id)
                   }}
                   className="cursor-pointer"
                 >
@@ -1151,6 +1207,17 @@ export function PlanogramEditor({
                     fill={selected ? "#fef3c7" : "transparent"}
                     opacity={selected ? 0.5 : 1}
                   />
+                  {selectedPickerProduct?.hasDimensions && selected ? (
+                    <text
+                      x={8}
+                      y={yTop - space.clearanceHeightMm * k + 16}
+                      fontSize={10}
+                      fill="#92400e"
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {t("clickShelfToPlace", { sku: selectedPickerProduct.sku })}
+                    </text>
+                  ) : null}
                   <rect x={0} y={yTop} width={W} height={Math.max(2, shelf.thicknessMm * k)} fill="#78716c" />
                 </g>
               )
@@ -1175,6 +1242,7 @@ export function PlanogramEditor({
                   onPointerDown={(e) => startDrag(e, p)}
                   onClick={(e) => {
                     e.stopPropagation()
+                    setSelectedPickerProduct(null)
                     setSelectedPlacementId(p.id)
                     setSelectedShelfId(p.shelfId)
                   }}
@@ -1236,7 +1304,181 @@ export function PlanogramEditor({
         </div>
 
           {/* Side panels */}
-        <div className="min-w-72 max-w-sm flex-1 space-y-4">
+        <div className="min-w-0 space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
+          {!readOnly ? (
+            <div className="sticky top-3 z-10 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-semibold">{t("workbench")}</h2>
+              <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-medium text-neutral-700">{t("quickAddTitle")}</div>
+                    <p className="mt-1 text-xs text-neutral-500">{t("quickAddHint")}</p>
+                  </div>
+                  {selectedPickerProduct ? (
+                    <button
+                      type="button"
+                      onClick={() => void place(selectedPickerProduct)}
+                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
+                      className="shrink-0 rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                    >
+                      {t("placeOnSelectedShelf")}
+                    </button>
+                  ) : null}
+                </div>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => searchProducts(e.target.value)}
+                  placeholder={t("searchProducts")}
+                  className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm"
+                />
+                {pickerProducts.length > 0 ? (
+                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                    {pickerProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        draggable={p.hasDimensions}
+                        onDragStart={(event) => handleCatalogDragStart(event, p)}
+                        onDragEnd={() => setDraggingProductId(null)}
+                        onClick={() => {
+                          setSelectedPickerProduct(p)
+                          setSelectedPlacementId(null)
+                        }}
+                        disabled={!p.hasDimensions}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-white disabled:opacity-40 ${
+                          selectedPickerProduct?.id === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
+                        }`}
+                        title={p.hasDimensions ? p.name : t("noDims")}
+                      >
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
+                          style={{ backgroundColor: colorFor(p.sku) }}
+                        >
+                          {p.imageKey ? (
+                            <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            p.name.slice(0, 1)
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                        <span className="text-[11px] text-neutral-400">{p.widthMm ?? "—"}mm</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              {selectedPickerProduct ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-xs font-medium text-amber-800">{t("selectedCatalogProduct")}</div>
+                  <div className="mt-1 text-sm font-medium text-neutral-900">{selectedPickerProduct.name}</div>
+                  <div className="mt-1 text-xs text-neutral-600">
+                    {selectedPickerProduct.sku} · {selectedPickerProduct.widthMm}×{selectedPickerProduct.heightMm}×{selectedPickerProduct.depthMm} mm
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void place(selectedPickerProduct)}
+                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
+                      className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                    >
+                      {t("placeOnSelectedShelf")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPickerProduct(null)}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs hover:bg-white"
+                    >
+                      {t("cancelSelection")}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-amber-700">{t("selectedCatalogProductHint")}</p>
+                </div>
+              ) : null}
+
+              {selectedPlacement ? (
+                <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                  <div className="text-xs font-medium text-neutral-500">{t("selectedPlacement")}</div>
+                  <div className="mt-1 text-sm font-medium text-neutral-900">{selectedPlacement.product.name}</div>
+                  <div className="mt-1 text-xs text-neutral-600">
+                    {selectedPlacement.product.sku} · {selectedPlacement.widthMm}×{selectedPlacement.heightMm}×{selectedPlacement.depthMm} mm
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <label className="block text-xs">
+                      <span className="text-neutral-500">{t("moveToShelf")}</span>
+                      <select
+                        value={selectedPlacement.shelfId}
+                        onChange={(e) => patchPlacement(selectedPlacement.id, { shelfId: e.target.value })}
+                        className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
+                      >
+                        {equipment.shelves.map((shelf) => (
+                          <option key={shelf.id} value={shelf.id}>
+                            {t("shelf")} {shelf.shelfIndex + 1}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs">
+                      <span className="text-neutral-500">{t("position")}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={selectedPlacement.xMm}
+                        onChange={(e) =>
+                          patchPlacement(selectedPlacement.id, { xMm: Number.parseInt(e.target.value || "0", 10) })
+                        }
+                        className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
+                      />
+                    </label>
+                    <label className="block text-xs">
+                      <span className="text-neutral-500">{t("facingsX")}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={selectedPlacement.facingsX}
+                        onChange={(e) =>
+                          patchPlacement(selectedPlacement.id, { facingsX: Number.parseInt(e.target.value || "1", 10) })
+                        }
+                        className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => patchPlacement(selectedPlacement.id, { xMm: Math.max(0, selectedPlacement.xMm - 10) })}
+                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50"
+                    >
+                      {t("nudgeLeft")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => patchPlacement(selectedPlacement.id, { xMm: selectedPlacement.xMm + 10 })}
+                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50"
+                    >
+                      {t("nudgeRight")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void duplicatePlacement(selectedPlacement)}
+                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50"
+                    >
+                      {t("duplicatePlacement")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deletePlacement(selectedPlacement.id)}
+                      className="rounded-md border border-red-200 bg-white px-2 py-1 text-red-600 hover:bg-red-50"
+                    >
+                      {t("remove")}
+                    </button>
+                  </div>
+                </div>
+              ) : !selectedPickerProduct ? (
+                <p className="mt-2 text-xs text-neutral-500">{t("workbenchEmpty")}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-medium">{t("versionHistory")}</h2>
             <div className="mb-3 flex flex-wrap gap-1.5">
@@ -1358,7 +1600,20 @@ export function PlanogramEditor({
 
           {!readOnly ? (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">
-              <h2 className="mb-2 text-sm font-medium">{t("autoPlacement")}</h2>
+              <h2 className="text-sm font-medium">{t("autoPlacement")}</h2>
+              <p className="mt-1 text-xs text-neutral-500">{t("autoPlacementHint")}</p>
+              <div className="my-3 rounded-md border border-neutral-200 bg-neutral-50 p-2 text-xs">
+                <div className="font-medium text-neutral-700">
+                  {activeAutoZone ? t("autoTargetZone", { zone: activeAutoZone.name }) : t("autoNoZone")}
+                </div>
+                <div className="mt-1 text-neutral-500">
+                  {t("autoRuleSummary", {
+                    sort: t(`auto.${autoRule.sortBy}` as never),
+                    facings: t(`auto.${autoRule.facingsBy}` as never),
+                    limit: autoRule.limit,
+                  })}
+                </div>
+              </div>
               <div className="space-y-2">
                 <select
                   value={autoRule.zoneId}
@@ -1493,7 +1748,11 @@ export function PlanogramEditor({
                 >
                   {t("runAutoPlacement")}
                 </button>
-                {autoLog ? <p className="text-xs text-neutral-500">{autoLog}</p> : null}
+                {autoLog ? (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">
+                    {autoLog}
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1512,7 +1771,7 @@ export function PlanogramEditor({
                     disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
                     className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
                   >
-                    {t("placeSelectedProduct")}
+                    {t("placeOnSelectedShelf")}
                   </button>
                 ) : null}
               </div>
@@ -1531,12 +1790,12 @@ export function PlanogramEditor({
                     onDragStart={(event) => handleCatalogDragStart(event, p)}
                     onDragEnd={() => setDraggingProductId(null)}
                     onClick={() => {
-                      setSelectedPickerProductId(p.id)
-                      if (selectedShelfId) void place(p)
+                      setSelectedPickerProduct(p)
+                      setSelectedPlacementId(null)
                     }}
                     disabled={!p.hasDimensions}
                     className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-neutral-100 disabled:opacity-40 ${
-                      selectedPickerProductId === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
+                      selectedPickerProduct?.id === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
                     }`}
                     title={p.hasDimensions ? p.name : t("noDims")}
                   >
