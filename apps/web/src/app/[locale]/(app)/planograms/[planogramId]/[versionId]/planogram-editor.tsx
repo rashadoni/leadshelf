@@ -329,6 +329,17 @@ export function PlanogramEditor({
     return fetch(input, init)
   }
 
+  async function createNextDraft() {
+    const res = await apiFetch(
+      `/api/v1/planograms/${planogram.id}/versions/${version.id}/next-draft`,
+      { method: "POST" },
+    )
+    if (res.ok) {
+      const body = await res.json()
+      router.push(`/${locale}/planograms/${planogram.id}/${body.versionId}`)
+    }
+  }
+
   async function handleResponse(res: Response): Promise<Record<string, unknown> | null> {
     if (res.status === 401) {
       setMessageTone("error")
@@ -1317,16 +1328,7 @@ export function PlanogramEditor({
           <>
             <span className="text-xs text-neutral-500">{tPub("readOnly")}</span>
             <button
-              onClick={async () => {
-                const res = await apiFetch(
-                  `/api/v1/planograms/${planogram.id}/versions/${version.id}/next-draft`,
-                  { method: "POST" },
-                )
-                if (res.ok) {
-                  const body = await res.json()
-                  router.push(`/${locale}/planograms/${planogram.id}/${body.versionId}`)
-                }
-              }}
+              onClick={() => void createNextDraft()}
               className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
             >
               {tPub("nextDraft")}
@@ -1369,132 +1371,106 @@ export function PlanogramEditor({
         </div>
       </div>
 
-      {!readOnly ? (
-        <div className="mb-4 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:hidden">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">{t("workbench")}</h2>
-              <p className="mt-1 text-xs text-neutral-500">{t("quickAddHint")}</p>
-            </div>
-            {isBusy ? <span className="rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-600">{t("saving")}</span> : null}
-          </div>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => searchProducts(e.target.value)}
-            placeholder={t("searchProducts")}
-            className="mt-3 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
-          />
-          {renderPickerProductList("compact")}
-          {selectedPickerProduct ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-neutral-900">{selectedPickerProduct.name}</div>
-                <div className="text-xs text-amber-700">{t("selectedCatalogProductHint")}</div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void place(selectedPickerProduct)}
-                  disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
-                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                >
-                  {pendingAction === "place" ? t("saving") : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPickerProduct(null)}
-                  disabled={isBusy}
-                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
-                >
-                  {t("cancelSelection")}
-                </button>
-              </div>
-            </div>
-          ) : selectedPlacement ? (
-            <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-              <div className="text-xs font-medium text-neutral-500">{t("selectedPlacement")}</div>
-              <div className="mt-1 truncate text-sm font-medium text-neutral-900">{selectedPlacement.product.name}</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void duplicatePlacement(selectedPlacement)}
-                  disabled={isBusy}
-                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
-                >
-                  {t("duplicatePlacement")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deletePlacement(selectedPlacement.id)}
-                  disabled={isBusy}
-                  className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
-                >
-                  {t("remove")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="grid max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
         {/* Canvas */}
         <div className="min-w-0 overflow-x-auto">
           {activeView === "planogram" ? (
             <>
-              {!readOnly ? (
-                <div className="mb-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <span className="font-medium text-neutral-900">{t("targetShelf")}</span>{" "}
-                  <span className="text-neutral-600">
-                    {selectedShelfNumber ? t("shelfNumber", { shelf: selectedShelfNumber }) : t("selectShelfShort")}
-                  </span>
-                </div>
-                {selectedPickerProduct ? (
-                  <button
-                    type="button"
-                    onClick={() => void place(selectedPickerProduct)}
-                    disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
-                    className="rounded-md bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                  >
-                    {pendingAction === "place"
-                      ? t("saving")
-                      : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {shelfInfos.map(({ shelf, space, usage }) => {
-                  const selected = shelf.id === selectedShelfId
-                  return (
+              {readOnly ? (
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="max-w-2xl">
+                      <h2 className="text-sm font-semibold text-amber-950">{t("readOnlyPlanogramTitle")}</h2>
+                      <p className="mt-1 text-sm text-amber-800">{t("readOnlyPlanogramBody")}</p>
+                    </div>
                     <button
-                      key={shelf.id}
                       type="button"
-                      onClick={() => setSelectedShelfId(shelf.id)}
-                      disabled={isBusy}
-                      className={`min-w-32 rounded-md border px-3 py-2 text-left transition disabled:opacity-40 ${
-                        selected
-                          ? "border-amber-300 bg-amber-50 text-amber-900 ring-1 ring-amber-200"
-                          : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-white"
-                      }`}
+                      onClick={() => void createNextDraft()}
+                      className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
                     >
-                      <span className="block font-medium">{t("shelfNumber", { shelf: shelf.shelfIndex + 1 })}</span>
-                      <span className="block text-[11px] text-neutral-500">
-                        {t("freeWidth")}: {usage.freeWidthMm}/{space.innerWidthMm}mm
-                      </span>
+                      {t("createDraftToEdit")}
                     </button>
-                  )
-                })}
-              </div>
-              <p className="mt-2 text-neutral-500">
-                {selectedPickerProduct
-                  ? t("targetShelfHint", { shelf: selectedShelfNumber ?? 0 })
-                  : t("selectProductForShelfHint")}
-              </p>
+                  </div>
                 </div>
-              ) : null}
+              ) : (
+                <div className="mb-3 rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-sm">
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+                    <div>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{t("shelfStep")}</div>
+                          <div className="mt-0.5 text-sm font-medium text-neutral-900">
+                            {selectedShelfNumber ? t("shelfNumber", { shelf: selectedShelfNumber }) : t("selectShelfShort")}
+                          </div>
+                        </div>
+                        {selectedPickerProduct ? (
+                          <button
+                            type="button"
+                            onClick={() => void place(selectedPickerProduct)}
+                            disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
+                            className="rounded-md bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                          >
+                            {pendingAction === "place"
+                              ? t("saving")
+                              : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {shelfInfos.map(({ shelf, space, usage }) => {
+                          const selected = shelf.id === selectedShelfId
+                          return (
+                            <button
+                              key={shelf.id}
+                              type="button"
+                              onClick={() => setSelectedShelfId(shelf.id)}
+                              disabled={isBusy}
+                              className={`min-w-32 rounded-md border px-3 py-2 text-left transition disabled:opacity-40 ${
+                                selected
+                                  ? "border-amber-300 bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+                                  : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-white"
+                              }`}
+                            >
+                              <span className="block font-medium">{t("shelfNumber", { shelf: shelf.shelfIndex + 1 })}</span>
+                              <span className="block text-[11px] text-neutral-500">
+                                {t("freeWidth")}: {usage.freeWidthMm}/{space.innerWidthMm}mm
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <p className="mt-2 text-neutral-500">
+                        {selectedPickerProduct
+                          ? t("targetShelfHint", { shelf: selectedShelfNumber ?? 0 })
+                          : t("selectProductForShelfHint")}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{t("addSkuStep")}</div>
+                          <div className="mt-0.5 text-sm font-medium text-neutral-900">{t("quickAddTitle")}</div>
+                        </div>
+                        {isBusy ? <span className="rounded bg-white px-2 py-1 text-xs text-neutral-600">{t("saving")}</span> : null}
+                      </div>
+                      <input
+                        type="search"
+                        value={search}
+                        onChange={(e) => searchProducts(e.target.value)}
+                        placeholder={t("searchProducts")}
+                        className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
+                      />
+                      {renderPickerProductList("panel")}
+                      {selectedPickerProduct ? (
+                        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2">
+                          <div className="truncate text-sm font-medium text-neutral-900">{selectedPickerProduct.name}</div>
+                          <div className="mt-0.5 text-xs text-amber-700">{t("selectedCatalogProductHint")}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )}
               <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
@@ -1593,6 +1569,9 @@ export function PlanogramEditor({
               const isSel = p.id === selectedPlacementId
               const diffKind = diff.currentMarks.get(editorPlacementDiffKey(p))
               const metric = metricsByProductId.get(p.product.id)
+              const productLabel = p.product.sku
+              const labelWidthPx = Math.min(Math.max(36, productLabel.length * 5.8 + 12), Math.max(0, wPx - 4))
+              const showProductLabel = labelWidthPx >= 26 && hPx >= 16
               return (
                 <g
                   key={p.id}
@@ -1606,6 +1585,7 @@ export function PlanogramEditor({
                   className={readOnly ? "cursor-pointer" : "cursor-move"}
                   opacity={dragState ? 0.72 : 1}
                 >
+                  <title>{`${p.product.sku} · ${p.product.name}`}</title>
                   {p.product.imageKey ? (
                     <image
                       href={`/api/media/${p.product.imageKey}`}
@@ -1640,11 +1620,23 @@ export function PlanogramEditor({
                     stroke={isSel ? "#0f172a" : diffKind === "added" ? "#16a34a" : diffKind === "moved" ? "#f59e0b" : "white"}
                     strokeWidth={isSel || diffKind ? 2 : 0.8}
                   />
-                  {wPx > 34 && (
-                    <text x={x + 3} y={y + 10} fontSize={9} fill="white" style={{ pointerEvents: "none" }}>
-                      {p.product.sku}
-                    </text>
-                  )}
+                  {showProductLabel ? (
+                    <>
+                      <rect
+                        x={x + 2}
+                        y={y + 2}
+                        width={labelWidthPx}
+                        height={13}
+                        fill="#111827"
+                        opacity={0.9}
+                        rx={2}
+                        style={{ pointerEvents: "none" }}
+                      />
+                      <text x={x + 6} y={y + 12} fontSize={8.5} fill="white" style={{ pointerEvents: "none" }}>
+                        {productLabel}
+                      </text>
+                    </>
+                  ) : null}
                   {dragState && metric ? (
                     <text x={x + 3} y={y + hPx + 12} fontSize={9} fill="#111827" style={{ pointerEvents: "none" }}>
                       {metric.abcClass} · {formatMoney(metric.turnoverPerDay, metric.currency)}/d · {formatDays(metric.stockDays)}d
@@ -1735,56 +1727,10 @@ export function PlanogramEditor({
 
           {/* Side panels */}
         <div className="min-w-0 space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
-          {!readOnly && activeView === "planogram" ? (
+          {selectedPlacement && !readOnly && activeView === "planogram" ? (
             <div className="hidden rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:sticky xl:top-3 xl:z-10 xl:block">
-              <h2 className="text-sm font-semibold">{t("workbench")}</h2>
+              <h2 className="text-sm font-semibold">{t("selectedPlacement")}</h2>
               <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-medium text-neutral-700">{t("quickAddTitle")}</div>
-                    <p className="mt-1 text-xs text-neutral-500">{t("quickAddHint")}</p>
-                  </div>
-                </div>
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => searchProducts(e.target.value)}
-                  placeholder={t("searchProducts")}
-                  className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm"
-                />
-                {renderPickerProductList("panel")}
-              </div>
-              {selectedPickerProduct ? (
-                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <div className="text-xs font-medium text-amber-800">{t("selectedCatalogProduct")}</div>
-                  <div className="mt-1 text-sm font-medium text-neutral-900">{selectedPickerProduct.name}</div>
-                  <div className="mt-1 text-xs text-neutral-600">
-                    {selectedPickerProduct.sku} · {selectedPickerProduct.widthMm}×{selectedPickerProduct.heightMm}×{selectedPickerProduct.depthMm} mm
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void place(selectedPickerProduct)}
-                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
-                      className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                    >
-                      {pendingAction === "place" ? t("saving") : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPickerProduct(null)}
-                      disabled={isBusy}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs hover:bg-white disabled:opacity-40"
-                    >
-                      {t("cancelSelection")}
-                    </button>
-                  </div>
-                  <p className="mt-2 text-xs text-amber-700">{t("selectedCatalogProductHint")}</p>
-                </div>
-              ) : null}
-
-              {selectedPlacement ? (
-                <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                   <div className="text-xs font-medium text-neutral-500">{t("selectedPlacement")}</div>
                   <div className="mt-1 text-sm font-medium text-neutral-900">{selectedPlacement.product.name}</div>
                   <div className="mt-1 text-xs text-neutral-600">
@@ -1868,9 +1814,6 @@ export function PlanogramEditor({
                     </button>
                   </div>
                 </div>
-              ) : !selectedPickerProduct ? (
-                <p className="mt-2 text-xs text-neutral-500">{t("workbenchEmpty")}</p>
-              ) : null}
             </div>
           ) : null}
 
