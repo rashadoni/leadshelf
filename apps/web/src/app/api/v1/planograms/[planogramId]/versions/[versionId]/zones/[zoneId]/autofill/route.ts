@@ -23,6 +23,7 @@ const schema = z.object({
   maxBrandSharePct: z.number().int().min(1).max(100).nullable().optional(),
   autoCompressSoftPacks: z.boolean().default(true),
   limit: z.number().int().min(1).max(100).default(30),
+  preview: z.boolean().default(false),
 })
 
 function decimalNumber(value: unknown): number {
@@ -180,6 +181,29 @@ export async function POST(
     maxProducts: data.limit,
   })
   const productById = new Map(sorted.map((product) => [product.id, product]))
+  const previewPlacements = plan.placements.map((placement) => {
+    const product = productById.get(placement.productId)
+    return {
+      productId: placement.productId,
+      sku: product?.sku ?? placement.productId,
+      name: product?.name ?? placement.productId,
+      shelfId: placement.shelfId,
+      xMm: placement.xMm,
+      facingsX: placement.facingsX,
+      compressionX: placement.compressionX,
+      reason: placement.reason,
+    }
+  })
+
+  if (data.preview) {
+    return NextResponse.json({
+      preview: true,
+      revision: version.updatedAt.toISOString(),
+      placements: previewPlacements,
+      rejectedCount: plan.rejected.length,
+      selectedCount: sorted.slice(0, data.limit).length,
+    })
+  }
 
   const result = await workerDb.$transaction(async (tx) => {
     const created = []

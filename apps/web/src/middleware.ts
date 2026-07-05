@@ -22,7 +22,9 @@ export default async function middleware(req: NextRequest) {
   if (!session) {
     const seg = pathname.split("/")[1]
     const locale = routing.locales.includes(seg as never) ? seg : routing.defaultLocale
-    return NextResponse.redirect(new URL(`/${locale}/login`, req.url))
+    const loginUrl = new URL(`/${locale}/login`, req.url)
+    loginUrl.searchParams.set("next", `${req.nextUrl.pathname}${req.nextUrl.search}`)
+    return NextResponse.redirect(loginUrl)
   }
   return response
 }

@@ -23,7 +23,9 @@ export default function LoginPage() {
     })
     if (res.ok) {
       // полный переход, чтобы middleware увидел свежие cookie
-      window.location.assign(`/${locale}`)
+      const next = new URLSearchParams(window.location.search).get("next")
+      const safeNext = next?.startsWith(`/${locale}/`) && !next.startsWith("//") ? next : `/${locale}`
+      window.location.assign(safeNext)
     } else {
       setError(true)
       setPending(false)

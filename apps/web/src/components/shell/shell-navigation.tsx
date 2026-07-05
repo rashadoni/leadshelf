@@ -30,7 +30,7 @@ export function ShellNav() {
   const t = useTranslations("nav")
 
   return (
-    <nav className="flex gap-1 overflow-x-auto p-2 md:block md:space-y-0.5 md:overflow-visible">
+    <nav className="flex gap-1 overflow-x-auto p-2 lg:block lg:space-y-0.5 lg:overflow-visible">
       {NAV_ITEMS.map((item) => {
         const active = isActivePath(pathname, item.href)
         return (

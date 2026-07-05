@@ -180,6 +180,22 @@ interface GoldenPhotoCandidate {
   userName: string
 }
 
+interface AutoPreviewPlacement {
+  productId: string
+  sku: string
+  name: string
+  shelfId: string
+  xMm: number
+  facingsX: number
+  compressionX?: number
+  reason?: string
+}
+
+interface AutoPreviewState {
+  placements: AutoPreviewPlacement[]
+  rejectedCount: number
+}
+
 const PALETTE = ["#0ea5e9", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#14b8a6", "#f97316"]
 function colorFor(text: string): string {
   let hash = 0
@@ -264,7 +280,11 @@ export function PlanogramEditor({
     limit: 20,
   })
   const [autoLog, setAutoLog] = useState<string | null>(null)
+  const [autoPreview, setAutoPreview] = useState<AutoPreviewState | null>(null)
+  const [lastAutoFillIds, setLastAutoFillIds] = useState<string[]>([])
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
   const readOnly = version.state !== "DRAFT"
+  const isBusy = pendingAction !== null
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
   const selectedEffectiveSize = selectedPlacement ? orientedProductSizeMm(selectedPlacement) : null
@@ -289,6 +309,12 @@ export function PlanogramEditor({
 
   const base = `/api/v1/planograms/${planogram.id}/versions/${version.id}/placements`
   const goldenReferenceBase = `/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`
+
+  function updateAutoRule(patch: Partial<typeof autoRule>) {
+    setAutoRule((prev) => ({ ...prev, ...patch }))
+    setAutoPreview(null)
+    setAutoLog(null)
+  }
 
   async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const first = await fetch(input, init)
@@ -332,54 +358,59 @@ export function PlanogramEditor({
   }
 
   async function place(product: PickerProduct, shelfId = selectedShelfId, xMm?: number) {
-    if (!shelfId || readOnly || !product.hasDimensions) return
-    const res = await apiFetch(base, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        expectedRevision: revision,
-        shelfId,
-        productId: product.id,
-        ...(xMm == null ? {} : { xMm }),
-        facingsX: 1,
-        facingsY: 1,
-        facingsZ: 1,
-      }),
-    })
-    const body = await handleResponse(res)
-    if (body) {
-      setRevision(body.revision as string)
-      router.refresh()
-      // локально дорисуем без ожидания refresh
-      setPlacements((prev) => [
-        ...prev,
-        {
-          id: body.placementId as string,
+    if (!shelfId || readOnly || !product.hasDimensions || isBusy) return
+    setPendingAction("place")
+    try {
+      const res = await apiFetch(base, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedRevision: revision,
           shelfId,
-          xMm: body.xMm as number,
-          widthMm: product.widthMm ?? 0,
-          heightMm: product.heightMm ?? 0,
-          depthMm: product.depthMm ?? 0,
+          productId: product.id,
+          ...(xMm == null ? {} : { xMm }),
           facingsX: 1,
           facingsY: 1,
           facingsZ: 1,
-          rotationX: 0,
-          rotationY: 0,
-          rotationZ: 0,
-          stackMode: "NONE",
-          product: {
-            id: product.id,
-            sku: product.sku,
-            barcode: product.barcode,
-            name: product.name,
-            brandName: null,
-            imageKey: product.imageKey,
+        }),
+      })
+      const body = await handleResponse(res)
+      if (body) {
+        setRevision(body.revision as string)
+        router.refresh()
+        // локально дорисуем без ожидания refresh
+        setPlacements((prev) => [
+          ...prev,
+          {
+            id: body.placementId as string,
+            shelfId,
+            xMm: body.xMm as number,
+            widthMm: product.widthMm ?? 0,
+            heightMm: product.heightMm ?? 0,
+            depthMm: product.depthMm ?? 0,
+            facingsX: 1,
+            facingsY: 1,
+            facingsZ: 1,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+            stackMode: "NONE",
+            product: {
+              id: product.id,
+              sku: product.sku,
+              barcode: product.barcode,
+              name: product.name,
+              brandName: null,
+              imageKey: product.imageKey,
+            },
           },
-        },
-      ])
-      setSelectedPlacementId(body.placementId as string)
-      setSelectedShelfId(shelfId)
-      setSelectedPickerProduct(null)
+        ])
+        setSelectedPlacementId(body.placementId as string)
+        setSelectedShelfId(shelfId)
+        setSelectedPickerProduct(null)
+      }
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -416,85 +447,132 @@ export function PlanogramEditor({
   }
 
   async function duplicatePlacement(placement: EditorPlacement) {
-    if (readOnly) return
-    const res = await apiFetch(base, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        expectedRevision: revision,
-        shelfId: placement.shelfId,
-        productId: placement.product.id,
-        facingsX: placement.facingsX,
-        facingsY: placement.facingsY,
-        facingsZ: placement.facingsZ,
-        rotationX: placement.rotationX,
-        rotationY: placement.rotationY,
-        rotationZ: placement.rotationZ,
-        stackMode: placement.stackMode,
-      }),
-    })
-    const body = await handleResponse(res)
-    if (!body) return
-    setRevision(body.revision as string)
-    const next: EditorPlacement = {
-      ...placement,
-      id: body.placementId as string,
-      xMm: body.xMm as number,
+    if (readOnly || isBusy) return
+    setPendingAction("duplicate")
+    try {
+      const res = await apiFetch(base, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedRevision: revision,
+          shelfId: placement.shelfId,
+          productId: placement.product.id,
+          facingsX: placement.facingsX,
+          facingsY: placement.facingsY,
+          facingsZ: placement.facingsZ,
+          rotationX: placement.rotationX,
+          rotationY: placement.rotationY,
+          rotationZ: placement.rotationZ,
+          stackMode: placement.stackMode,
+        }),
+      })
+      const body = await handleResponse(res)
+      if (!body) return
+      setRevision(body.revision as string)
+      const next: EditorPlacement = {
+        ...placement,
+        id: body.placementId as string,
+        xMm: body.xMm as number,
+      }
+      setPlacements((prev) => [...prev, next])
+      setSelectedPlacementId(next.id)
+    } finally {
+      setPendingAction(null)
     }
-    setPlacements((prev) => [...prev, next])
-    setSelectedPlacementId(next.id)
   }
 
   async function patchPlacement(id: string, patch: Record<string, number | string>) {
-    const res = await apiFetch(`${base}/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: revision, ...patch }),
-    })
-    const body = await handleResponse(res)
-    if (body) {
-      setRevision(body.revision as string)
-      setPlacements((prev) =>
-        prev.map((p) => (p.id === id ? ({ ...p, ...patch } as EditorPlacement) : p)),
-      )
+    if (readOnly || isBusy) return
+    setPendingAction("patch")
+    try {
+      const res = await apiFetch(`${base}/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: revision, ...patch }),
+      })
+      const body = await handleResponse(res)
+      if (body) {
+        setRevision(body.revision as string)
+        setPlacements((prev) =>
+          prev.map((p) => (p.id === id ? ({ ...p, ...patch } as EditorPlacement) : p)),
+        )
+      }
+    } finally {
+      setPendingAction(null)
     }
   }
 
-  async function deletePlacement(id: string) {
+  async function deletePlacementWithRevision(id: string, expectedRevision: string) {
     const res = await apiFetch(`${base}/${id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: revision }),
+      body: JSON.stringify({ expectedRevision }),
     })
-    const body = await handleResponse(res)
-    if (body) {
-      setRevision(body.revision as string)
-      setPlacements((prev) => prev.filter((p) => p.id !== id))
+    return handleResponse(res)
+  }
+
+  async function deletePlacement(id: string) {
+    if (readOnly || isBusy) return
+    setPendingAction("delete")
+    try {
+      const body = await deletePlacementWithRevision(id, revision)
+      if (body) {
+        setRevision(body.revision as string)
+        setPlacements((prev) => prev.filter((p) => p.id !== id))
+        setSelectedPlacementId(null)
+      }
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  async function undoAutoFill() {
+    if (readOnly || isBusy || lastAutoFillIds.length === 0) return
+    setPendingAction("undoAutoFill")
+    try {
+      let nextRevision = revision
+      for (const id of lastAutoFillIds) {
+        const body = await deletePlacementWithRevision(id, nextRevision)
+        if (!body) return
+        nextRevision = body.revision as string
+      }
+      setRevision(nextRevision)
+      setPlacements((prev) => prev.filter((placement) => !lastAutoFillIds.includes(placement.id)))
       setSelectedPlacementId(null)
+      setLastAutoFillIds([])
+      setAutoLog(t("autoUndoComplete", { count: lastAutoFillIds.length }))
+      router.refresh()
+    } finally {
+      setPendingAction(null)
     }
   }
 
   async function createGoldenReference() {
-    if (!selectedGoldenPhotoId) return
-    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ photoSubmissionId: selectedGoldenPhotoId }),
-    })
-    const body = await handleResponse(res)
-    if (body) {
-      const reference = {
-        id: body.id as string,
-        imageUrl: body.imageUrl as string,
-        status: body.status as string,
-        createdAt: body.createdAt as string,
-        slots: [],
+    if (!selectedGoldenPhotoId || isBusy) return
+    setPendingAction("goldenReference")
+    try {
+      const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/golden-reference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoSubmissionId: selectedGoldenPhotoId }),
+      })
+      const body = await handleResponse(res)
+      if (body) {
+        const reference = {
+          id: body.id as string,
+          imageUrl: body.imageUrl as string,
+          status: body.status as string,
+          createdAt: body.createdAt as string,
+          slots: [],
+        }
+        setReferences((prev) => [
+          reference,
+          ...prev,
+        ])
+        setActiveReferenceId(reference.id)
       }
-      setReferences((prev) => [
-        reference,
-        ...prev,
-      ])
-      setActiveReferenceId(reference.id)
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -764,72 +842,119 @@ export function PlanogramEditor({
   }
 
   async function createZone() {
-    if (readOnly) return
-    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: revision, ...zoneDraft }),
-    })
-    const body = await handleResponse(res)
-    if (!body) return
-    setRevision(body.revision as string)
-    setZones((prev) => [
-      ...prev,
-      {
-        id: body.id as string,
-        name: body.name as string,
-        color: body.color as string | null,
-        xMm: body.xMm as number,
-        yMm: body.yMm as number,
-        widthMm: body.widthMm as number,
-        heightMm: body.heightMm as number,
-      },
-    ])
-    setAutoRule((prev) => ({ ...prev, zoneId: prev.zoneId || (body.id as string) }))
-    setZoneDraft((prev) => ({ ...prev, name: "" }))
+    if (readOnly || isBusy) return
+    setPendingAction("zone")
+    try {
+      const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: revision, ...zoneDraft }),
+      })
+      const body = await handleResponse(res)
+      if (!body) return
+      setRevision(body.revision as string)
+      setZones((prev) => [
+        ...prev,
+        {
+          id: body.id as string,
+          name: body.name as string,
+          color: body.color as string | null,
+          xMm: body.xMm as number,
+          yMm: body.yMm as number,
+          widthMm: body.widthMm as number,
+          heightMm: body.heightMm as number,
+        },
+      ])
+      updateAutoRule({ zoneId: autoRule.zoneId || (body.id as string) })
+      setZoneDraft((prev) => ({ ...prev, name: "" }))
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   async function deleteZone(zoneId: string) {
-    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${zoneId}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: revision }),
-    })
-    const body = await handleResponse(res)
-    if (!body) return
-    setRevision(body.revision as string)
-    setZones((prev) => prev.filter((zone) => zone.id !== zoneId))
-    setAutoRule((prev) => ({ ...prev, zoneId: prev.zoneId === zoneId ? "" : prev.zoneId }))
+    if (readOnly || isBusy) return
+    setPendingAction("zone")
+    try {
+      const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${zoneId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: revision }),
+      })
+      const body = await handleResponse(res)
+      if (!body) return
+      setRevision(body.revision as string)
+      setZones((prev) => prev.filter((zone) => zone.id !== zoneId))
+      updateAutoRule({ zoneId: autoRule.zoneId === zoneId ? "" : autoRule.zoneId })
+    } finally {
+      setPendingAction(null)
+    }
   }
 
-  async function autoFillZone() {
-    if (!autoRule.zoneId || readOnly) return
-    const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${autoRule.zoneId}/autofill`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        expectedRevision: revision,
-        categoryId: autoRule.categoryId || null,
-        brandId: autoRule.brandId || null,
-        supplierId: autoRule.supplierId || null,
-        sortBy: autoRule.sortBy,
-        facingsBy: autoRule.facingsBy,
-        excludeSkus: autoRule.excludeSkus
-          .split(/[,\n]/)
-          .map((sku) => sku.trim())
-          .filter(Boolean),
-        maxBrandSharePct: autoRule.maxBrandSharePct,
-        autoCompressSoftPacks: autoRule.autoCompressSoftPacks,
-        limit: autoRule.limit,
-      }),
-    })
-    const body = await handleResponse(res)
-    if (!body) return
-    setRevision(body.revision as string)
-    setPlacements((prev) => [...prev, ...((body.placements as EditorPlacement[]) ?? [])])
-    const log = body.log as { placed?: unknown[]; rejected?: unknown[] } | undefined
-    setAutoLog(t("autoLog", { placed: log?.placed?.length ?? 0, rejected: log?.rejected?.length ?? 0 }))
-    router.refresh()
+  function autoFillPayload(preview: boolean) {
+    return {
+      expectedRevision: revision,
+      preview,
+      categoryId: autoRule.categoryId || null,
+      brandId: autoRule.brandId || null,
+      supplierId: autoRule.supplierId || null,
+      sortBy: autoRule.sortBy,
+      facingsBy: autoRule.facingsBy,
+      excludeSkus: autoRule.excludeSkus
+        .split(/[,\n]/)
+        .map((sku) => sku.trim())
+        .filter(Boolean),
+      maxBrandSharePct: autoRule.maxBrandSharePct,
+      autoCompressSoftPacks: autoRule.autoCompressSoftPacks,
+      limit: autoRule.limit,
+    }
+  }
+
+  async function previewAutoFillZone() {
+    if (!autoRule.zoneId || readOnly || isBusy) return
+    setPendingAction("autoPreview")
+    try {
+      const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${autoRule.zoneId}/autofill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(autoFillPayload(true)),
+      })
+      const body = await handleResponse(res)
+      if (!body) return
+      const preview = (body.placements as AutoPreviewPlacement[]) ?? []
+      setAutoPreview({
+        placements: preview,
+        rejectedCount: Number(body.rejectedCount ?? 0),
+      })
+      setLastAutoFillIds([])
+      setAutoLog(preview.length === 0 ? t("autoPreviewEmpty") : null)
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  async function applyAutoFillZone() {
+    if (!autoRule.zoneId || readOnly || isBusy || !autoPreview) return
+    setPendingAction("autoApply")
+    try {
+      const res = await apiFetch(`/api/v1/planograms/${planogram.id}/versions/${version.id}/zones/${autoRule.zoneId}/autofill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(autoFillPayload(false)),
+      })
+      const body = await handleResponse(res)
+      if (!body) return
+      const created = (body.placements as EditorPlacement[]) ?? []
+      setRevision(body.revision as string)
+      setPlacements((prev) => [...prev, ...created])
+      setLastAutoFillIds(created.map((placement) => placement.id))
+      setAutoPreview(null)
+      const log = body.log as { placed?: unknown[]; rejected?: unknown[] } | undefined
+      setAutoLog(t("autoLog", { placed: log?.placed?.length ?? 0, rejected: log?.rejected?.length ?? 0 }))
+      router.refresh()
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   // --- SVG geometry ---
@@ -983,7 +1108,7 @@ export function PlanogramEditor({
   }
 
   function startDrag(event: PointerEvent<SVGGElement>, placement: EditorPlacement) {
-    if (readOnly) return
+    if (readOnly || isBusy) return
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = pointInSvg(event)
@@ -1138,6 +1263,108 @@ export function PlanogramEditor({
           <p className="mt-1">{t("workflow.referenceBody")}</p>
         </div>
       </div>
+
+      {!readOnly ? (
+        <div className="mb-4 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:hidden">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">{t("workbench")}</h2>
+              <p className="mt-1 text-xs text-neutral-500">{t("quickAddHint")}</p>
+            </div>
+            {isBusy ? <span className="rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-600">{t("saving")}</span> : null}
+          </div>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => searchProducts(e.target.value)}
+            placeholder={t("searchProducts")}
+            className="mt-3 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
+          />
+          {pickerProducts.length > 0 ? (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+              {pickerProducts.map((p) => (
+                <button
+                  key={p.id}
+                  draggable={p.hasDimensions}
+                  onDragStart={(event) => handleCatalogDragStart(event, p)}
+                  onDragEnd={() => setDraggingProductId(null)}
+                  onClick={() => {
+                    setSelectedPickerProduct(p)
+                    setSelectedPlacementId(null)
+                  }}
+                  disabled={!p.hasDimensions || isBusy}
+                  className={`flex min-w-52 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm disabled:opacity-40 ${
+                    selectedPickerProduct?.id === p.id ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-neutral-50"
+                  }`}
+                  title={p.hasDimensions ? p.name : t("noDims")}
+                >
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
+                    style={{ backgroundColor: colorFor(p.sku) }}
+                  >
+                    {p.imageKey ? <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" /> : p.name.slice(0, 1)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-neutral-900">{p.name}</span>
+                    <span className="block truncate text-xs text-neutral-500">
+                      {p.sku} · {p.widthMm ?? "—"}mm
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedPickerProduct ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-neutral-900">{selectedPickerProduct.name}</div>
+                <div className="text-xs text-amber-700">{t("selectedCatalogProductHint")}</div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void place(selectedPickerProduct)}
+                  disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
+                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                >
+                  {pendingAction === "place" ? t("saving") : t("placeOnSelectedShelf")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPickerProduct(null)}
+                  disabled={isBusy}
+                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
+                >
+                  {t("cancelSelection")}
+                </button>
+              </div>
+            </div>
+          ) : selectedPlacement ? (
+            <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs font-medium text-neutral-500">{t("selectedPlacement")}</div>
+              <div className="mt-1 truncate text-sm font-medium text-neutral-900">{selectedPlacement.product.name}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void duplicatePlacement(selectedPlacement)}
+                  disabled={isBusy}
+                  className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs hover:bg-neutral-50 disabled:opacity-40"
+                >
+                  {t("duplicatePlacement")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deletePlacement(selectedPlacement.id)}
+                  disabled={isBusy}
+                  className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
+                >
+                  {t("remove")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(760px,1fr)_420px]">
         {/* Canvas */}
@@ -1306,7 +1533,7 @@ export function PlanogramEditor({
           {/* Side panels */}
         <div className="min-w-0 space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
           {!readOnly ? (
-            <div className="sticky top-3 z-10 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm">
+            <div className="hidden rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:sticky xl:top-3 xl:z-10 xl:block">
               <h2 className="text-sm font-semibold">{t("workbench")}</h2>
               <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -1318,10 +1545,10 @@ export function PlanogramEditor({
                     <button
                       type="button"
                       onClick={() => void place(selectedPickerProduct)}
-                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
+                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
                       className="shrink-0 rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
                     >
-                      {t("placeOnSelectedShelf")}
+                      {pendingAction === "place" ? t("saving") : t("placeOnSelectedShelf")}
                     </button>
                   ) : null}
                 </div>
@@ -1344,7 +1571,7 @@ export function PlanogramEditor({
                           setSelectedPickerProduct(p)
                           setSelectedPlacementId(null)
                         }}
-                        disabled={!p.hasDimensions}
+                        disabled={!p.hasDimensions || isBusy}
                         className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-white disabled:opacity-40 ${
                           selectedPickerProduct?.id === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
                         }`}
@@ -1378,15 +1605,16 @@ export function PlanogramEditor({
                     <button
                       type="button"
                       onClick={() => void place(selectedPickerProduct)}
-                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
+                      disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
                       className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
                     >
-                      {t("placeOnSelectedShelf")}
+                      {pendingAction === "place" ? t("saving") : t("placeOnSelectedShelf")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedPickerProduct(null)}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs hover:bg-white"
+                      disabled={isBusy}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs hover:bg-white disabled:opacity-40"
                     >
                       {t("cancelSelection")}
                     </button>
@@ -1408,6 +1636,7 @@ export function PlanogramEditor({
                       <select
                         value={selectedPlacement.shelfId}
                         onChange={(e) => patchPlacement(selectedPlacement.id, { shelfId: e.target.value })}
+                        disabled={isBusy}
                         className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
                       >
                         {equipment.shelves.map((shelf) => (
@@ -1426,6 +1655,7 @@ export function PlanogramEditor({
                         onChange={(e) =>
                           patchPlacement(selectedPlacement.id, { xMm: Number.parseInt(e.target.value || "0", 10) })
                         }
+                        disabled={isBusy}
                         className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
                       />
                     </label>
@@ -1438,6 +1668,7 @@ export function PlanogramEditor({
                         onChange={(e) =>
                           patchPlacement(selectedPlacement.id, { facingsX: Number.parseInt(e.target.value || "1", 10) })
                         }
+                        disabled={isBusy}
                         className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
                       />
                     </label>
@@ -1446,28 +1677,32 @@ export function PlanogramEditor({
                     <button
                       type="button"
                       onClick={() => patchPlacement(selectedPlacement.id, { xMm: Math.max(0, selectedPlacement.xMm - 10) })}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50"
+                      disabled={isBusy}
+                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
                     >
                       {t("nudgeLeft")}
                     </button>
                     <button
                       type="button"
                       onClick={() => patchPlacement(selectedPlacement.id, { xMm: selectedPlacement.xMm + 10 })}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50"
+                      disabled={isBusy}
+                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
                     >
                       {t("nudgeRight")}
                     </button>
                     <button
                       type="button"
                       onClick={() => void duplicatePlacement(selectedPlacement)}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50"
+                      disabled={isBusy}
+                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
                     >
                       {t("duplicatePlacement")}
                     </button>
                     <button
                       type="button"
                       onClick={() => deletePlacement(selectedPlacement.id)}
-                      className="rounded-md border border-red-200 bg-white px-2 py-1 text-red-600 hover:bg-red-50"
+                      disabled={isBusy}
+                      className="rounded-md border border-red-200 bg-white px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-40"
                     >
                       {t("remove")}
                     </button>
@@ -1542,14 +1777,21 @@ export function PlanogramEditor({
             ) : (
               <div className="mb-3 space-y-1">
                 {zones.map((zone) => (
-                  <div key={zone.id} className="flex items-center gap-2 rounded-md bg-neutral-50 px-2 py-1 text-xs">
-                    <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: zone.color ?? "#f59e0b" }} />
-                    <span className="min-w-0 flex-1 truncate">{zone.name}</span>
-                    <span className="text-neutral-400">
-                      {zone.widthMm}×{zone.heightMm}
+                  <div key={zone.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md bg-neutral-50 px-2 py-2 text-xs">
+                    <span className="h-4 w-4 rounded-sm border border-white shadow-sm" style={{ backgroundColor: zone.color ?? "#f59e0b" }} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-neutral-800">{zone.name}</span>
+                      <span className="block text-neutral-500">
+                        {t("zoneSize", { width: zone.widthMm, height: zone.heightMm })} · {t("zoneOrigin", { x: zone.xMm, y: zone.yMm })}
+                      </span>
                     </span>
                     {!readOnly ? (
-                      <button type="button" onClick={() => deleteZone(zone.id)} className="text-red-600 hover:text-red-700">
+                      <button
+                        type="button"
+                        onClick={() => deleteZone(zone.id)}
+                        disabled={isBusy}
+                        className="rounded-md border border-red-200 bg-white px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-40"
+                      >
                         {t("deleteReferenceSlot")}
                       </button>
                     ) : null}
@@ -1566,29 +1808,33 @@ export function PlanogramEditor({
                   className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
                 />
                 <div className="grid grid-cols-5 gap-2">
-                  <input
-                    type="color"
-                    value={zoneDraft.color}
-                    onChange={(e) => setZoneDraft((prev) => ({ ...prev, color: e.target.value }))}
-                    className="h-8 w-full rounded border border-neutral-300"
-                  />
-                  {(["xMm", "yMm", "widthMm", "heightMm"] as const).map((field) => (
+                  <label className="block text-xs">
+                    <span className="text-neutral-500">{t("zoneColor")}</span>
                     <input
-                      key={field}
-                      type="number"
-                      min={field === "widthMm" || field === "heightMm" ? 1 : 0}
-                      value={zoneDraft[field]}
-                      onChange={(e) =>
-                        setZoneDraft((prev) => ({ ...prev, [field]: Number.parseInt(e.target.value || "0", 10) }))
-                      }
-                      className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
-                      title={field}
+                      type="color"
+                      value={zoneDraft.color}
+                      onChange={(e) => setZoneDraft((prev) => ({ ...prev, color: e.target.value }))}
+                      className="mt-1 h-8 w-full rounded border border-neutral-300"
                     />
+                  </label>
+                  {(["xMm", "yMm", "widthMm", "heightMm"] as const).map((field) => (
+                    <label key={field} className="block text-xs">
+                      <span className="text-neutral-500">{t(`zoneFields.${field}` as never)}</span>
+                      <input
+                        type="number"
+                        min={field === "widthMm" || field === "heightMm" ? 1 : 0}
+                        value={zoneDraft[field]}
+                        onChange={(e) =>
+                          setZoneDraft((prev) => ({ ...prev, [field]: Number.parseInt(e.target.value || "0", 10) }))
+                        }
+                        className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                      />
+                    </label>
                   ))}
                 </div>
                 <button
                   type="button"
-                  disabled={!zoneDraft.name.trim()}
+                  disabled={!zoneDraft.name.trim() || isBusy}
                   onClick={createZone}
                   className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
                 >
@@ -1617,7 +1863,8 @@ export function PlanogramEditor({
               <div className="space-y-2">
                 <select
                   value={autoRule.zoneId}
-                  onChange={(e) => setAutoRule((prev) => ({ ...prev, zoneId: e.target.value }))}
+                  onChange={(e) => updateAutoRule({ zoneId: e.target.value })}
+                  disabled={isBusy}
                   className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
                 >
                   <option value="">{t("selectZone")}</option>
@@ -1630,7 +1877,8 @@ export function PlanogramEditor({
                 <div className="grid grid-cols-3 gap-2">
                   <select
                     value={autoRule.categoryId}
-                    onChange={(e) => setAutoRule((prev) => ({ ...prev, categoryId: e.target.value }))}
+                    onChange={(e) => updateAutoRule({ categoryId: e.target.value })}
+                    disabled={isBusy}
                     className="min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
                   >
                     <option value="">{t("allCategories")}</option>
@@ -1642,7 +1890,8 @@ export function PlanogramEditor({
                   </select>
                   <select
                     value={autoRule.brandId}
-                    onChange={(e) => setAutoRule((prev) => ({ ...prev, brandId: e.target.value }))}
+                    onChange={(e) => updateAutoRule({ brandId: e.target.value })}
+                    disabled={isBusy}
                     className="min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
                   >
                     <option value="">{t("allBrands")}</option>
@@ -1654,7 +1903,8 @@ export function PlanogramEditor({
                   </select>
                   <select
                     value={autoRule.supplierId}
-                    onChange={(e) => setAutoRule((prev) => ({ ...prev, supplierId: e.target.value }))}
+                    onChange={(e) => updateAutoRule({ supplierId: e.target.value })}
+                    disabled={isBusy}
                     className="min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
                   >
                     <option value="">{t("allSuppliers")}</option>
@@ -1670,7 +1920,8 @@ export function PlanogramEditor({
                     <span className="text-neutral-500">{t("sortBy")}</span>
                     <select
                       value={autoRule.sortBy}
-                      onChange={(e) => setAutoRule((prev) => ({ ...prev, sortBy: e.target.value }))}
+                      onChange={(e) => updateAutoRule({ sortBy: e.target.value })}
+                      disabled={isBusy}
                       className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                     >
                       {["turnover", "profit", "quantity", "name", "height"].map((value) => (
@@ -1684,7 +1935,8 @@ export function PlanogramEditor({
                     <span className="text-neutral-500">{t("facingsBy")}</span>
                     <select
                       value={autoRule.facingsBy}
-                      onChange={(e) => setAutoRule((prev) => ({ ...prev, facingsBy: e.target.value }))}
+                      onChange={(e) => updateAutoRule({ facingsBy: e.target.value })}
+                      disabled={isBusy}
                       className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                     >
                       {["turnover", "profit", "quantity"].map((value) => (
@@ -1701,7 +1953,8 @@ export function PlanogramEditor({
                       min={1}
                       max={100}
                       value={autoRule.limit}
-                      onChange={(e) => setAutoRule((prev) => ({ ...prev, limit: Number.parseInt(e.target.value || "1", 10) }))}
+                      onChange={(e) => updateAutoRule({ limit: Number.parseInt(e.target.value || "1", 10) })}
+                      disabled={isBusy}
                       className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                     />
                   </label>
@@ -1711,7 +1964,8 @@ export function PlanogramEditor({
                     <span className="text-neutral-500">{t("excludeSkus")}</span>
                     <input
                       value={autoRule.excludeSkus}
-                      onChange={(e) => setAutoRule((prev) => ({ ...prev, excludeSkus: e.target.value }))}
+                      onChange={(e) => updateAutoRule({ excludeSkus: e.target.value })}
+                      disabled={isBusy}
                       placeholder="SKU1, SKU2"
                       className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                     />
@@ -1725,8 +1979,9 @@ export function PlanogramEditor({
                         max={100}
                         value={autoRule.maxBrandSharePct}
                         onChange={(e) =>
-                          setAutoRule((prev) => ({ ...prev, maxBrandSharePct: Number.parseInt(e.target.value || "100", 10) }))
+                          updateAutoRule({ maxBrandSharePct: Number.parseInt(e.target.value || "100", 10) })
                         }
+                        disabled={isBusy}
                         className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
                       />
                     </label>
@@ -1734,7 +1989,8 @@ export function PlanogramEditor({
                       <input
                         type="checkbox"
                         checked={autoRule.autoCompressSoftPacks}
-                        onChange={(e) => setAutoRule((prev) => ({ ...prev, autoCompressSoftPacks: e.target.checked }))}
+                        onChange={(e) => updateAutoRule({ autoCompressSoftPacks: e.target.checked })}
+                        disabled={isBusy}
                       />
                       {t("autoCompressSoftPacks")}
                     </label>
@@ -1742,12 +1998,62 @@ export function PlanogramEditor({
                 </div>
                 <button
                   type="button"
-                  disabled={!autoRule.zoneId}
-                  onClick={autoFillZone}
+                  disabled={!autoRule.zoneId || isBusy}
+                  onClick={previewAutoFillZone}
                   className="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                 >
-                  {t("runAutoPlacement")}
+                  {pendingAction === "autoPreview" ? t("previewing") : t("previewAutoPlacement")}
                 </button>
+                {autoPreview ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">
+                        {t("autoPreviewReady", { count: autoPreview.placements.length, rejected: autoPreview.rejectedCount })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAutoPreview(null)}
+                        disabled={isBusy}
+                        className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-800 hover:bg-amber-100 disabled:opacity-40"
+                      >
+                        {t("resetPreview")}
+                      </button>
+                    </div>
+                    {autoPreview.placements.length > 0 ? (
+                      <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                        {autoPreview.placements.slice(0, 8).map((placement) => (
+                          <div key={`${placement.productId}-${placement.shelfId}-${placement.xMm}`} className="flex justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                            <span className="min-w-0 truncate">{placement.sku} · {placement.name}</span>
+                            <span className="shrink-0 text-amber-700">
+                              {t("previewPlacementMeta", { shelf: placement.shelfId.slice(-4), x: placement.xMm, facings: placement.facingsX })}
+                            </span>
+                          </div>
+                        ))}
+                        {autoPreview.placements.length > 8 ? (
+                          <div className="px-2 text-amber-700">+{autoPreview.placements.length - 8}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={applyAutoFillZone}
+                      disabled={autoPreview.placements.length === 0 || isBusy}
+                      className="mt-2 w-full rounded-md bg-amber-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-50"
+                    >
+                      {pendingAction === "autoApply" ? t("saving") : t("applyAutoPlacement", { count: autoPreview.placements.length })}
+                    </button>
+                  </div>
+                ) : null}
+                {lastAutoFillIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={undoAutoFill}
+                    disabled={isBusy}
+                    className="w-full rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+                  >
+                    {pendingAction === "undoAutoFill" ? t("saving") : t("undoAutoPlacement", { count: lastAutoFillIds.length })}
+                  </button>
+                ) : null}
                 {autoLog ? (
                   <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">
                     {autoLog}
@@ -1756,67 +2062,6 @@ export function PlanogramEditor({
               </div>
             </div>
           ) : null}
-
-          {!readOnly && (
-            <div className="rounded-xl border border-neutral-200 bg-white p-4">
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-medium">{t("products")}</h2>
-                  <p className="mt-1 text-xs text-neutral-500">{t("selectShelf")}</p>
-                </div>
-                {selectedPickerProduct ? (
-                  <button
-                    type="button"
-                    onClick={() => void place(selectedPickerProduct)}
-                    disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
-                    className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                  >
-                    {t("placeOnSelectedShelf")}
-                  </button>
-                ) : null}
-              </div>
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => searchProducts(e.target.value)}
-                placeholder={t("searchProducts")}
-                className="mb-2 w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-              />
-              <div className="max-h-56 space-y-1 overflow-y-auto">
-                {pickerProducts.map((p) => (
-                  <button
-                    key={p.id}
-                    draggable={p.hasDimensions}
-                    onDragStart={(event) => handleCatalogDragStart(event, p)}
-                    onDragEnd={() => setDraggingProductId(null)}
-                    onClick={() => {
-                      setSelectedPickerProduct(p)
-                      setSelectedPlacementId(null)
-                    }}
-                    disabled={!p.hasDimensions}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-neutral-100 disabled:opacity-40 ${
-                      selectedPickerProduct?.id === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
-                    }`}
-                    title={p.hasDimensions ? p.name : t("noDims")}
-                  >
-                    <span
-                      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
-                      style={{ backgroundColor: colorFor(p.sku) }}
-                    >
-                      {p.imageKey ? (
-                        <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        p.name.slice(0, 1)
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                    <span className="text-[11px] text-neutral-400">{p.widthMm ?? "—"}mm</span>
-                    {!p.hasDimensions && <span className="text-xs text-amber-600">⚠</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Shelf capacity */}
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
@@ -2011,7 +2256,24 @@ export function PlanogramEditor({
               </div>
             )}
             {goldenPhotoCandidates.length === 0 ? (
-              <p className="text-xs text-neutral-500">{t("noGoldenPhotoCandidates")}</p>
+              <div className="rounded-md border border-dashed border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+                <p>{t("noGoldenPhotoCandidates")}</p>
+                <p className="mt-1 text-neutral-500">{t("noGoldenPhotoCandidatesAction")}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={`/${locale}/tasks`}
+                    className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 font-medium text-neutral-800 hover:bg-neutral-50"
+                  >
+                    {t("openTasks")}
+                  </a>
+                  <a
+                    href={`/${locale}/reviews`}
+                    className="rounded-md bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700"
+                  >
+                    {t("openReviews")}
+                  </a>
+                </div>
+              </div>
             ) : (
               <div className="space-y-2">
                 <select
@@ -2029,9 +2291,10 @@ export function PlanogramEditor({
                 <button
                   type="button"
                   onClick={createGoldenReference}
-                  className="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+                  disabled={isBusy}
+                  className="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                 >
-                  {t("createGoldenReference")}
+                  {pendingAction === "goldenReference" ? t("saving") : t("createGoldenReference")}
                 </button>
               </div>
             )}

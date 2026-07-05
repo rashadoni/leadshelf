@@ -14,9 +14,9 @@ export async function DashboardShell({
   const tc = await getTranslations("common")
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50 text-neutral-950 md:flex-row">
-      <aside className="border-b border-neutral-200 bg-white md:sticky md:top-0 md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r">
-        <div className="border-b border-neutral-200 p-4 md:block">
+    <div className="flex min-h-screen flex-col bg-neutral-50 text-neutral-950 lg:flex-row">
+      <aside className="border-b border-neutral-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r">
+        <div className="border-b border-neutral-200 p-4 lg:block">
           <div className="text-lg font-bold">{tc("appName")}</div>
           <div className="mt-1 text-xs text-neutral-500">{tc("workspace")}</div>
         </div>
