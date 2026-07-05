@@ -4,6 +4,7 @@
 import type {
   MobilePushOperation,
   MobilePushResult,
+  MobilePhotoUploadResponse,
   MobileRouteRow,
   MobileRouteStopRow,
   MobileStoreRow,
@@ -38,7 +39,7 @@ export interface SyncApi {
     taskId: string
     fileUri: string
     takenAt: string
-  }): Promise<{ photoId: string; key: string }>
+  }): Promise<MobilePhotoUploadResponse>
 }
 
 export type OutboxRow = PushOperation & {
@@ -63,7 +64,7 @@ export interface LocalStore {
   markOutbox(clientOpId: string, status: OutboxRow["status"], detail?: unknown): Promise<void>
   bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
   pendingPhotos(): Promise<PhotoQueueRow[]>
-  markPhotoUploaded(clientPhotoId: string): Promise<void>
+  markPhotoUploaded(clientPhotoId: string, result: MobilePhotoUploadResponse): Promise<void>
 }
 
 export type SyncPhase =

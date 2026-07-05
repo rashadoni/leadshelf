@@ -6,6 +6,7 @@ import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/p
 import {
   MOBILE_PROTOCOL_VERSION,
   mobileLoginResponseSchema,
+  mobilePhotoUploadResponseSchema,
   mobileSyncPullResponseSchema,
   mobileSyncPushResponseSchema,
   mobileTokenPairSchema,
@@ -133,9 +134,9 @@ export const syncApi: SyncApi = {
     form.append("clientPhotoId", photo.clientPhotoId)
     form.append("taskId", photo.taskId)
     form.append("takenAt", photo.takenAt)
-    return request<{ photoId: string; key: string }>("/api/v1/mobile/photos/upload", {
+    return request("/api/v1/mobile/photos/upload", {
       method: "POST",
       body: form,
-    })
+    }).then((body) => mobilePhotoUploadResponseSchema.parse(body))
   },
 }

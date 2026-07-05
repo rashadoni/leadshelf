@@ -24,6 +24,7 @@ import type {
   TaskRow,
   VisitRow,
 } from "../sync/ports"
+import type { MobilePhotoUploadResponse } from "@leadshelf/api-contracts/mobile/v1"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -58,7 +59,9 @@ export function initDb(): void {
     );
     CREATE TABLE IF NOT EXISTS photo_queue (
       clientPhotoId TEXT PRIMARY KEY, taskId TEXT, fileUri TEXT,
-      takenAt TEXT, uploaded INTEGER DEFAULT 0
+      takenAt TEXT, uploaded INTEGER DEFAULT 0,
+      uploadedAt TEXT, serverPhotoId TEXT, objectKey TEXT, qualityScore REAL,
+      qualityCheck TEXT, visionReviewId TEXT, visionStatus TEXT, visionReason TEXT
     );
   `)
   const taskColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(tasks)")
@@ -72,6 +75,18 @@ export function initDb(): void {
   if (!storeColumns.some((c) => c.name === "longitude")) {
     db.execSync("ALTER TABLE stores ADD COLUMN longitude REAL")
   }
+  const photoColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(photo_queue)")
+  const ensurePhotoColumn = (name: string, sql: string) => {
+    if (!photoColumns.some((c) => c.name === name)) db.execSync(sql)
+  }
+  ensurePhotoColumn("uploadedAt", "ALTER TABLE photo_queue ADD COLUMN uploadedAt TEXT")
+  ensurePhotoColumn("serverPhotoId", "ALTER TABLE photo_queue ADD COLUMN serverPhotoId TEXT")
+  ensurePhotoColumn("objectKey", "ALTER TABLE photo_queue ADD COLUMN objectKey TEXT")
+  ensurePhotoColumn("qualityScore", "ALTER TABLE photo_queue ADD COLUMN qualityScore REAL")
+  ensurePhotoColumn("qualityCheck", "ALTER TABLE photo_queue ADD COLUMN qualityCheck TEXT")
+  ensurePhotoColumn("visionReviewId", "ALTER TABLE photo_queue ADD COLUMN visionReviewId TEXT")
+  ensurePhotoColumn("visionStatus", "ALTER TABLE photo_queue ADD COLUMN visionStatus TEXT")
+  ensurePhotoColumn("visionReason", "ALTER TABLE photo_queue ADD COLUMN visionReason TEXT")
 }
 
 export const localStore: LocalStore = {
@@ -282,8 +297,23 @@ export const localStore: LocalStore = {
     return rows.map((r): PhotoQueueRow => ({ ...r, uploaded: false }))
   },
 
-  async markPhotoUploaded(clientPhotoId) {
-    db.runSync("UPDATE photo_queue SET uploaded=1 WHERE clientPhotoId=?", [clientPhotoId])
+  async markPhotoUploaded(clientPhotoId, result) {
+    db.runSync(
+      `UPDATE photo_queue SET uploaded=1, uploadedAt=?, serverPhotoId=?, objectKey=?,
+        qualityScore=?, qualityCheck=?, visionReviewId=?, visionStatus=?, visionReason=?
+       WHERE clientPhotoId=?`,
+      [
+        new Date().toISOString(),
+        result.photoId,
+        result.key,
+        result.qualityScore ?? null,
+        result.qualityCheck == null ? null : JSON.stringify(result.qualityCheck),
+        result.visionReviewId ?? null,
+        result.visionStatus ?? null,
+        result.visionReason ?? null,
+        clientPhotoId,
+      ],
+    )
   },
 }
 
@@ -319,6 +349,60 @@ export function getBundle(versionId: string): Record<string, unknown> | null {
     [versionId],
   )
   return row ? (JSON.parse(row.json) as Record<string, unknown>) : null
+}
+
+export type TaskPhotoProofRow = {
+  clientPhotoId: string
+  taskId: string
+  takenAt: string
+  uploaded: boolean
+  uploadedAt: string | null
+  serverPhotoId: string | null
+  objectKey: string | null
+  qualityScore: number | null
+  qualityCheck: unknown | null
+  visionReviewId: string | null
+  visionStatus: string | null
+  visionReason: string | null
+  outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
+  outboxDetail: unknown | null
+}
+
+export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
+  const rows = db.getAllSync<{
+    clientPhotoId: string
+    taskId: string
+    takenAt: string
+    uploaded: number
+    uploadedAt: string | null
+    serverPhotoId: string | null
+    objectKey: string | null
+    qualityScore: number | null
+    qualityCheck: string | null
+    visionReviewId: string | null
+    visionStatus: string | null
+    visionReason: string | null
+    outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
+    outboxDetail: string | null
+  }>(
+    `SELECT p.clientPhotoId, p.taskId, p.takenAt, p.uploaded, p.uploadedAt,
+      p.serverPhotoId, p.objectKey, p.qualityScore, p.qualityCheck,
+      p.visionReviewId, p.visionStatus, p.visionReason,
+      o.status AS outboxStatus, o.detail AS outboxDetail
+     FROM photo_queue p
+     LEFT JOIN outbox_ops o
+       ON o.kind='photo.submit'
+      AND json_extract(o.payload, '$.clientPhotoId') = p.clientPhotoId
+     WHERE p.taskId=?
+     ORDER BY p.takenAt DESC`,
+    [taskId],
+  )
+  return rows.map((row) => ({
+    ...row,
+    uploaded: Boolean(row.uploaded),
+    qualityCheck: row.qualityCheck ? JSON.parse(row.qualityCheck) : null,
+    outboxDetail: row.outboxDetail ? JSON.parse(row.outboxDetail) : null,
+  }))
 }
 
 export function listRoutes(): RouteRow[] {

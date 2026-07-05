@@ -15,6 +15,8 @@ import {
   getBundle,
   getStore,
   getTask,
+  listTaskPhotoProofs,
+  type TaskPhotoProofRow,
 } from "../../../src/db/local-store"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
 import {
@@ -50,6 +52,7 @@ export default function TaskDetailScreen() {
   const photoCameraRef = useRef<CameraView | null>(null)
   const [task, setTask] = useState<TaskRow | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
+  const [photoProofs, setPhotoProofs] = useState<TaskPhotoProofRow[]>([])
   const [comment, setComment] = useState("")
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null)
   const [barcodeQuery, setBarcodeQuery] = useState("")
@@ -64,6 +67,7 @@ export default function TaskDetailScreen() {
     if (fresh?.planogramVersionId) {
       setBundle(getBundle(fresh.planogramVersionId) as Bundle | null)
     }
+    setPhotoProofs(listTaskPhotoProofs(taskId))
   }, [taskId])
   useFocusEffect(reload)
 
@@ -193,6 +197,24 @@ export default function TaskDetailScreen() {
     applyCodeLookup(result.data)
   }
 
+  function photoProofStatus(proof: TaskPhotoProofRow): string {
+    if (!proof.uploaded) return t("photoProofWaitingUpload")
+    if (proof.outboxStatus === "pending") return t("photoProofWaitingSubmit")
+    if (proof.outboxStatus === "conflict") return t("photoProofConflict")
+    if (proof.outboxStatus === "rejected") return t("photoProofRejected")
+    if (proof.visionStatus) return t("photoProofVisionReview")
+    return t("photoProofUploaded")
+  }
+
+  function photoProofMeta(proof: TaskPhotoProofRow): string {
+    const parts = [
+      proof.uploadedAt ? `${t("uploaded")}: ${proof.uploadedAt.slice(0, 16).replace("T", " ")}` : null,
+      proof.qualityScore != null ? `${t("qualityScore")}: ${Math.round(proof.qualityScore * 100)}%` : null,
+      proof.visionStatus ? `${t("visionStatus")}: ${proof.visionStatus}` : null,
+    ]
+    return parts.filter(Boolean).join(" · ")
+  }
+
   if (photoCameraOpen) {
     return (
       <SafeAreaView style={styles.proofRoot} edges={["top", "bottom"]}>
@@ -253,6 +275,36 @@ export default function TaskDetailScreen() {
       </View>
       <SyncBar />
       <ScrollView contentContainerStyle={{ padding: 12, gap: 12 }}>
+        <View style={styles.proofSummaryCard}>
+          <View style={styles.proofSummaryHeader}>
+            <Text style={styles.proofSummaryTitle}>{t("photoProof")}</Text>
+            <Text style={styles.proofSummaryCount}>
+              {photoProofs.length} {t("photos")}
+            </Text>
+          </View>
+          {photoProofs.length === 0 ? (
+            <Text style={styles.proofSummaryEmpty}>{t("noPhotoProofs")}</Text>
+          ) : (
+            <View style={styles.proofList}>
+              {photoProofs.slice(0, 3).map((proof) => (
+                <View key={proof.clientPhotoId} style={styles.proofRow}>
+                  <View style={styles.proofRowBody}>
+                    <Text style={styles.proofRowTitle}>{photoProofStatus(proof)}</Text>
+                    <Text style={styles.proofRowMeta} numberOfLines={2}>
+                      {photoProofMeta(proof) || `${t("takenAt")}: ${proof.takenAt.slice(0, 16).replace("T", " ")}`}
+                    </Text>
+                    {proof.visionReason ? (
+                      <Text style={styles.proofRowWarning} numberOfLines={2}>
+                        {proof.visionReason}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={[styles.proofStateDot, proof.uploaded && styles.proofStateDotDone]} />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
         <Text style={styles.section}>{t("locationHint")}</Text>
         <View style={styles.locationCard}>
           <Text style={styles.locationTitle}>{locationTitle}</Text>
@@ -540,6 +592,33 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: "#737373" },
   section: { fontSize: 13, fontWeight: "600", color: "#525252" },
   actions: { gap: 8, marginTop: 8 },
+  proofSummaryCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    backgroundColor: "white",
+    padding: 12,
+    gap: 8,
+  },
+  proofSummaryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  proofSummaryTitle: { fontSize: 15, fontWeight: "800", color: "#171717" },
+  proofSummaryCount: { fontSize: 12, fontWeight: "700", color: "#737373" },
+  proofSummaryEmpty: { fontSize: 12, color: "#737373" },
+  proofList: { gap: 8 },
+  proofRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 8,
+    backgroundColor: "#fafaf9",
+    padding: 10,
+  },
+  proofRowBody: { flex: 1, gap: 2 },
+  proofRowTitle: { fontSize: 13, fontWeight: "800", color: "#171717" },
+  proofRowMeta: { fontSize: 11, color: "#525252" },
+  proofRowWarning: { marginTop: 2, fontSize: 11, color: "#92400e", fontWeight: "600" },
+  proofStateDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#d97706" },
+  proofStateDotDone: { backgroundColor: "#16a34a" },
   locationCard: {
     borderRadius: 10,
     borderWidth: 1,

@@ -106,8 +106,8 @@ export class SyncManager {
       // 3. Фото: upload до push (photo.submit ссылается на загруженный файл)
       this.patch({ phase: "uploadingPhotos" })
       for (const photo of await this.deps.store.pendingPhotos()) {
-        await this.deps.api.uploadPhoto(photo) // дедуп по clientPhotoId на сервере
-        await this.deps.store.markPhotoUploaded(photo.clientPhotoId)
+        const result = await this.deps.api.uploadPhoto(photo) // дедуп по clientPhotoId на сервере
+        await this.deps.store.markPhotoUploaded(photo.clientPhotoId, result)
       }
 
       // 4. PUSH outbox

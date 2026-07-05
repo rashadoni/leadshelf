@@ -281,3 +281,16 @@ export const mobilePhotoUploadFieldsSchema = z.object({
   exifJson: z.string().max(20000).optional(),
 })
 export type MobilePhotoUploadFields = z.infer<typeof mobilePhotoUploadFieldsSchema>
+
+export const mobilePhotoUploadResponseSchema = z.object({
+  photoId: z.string(),
+  key: z.string(),
+  qualityScore: z.number().nullable().optional(),
+  qualityCheck: z.unknown().nullable().optional(),
+  reviewId: z.string().nullable().optional(),
+  deduplicated: z.boolean().optional(),
+  visionReviewId: z.string().nullable().optional(),
+  visionStatus: z.string().nullable().optional(),
+  visionReason: z.string().nullable().optional(),
+})
+export type MobilePhotoUploadResponse = z.infer<typeof mobilePhotoUploadResponseSchema>
