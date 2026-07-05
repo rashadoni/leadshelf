@@ -975,6 +975,8 @@ export function PlanogramEditor({
       }),
     [equipment, placements],
   )
+  const selectedShelfInfo = shelfInfos.find(({ shelf }) => shelf.id === selectedShelfId) ?? shelfInfos[0] ?? null
+  const selectedShelfNumber = selectedShelfInfo ? selectedShelfInfo.shelf.shelfIndex + 1 : null
 
   const diff = useMemo(() => {
     if (!currentHistory || !previousHistory) return { entries: [] as DiffEntry[], currentMarks: new Map<string, DiffEntry["kind"]>() }
@@ -1327,7 +1329,7 @@ export function PlanogramEditor({
                   disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
                   className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
                 >
-                  {pendingAction === "place" ? t("saving") : t("placeOnSelectedShelf")}
+                  {pendingAction === "place" ? t("saving") : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
                 </button>
                 <button
                   type="button"
@@ -1369,6 +1371,58 @@ export function PlanogramEditor({
       <div className="grid gap-4 xl:grid-cols-[minmax(760px,1fr)_420px]">
         {/* Canvas */}
         <div className="min-w-0 overflow-x-auto">
+          {!readOnly ? (
+            <div className="mb-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-medium text-neutral-900">{t("targetShelf")}</span>{" "}
+                  <span className="text-neutral-600">
+                    {selectedShelfNumber ? t("shelfNumber", { shelf: selectedShelfNumber }) : t("selectShelfShort")}
+                  </span>
+                </div>
+                {selectedPickerProduct ? (
+                  <button
+                    type="button"
+                    onClick={() => void place(selectedPickerProduct)}
+                    disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
+                    className="rounded-md bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    {pendingAction === "place"
+                      ? t("saving")
+                      : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {shelfInfos.map(({ shelf, space, usage }) => {
+                  const selected = shelf.id === selectedShelfId
+                  return (
+                    <button
+                      key={shelf.id}
+                      type="button"
+                      onClick={() => setSelectedShelfId(shelf.id)}
+                      disabled={isBusy}
+                      className={`min-w-32 rounded-md border px-3 py-2 text-left transition disabled:opacity-40 ${
+                        selected
+                          ? "border-amber-300 bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+                          : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-white"
+                      }`}
+                    >
+                      <span className="block font-medium">{t("shelfNumber", { shelf: shelf.shelfIndex + 1 })}</span>
+                      <span className="block text-[11px] text-neutral-500">
+                        {t("freeWidth")}: {usage.freeWidthMm}/{space.innerWidthMm}mm
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-neutral-500">
+                {selectedPickerProduct
+                  ? t("targetShelfHint", { shelf: selectedShelfNumber ?? 0 })
+                  : t("selectProductForShelfHint")}
+              </p>
+            </div>
+          ) : null}
           <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
@@ -1434,17 +1488,21 @@ export function PlanogramEditor({
                     fill={selected ? "#fef3c7" : "transparent"}
                     opacity={selected ? 0.5 : 1}
                   />
-                  {selectedPickerProduct?.hasDimensions && selected ? (
-                    <text
-                      x={8}
-                      y={yTop - space.clearanceHeightMm * k + 16}
-                      fontSize={10}
-                      fill="#92400e"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {t("clickShelfToPlace", { sku: selectedPickerProduct.sku })}
-                    </text>
-                  ) : null}
+                  <text
+                    x={8}
+                    y={yTop - space.clearanceHeightMm * k + 16}
+                    fontSize={10}
+                    fontWeight={selected ? 700 : 500}
+                    fill={selected ? "#92400e" : "#6b7280"}
+                    style={{ pointerEvents: "none" }}
+                  >
+                    {selectedPickerProduct?.hasDimensions && selected
+                      ? t("clickShelfToPlace", {
+                          shelf: shelf.shelfIndex + 1,
+                          sku: selectedPickerProduct.sku,
+                        })
+                      : t("shelfNumber", { shelf: shelf.shelfIndex + 1 })}
+                  </text>
                   <rect x={0} y={yTop} width={W} height={Math.max(2, shelf.thicknessMm * k)} fill="#78716c" />
                 </g>
               )
@@ -1548,7 +1606,7 @@ export function PlanogramEditor({
                       disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
                       className="shrink-0 rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
                     >
-                      {pendingAction === "place" ? t("saving") : t("placeOnSelectedShelf")}
+                      {pendingAction === "place" ? t("saving") : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
                     </button>
                   ) : null}
                 </div>
@@ -1608,7 +1666,7 @@ export function PlanogramEditor({
                       disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions || isBusy}
                       className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
                     >
-                      {pendingAction === "place" ? t("saving") : t("placeOnSelectedShelf")}
+                      {pendingAction === "place" ? t("saving") : t("placeOnShelfNumber", { shelf: selectedShelfNumber ?? 0 })}
                     </button>
                     <button
                       type="button"
