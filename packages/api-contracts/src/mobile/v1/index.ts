@@ -51,6 +51,7 @@ export const mobileSyncCursorsSchema = z.object({
   planogramBundles: z.string().nullable().optional(),
   routes: z.string().nullable().optional(),
   visits: z.string().nullable().optional(),
+  photoSubmissions: z.string().nullable().optional(),
 })
 export type MobileSyncCursors = z.infer<typeof mobileSyncCursorsSchema>
 
@@ -139,6 +140,34 @@ export const mobilePlanogramBundleSchema = z
   .passthrough()
 export type MobilePlanogramBundle = z.infer<typeof mobilePlanogramBundleSchema>
 
+export const mobileHumanReviewStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"])
+export type MobileHumanReviewStatus = z.infer<typeof mobileHumanReviewStatusSchema>
+
+export const mobilePhotoSubmissionReviewSchema = z.object({
+  id: z.string(),
+  reason: z.enum(["PHOTO_QUALITY", "VISION_COMPLIANCE"]),
+  status: mobileHumanReviewStatusSchema,
+  score: z.number().nullable(),
+  note: z.string().nullable(),
+  reviewedAt: z.string().nullable(),
+  updatedAt: z.string(),
+})
+export type MobilePhotoSubmissionReview = z.infer<typeof mobilePhotoSubmissionReviewSchema>
+
+export const mobilePhotoSubmissionRowSchema = z.object({
+  id: z.string(),
+  clientPhotoId: z.string().nullable(),
+  taskId: z.string(),
+  storeId: z.string(),
+  key: z.string(),
+  takenAt: z.string(),
+  qualityScore: z.number().nullable(),
+  review: mobilePhotoSubmissionReviewSchema.nullable(),
+  vision: mobilePhotoSubmissionReviewSchema.nullable(),
+  updatedAt: z.string(),
+})
+export type MobilePhotoSubmissionRow = z.infer<typeof mobilePhotoSubmissionRowSchema>
+
 export const mobileSyncPullRequestSchema = z.object({
   protocolVersion: mobileProtocolVersionSchema,
   cursors: mobileSyncCursorsSchema.default({}),
@@ -150,12 +179,14 @@ export const mobileSyncPullResponseSchema = z.object({
   stores: z.array(mobileStoreRowSchema),
   routes: z.array(mobileRouteRowSchema).default([]),
   visits: z.array(mobileVisitRowSchema).default([]),
+  photoSubmissions: z.array(mobilePhotoSubmissionRowSchema).default([]),
   planogramBundles: z.array(mobilePlanogramBundleSchema),
   cursors: z.object({
     tasks: z.string().nullable(),
     planogramBundles: z.string().nullable(),
     routes: z.string().nullable().optional(),
     visits: z.string().nullable().optional(),
+    photoSubmissions: z.string().nullable().optional(),
   }),
 })
 export type MobileSyncPullResponse = z.infer<typeof mobileSyncPullResponseSchema>

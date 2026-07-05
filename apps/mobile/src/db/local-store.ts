@@ -63,6 +63,26 @@ export function initDb(): void {
       uploadedAt TEXT, serverPhotoId TEXT, objectKey TEXT, qualityScore REAL,
       qualityCheck TEXT, visionReviewId TEXT, visionStatus TEXT, visionReason TEXT
     );
+    CREATE TABLE IF NOT EXISTS server_photo_submissions (
+      id TEXT PRIMARY KEY,
+      clientPhotoId TEXT,
+      taskId TEXT,
+      storeId TEXT,
+      objectKey TEXT,
+      takenAt TEXT,
+      qualityScore REAL,
+      reviewId TEXT,
+      reviewReason TEXT,
+      reviewStatus TEXT,
+      reviewScore REAL,
+      reviewNote TEXT,
+      reviewedAt TEXT,
+      visionReviewId TEXT,
+      visionStatus TEXT,
+      visionReason TEXT,
+      visionScore REAL,
+      updatedAt TEXT
+    );
   `)
   const taskColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(tasks)")
   if (!taskColumns.some((c) => c.name === "locationHint")) {
@@ -162,6 +182,53 @@ export const localStore: LocalStore = {
           ],
         )
       }
+      for (const photo of data.photoSubmissions) {
+        db.runSync(
+          `INSERT INTO server_photo_submissions (
+             id, clientPhotoId, taskId, storeId, objectKey, takenAt, qualityScore,
+             reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
+             visionReviewId, visionStatus, visionReason, visionScore, updatedAt
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+             clientPhotoId=excluded.clientPhotoId,
+             taskId=excluded.taskId,
+             storeId=excluded.storeId,
+             objectKey=excluded.objectKey,
+             takenAt=excluded.takenAt,
+             qualityScore=excluded.qualityScore,
+             reviewId=excluded.reviewId,
+             reviewReason=excluded.reviewReason,
+             reviewStatus=excluded.reviewStatus,
+             reviewScore=excluded.reviewScore,
+             reviewNote=excluded.reviewNote,
+             reviewedAt=excluded.reviewedAt,
+             visionReviewId=excluded.visionReviewId,
+             visionStatus=excluded.visionStatus,
+             visionReason=excluded.visionReason,
+             visionScore=excluded.visionScore,
+             updatedAt=excluded.updatedAt`,
+          [
+            photo.id,
+            photo.clientPhotoId,
+            photo.taskId,
+            photo.storeId,
+            photo.key,
+            photo.takenAt,
+            photo.qualityScore,
+            photo.review?.id ?? null,
+            photo.review?.reason ?? null,
+            photo.review?.status ?? null,
+            photo.review?.score ?? null,
+            photo.review?.note ?? null,
+            photo.review?.reviewedAt ?? null,
+            photo.vision?.id ?? null,
+            photo.vision?.status ?? null,
+            photo.vision?.note ?? null,
+            photo.vision?.score ?? null,
+            photo.updatedAt,
+          ],
+        )
+      }
     })
   },
 
@@ -173,6 +240,7 @@ export const localStore: LocalStore = {
       planogramBundles: map.planogramBundles ?? null,
       routes: map.routes ?? null,
       visits: map.visits ?? null,
+      photoSubmissions: map.photoSubmissions ?? null,
     }
   },
 
@@ -364,12 +432,18 @@ export type TaskPhotoProofRow = {
   visionReviewId: string | null
   visionStatus: string | null
   visionReason: string | null
+  reviewId: string | null
+  reviewReason: string | null
+  reviewStatus: "PENDING" | "APPROVED" | "REJECTED" | null
+  reviewScore: number | null
+  reviewNote: string | null
+  reviewedAt: string | null
   outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
   outboxDetail: unknown | null
 }
 
 export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
-  const rows = db.getAllSync<{
+  const localRows = db.getAllSync<{
     clientPhotoId: string
     taskId: string
     takenAt: string
@@ -394,15 +468,99 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
        ON o.kind='photo.submit'
       AND json_extract(o.payload, '$.clientPhotoId') = p.clientPhotoId
      WHERE p.taskId=?
-     ORDER BY p.takenAt DESC`,
+    ORDER BY p.takenAt DESC`,
     [taskId],
   )
-  return rows.map((row) => ({
+  const localProofs = localRows.map((row): TaskPhotoProofRow => ({
     ...row,
     uploaded: Boolean(row.uploaded),
     qualityCheck: row.qualityCheck ? JSON.parse(row.qualityCheck) : null,
+    reviewId: null,
+    reviewReason: null,
+    reviewStatus: null,
+    reviewScore: null,
+    reviewNote: null,
+    reviewedAt: null,
     outboxDetail: row.outboxDetail ? JSON.parse(row.outboxDetail) : null,
   }))
+  const localClientIds = new Set(localProofs.map((row) => row.clientPhotoId))
+  const serverRows = db.getAllSync<{
+    id: string
+    clientPhotoId: string | null
+    taskId: string
+    objectKey: string | null
+    takenAt: string
+    qualityScore: number | null
+    reviewId: string | null
+    reviewReason: string | null
+    reviewStatus: "PENDING" | "APPROVED" | "REJECTED" | null
+    reviewScore: number | null
+    reviewNote: string | null
+    reviewedAt: string | null
+    visionReviewId: string | null
+    visionStatus: string | null
+    visionReason: string | null
+  }>(
+    `SELECT id, clientPhotoId, taskId, objectKey, takenAt, qualityScore,
+      reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
+      visionReviewId, visionStatus, visionReason
+     FROM server_photo_submissions
+     WHERE taskId=?
+     ORDER BY takenAt DESC`,
+    [taskId],
+  )
+  const serverByClientId = new Map(
+    serverRows
+      .filter((row): row is typeof row & { clientPhotoId: string } => Boolean(row.clientPhotoId))
+      .map((row) => [row.clientPhotoId, row]),
+  )
+  const mergedLocalProofs = localProofs.map((proof) => {
+    const server = serverByClientId.get(proof.clientPhotoId)
+    if (!server) return proof
+    return {
+      ...proof,
+      uploaded: true,
+      serverPhotoId: proof.serverPhotoId ?? server.id,
+      objectKey: proof.objectKey ?? server.objectKey,
+      qualityScore: server.qualityScore ?? proof.qualityScore,
+      visionReviewId: server.visionReviewId ?? proof.visionReviewId,
+      visionStatus: server.visionStatus ?? proof.visionStatus,
+      visionReason: server.visionReason ?? proof.visionReason,
+      reviewId: server.reviewId,
+      reviewReason: server.reviewReason,
+      reviewStatus: server.reviewStatus,
+      reviewScore: server.reviewScore,
+      reviewNote: server.reviewNote,
+      reviewedAt: server.reviewedAt,
+    }
+  })
+  const serverProofs = serverRows
+    .filter((row) => !row.clientPhotoId || !localClientIds.has(row.clientPhotoId))
+    .map(
+      (row): TaskPhotoProofRow => ({
+        clientPhotoId: row.clientPhotoId ?? `server-${row.id}`,
+        taskId: row.taskId,
+        takenAt: row.takenAt,
+        uploaded: true,
+        uploadedAt: null,
+        serverPhotoId: row.id,
+        objectKey: row.objectKey,
+        qualityScore: row.qualityScore,
+        qualityCheck: null,
+        visionReviewId: row.visionReviewId,
+        visionStatus: row.visionStatus,
+        visionReason: row.visionReason,
+        reviewId: row.reviewId,
+        reviewReason: row.reviewReason,
+        reviewStatus: row.reviewStatus,
+        reviewScore: row.reviewScore,
+        reviewNote: row.reviewNote,
+        reviewedAt: row.reviewedAt,
+        outboxStatus: null,
+        outboxDetail: null,
+      }),
+    )
+  return [...mergedLocalProofs, ...serverProofs].sort((a, b) => b.takenAt.localeCompare(a.takenAt))
 }
 
 export function listRoutes(): RouteRow[] {

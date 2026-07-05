@@ -41,6 +41,41 @@ function cursorWhere(token: SyncCursorToken | null) {
 
 const PULL_LIMIT = 200
 
+function isAfterCursor(token: SyncCursorToken | null, updatedAt: Date, id: string): boolean {
+  if (!token) return true
+  const cursorAt = new Date(token.u)
+  const at = updatedAt.getTime()
+  const cursor = cursorAt.getTime()
+  return at > cursor || (at === cursor && id > token.id)
+}
+
+function latestDate(...dates: Array<Date | null | undefined>): Date {
+  return dates.reduce<Date>((latest, date) => {
+    if (!date) return latest
+    return date > latest ? date : latest
+  }, new Date(0))
+}
+
+function mapMobileReview(review: {
+  id: string
+  reason: "PHOTO_QUALITY" | "VISION_COMPLIANCE"
+  status: "PENDING" | "APPROVED" | "REJECTED"
+  score: number | null
+  note: string | null
+  reviewedAt: Date | null
+  updatedAt: Date
+}) {
+  return {
+    id: review.id,
+    reason: review.reason,
+    status: review.status,
+    score: review.score,
+    note: review.note,
+    reviewedAt: review.reviewedAt?.toISOString() ?? null,
+    updatedAt: review.updatedAt.toISOString(),
+  }
+}
+
 type TaskLocationHint = {
   source: "STORE_FLOOR_PLAN" | "FORMAT_FLOOR_PLAN"
   floorPlanName: string | null
@@ -64,6 +99,7 @@ export async function pullChanges(
     planogramBundles?: string | null
     routes?: string | null
     visits?: string | null
+    photoSubmissions?: string | null
   },
 ) {
   // Пилотный скоуп: только НАЗНАЧЕННЫЕ задачи (docs/18 решение b)
@@ -86,7 +122,7 @@ export async function pullChanges(
   // Все назначенные задачи пользователя определяют точки и планограммы
   const allAssigned = await prisma.task.findMany({
     where: { organizationId, assigneeId: userId },
-    select: { storeId: true, planogramVersionId: true },
+    select: { id: true, storeId: true, planogramVersionId: true },
   })
   const fieldAgent = await prisma.fieldAgent.findFirst({
     where: { organizationId, userId },
@@ -131,6 +167,55 @@ export async function pullChanges(
   const nextVisitCursor = lastVisit
     ? encodeCursor({ u: lastVisit.updatedAt.toISOString(), id: lastVisit.id })
     : (cursors.visits ?? null)
+
+  const assignedTaskIds = allAssigned.map((task) => task.id)
+  const photoCursor = decodeCursor(cursors.photoSubmissions)
+  const photoCandidates =
+    assignedTaskIds.length > 0
+      ? await prisma.photoSubmission.findMany({
+          where: {
+            organizationId,
+            taskId: { in: assignedTaskIds },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: PULL_LIMIT * 5,
+          select: {
+            id: true,
+            clientPhotoId: true,
+            taskId: true,
+            storeId: true,
+            url: true,
+            takenAt: true,
+            qualityScore: true,
+            createdAt: true,
+            humanReviews: {
+              orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+              take: 5,
+              select: {
+                id: true,
+                reason: true,
+                status: true,
+                score: true,
+                note: true,
+                reviewedAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        })
+      : []
+  const photoSubmissions = photoCandidates
+    .map((photo) => {
+      const updatedAt = latestDate(photo.createdAt, ...photo.humanReviews.map((review) => review.updatedAt))
+      return { photo, updatedAt }
+    })
+    .filter(({ photo, updatedAt }) => isAfterCursor(photoCursor, updatedAt, photo.id))
+    .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime() || a.photo.id.localeCompare(b.photo.id))
+    .slice(0, PULL_LIMIT)
+  const lastPhoto = photoSubmissions[photoSubmissions.length - 1]
+  const nextPhotoCursor = lastPhoto
+    ? encodeCursor({ u: lastPhoto.updatedAt.toISOString(), id: lastPhoto.photo.id })
+    : (cursors.photoSubmissions ?? null)
 
   const stores = await prisma.store.findMany({
     where: { id: { in: storeIds } },
@@ -302,6 +387,22 @@ export async function pullChanges(
       anomalyFlags: visit.anomalyFlags,
       updatedAt: visit.updatedAt.toISOString(),
     })),
+    photoSubmissions: photoSubmissions.map(({ photo, updatedAt }) => {
+      const qualityReview = photo.humanReviews.find((review) => review.reason === "PHOTO_QUALITY")
+      const visionReview = photo.humanReviews.find((review) => review.reason === "VISION_COMPLIANCE")
+      return {
+        id: photo.id,
+        clientPhotoId: photo.clientPhotoId,
+        taskId: photo.taskId!,
+        storeId: photo.storeId,
+        key: photo.url,
+        takenAt: photo.takenAt.toISOString(),
+        qualityScore: photo.qualityScore,
+        review: qualityReview ? mapMobileReview(qualityReview) : null,
+        vision: visionReview ? mapMobileReview(visionReview) : null,
+        updatedAt: updatedAt.toISOString(),
+      }
+    }),
     planogramBundles: versions.map((v) => ({
       versionId: v.id,
       versionNumber: v.versionNumber,
@@ -355,6 +456,7 @@ export async function pullChanges(
       planogramBundles: nextBundleCursor,
       routes: nextRouteCursor,
       visits: nextVisitCursor,
+      photoSubmissions: nextPhotoCursor,
     },
   }
 }

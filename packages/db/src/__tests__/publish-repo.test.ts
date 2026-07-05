@@ -487,6 +487,85 @@ describe("publish", () => {
     ).resolves.toBe(3)
   })
 
+  test("mobile pull возвращает серверный photo review и обновляет его по курсору", async () => {
+    const task = await prisma.task.create({
+      data: {
+        organizationId: orgId,
+        storeId: store1,
+        assigneeId: mobileUserId,
+        title: "Review sync task",
+        status: "PHOTO_SUBMITTED",
+      },
+    })
+    const photo = await prisma.photoSubmission.create({
+      data: {
+        organizationId: orgId,
+        storeId: store1,
+        taskId: task.id,
+        userId: mobileUserId,
+        url: `photos/${orgId}/${task.id}/photo-review-sync-0001.jpg`,
+        clientPhotoId: "photo-review-sync-0001",
+        takenAt: new Date("2026-07-04T08:00:00Z"),
+        qualityScore: 0.42,
+        createdAt: new Date("2026-07-04T08:01:00Z"),
+      },
+    })
+    const review = await prisma.humanReview.create({
+      data: {
+        organizationId: orgId,
+        reason: "PHOTO_QUALITY",
+        status: "PENDING",
+        taskId: task.id,
+        photoSubmissionId: photo.id,
+        score: 0.42,
+        note: "Фото размыто, нужна проверка",
+        createdAt: new Date("2026-07-04T08:02:00Z"),
+        updatedAt: new Date("2026-07-04T08:02:00Z"),
+      },
+    })
+
+    const first = await pullChanges(prisma, orgId, mobileUserId, {})
+    expect(first.photoSubmissions).toContainEqual(
+      expect.objectContaining({
+        id: photo.id,
+        clientPhotoId: "photo-review-sync-0001",
+        taskId: task.id,
+        key: `photos/${orgId}/${task.id}/photo-review-sync-0001.jpg`,
+        qualityScore: 0.42,
+        review: expect.objectContaining({
+          id: review.id,
+          reason: "PHOTO_QUALITY",
+          status: "PENDING",
+          note: "Фото размыто, нужна проверка",
+        }),
+      }),
+    )
+
+    await prisma.humanReview.update({
+      where: { id: review.id },
+      data: {
+        status: "APPROVED",
+        note: "Фото принято",
+        reviewedAt: new Date("2026-07-04T08:05:00Z"),
+        updatedAt: new Date("2099-07-04T08:05:00Z"),
+      },
+    })
+
+    const second = await pullChanges(prisma, orgId, mobileUserId, {
+      photoSubmissions: first.cursors.photoSubmissions,
+    })
+    expect(second.photoSubmissions).toEqual([
+      expect.objectContaining({
+        id: photo.id,
+        review: expect.objectContaining({
+          status: "APPROVED",
+          note: "Фото принято",
+          reviewedAt: "2026-07-04T08:05:00.000Z",
+        }),
+      }),
+    ])
+  })
+
   test("mobile routes/visits: pull route, replay check-in once, and checkout safely", async () => {
     await prisma.store.update({
       where: { id: store1 },

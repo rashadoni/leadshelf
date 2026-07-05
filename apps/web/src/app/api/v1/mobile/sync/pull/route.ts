@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     planogramBundles: parsed.data.cursors.planogramBundles ?? saved.planogramBundles ?? null,
     routes: parsed.data.cursors.routes ?? saved.routes ?? null,
     visits: parsed.data.cursors.visits ?? saved.visits ?? null,
+    photoSubmissions: parsed.data.cursors.photoSubmissions ?? saved.photoSubmissions ?? null,
   }
 
   const changes = await pullChanges(workerDb, session.org, session.sub, cursors)

@@ -202,6 +202,9 @@ export default function TaskDetailScreen() {
     if (proof.outboxStatus === "pending") return t("photoProofWaitingSubmit")
     if (proof.outboxStatus === "conflict") return t("photoProofConflict")
     if (proof.outboxStatus === "rejected") return t("photoProofRejected")
+    if (proof.reviewStatus === "APPROVED") return t("photoProofApproved")
+    if (proof.reviewStatus === "REJECTED") return t("photoProofRejected")
+    if (proof.reviewStatus === "PENDING") return t("photoProofReviewPending")
     if (proof.visionStatus) return t("photoProofVisionReview")
     return t("photoProofUploaded")
   }
@@ -210,6 +213,7 @@ export default function TaskDetailScreen() {
     const parts = [
       proof.uploadedAt ? `${t("uploaded")}: ${proof.uploadedAt.slice(0, 16).replace("T", " ")}` : null,
       proof.qualityScore != null ? `${t("qualityScore")}: ${Math.round(proof.qualityScore * 100)}%` : null,
+      proof.reviewStatus ? `${t("reviewStatus")}: ${proof.reviewStatus}` : null,
       proof.visionStatus ? `${t("visionStatus")}: ${proof.visionStatus}` : null,
     ]
     return parts.filter(Boolean).join(" · ")
@@ -293,9 +297,9 @@ export default function TaskDetailScreen() {
                     <Text style={styles.proofRowMeta} numberOfLines={2}>
                       {photoProofMeta(proof) || `${t("takenAt")}: ${proof.takenAt.slice(0, 16).replace("T", " ")}`}
                     </Text>
-                    {proof.visionReason ? (
+                    {proof.reviewNote || proof.visionReason ? (
                       <Text style={styles.proofRowWarning} numberOfLines={2}>
-                        {proof.visionReason}
+                        {proof.reviewNote ?? proof.visionReason}
                       </Text>
                     ) : null}
                   </View>

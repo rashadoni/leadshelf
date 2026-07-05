@@ -27,6 +27,7 @@ export type SyncCursors = {
   planogramBundles: string | null
   routes?: string | null
   visits?: string | null
+  photoSubmissions?: string | null
 }
 
 /** Транспорт к замороженному mobile API (реализация: api/mobile-client). */

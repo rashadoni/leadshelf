@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
-import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi } from "./ports"
+import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi, SyncCursors } from "./ports"
 
 function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
   calls: string[]
@@ -12,7 +12,13 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
     calls,
     outbox: [] as OutboxRow[],
     photos: [] as PhotoQueueRow[],
-    cursors: { tasks: null as string | null, planogramBundles: null as string | null },
+    cursors: {
+      tasks: null as string | null,
+      planogramBundles: null as string | null,
+      routes: null as string | null,
+      visits: null as string | null,
+      photoSubmissions: null as string | null,
+    } as SyncCursors,
   }
   return {
     calls,
@@ -60,8 +66,9 @@ const EMPTY_PULL: PullResponse = {
   stores: [],
   routes: [],
   visits: [],
+  photoSubmissions: [],
   planogramBundles: [],
-  cursors: { tasks: "c1", planogramBundles: "c2" },
+  cursors: { tasks: "c1", planogramBundles: "c2", routes: "c3", visits: "c4", photoSubmissions: "c5" },
 }
 
 function makeApi(over: Partial<SyncApi> = {}): SyncApi & { pushed: string[] } {
