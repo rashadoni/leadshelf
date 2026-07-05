@@ -380,15 +380,34 @@
     },
     "detail": {
       "open": "Детали точки",
+      "openPage": "Открыть страницу",
+      "backToStores": "К списку точек",
       "floorPlans": "Планы зала",
       "assignments": "Активные планограммы",
       "tasks": "Последние задачи",
       "fieldWork": "Маршруты и визиты",
       "photoProof": "Фото-контроль",
+      "visits": "Визиты",
+      "dataQuality": "Готовность точки",
+      "noGeo": "Координаты не заданы",
+      "noFloorPlan": "Для этой точки нет опубликованного плана зала.",
+      "openPhoto": "Открыть фото",
       "published": "опубликован",
       "draft": "черновик",
       "equipmentCount": "оборудование: {count}",
-      "photos": "фото: {count}"
+      "photos": "фото: {count}",
+      "metrics": {
+        "placements": "SKU",
+        "equipment": "Оборуд.",
+        "tasks": "Задачи"
+      },
+      "quality": {
+        "floorPlan": "План зала",
+        "assignment": "Активные планограммы",
+        "openTasks": "Открытые задачи",
+        "pendingReviews": "Review на проверке",
+        "missing": "нет"
+      }
     }
   },
   "floorPlans": {
@@ -446,10 +465,24 @@
     },
     "detail": {
       "open": "Детали задачи",
+      "openPage": "Открыть страницу",
+      "backToTasks": "К списку задач",
+      "noDescription": "Описание не заполнено. Ориентируйтесь на связанную планограмму, магазин и фото-контроль.",
       "history": "История статусов",
       "photos": "Фото",
       "reviews": "Проверки",
-      "comments": "Комментарии"
+      "comments": "Комментарии",
+      "noPhotos": "Фото по задаче пока нет.",
+      "noReview": "Без review",
+      "metrics": {
+        "due": "Срок",
+        "assignee": "Исполнитель",
+        "photos": "Фото",
+        "pendingReviews": "Review на проверке",
+        "latestPhoto": "Последнее фото",
+        "placements": "SKU",
+        "equipment": "Оборудование"
+      }
     },
     "sla": {
       "open": "Открытые",

@@ -66,6 +66,7 @@ export default async function StoresPage() {
           orderBy: { updatedAt: "desc" },
           take: 4,
           select: {
+            id: true,
             title: true,
             status: true,
             dueAt: true,
@@ -181,7 +182,9 @@ export default async function StoresPage() {
                   <Fragment key={store.id}>
                     <tr>
                       <td className="px-3 py-3">
-                        <div className="font-medium">{store.name}</div>
+                        <Link href={`/stores/${store.id}`} className="font-medium hover:underline">
+                          {store.name}
+                        </Link>
                         <div className="text-xs text-neutral-500">
                           {dash(store.code)}
                           {store.address ? ` · ${store.address}` : ""}
@@ -212,7 +215,7 @@ export default async function StoresPage() {
                       <td colSpan={8} className="px-3 py-3">
                         <details>
                           <summary className="cursor-pointer text-xs font-medium text-neutral-700 hover:text-neutral-950">
-                            {t("detail.open")}
+                            {t("detail.open")} · <Link href={`/stores/${store.id}`}>{t("detail.openPage")}</Link>
                           </summary>
                           <div className="mt-3 grid gap-3 lg:grid-cols-5">
                             <div className="rounded-lg border border-neutral-200 bg-white p-3">
@@ -264,7 +267,7 @@ export default async function StoresPage() {
                                 {store.tasks.length > 0 ? (
                                   store.tasks.map((task) => (
                                     <div key={`${task.title}-${task.dueAt?.toISOString() ?? "no-due"}`}>
-                                      <Link href={`/tasks?status=${task.status}`} className="font-medium hover:underline">
+                                      <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
                                         {task.title}
                                       </Link>
                                       <div className="text-neutral-400">

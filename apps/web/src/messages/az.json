@@ -380,15 +380,34 @@
     },
     "detail": {
       "open": "Nöqtə detalları",
+      "openPage": "Səhifəni aç",
+      "backToStores": "Nöqtələr siyahısına",
       "floorPlans": "Zal planları",
       "assignments": "Aktiv planoqramlar",
       "tasks": "Son tapşırıqlar",
       "fieldWork": "Marşrut və vizitlər",
       "photoProof": "Foto nəzarət",
+      "visits": "Vizitlər",
+      "dataQuality": "Nöqtə hazırlığı",
+      "noGeo": "Koordinat yoxdur",
+      "noFloorPlan": "Bu nöqtə üçün dərc edilmiş zal planı yoxdur.",
+      "openPhoto": "Fotonu aç",
       "published": "dərc edilib",
       "draft": "qaralama",
       "equipmentCount": "avadanlıq: {count}",
-      "photos": "foto: {count}"
+      "photos": "foto: {count}",
+      "metrics": {
+        "placements": "SKU",
+        "equipment": "Avadan.",
+        "tasks": "Tapşırıq"
+      },
+      "quality": {
+        "floorPlan": "Zal planı",
+        "assignment": "Aktiv planoqramlar",
+        "openTasks": "Açıq tapşırıqlar",
+        "pendingReviews": "Review gözləyir",
+        "missing": "yoxdur"
+      }
     }
   },
   "floorPlans": {
@@ -446,10 +465,24 @@
     },
     "detail": {
       "open": "Tapşırıq detalları",
+      "openPage": "Səhifəni aç",
+      "backToTasks": "Tapşırıqlar siyahısına",
+      "noDescription": "Təsvir doldurulmayıb. Bağlı planoqram, nöqtə və foto nəzarətə əsaslanın.",
       "history": "Status tarixi",
       "photos": "Fotolar",
       "reviews": "Yoxlamalar",
-      "comments": "Şərhlər"
+      "comments": "Şərhlər",
+      "noPhotos": "Bu tapşırıq üzrə hələ foto yoxdur.",
+      "noReview": "Review yoxdur",
+      "metrics": {
+        "due": "Müddət",
+        "assignee": "İcraçı",
+        "photos": "Foto",
+        "pendingReviews": "Review gözləyir",
+        "latestPhoto": "Son foto",
+        "placements": "SKU",
+        "equipment": "Avadanlıq"
+      }
     },
     "sla": {
       "open": "Açıq",

@@ -36,7 +36,7 @@ export default async function TasksPage({
     db.task.findMany({
       where: statusFilter ? { status: statusFilter } : {},
       include: {
-        store: { select: { name: true, code: true } },
+        store: { select: { id: true, name: true, code: true } },
         assignee: { select: { id: true, name: true } },
         planogramVersion: {
           select: {
@@ -143,9 +143,15 @@ export default async function TasksPage({
               {tasks.map((task) => (
                 <Fragment key={task.id}>
                   <tr className="border-b border-neutral-100 hover:bg-neutral-50">
-                    <td className="px-3 py-2 font-medium">{task.title}</td>
+                    <td className="px-3 py-2 font-medium">
+                      <Link href={`/tasks/${task.id}`} className="hover:underline">
+                        {task.title}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2 text-neutral-500">
-                      {task.store.name} {task.store.code && `(${task.store.code})`}
+                      <Link href={`/stores/${task.store.id}`} className="hover:underline">
+                        {task.store.name} {task.store.code && `(${task.store.code})`}
+                      </Link>
                     </td>
                     <td className="px-3 py-2">
                       {task.planogramVersion && (
@@ -201,7 +207,7 @@ export default async function TasksPage({
                     <td colSpan={8} className="px-3 py-3">
                       <details className="group">
                         <summary className="cursor-pointer text-xs font-medium text-neutral-700 hover:text-neutral-950">
-                          {t("detail.open")}
+                          {t("detail.open")} · <Link href={`/tasks/${task.id}`}>{t("detail.openPage")}</Link>
                         </summary>
                         <div className="mt-3 grid gap-3 md:grid-cols-4">
                           <div className="rounded-lg border border-neutral-200 bg-white p-3">
