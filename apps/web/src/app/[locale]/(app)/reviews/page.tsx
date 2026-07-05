@@ -184,15 +184,32 @@ export default async function ReviewsPage({
             const store = photo?.store ?? review.task?.store ?? null
             const planogramVersion = review.task?.planogramVersion ?? review.planogramVersion
             return (
-              <div key={review.id} className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-3 md:grid-cols-[160px_1fr_auto]">
-                <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
-                  {photo ? (
-                    <img src={`/api/media/${photo.url}`} alt="" className="h-36 w-full object-cover" />
-                  ) : (
-                    <div className="flex h-36 items-center justify-center text-xs text-neutral-400">
-                      {t("noPhoto")}
+              <div key={review.id} className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-3 md:grid-cols-[190px_1fr_auto]">
+                <div className="space-y-2">
+                  <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                    {photo ? (
+                      <img src={`/api/media/${photo.url}`} alt="" className="h-28 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-28 items-center justify-center text-xs text-neutral-400">
+                        {t("noPhoto")}
+                      </div>
+                    )}
+                    <div className="border-t border-neutral-200 px-2 py-1 text-[11px] text-neutral-500">
+                      {t("photoProof")}
                     </div>
-                  )}
+                  </div>
+                  <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                    {review.goldenReference ? (
+                      <img src={`/api/media/${review.goldenReference.imageUrl}`} alt="" className="h-24 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-24 items-center justify-center text-xs text-neutral-400">
+                        {t("noReference")}
+                      </div>
+                    )}
+                    <div className="border-t border-neutral-200 px-2 py-1 text-[11px] text-neutral-500">
+                      {t("goldenReference")}
+                    </div>
+                  </div>
                 </div>
                 <div className="min-w-0">
                   <div className="mb-1 flex flex-wrap items-center gap-2">

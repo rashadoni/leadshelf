@@ -5,7 +5,7 @@
 // Каждая мутация — API-вызов; при 422 показываем физическую причину,
 // при 409 перезагружаем draft.
 
-import { useMemo, useRef, useState, type PointerEvent } from "react"
+import { useMemo, useRef, useState, type DragEvent, type PointerEvent } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
@@ -59,6 +59,8 @@ interface PickerProduct {
   imageKey: string | null
   hasDimensions: boolean
   widthMm: number | null
+  heightMm: number | null
+  depthMm: number | null
 }
 
 interface DragState {
@@ -229,12 +231,16 @@ export function PlanogramEditor({
   const [message, setMessage] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
+  const [selectedPickerProductId, setSelectedPickerProductId] = useState<string | null>(null)
+  const [draggingProductId, setDraggingProductId] = useState<string | null>(null)
   const [references, setReferences] = useState(goldenReferences)
   const [activeReferenceId, setActiveReferenceId] = useState(goldenReferences[0]?.id ?? "")
   const [selectedGoldenPhotoId, setSelectedGoldenPhotoId] = useState(goldenPhotoCandidates[0]?.id ?? "")
   const [slotPlacementId, setSlotPlacementId] = useState(initialPlacements[0]?.id ?? "")
   const [slotDraft, setSlotDraft] = useState<ReferenceSlotDraft>({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
   const [selectedReferenceSlotId, setSelectedReferenceSlotId] = useState<string | null>(null)
+  const [referenceZoom, setReferenceZoom] = useState(100)
+  const [referenceStepPct, setReferenceStepPct] = useState(0.5)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [referenceSlotDrag, setReferenceSlotDrag] = useState<ReferenceSlotDrag | null>(null)
   const [zoneDraft, setZoneDraft] = useState({
@@ -261,6 +267,7 @@ export function PlanogramEditor({
   const readOnly = version.state !== "DRAFT"
 
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId) ?? null
+  const selectedPickerProduct = pickerProducts.find((p) => p.id === selectedPickerProductId) ?? null
   const selectedEffectiveSize = selectedPlacement ? orientedProductSizeMm(selectedPlacement) : null
   const metricsByProductId = useMemo(
     () => new Map(placementMetrics.map((metric) => [metric.productId, metric])),
@@ -270,6 +277,10 @@ export function PlanogramEditor({
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
   const selectedReferenceSlot =
     activeReference?.slots.find((slot) => slot.id === selectedReferenceSlotId) ?? null
+  const referenceCoveredPlacementIds = new Set(
+    activeReference?.slots.map((slot) => slot.placementId).filter((id): id is string => Boolean(id)) ?? [],
+  )
+  const referenceMissingPlacements = placements.filter((placement) => !referenceCoveredPlacementIds.has(placement.id))
   const currentHistory = versionHistory.find((item) => item.id === version.id) ?? null
   const previousHistory =
     versionHistory
@@ -307,15 +318,16 @@ export function PlanogramEditor({
     }
   }
 
-  async function place(product: PickerProduct) {
-    if (!selectedShelfId || readOnly) return
+  async function place(product: PickerProduct, shelfId = selectedShelfId, xMm?: number) {
+    if (!shelfId || readOnly || !product.hasDimensions) return
     const res = await fetch(base, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         expectedRevision: revision,
-        shelfId: selectedShelfId,
+        shelfId,
         productId: product.id,
+        ...(xMm == null ? {} : { xMm }),
         facingsX: 1,
         facingsY: 1,
         facingsZ: 1,
@@ -330,11 +342,11 @@ export function PlanogramEditor({
         ...prev,
         {
           id: body.placementId as string,
-          shelfId: selectedShelfId,
+          shelfId,
           xMm: body.xMm as number,
           widthMm: product.widthMm ?? 0,
-          heightMm: 0,
-          depthMm: 0,
+          heightMm: product.heightMm ?? 0,
+          depthMm: product.depthMm ?? 0,
           facingsX: 1,
           facingsY: 1,
           facingsZ: 1,
@@ -353,7 +365,38 @@ export function PlanogramEditor({
         },
       ])
       setSelectedPlacementId(body.placementId as string)
+      setSelectedShelfId(shelfId)
     }
+  }
+
+  async function duplicatePlacement(placement: EditorPlacement) {
+    if (readOnly) return
+    const res = await fetch(base, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expectedRevision: revision,
+        shelfId: placement.shelfId,
+        productId: placement.product.id,
+        facingsX: placement.facingsX,
+        facingsY: placement.facingsY,
+        facingsZ: placement.facingsZ,
+        rotationX: placement.rotationX,
+        rotationY: placement.rotationY,
+        rotationZ: placement.rotationZ,
+        stackMode: placement.stackMode,
+      }),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+    setRevision(body.revision as string)
+    const next: EditorPlacement = {
+      ...placement,
+      id: body.placementId as string,
+      xMm: body.xMm as number,
+    }
+    setPlacements((prev) => [...prev, next])
+    setSelectedPlacementId(next.id)
   }
 
   async function patchPlacement(id: string, patch: Record<string, number | string>) {
@@ -492,6 +535,31 @@ export function PlanogramEditor({
     return Math.min(max, Math.max(min, value))
   }
 
+  function normalizedSlotDraft(draft: ReferenceSlotDraft): ReferenceSlotDraft {
+    const widthPct = roundedPct(clampPct(draft.widthPct, 1, 100))
+    const heightPct = roundedPct(clampPct(draft.heightPct, 1, 100))
+    return {
+      widthPct,
+      heightPct,
+      xPct: roundedPct(clampPct(draft.xPct, 0, 100 - widthPct)),
+      yPct: roundedPct(clampPct(draft.yPct, 0, 100 - heightPct)),
+    }
+  }
+
+  function referenceDraftForPlacement(placement: EditorPlacement): ReferenceSlotDraft {
+    const shelf = equipment.shelves.find((item) => item.id === placement.shelfId)
+    const oriented = orientedProductSizeMm(placement)
+    const widthPct = clampPct((placementWidthMm(placement) / equipment.widthMm) * 100, 4, 35)
+    const heightPct = clampPct(((oriented.heightMm * placement.facingsY) / equipment.heightMm) * 100, 4, 30)
+    const yMm = shelf ? shelf.yMm + shelf.thicknessMm : 0
+    return normalizedSlotDraft({
+      xPct: (placement.xMm / equipment.widthMm) * 100,
+      yPct: 100 - ((yMm + oriented.heightMm * placement.facingsY) / equipment.heightMm) * 100,
+      widthPct,
+      heightPct,
+    })
+  }
+
   function referencePointInPct(event: PointerEvent<HTMLElement>) {
     const rect = referenceImageRef.current?.getBoundingClientRect()
     if (!rect || rect.width === 0 || rect.height === 0) return null
@@ -558,19 +626,19 @@ export function PlanogramEditor({
     await persistReferenceSlotDraft(activeReference.id, state.slotId, state.draft)
   }
 
-  async function createReferenceSlot() {
-    if (!activeReference || !slotPlacement) return
+  async function createReferenceSlotForPlacement(placement: EditorPlacement, draft = slotDraft) {
+    if (!activeReference) return null
     const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        placementId: slotPlacement.id,
-        label: slotPlacement.product.name,
-        ...slotDraft,
+        placementId: placement.id,
+        label: placement.product.name,
+        ...normalizedSlotDraft(draft),
       }),
     })
     const body = await handleResponse(res)
-    if (!body) return
+    if (!body) return null
 
     const slot: GoldenReferenceSlot = {
       id: body.id as string,
@@ -588,6 +656,19 @@ export function PlanogramEditor({
       prev.map((ref) => (ref.id === activeReference.id ? { ...ref, slots: [...ref.slots, slot] } : ref)),
     )
     setSelectedReferenceSlotId(slot.id)
+    return slot
+  }
+
+  async function createReferenceSlot() {
+    if (!slotPlacement) return
+    await createReferenceSlotForPlacement(slotPlacement, slotDraft)
+  }
+
+  async function createMissingReferenceSlots() {
+    if (!activeReference || referenceMissingPlacements.length === 0) return
+    for (const placement of referenceMissingPlacements) {
+      await createReferenceSlotForPlacement(placement, referenceDraftForPlacement(placement))
+    }
   }
 
   async function updateReferenceSlot() {
@@ -623,6 +704,17 @@ export function PlanogramEditor({
       ),
     )
     if (selectedReferenceSlotId === slotId) resetReferenceSlotDraft()
+  }
+
+  function nudgeReferenceSlot(dx: number, dy: number, dw = 0, dh = 0) {
+    const next = normalizedSlotDraft({
+      xPct: slotDraft.xPct + dx,
+      yPct: slotDraft.yPct + dy,
+      widthPct: slotDraft.widthPct + dw,
+      heightPct: slotDraft.heightPct + dh,
+    })
+    setSlotDraft(next)
+    if (selectedReferenceSlotId) patchReferenceSlotDraft(selectedReferenceSlotId, next)
   }
 
   async function createZone() {
@@ -820,6 +912,16 @@ export function PlanogramEditor({
     return point.matrixTransform(matrix.inverse())
   }
 
+  function pointInSvgFromClient(clientX: number, clientY: number) {
+    const svg = svgRef.current
+    const matrix = svg?.getScreenCTM()
+    if (!svg || !matrix) return null
+    const point = svg.createSVGPoint()
+    point.x = clientX
+    point.y = clientY
+    return point.matrixTransform(matrix.inverse())
+  }
+
   function shelfIdForSvgY(y: number): string | null {
     for (const { shelf, space } of shelfInfos) {
       const shelfTop = H - (shelf.yMm + shelf.thicknessMm) * k
@@ -872,6 +974,49 @@ export function PlanogramEditor({
     if (!placement) return
     if (placement.xMm === state.xMm && placement.shelfId === state.shelfId) return
     await patchPlacement(state.placementId, { xMm: state.xMm, shelfId: state.shelfId })
+  }
+
+  function handleCatalogDragStart(event: DragEvent<HTMLElement>, product: PickerProduct) {
+    if (!product.hasDimensions) return
+    event.dataTransfer.setData("text/plain", product.id)
+    event.dataTransfer.effectAllowed = "copy"
+    setDraggingProductId(product.id)
+    setSelectedPickerProductId(product.id)
+  }
+
+  async function handleCatalogDrop(event: DragEvent<SVGSVGElement>) {
+    event.preventDefault()
+    const productId = event.dataTransfer.getData("text/plain") || draggingProductId
+    const product = pickerProducts.find((item) => item.id === productId)
+    const point = pointInSvgFromClient(event.clientX, event.clientY)
+    setDraggingProductId(null)
+    if (!product || !point) return
+    const shelfId = shelfIdForSvgY(point.y) ?? selectedShelfId
+    if (!shelfId) return
+    const draftPlacement: EditorPlacement = {
+      id: "draft",
+      shelfId,
+      xMm: 0,
+      widthMm: product.widthMm ?? 0,
+      heightMm: product.heightMm ?? 0,
+      depthMm: product.depthMm ?? 0,
+      facingsX: 1,
+      facingsY: 1,
+      facingsZ: 1,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      stackMode: "NONE",
+      product: {
+        id: product.id,
+        sku: product.sku,
+        barcode: product.barcode,
+        name: product.name,
+        brandName: null,
+        imageKey: product.imageKey,
+      },
+    }
+    await place(product, shelfId, snappedXMm(point.x / k, draftPlacement))
   }
 
   return (
@@ -958,6 +1103,10 @@ export function PlanogramEditor({
             onPointerMove={moveDrag}
             onPointerUp={() => void finishDrag()}
             onPointerCancel={() => setDrag(null)}
+            onDragOver={(event) => {
+              if (draggingProductId) event.preventDefault()
+            }}
+            onDrop={(event) => void handleCatalogDrop(event)}
           >
             {zones.map((zone) => {
               const color = zone.color ?? "#f59e0b"
@@ -985,7 +1134,14 @@ export function PlanogramEditor({
               const yTop = H - (shelf.yMm + shelf.thicknessMm) * k
               const selected = shelf.id === selectedShelfId
               return (
-                <g key={shelf.id} onClick={() => setSelectedShelfId(shelf.id)} className="cursor-pointer">
+                <g
+                  key={shelf.id}
+                  onClick={() => {
+                    setSelectedShelfId(shelf.id)
+                    if (selectedPickerProduct?.hasDimensions) void place(selectedPickerProduct, shelf.id)
+                  }}
+                  className="cursor-pointer"
+                >
                   {/* зона просвета полки (кликабельна) */}
                   <rect
                     x={0}
@@ -1344,8 +1500,22 @@ export function PlanogramEditor({
 
           {!readOnly && (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">
-              <h2 className="mb-2 text-sm font-medium">{t("products")}</h2>
-              <p className="mb-2 text-xs text-neutral-500">{t("selectShelf")}</p>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-medium">{t("products")}</h2>
+                  <p className="mt-1 text-xs text-neutral-500">{t("selectShelf")}</p>
+                </div>
+                {selectedPickerProduct ? (
+                  <button
+                    type="button"
+                    onClick={() => void place(selectedPickerProduct)}
+                    disabled={!selectedShelfId || !selectedPickerProduct.hasDimensions}
+                    className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    {t("placeSelectedProduct")}
+                  </button>
+                ) : null}
+              </div>
               <input
                 type="search"
                 value={search}
@@ -1357,9 +1527,17 @@ export function PlanogramEditor({
                 {pickerProducts.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => place(p)}
+                    draggable={p.hasDimensions}
+                    onDragStart={(event) => handleCatalogDragStart(event, p)}
+                    onDragEnd={() => setDraggingProductId(null)}
+                    onClick={() => {
+                      setSelectedPickerProductId(p.id)
+                      if (selectedShelfId) void place(p)
+                    }}
                     disabled={!p.hasDimensions}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-neutral-100 disabled:opacity-40"
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-neutral-100 disabled:opacity-40 ${
+                      selectedPickerProductId === p.id ? "bg-amber-50 ring-1 ring-amber-200" : ""
+                    }`}
                     title={p.hasDimensions ? p.name : t("noDims")}
                   >
                     <span
@@ -1373,6 +1551,7 @@ export function PlanogramEditor({
                       )}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                    <span className="text-[11px] text-neutral-400">{p.widthMm ?? "—"}mm</span>
                     {!p.hasDimensions && <span className="text-xs text-amber-600">⚠</span>}
                   </button>
                 ))}
@@ -1448,48 +1627,76 @@ export function PlanogramEditor({
                 </div>
                 {activeReference && (
                   <div>
-                    <div
-                      ref={referenceImageRef}
-                      className="relative touch-none select-none overflow-hidden rounded-md border border-neutral-200 bg-neutral-100"
-                      onPointerMove={moveReferenceSlotDrag}
-                      onPointerUp={() => void finishReferenceSlotDrag()}
-                      onPointerCancel={() => {
-                        referenceSlotDragRef.current = null
-                        setReferenceSlotDrag(null)
-                      }}
-                    >
-                      <img
-                        src={`/api/media/${activeReference.imageUrl}`}
-                        alt=""
-                        className="max-h-80 w-full object-contain"
-                        draggable={false}
-                      />
-                      {activeReference.slots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "move")}
-                          className={`absolute cursor-move border-2 bg-emerald-400/15 ${
-                            selectedReferenceSlotId === slot.id
-                              ? "border-emerald-500 ring-2 ring-emerald-500/25"
-                              : "border-emerald-400"
-                          }`}
-                          style={{
-                            left: `${slot.xPct}%`,
-                            top: `${slot.yPct}%`,
-                            width: `${slot.widthPct}%`,
-                            height: `${slot.heightPct}%`,
-                          }}
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-neutral-500">
+                        {t("referenceCoverage", {
+                          covered: placements.length - referenceMissingPlacements.length,
+                          total: placements.length,
+                        })}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setReferenceZoom((value) => Math.max(100, value - 25))}
+                          className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
                         >
-                          <span className="absolute left-0 top-0 max-w-full truncate bg-emerald-500 px-1 text-[10px] font-medium text-white">
-                            {slot.productSku ?? slot.label ?? t("referenceSlot")}
-                          </span>
-                          <span
-                            onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "resize")}
-                            className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize border-l border-t border-white bg-emerald-600"
-                            aria-hidden="true"
-                          />
-                        </div>
-                      ))}
+                          -
+                        </button>
+                        <span className="w-12 text-center tabular-nums">{referenceZoom}%</span>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceZoom((value) => Math.min(250, value + 25))}
+                          className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-auto rounded-md border border-neutral-200 bg-neutral-100">
+                      <div
+                        ref={referenceImageRef}
+                        className="relative touch-none select-none"
+                        style={{ width: `${referenceZoom}%`, minWidth: "100%" }}
+                        onPointerMove={moveReferenceSlotDrag}
+                        onPointerUp={() => void finishReferenceSlotDrag()}
+                        onPointerCancel={() => {
+                          referenceSlotDragRef.current = null
+                          setReferenceSlotDrag(null)
+                        }}
+                      >
+                        <img
+                          src={`/api/media/${activeReference.imageUrl}`}
+                          alt=""
+                          className="block w-full object-contain"
+                          draggable={false}
+                        />
+                        {activeReference.slots.map((slot) => (
+                          <div
+                            key={slot.id}
+                            onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "move")}
+                            className={`absolute cursor-move border-2 bg-emerald-400/15 ${
+                              selectedReferenceSlotId === slot.id
+                                ? "border-emerald-500 ring-2 ring-emerald-500/25"
+                                : "border-emerald-400"
+                            }`}
+                            style={{
+                              left: `${slot.xPct}%`,
+                              top: `${slot.yPct}%`,
+                              width: `${slot.widthPct}%`,
+                              height: `${slot.heightPct}%`,
+                            }}
+                          >
+                            <span className="absolute left-0 top-0 max-w-full truncate bg-emerald-500 px-1 text-[10px] font-medium text-white">
+                              {slot.productSku ?? slot.label ?? t("referenceSlot")}
+                            </span>
+                            <span
+                              onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "resize")}
+                              className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize border-l border-t border-white bg-emerald-600"
+                              aria-hidden="true"
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     {activeReference.slots.length > 0 ? (
                       <p className="mt-2 text-xs text-neutral-500">{t("dragReferenceSlotHint")}</p>
@@ -1531,6 +1738,15 @@ export function PlanogramEditor({
                         ))}
                       </div>
                     )}
+                    {referenceMissingPlacements.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => void createMissingReferenceSlots()}
+                        className="mt-2 w-full rounded-md border border-emerald-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                      >
+                        {t("createMissingReferenceSlots", { count: referenceMissingPlacements.length })}
+                      </button>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1575,7 +1791,11 @@ export function PlanogramEditor({
                 <div className="space-y-2">
                   <select
                     value={slotPlacement?.id ?? ""}
-                    onChange={(e) => setSlotPlacementId(e.target.value)}
+                    onChange={(e) => {
+                      setSlotPlacementId(e.target.value)
+                      const placement = placements.find((item) => item.id === e.target.value)
+                      if (placement && !selectedReferenceSlot) setSlotDraft(referenceDraftForPlacement(placement))
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
                   >
                     {placements.map((placement) => (
@@ -1603,6 +1823,30 @@ export function PlanogramEditor({
                         />
                       </label>
                     ))}
+                  </div>
+                  <div className="rounded-md bg-neutral-50 p-2">
+                    <div className="mb-2 flex items-center justify-between gap-2 text-xs text-neutral-500">
+                      <span>{t("precisionStep")}</span>
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={5}
+                        step={0.1}
+                        value={referenceStepPct}
+                        onChange={(e) => setReferenceStepPct(Number.parseFloat(e.target.value || "0.5"))}
+                        className="w-20 rounded border border-neutral-300 px-2 py-1 text-right"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-xs">
+                      <button type="button" onClick={() => nudgeReferenceSlot(-referenceStepPct, 0)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">←</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(0, -referenceStepPct)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">↑</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(0, referenceStepPct)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">↓</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(referenceStepPct, 0)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">→</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(0, 0, -referenceStepPct, 0)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">{t("narrower")}</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(0, 0, referenceStepPct, 0)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">{t("wider")}</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(0, 0, 0, -referenceStepPct)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">{t("shorter")}</button>
+                      <button type="button" onClick={() => nudgeReferenceSlot(0, 0, 0, referenceStepPct)} className="rounded border border-neutral-300 px-2 py-1 hover:bg-white">{t("taller")}</button>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -1688,6 +1932,56 @@ export function PlanogramEditor({
                     className="block w-24 rounded border border-neutral-300 px-2 py-1"
                   />
                 </label>
+                <label className="block text-xs">
+                  <span className="text-neutral-500">{t("moveToShelf")}</span>
+                  <select
+                    value={selectedPlacement.shelfId}
+                    onChange={(e) => patchPlacement(selectedPlacement.id, { shelfId: e.target.value })}
+                    className="block w-28 rounded border border-neutral-300 px-2 py-1"
+                  >
+                    {equipment.shelves.map((shelf) => (
+                      <option key={shelf.id} value={shelf.id}>
+                        {t("shelf")} {shelf.shelfIndex + 1}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => patchPlacement(selectedPlacement.id, { xMm: Math.max(0, selectedPlacement.xMm - 10) })}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                >
+                  {t("nudgeLeft")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => patchPlacement(selectedPlacement.id, { xMm: selectedPlacement.xMm + 10 })}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                >
+                  {t("nudgeRight")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void duplicatePlacement(selectedPlacement)}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                >
+                  {t("duplicatePlacement")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const draft = referenceDraftForPlacement(selectedPlacement)
+                    setSlotPlacementId(selectedPlacement.id)
+                    setSlotDraft(draft)
+                    if (activeReference) void createReferenceSlotForPlacement(selectedPlacement, draft)
+                  }}
+                  disabled={!activeReference}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
+                >
+                  {t("createSlotFromPlacement")}
+                </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(["rotationX", "rotationY", "rotationZ"] as const).map((field) => (
