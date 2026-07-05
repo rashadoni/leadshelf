@@ -217,6 +217,7 @@ export function PlanogramEditor({
   const [selectedGoldenPhotoId, setSelectedGoldenPhotoId] = useState(goldenPhotoCandidates[0]?.id ?? "")
   const [slotPlacementId, setSlotPlacementId] = useState(initialPlacements[0]?.id ?? "")
   const [slotDraft, setSlotDraft] = useState({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
+  const [selectedReferenceSlotId, setSelectedReferenceSlotId] = useState<string | null>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [zoneDraft, setZoneDraft] = useState({
     name: "",
@@ -249,6 +250,8 @@ export function PlanogramEditor({
   )
   const activeReference = references.find((ref) => ref.id === activeReferenceId) ?? references[0] ?? null
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
+  const selectedReferenceSlot =
+    activeReference?.slots.find((slot) => slot.id === selectedReferenceSlotId) ?? null
   const currentHistory = versionHistory.find((item) => item.id === version.id) ?? null
   const previousHistory =
     versionHistory
@@ -388,6 +391,32 @@ export function PlanogramEditor({
     }
   }
 
+  async function deleteGoldenReference(referenceId: string) {
+    const confirmed = window.confirm(t("confirmDeleteReference"))
+    if (!confirmed) return
+    const res = await fetch(`${goldenReferenceBase}/${referenceId}`, { method: "DELETE" })
+    const body = await handleResponse(res)
+    if (!body) return
+    setReferences((prev) => prev.filter((ref) => ref.id !== referenceId))
+    setSelectedReferenceSlotId(null)
+    setActiveReferenceId((current) => {
+      if (current !== referenceId) return current
+      const next = references.find((ref) => ref.id !== referenceId)
+      return next?.id ?? ""
+    })
+  }
+
+  function editReferenceSlot(slot: GoldenReferenceSlot) {
+    setSelectedReferenceSlotId(slot.id)
+    setSlotPlacementId(slot.placementId ?? placements[0]?.id ?? "")
+    setSlotDraft({
+      xPct: slot.xPct,
+      yPct: slot.yPct,
+      widthPct: slot.widthPct,
+      heightPct: slot.heightPct,
+    })
+  }
+
   async function createReferenceSlot() {
     if (!activeReference || !slotPlacement) return
     const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots`, {
@@ -417,6 +446,48 @@ export function PlanogramEditor({
     setReferences((prev) =>
       prev.map((ref) => (ref.id === activeReference.id ? { ...ref, slots: [...ref.slots, slot] } : ref)),
     )
+    setSelectedReferenceSlotId(slot.id)
+  }
+
+  async function updateReferenceSlot() {
+    if (!activeReference || !selectedReferenceSlot || !slotPlacement) return
+    const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots/${selectedReferenceSlot.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        placementId: slotPlacement.id,
+        label: slotPlacement.product.name,
+        ...slotDraft,
+      }),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+
+    const updatedSlot: GoldenReferenceSlot = {
+      id: body.id as string,
+      placementId: body.placementId as string | null,
+      productId: body.productId as string | null,
+      productSku: body.productSku as string | null,
+      productName: body.productName as string | null,
+      label: body.label as string | null,
+      xPct: body.xPct as number,
+      yPct: body.yPct as number,
+      widthPct: body.widthPct as number,
+      heightPct: body.heightPct as number,
+    }
+    setReferences((prev) =>
+      prev.map((ref) =>
+        ref.id === activeReference.id
+          ? { ...ref, slots: ref.slots.map((slot) => (slot.id === updatedSlot.id ? updatedSlot : slot)) }
+          : ref,
+      ),
+    )
+  }
+
+  function resetReferenceSlotDraft() {
+    setSelectedReferenceSlotId(null)
+    setSlotPlacementId(placements[0]?.id ?? "")
+    setSlotDraft({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
   }
 
   async function deleteReferenceSlot(referenceId: string, slotId: string) {
@@ -428,6 +499,7 @@ export function PlanogramEditor({
         ref.id === referenceId ? { ...ref, slots: ref.slots.filter((slot) => slot.id !== slotId) } : ref,
       ),
     )
+    if (selectedReferenceSlotId === slotId) resetReferenceSlotDraft()
   }
 
   async function createZone() {
@@ -715,7 +787,7 @@ export function PlanogramEditor({
                 )
                 if (res.ok) {
                   const body = await res.json()
-                  window.location.assign(`/${locale}/planograms/${planogram.id}/${body.versionId}`)
+                  router.push(`/${locale}/planograms/${planogram.id}/${body.versionId}`)
                 }
               }}
               className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
@@ -731,6 +803,25 @@ export function PlanogramEditor({
           {message}
         </div>
       )}
+
+      <div className="mb-4 grid gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs text-neutral-600 md:grid-cols-4">
+        <div>
+          <div className="font-medium text-neutral-900">{t("workflow.selectShelfTitle")}</div>
+          <p className="mt-1">{t("workflow.selectShelfBody")}</p>
+        </div>
+        <div>
+          <div className="font-medium text-neutral-900">{t("workflow.addProductTitle")}</div>
+          <p className="mt-1">{t("workflow.addProductBody")}</p>
+        </div>
+        <div>
+          <div className="font-medium text-neutral-900">{t("workflow.moveProductTitle")}</div>
+          <p className="mt-1">{t("workflow.moveProductBody")}</p>
+        </div>
+        <div>
+          <div className="font-medium text-neutral-900">{t("workflow.referenceTitle")}</div>
+          <p className="mt-1">{t("workflow.referenceBody")}</p>
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-6">
         {/* Canvas */}
@@ -1190,7 +1281,21 @@ export function PlanogramEditor({
           </div>
 
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <h2 className="mb-2 text-sm font-medium">{t("goldenReference")}</h2>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-medium">{t("goldenReference")}</h2>
+                <p className="mt-1 text-xs text-neutral-500">{t("goldenReferenceHint")}</p>
+              </div>
+              {activeReference ? (
+                <button
+                  type="button"
+                  onClick={() => deleteGoldenReference(activeReference.id)}
+                  className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                >
+                  {t("deleteReference")}
+                </button>
+              ) : null}
+            </div>
             {references.length === 0 ? (
               <div className="mb-3 rounded-md border border-dashed border-neutral-200 p-3 text-xs text-neutral-500">
                 {t("noGoldenReference")}
@@ -1202,15 +1307,18 @@ export function PlanogramEditor({
                     <button
                       type="button"
                       key={ref.id}
-                      onClick={() => setActiveReferenceId(ref.id)}
+                      onClick={() => {
+                        setActiveReferenceId(ref.id)
+                        setSelectedReferenceSlotId(null)
+                      }}
                       className={`overflow-hidden rounded-md border text-left ${
                         ref.id === activeReference?.id ? "border-neutral-900" : "border-neutral-200"
                       }`}
                     >
                       <img src={`/api/media/${ref.imageUrl}`} alt="" className="h-24 w-full object-cover" />
                       <div className="flex items-center justify-between px-2 py-1 text-xs text-neutral-500">
-                        <span>{ref.status}</span>
-                        <span>{ref.slots.length}</span>
+                        <span>{t(`referenceStatus.${ref.status}` as never)}</span>
+                        <span>{t("slotCount", { count: ref.slots.length })}</span>
                       </div>
                     </button>
                   ))}
@@ -1247,12 +1355,25 @@ export function PlanogramEditor({
                         {activeReference.slots.map((slot) => (
                           <div
                             key={slot.id}
-                            className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 px-2 py-1 text-xs"
+                            className={`flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs ${
+                              selectedReferenceSlotId === slot.id ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-neutral-50"
+                            }`}
                           >
-                            <span className="min-w-0 flex-1 truncate">
+                            <button
+                              type="button"
+                              onClick={() => editReferenceSlot(slot)}
+                              className="min-w-0 flex-1 truncate text-left hover:text-neutral-900"
+                            >
                               {slot.productSku ? `${slot.productSku} · ` : ""}
                               {slot.productName ?? slot.label}
-                            </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => editReferenceSlot(slot)}
+                              className="text-neutral-600 hover:text-neutral-900"
+                            >
+                              {t("editReferenceSlot")}
+                            </button>
                             <button
                               type="button"
                               onClick={() => deleteReferenceSlot(activeReference.id, slot.id)}
@@ -1295,7 +1416,16 @@ export function PlanogramEditor({
             )}
             {activeReference && placements.length > 0 && (
               <div className="mt-3 border-t border-neutral-100 pt-3">
-                <h3 className="mb-2 text-xs font-medium text-neutral-600">{t("referenceSlot")}</h3>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-medium text-neutral-600">
+                    {selectedReferenceSlot ? t("editReferenceSlotTitle") : t("referenceSlot")}
+                  </h3>
+                  {selectedReferenceSlot ? (
+                    <button type="button" onClick={resetReferenceSlotDraft} className="text-xs text-neutral-500 hover:text-neutral-900">
+                      {t("newReferenceSlot")}
+                    </button>
+                  ) : null}
+                </div>
                 <div className="space-y-2">
                   <select
                     value={slotPlacement?.id ?? ""}
@@ -1330,10 +1460,10 @@ export function PlanogramEditor({
                   </div>
                   <button
                     type="button"
-                    onClick={createReferenceSlot}
+                    onClick={selectedReferenceSlot ? updateReferenceSlot : createReferenceSlot}
                     className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
                   >
-                    {t("addReferenceSlot")}
+                    {selectedReferenceSlot ? t("saveReferenceSlot") : t("addReferenceSlot")}
                   </button>
                 </div>
               </div>
