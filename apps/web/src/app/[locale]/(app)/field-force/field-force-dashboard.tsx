@@ -78,6 +78,16 @@ function formatLocalDate(value: Date) {
   return `${year}-${month}-${day}`
 }
 
+function pickDisplayRoute(routes: any[]) {
+  if (!routes.length) return null
+  return (
+    routes.find((route) => route.status === "IN_PROGRESS") ??
+    routes.find((route) => route.status === "PLANNED") ??
+    routes.find((route) => route.status === "COMPLETED") ??
+    routes[0]
+  )
+}
+
 export function FieldForceDashboard() {
   const [agents, setAgents] = useState<AgentLocation[]>([])
   const [statusCounts, setStatusCounts] = useState({ total: 0, checkedIn: 0, onRoad: 0, late: 0, offline: 0 })
@@ -104,9 +114,11 @@ export function FieldForceDashboard() {
       const res = await fetch(`/api/v1/field-force/routes?agentId=${agentId}&date=${today}`)
       const json = await res.json()
       if (json.success && json.data?.routes?.length > 0) {
-        setAgentRoute(json.data.routes[0])
+        setAgentRoute(pickDisplayRoute(json.data.routes))
       } else {
-        setAgentRoute(null)
+        const fallbackRes = await fetch(`/api/v1/field-force/routes?agentId=${agentId}&limit=10`)
+        const fallbackJson = await fallbackRes.json()
+        setAgentRoute(fallbackJson.success ? pickDisplayRoute(fallbackJson.data?.routes ?? []) : null)
       }
     } catch {
       setAgentRoute(null)
