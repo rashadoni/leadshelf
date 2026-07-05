@@ -311,6 +311,7 @@
       },
       "referenceSlot": "Эталонная зона",
       "noReferenceSlots": "Для этого эталонного снимка зоны ещё не размечены.",
+      "dragReferenceSlotHint": "Перетаскивайте зону по снимку; потяните нижний правый угол, чтобы изменить размер.",
       "addReferenceSlot": "Добавить зону",
       "editReferenceSlot": "Изменить",
       "editReferenceSlotTitle": "Редактирование зоны",

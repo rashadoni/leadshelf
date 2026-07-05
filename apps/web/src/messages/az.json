@@ -311,6 +311,7 @@
       },
       "referenceSlot": "Etalon sahəsi",
       "noReferenceSlots": "Bu etalon foto üçün sahələr hələ işarələnməyib.",
+      "dragReferenceSlotHint": "Sahəni foto üzərində dartın; ölçünü dəyişmək üçün sağ alt küncü çəkin.",
       "addReferenceSlot": "Sahəni əlavə et",
       "editReferenceSlot": "Dəyiş",
       "editReferenceSlotTitle": "Sahənin redaktəsi",

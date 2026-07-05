@@ -68,6 +68,21 @@ interface DragState {
   shelfId: string
 }
 
+interface ReferenceSlotDraft {
+  xPct: number
+  yPct: number
+  widthPct: number
+  heightPct: number
+}
+
+interface ReferenceSlotDrag {
+  slotId: string
+  mode: "move" | "resize"
+  offsetXPct: number
+  offsetYPct: number
+  draft: ReferenceSlotDraft
+}
+
 interface VersionHistoryPlacement {
   productId: string
   productSku: string
@@ -201,6 +216,8 @@ export function PlanogramEditor({
   const locale = useLocale()
   const router = useRouter()
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const referenceImageRef = useRef<HTMLDivElement | null>(null)
+  const referenceSlotDragRef = useRef<ReferenceSlotDrag | null>(null)
 
   const [placements, setPlacements] = useState(initialPlacements)
   const [zones, setZones] = useState(initialZones)
@@ -216,9 +233,10 @@ export function PlanogramEditor({
   const [activeReferenceId, setActiveReferenceId] = useState(goldenReferences[0]?.id ?? "")
   const [selectedGoldenPhotoId, setSelectedGoldenPhotoId] = useState(goldenPhotoCandidates[0]?.id ?? "")
   const [slotPlacementId, setSlotPlacementId] = useState(initialPlacements[0]?.id ?? "")
-  const [slotDraft, setSlotDraft] = useState({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
+  const [slotDraft, setSlotDraft] = useState<ReferenceSlotDraft>({ xPct: 5, yPct: 5, widthPct: 20, heightPct: 20 })
   const [selectedReferenceSlotId, setSelectedReferenceSlotId] = useState<string | null>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
+  const [referenceSlotDrag, setReferenceSlotDrag] = useState<ReferenceSlotDrag | null>(null)
   const [zoneDraft, setZoneDraft] = useState({
     name: "",
     color: "#f59e0b",
@@ -417,6 +435,129 @@ export function PlanogramEditor({
     })
   }
 
+  function slotFromResponse(body: Record<string, unknown>): GoldenReferenceSlot {
+    return {
+      id: body.id as string,
+      placementId: body.placementId as string | null,
+      productId: body.productId as string | null,
+      productSku: body.productSku as string | null,
+      productName: body.productName as string | null,
+      label: body.label as string | null,
+      xPct: body.xPct as number,
+      yPct: body.yPct as number,
+      widthPct: body.widthPct as number,
+      heightPct: body.heightPct as number,
+    }
+  }
+
+  function updateReferenceSlotLocal(referenceId: string, updatedSlot: GoldenReferenceSlot) {
+    setReferences((prev) =>
+      prev.map((ref) =>
+        ref.id === referenceId
+          ? { ...ref, slots: ref.slots.map((slot) => (slot.id === updatedSlot.id ? updatedSlot : slot)) }
+          : ref,
+      ),
+    )
+  }
+
+  function patchReferenceSlotDraft(slotId: string, draft: ReferenceSlotDraft) {
+    setReferences((prev) =>
+      prev.map((ref) =>
+        ref.id === activeReference?.id
+          ? {
+              ...ref,
+              slots: ref.slots.map((slot) => (slot.id === slotId ? { ...slot, ...draft } : slot)),
+            }
+          : ref,
+      ),
+    )
+  }
+
+  async function persistReferenceSlotDraft(referenceId: string, slotId: string, draft: ReferenceSlotDraft) {
+    const res = await fetch(`${goldenReferenceBase}/${referenceId}/slots/${slotId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    })
+    const body = await handleResponse(res)
+    if (!body) return
+    updateReferenceSlotLocal(referenceId, slotFromResponse(body))
+  }
+
+  function roundedPct(value: number) {
+    return Math.round(value * 10) / 10
+  }
+
+  function clampPct(value: number, min = 0, max = 100) {
+    return Math.min(max, Math.max(min, value))
+  }
+
+  function referencePointInPct(event: PointerEvent<HTMLElement>) {
+    const rect = referenceImageRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0 || rect.height === 0) return null
+    return {
+      xPct: clampPct(((event.clientX - rect.left) / rect.width) * 100),
+      yPct: clampPct(((event.clientY - rect.top) / rect.height) * 100),
+    }
+  }
+
+  function beginReferenceSlotDrag(event: PointerEvent<HTMLElement>, slot: GoldenReferenceSlot, mode: ReferenceSlotDrag["mode"]) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const point = referencePointInPct(event)
+    if (!point) return
+    const draft = {
+      xPct: slot.xPct,
+      yPct: slot.yPct,
+      widthPct: slot.widthPct,
+      heightPct: slot.heightPct,
+    }
+    editReferenceSlot(slot)
+    const nextDrag = {
+      slotId: slot.id,
+      mode,
+      offsetXPct: point.xPct - slot.xPct,
+      offsetYPct: point.yPct - slot.yPct,
+      draft,
+    }
+    referenceSlotDragRef.current = nextDrag
+    setReferenceSlotDrag(nextDrag)
+  }
+
+  function moveReferenceSlotDrag(event: PointerEvent<HTMLDivElement>) {
+    if (!referenceSlotDrag) return
+    event.preventDefault()
+    const point = referencePointInPct(event)
+    if (!point) return
+    const current = referenceSlotDrag.draft
+    const next =
+      referenceSlotDrag.mode === "move"
+        ? {
+            ...current,
+            xPct: roundedPct(clampPct(point.xPct - referenceSlotDrag.offsetXPct, 0, 100 - current.widthPct)),
+            yPct: roundedPct(clampPct(point.yPct - referenceSlotDrag.offsetYPct, 0, 100 - current.heightPct)),
+          }
+        : {
+            ...current,
+            widthPct: roundedPct(clampPct(point.xPct - current.xPct, 1, 100 - current.xPct)),
+            heightPct: roundedPct(clampPct(point.yPct - current.yPct, 1, 100 - current.yPct)),
+          }
+    const nextDrag = { ...referenceSlotDrag, draft: next }
+    referenceSlotDragRef.current = nextDrag
+    setReferenceSlotDrag(nextDrag)
+    setSlotDraft(next)
+    patchReferenceSlotDraft(referenceSlotDrag.slotId, next)
+  }
+
+  async function finishReferenceSlotDrag() {
+    const state = referenceSlotDragRef.current
+    referenceSlotDragRef.current = null
+    setReferenceSlotDrag(null)
+    if (!state || !activeReference) return
+    await persistReferenceSlotDraft(activeReference.id, state.slotId, state.draft)
+  }
+
   async function createReferenceSlot() {
     if (!activeReference || !slotPlacement) return
     const res = await fetch(`${goldenReferenceBase}/${activeReference.id}/slots`, {
@@ -463,25 +604,7 @@ export function PlanogramEditor({
     const body = await handleResponse(res)
     if (!body) return
 
-    const updatedSlot: GoldenReferenceSlot = {
-      id: body.id as string,
-      placementId: body.placementId as string | null,
-      productId: body.productId as string | null,
-      productSku: body.productSku as string | null,
-      productName: body.productName as string | null,
-      label: body.label as string | null,
-      xPct: body.xPct as number,
-      yPct: body.yPct as number,
-      widthPct: body.widthPct as number,
-      heightPct: body.heightPct as number,
-    }
-    setReferences((prev) =>
-      prev.map((ref) =>
-        ref.id === activeReference.id
-          ? { ...ref, slots: ref.slots.map((slot) => (slot.id === updatedSlot.id ? updatedSlot : slot)) }
-          : ref,
-      ),
-    )
+    updateReferenceSlotLocal(activeReference.id, slotFromResponse(body))
   }
 
   function resetReferenceSlotDraft() {
@@ -1325,16 +1448,31 @@ export function PlanogramEditor({
                 </div>
                 {activeReference && (
                   <div>
-                    <div className="relative overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                    <div
+                      ref={referenceImageRef}
+                      className="relative touch-none select-none overflow-hidden rounded-md border border-neutral-200 bg-neutral-100"
+                      onPointerMove={moveReferenceSlotDrag}
+                      onPointerUp={() => void finishReferenceSlotDrag()}
+                      onPointerCancel={() => {
+                        referenceSlotDragRef.current = null
+                        setReferenceSlotDrag(null)
+                      }}
+                    >
                       <img
                         src={`/api/media/${activeReference.imageUrl}`}
                         alt=""
                         className="max-h-80 w-full object-contain"
+                        draggable={false}
                       />
                       {activeReference.slots.map((slot) => (
                         <div
                           key={slot.id}
-                          className="absolute border-2 border-emerald-400 bg-emerald-400/15"
+                          onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "move")}
+                          className={`absolute cursor-move border-2 bg-emerald-400/15 ${
+                            selectedReferenceSlotId === slot.id
+                              ? "border-emerald-500 ring-2 ring-emerald-500/25"
+                              : "border-emerald-400"
+                          }`}
                           style={{
                             left: `${slot.xPct}%`,
                             top: `${slot.yPct}%`,
@@ -1345,9 +1483,17 @@ export function PlanogramEditor({
                           <span className="absolute left-0 top-0 max-w-full truncate bg-emerald-500 px-1 text-[10px] font-medium text-white">
                             {slot.productSku ?? slot.label ?? t("referenceSlot")}
                           </span>
+                          <span
+                            onPointerDown={(event) => beginReferenceSlotDrag(event, slot, "resize")}
+                            className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize border-l border-t border-white bg-emerald-600"
+                            aria-hidden="true"
+                          />
                         </div>
                       ))}
                     </div>
+                    {activeReference.slots.length > 0 ? (
+                      <p className="mt-2 text-xs text-neutral-500">{t("dragReferenceSlotHint")}</p>
+                    ) : null}
                     {activeReference.slots.length === 0 ? (
                       <p className="mt-2 text-xs text-neutral-500">{t("noReferenceSlots")}</p>
                     ) : (
