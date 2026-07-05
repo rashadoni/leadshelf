@@ -359,6 +359,7 @@ export default async function AnalyticsPage({
         </div>
         <a
           href="/api/v1/analytics/planogram-products/export"
+          download="planogram-products.xls"
           className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
         >
           {t("exportExcel")}

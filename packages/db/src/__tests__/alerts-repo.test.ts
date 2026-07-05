@@ -122,16 +122,37 @@ describe("alerts repo", () => {
   })
 
   test("builds and enqueues office morning digest", async () => {
+    const since = new Date(Date.now() - 60 * 60 * 1000)
+    const until = new Date(Date.now() + 60 * 60 * 1000)
+    await emitProductEvent(prisma, orgId, {
+      kind: "visit.anomaly",
+      severity: "critical",
+      storeId,
+      entityType: "visit",
+      entityId: "visit-digest",
+      dedupeKey: "visit.anomaly:digest",
+      payload: { title: "Digest geofence breach" },
+    })
+    await emitProductEvent(prisma, orgId, {
+      kind: "task.overdue",
+      severity: "warning",
+      storeId,
+      entityType: "task",
+      entityId: "task-digest",
+      dedupeKey: "task.overdue:digest",
+      payload: { title: "Digest overdue task" },
+    })
+
     const digest = await buildOfficeMorningDigest(prisma, orgId, {
-      since: new Date("2026-07-03T00:00:00.000Z"),
-      until: new Date("2026-07-05T00:00:00.000Z"),
+      since,
+      until,
     })
     expect(digest.total).toBeGreaterThanOrEqual(2)
-    expect(digest.byKind["visit.anomaly"]).toBe(1)
+    expect(digest.byKind["visit.anomaly"]).toBeGreaterThanOrEqual(1)
 
     const queued = await enqueueOfficeMorningDigest(prisma, orgId, {
-      since: new Date("2026-07-03T00:00:00.000Z"),
-      until: new Date("2026-07-05T00:00:00.000Z"),
+      since,
+      until,
       dedupeKey: "morning.digest:test",
     })
     expect(queued.deliveryCount).toBe(1)

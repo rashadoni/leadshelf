@@ -3,6 +3,8 @@ import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 import { formatMeters, getPlanogramProductRows } from "@/server/analytics/planogram-products"
 
+export const runtime = "nodejs"
+
 function xml(value: string | number): string {
   return String(value)
     .replaceAll("&", "&amp;")
