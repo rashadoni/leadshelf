@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { mobilePhotoUploadFieldsSchema } from "@leadshelf/api-contracts/mobile/v1"
-import { evaluatePhotoQuality } from "@leadshelf/core"
+import { evaluatePhotoProofMetadata, evaluatePhotoQuality } from "@leadshelf/core"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 import { runVisionComplianceForPhoto } from "@/server/services/vision-compliance"
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   const task = await workerDb.task.findFirst({
     where: { id: parsed.data.taskId, organizationId: session.org, assigneeId: session.sub },
-    select: { id: true, storeId: true },
+    select: { id: true, storeId: true, store: { select: { latitude: true, longitude: true } } },
   })
   if (!task) return NextResponse.json({ error: "task_not_found_or_not_assigned" }, { status: 404 })
 
@@ -93,13 +93,30 @@ export async function POST(req: NextRequest) {
     takenAt: new Date(parsed.data.takenAt),
     exif,
   })
+  const proofMetadata = evaluatePhotoProofMetadata({
+    exif,
+    takenAt: new Date(parsed.data.takenAt),
+    expectedUserId: session.sub,
+    expectedTaskId: task.id,
+    expectedStoreId: task.storeId,
+    expectedStoreLocation:
+      task.store.latitude == null || task.store.longitude == null
+        ? null
+        : { latitude: task.store.latitude, longitude: task.store.longitude },
+  })
+  const proofScore = proofMetadata.status === "PASS" ? 1 : 0.55
+  const combinedQualityScore = Math.min(qualityCheck.score, proofScore)
+  const combinedQualityStatus = combinedQualityScore >= 0.8 ? "GOOD" : combinedQualityScore >= 0.5 ? "REVIEW" : "POOR"
   const qualityDetails: JsonObject = {
-    status: qualityCheck.status,
-    score: qualityCheck.score,
+    status: combinedQualityStatus,
+    score: combinedQualityScore,
+    imageStatus: qualityCheck.status,
+    imageScore: qualityCheck.score,
     dimensions: qualityCheck.dimensions
       ? { width: qualityCheck.dimensions.width, height: qualityCheck.dimensions.height }
       : null,
     issues: qualityCheck.issues,
+    proofMetadata: proofMetadata as unknown as JsonObject,
     checkedAt: new Date().toISOString(),
   }
   const exifWithQuality: JsonObject = {
@@ -118,17 +135,17 @@ export async function POST(req: NextRequest) {
         clientPhotoId: parsed.data.clientPhotoId,
         takenAt: new Date(parsed.data.takenAt),
         exif: exifWithQuality,
-        qualityScore: qualityCheck.score,
+        qualityScore: combinedQualityScore,
       },
     })
-    if (qualityCheck.status === "GOOD") return { photo, reviewId: null }
+    if (combinedQualityStatus === "GOOD" && proofMetadata.status === "PASS") return { photo, reviewId: null }
     const review = await tx.humanReview.create({
       data: {
         organizationId: session.org,
         reason: "PHOTO_QUALITY",
         taskId: task.id,
         photoSubmissionId: photo.id,
-        score: qualityCheck.score,
+        score: combinedQualityScore,
         findings: { qualityCheck: exifWithQuality.qualityCheck },
       },
       select: { id: true },
@@ -146,7 +163,7 @@ export async function POST(req: NextRequest) {
     {
       photoId: photo.id,
       key,
-      qualityScore: qualityCheck.score,
+      qualityScore: combinedQualityScore,
       qualityCheck: exifWithQuality.qualityCheck,
       reviewId,
       visionReviewId: "reviewId" in visionResult ? visionResult.reviewId : null,

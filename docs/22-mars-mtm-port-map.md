@@ -106,7 +106,7 @@ LeadShelf использует shelf-execution модели:
 | `src/components/mtm/golden-reference-editor.tsx` | planogram golden reference UI | `PARTIAL/ADAPTED` | В LeadShelf есть golden reference модели; UX еще спорный и требует доработки. |
 | `src/components/mtm/shelf-annotator.tsx` | planogram/photo annotation | `NOT PORTED` | Нужна проверка пригодности для LeadShelf planogram editor. |
 | `src/lib/mtm/photo-quality/*` | LeadShelf photo quality core | `NOT PORTED` | Можно переносить как pure logic после review. |
-| `src/lib/mtm/photo-watermark/*` | LeadShelf photo proof | `NOT PORTED` | Можно переносить как pure logic после review. |
+| `src/lib/mtm/photo-watermark/*` | LeadShelf photo proof | `PARTIAL/ADAPTED` | Backend proof-metadata validator добавлен в `packages/core/photo-proof/watermark.ts` и подключен к mobile photo upload; mobile watermark rendering/EXIF writing еще не перенесен и не проверен на устройстве. |
 | `src/lib/mtm/visit-anomaly/*` | LeadShelf route/visit guard | `PARTIAL` | Нужна проверка текущих helpers и API integration. |
 | `src/lib/mtm/territory-scope.ts` | LeadShelf team/agent scope | `NOT PORTED` | Желательно портировать до mobile/supervisor flow. |
 
@@ -133,8 +133,9 @@ LeadShelf использует shelf-execution модели:
    M-001 -> pull route -> check-in -> checkout -> pull completed visit.
 3. Shelf-AI: OpenAI provider boundary и signed `/api/vision-media/photos/*`
    URL слой добавлены, но production распознавание заработает только после
-   серверного API key и `VISION_MEDIA_*` env на web. Дальше нужны
-   watermark/exif перенос и native photo pass.
+   серверного API key и `VISION_MEDIA_*` env на web. Backend watermark/EXIF
+   validator добавлен; дальше нужны mobile watermark rendering/EXIF writing
+   и native photo pass.
 
 ## Честный текущий вывод
 
