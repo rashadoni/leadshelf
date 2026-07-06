@@ -485,12 +485,18 @@ Definition of Done:
 поведения из MTM `routes`, `visits`, `map`, `visit-anomaly/*`,
 `territory-scope.ts`.
 
+Текущая карта честного переноса Mars/LeadDrive MTM -> LeadShelf:
+`docs/22-mars-mtm-port-map.md`.
+
 Задачи:
 
 - Teams/FieldAgent поверх User. `[сделано: FieldAgent tenant scope +
-  /field-force agents dashboard + API добавления агента из User]`
+  /field-force agents dashboard + API добавления агента из User; добавлен
+  UI create/edit agent для User -> FieldAgent, team и phone]`
 - Routes + RouteStop, привязка к магазинам. `[сделано: API создания route
-  с ordered RouteStop по storeIds + /field-force routes table/form]`
+  с ordered RouteStop по storeIds + /field-force routes table/form; добавлен
+  PATCH/DELETE route, UI create/edit/cancel, выбор агента, дата, ordered
+  store picker с reorder/remove]`
 - Visits: check-in/out c geofence, anomaly-флаги (порт visit-anomaly).
   `[сделано: core geofence helper + check-in/check-out API + recent visits
   anomaly table в /field-force; web/mobile check-in не создает дубль для

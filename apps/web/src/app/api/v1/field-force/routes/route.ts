@@ -10,7 +10,7 @@ const FIELD_FORCE_ADMIN_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR"])
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(160),
   agentId: z.string().min(1).nullable().optional(),
-  date: z.string().date().optional(),
+  date: z.string().date().nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
   storeIds: z.array(z.string().min(1)).max(100).optional(),
   points: z.array(z.object({

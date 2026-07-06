@@ -1,21 +1,26 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import {
   Activity,
   CalendarDays,
   CheckCircle2,
+  Ban,
   Download,
+  Pencil,
   FileText,
-  Map,
+  Map as MapIcon,
+  Plus,
   Radio,
   RefreshCw,
   Route,
+  Save,
   Search,
   Settings,
   SlidersHorizontal,
   Trophy,
   Users,
+  X,
 } from "lucide-react"
 import { FieldForceDashboard } from "./field-force-dashboard"
 
@@ -62,6 +67,7 @@ interface AgentItem {
   status: "ACTIVE" | "INACTIVE"
   phone: string | null
   employeeCode: string | null
+  teamId: string | null
   team: { id: string; name: string } | null
   isOnline: boolean
   fieldStatus: "CHECKED_IN" | "ON_ROAD" | "LATE" | "OFFLINE"
@@ -72,6 +78,51 @@ interface AgentItem {
   routeStopsToday: number
   lastCustomer: string | null
   lastSeenAt: string | null
+}
+
+interface StoreOption {
+  id: string
+  name: string
+  code: string | null
+  address: string | null
+  format?: { id: string; name: string } | null
+  region?: { id: string; name: string } | null
+}
+
+interface TeamOption {
+  id: string
+  name: string
+}
+
+interface UserCandidate {
+  id: string
+  name: string
+  email: string | null
+  employeeCode: string | null
+  role: string
+}
+
+interface RouteFormPayload {
+  name: string
+  agentId: string | null
+  date: string | null
+  storeIds?: string[]
+}
+
+interface AgentCreatePayload {
+  userId: string
+  teamId: string | null
+  phone: string | null
+}
+
+interface AgentUpdatePayload {
+  teamId: string | null
+  phone: string | null
+}
+
+interface ActionMessage {
+  type: "success" | "error"
+  text: string
 }
 
 interface LiveEvent {
@@ -91,8 +142,8 @@ interface SettingsState {
   alertLateVisits: boolean
 }
 
-const TABS: Array<{ key: ViewKey; label: string; description: string; Icon: typeof Map }> = [
-  { key: "map", label: "Карта", description: "живое движение", Icon: Map },
+const TABS: Array<{ key: ViewKey; label: string; description: string; Icon: typeof MapIcon }> = [
+  { key: "map", label: "Карта", description: "живое движение", Icon: MapIcon },
   { key: "routes", label: "Маршруты", description: "точки и выполнение", Icon: Route },
   { key: "agents", label: "Агенты", description: "команды и статусы", Icon: Users },
   { key: "leaderboard", label: "Лидерборд", description: "рейтинг исполнения", Icon: Trophy },
@@ -127,6 +178,15 @@ const DEFAULT_SETTINGS: SettingsState = {
 function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions) {
   if (!value) return "—"
   return new Intl.DateTimeFormat("ru", options ?? { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
+}
+
+function toDateInput(value: string | Date | null | undefined) {
+  const date = value ? new Date(value) : new Date()
+  if (Number.isNaN(date.getTime())) return ""
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
 
 function percent(value: number, total: number) {
@@ -180,13 +240,32 @@ function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
   URL.revokeObjectURL(url)
 }
 
+async function apiRequest(url: string, init: RequestInit) {
+  const headers = new Headers(init.headers)
+  headers.set("Content-Type", "application/json")
+  const res = await fetch(url, {
+    ...init,
+    headers,
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || body.success === false) {
+    const message = typeof body.error === "string" ? body.error : `HTTP ${res.status}`
+    throw new Error(message)
+  }
+  return body
+}
+
 export function FieldForceWorkspace() {
   const [activeView, setActiveView] = useState<ViewKey>("map")
   const [routes, setRoutes] = useState<RouteItem[]>([])
   const [agents, setAgents] = useState<AgentItem[]>([])
+  const [stores, setStores] = useState<StoreOption[]>([])
+  const [teams, setTeams] = useState<TeamOption[]>([])
+  const [userCandidates, setUserCandidates] = useState<UserCandidate[]>([])
   const [liveFeed, setLiveFeed] = useState<LiveEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<ActionMessage | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
   const [routeSearch, setRouteSearch] = useState("")
   const [agentSearch, setAgentSearch] = useState("")
@@ -200,23 +279,29 @@ export function FieldForceWorkspace() {
     setLoading(true)
     setError(null)
     try {
-      const [routesRes, agentsRes, locationsRes] = await Promise.all([
+      const [routesRes, agentsRes, locationsRes, storesRes] = await Promise.all([
         fetch("/api/v1/field-force/routes?limit=200", { cache: "no-store" }),
         fetch("/api/v1/field-force/agents?limit=200", { cache: "no-store" }),
         fetch("/api/v1/field-force/locations", { cache: "no-store" }),
+        fetch("/api/v1/field-force/stores?limit=300", { cache: "no-store" }),
       ])
-      const [routesJson, agentsJson, locationsJson] = await Promise.all([
+      const [routesJson, agentsJson, locationsJson, storesJson] = await Promise.all([
         routesRes.json(),
         agentsRes.json(),
         locationsRes.json(),
+        storesRes.json(),
       ])
       if (!routesRes.ok || !routesJson.success) throw new Error("routes_failed")
       if (!agentsRes.ok || !agentsJson.success) throw new Error("agents_failed")
       if (!locationsRes.ok || !locationsJson.success) throw new Error("locations_failed")
+      if (!storesRes.ok || !storesJson.success) throw new Error("stores_failed")
 
       const nextRoutes = (routesJson.data?.routes ?? []) as RouteItem[]
       setRoutes(nextRoutes)
       setAgents((agentsJson.data?.agents ?? []) as AgentItem[])
+      setTeams((agentsJson.data?.teams ?? []) as TeamOption[])
+      setUserCandidates((agentsJson.data?.users ?? []) as UserCandidate[])
+      setStores((storesJson.data?.stores ?? []) as StoreOption[])
       setLiveFeed((locationsJson.data?.liveFeed ?? []) as LiveEvent[])
       setSelectedRouteId((current) => current ?? nextRoutes[0]?.id ?? null)
       setLastLoadedAt(new Date())
@@ -229,6 +314,73 @@ export function FieldForceWorkspace() {
 
   useEffect(() => {
     loadWorkspace()
+  }, [loadWorkspace])
+
+  const createRoute = useCallback(async (payload: RouteFormPayload) => {
+    try {
+      await apiRequest("/api/v1/field-force/routes", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      setActionMessage({ type: "success", text: "Маршрут создан." })
+      await loadWorkspace()
+    } catch (err) {
+      setActionMessage({ type: "error", text: `Маршрут не сохранен: ${(err as Error).message}` })
+      throw err
+    }
+  }, [loadWorkspace])
+
+  const updateRoute = useCallback(async (routeId: string, payload: RouteFormPayload) => {
+    try {
+      await apiRequest(`/api/v1/field-force/routes/${routeId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      })
+      setActionMessage({ type: "success", text: "Маршрут обновлен." })
+      await loadWorkspace()
+    } catch (err) {
+      setActionMessage({ type: "error", text: `Маршрут не обновлен: ${(err as Error).message}` })
+      throw err
+    }
+  }, [loadWorkspace])
+
+  const cancelRoute = useCallback(async (routeId: string) => {
+    try {
+      await apiRequest(`/api/v1/field-force/routes/${routeId}`, { method: "DELETE" })
+      setActionMessage({ type: "success", text: "Маршрут отменен." })
+      await loadWorkspace()
+    } catch (err) {
+      setActionMessage({ type: "error", text: `Маршрут не отменен: ${(err as Error).message}` })
+      throw err
+    }
+  }, [loadWorkspace])
+
+  const createAgent = useCallback(async (payload: AgentCreatePayload) => {
+    try {
+      await apiRequest("/api/v1/field-force/agents", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      setActionMessage({ type: "success", text: "Агент добавлен." })
+      await loadWorkspace()
+    } catch (err) {
+      setActionMessage({ type: "error", text: `Агент не сохранен: ${(err as Error).message}` })
+      throw err
+    }
+  }, [loadWorkspace])
+
+  const updateAgent = useCallback(async (agentId: string, payload: AgentUpdatePayload) => {
+    try {
+      await apiRequest(`/api/v1/field-force/agents/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      })
+      setActionMessage({ type: "success", text: "Агент обновлен." })
+      await loadWorkspace()
+    } catch (err) {
+      setActionMessage({ type: "error", text: `Агент не обновлен: ${(err as Error).message}` })
+      throw err
+    }
   }, [loadWorkspace])
 
   const filteredRoutes = useMemo(() => {
@@ -369,13 +521,19 @@ export function FieldForceWorkspace() {
       {activeView === "routes" ? (
         <RoutesView
           filteredRoutes={filteredRoutes}
+          agents={agents}
+          stores={stores}
           routeSearch={routeSearch}
           routeStatus={routeStatus}
           selectedRoute={selectedRoute}
           loading={loading}
+          actionMessage={actionMessage}
           onRouteSearch={setRouteSearch}
           onRouteStatus={setRouteStatus}
           onSelectRoute={setSelectedRouteId}
+          onCreateRoute={createRoute}
+          onUpdateRoute={updateRoute}
+          onCancelRoute={cancelRoute}
           onExport={() =>
             downloadCsv(
               "field-routes.csv",
@@ -394,11 +552,16 @@ export function FieldForceWorkspace() {
       {activeView === "agents" ? (
         <AgentsView
           agents={filteredAgents}
+          teams={teams}
+          userCandidates={userCandidates}
           agentSearch={agentSearch}
           agentStatus={agentStatus}
           loading={loading}
+          actionMessage={actionMessage}
           onAgentSearch={setAgentSearch}
           onAgentStatus={setAgentStatus}
+          onCreateAgent={createAgent}
+          onUpdateAgent={updateAgent}
           onExport={() =>
             downloadCsv(
               "field-agents.csv",
@@ -449,25 +612,144 @@ function ToolbarSearch({
 
 function RoutesView({
   filteredRoutes,
+  agents,
+  stores,
   routeSearch,
   routeStatus,
   selectedRoute,
   loading,
+  actionMessage,
   onRouteSearch,
   onRouteStatus,
   onSelectRoute,
+  onCreateRoute,
+  onUpdateRoute,
+  onCancelRoute,
   onExport,
 }: {
   filteredRoutes: RouteItem[]
+  agents: AgentItem[]
+  stores: StoreOption[]
   routeSearch: string
   routeStatus: "ALL" | RouteItem["status"]
   selectedRoute: RouteItem | null
   loading: boolean
+  actionMessage: ActionMessage | null
   onRouteSearch: (value: string) => void
   onRouteStatus: (value: "ALL" | RouteItem["status"]) => void
   onSelectRoute: (id: string) => void
+  onCreateRoute: (payload: RouteFormPayload) => Promise<void>
+  onUpdateRoute: (routeId: string, payload: RouteFormPayload) => Promise<void>
+  onCancelRoute: (routeId: string) => Promise<void>
   onExport: () => void
 }) {
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [routeForm, setRouteForm] = useState({
+    name: "",
+    agentId: "",
+    date: toDateInput(new Date()),
+    storeIds: [] as string[],
+  })
+
+  const storeById = useMemo(() => new Map(stores.map((store) => [store.id, store])), [stores])
+  const selectedStoreIds = useMemo(() => new Set(routeForm.storeIds), [routeForm.storeIds])
+  const routeLocked = Boolean(
+    formMode === "edit" &&
+      selectedRoute?.points.some((point) => point.status !== "PENDING" || point.visitedAt),
+  )
+
+  const openCreate = () => {
+    setFormMode("create")
+    setFormError(null)
+    setRouteForm({
+      name: "",
+      agentId: selectedRoute?.agentId ?? "",
+      date: toDateInput(new Date()),
+      storeIds: [],
+    })
+  }
+
+  const openEdit = () => {
+    if (!selectedRoute) return
+    setFormMode("edit")
+    setFormError(null)
+    setRouteForm({
+      name: selectedRoute.name,
+      agentId: selectedRoute.agentId ?? "",
+      date: toDateInput(selectedRoute.date),
+      storeIds: selectedRoute.points.map((point) => point.customerId),
+    })
+  }
+
+  const addStore = (storeId: string) => {
+    if (!storeId || selectedStoreIds.has(storeId)) return
+    setRouteForm((current) => ({ ...current, storeIds: [...current.storeIds, storeId] }))
+  }
+
+  const moveStore = (storeId: string, direction: -1 | 1) => {
+    setRouteForm((current) => {
+      const index = current.storeIds.indexOf(storeId)
+      const nextIndex = index + direction
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.storeIds.length) return current
+      const nextIds = [...current.storeIds]
+      const [item] = nextIds.splice(index, 1)
+      nextIds.splice(nextIndex, 0, item!)
+      return { ...current, storeIds: nextIds }
+    })
+  }
+
+  const removeStore = (storeId: string) => {
+    setRouteForm((current) => ({ ...current, storeIds: current.storeIds.filter((id) => id !== storeId) }))
+  }
+
+  const submitRoute = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const name = routeForm.name.trim()
+    if (!name) {
+      setFormError("Укажите название маршрута.")
+      return
+    }
+    if (!routeLocked && routeForm.storeIds.length === 0) {
+      setFormError("Добавьте хотя бы одну торговую точку.")
+      return
+    }
+    const today = toDateInput(new Date())
+    if (routeForm.date && routeForm.date < today) {
+      const confirmed = window.confirm(`Дата ${routeForm.date} уже прошла. Сохранить маршрут на прошедшую дату?`)
+      if (!confirmed) return
+    }
+
+    setSaving(true)
+    setFormError(null)
+    try {
+      const payload: RouteFormPayload = {
+        name,
+        agentId: routeForm.agentId || null,
+        date: routeForm.date || null,
+        ...(routeLocked ? {} : { storeIds: routeForm.storeIds }),
+      }
+      if (formMode === "edit" && selectedRoute) {
+        await onUpdateRoute(selectedRoute.id, payload)
+      } else {
+        await onCreateRoute(payload)
+      }
+      setFormMode(null)
+    } catch {
+      // Parent sets the visible API error message.
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancelSelectedRoute = async () => {
+    if (!selectedRoute) return
+    const confirmed = window.confirm(`Отменить маршрут "${selectedRoute.name}"?`)
+    if (!confirmed) return
+    await onCancelRoute(selectedRoute.id)
+  }
+
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
@@ -490,6 +772,29 @@ function RoutesView({
           >
             <Download className="h-4 w-4" />
             CSV
+          </button>
+          <button
+            className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700"
+            onClick={openCreate}
+          >
+            <Plus className="h-4 w-4" />
+            Новый маршрут
+          </button>
+          <button
+            className="inline-flex h-10 items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={openEdit}
+            disabled={!selectedRoute}
+          >
+            <Pencil className="h-4 w-4" />
+            Изменить
+          </button>
+          <button
+            className="inline-flex h-10 items-center gap-1 rounded-md border border-red-200 bg-white px-3 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={cancelSelectedRoute}
+            disabled={!selectedRoute || selectedRoute.status === "CANCELLED"}
+          >
+            <Ban className="h-4 w-4" />
+            Отменить
           </button>
         </div>
 
@@ -538,9 +843,176 @@ function RoutesView({
       </div>
 
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
-        <h2 className="text-lg font-semibold">Детали маршрута</h2>
-        {selectedRoute ? (
+        {actionMessage ? (
+          <div
+            className={`mb-3 rounded-md border p-2 text-sm ${
+              actionMessage.type === "success"
+                ? "border-green-200 bg-green-50 text-green-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {actionMessage.text}
+          </div>
+        ) : null}
+
+        {formMode ? (
+          <form onSubmit={submitRoute} className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{formMode === "edit" ? "Редактировать маршрут" : "Новый маршрут"}</h2>
+                <p className="mt-1 text-xs text-neutral-500">
+                  {routeLocked ? "Точки заблокированы: по маршруту уже есть визиты." : "Точки сохраняются в том порядке, в котором они стоят здесь."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-neutral-300 p-2 text-neutral-600 hover:bg-neutral-50"
+                onClick={() => setFormMode(null)}
+                aria-label="Закрыть форму"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {formError ? <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
+
+            <label className="block">
+              <span className="text-sm font-medium">Название</span>
+              <input
+                className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                value={routeForm.name}
+                onChange={(event) => setRouteForm((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Например: Маршрут Baku-01"
+              />
+            </label>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-medium">Агент</span>
+                <select
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+                  value={routeForm.agentId}
+                  onChange={(event) => setRouteForm((current) => ({ ...current, agentId: event.target.value }))}
+                >
+                  <option value="">Без агента</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">Дата</span>
+                <input
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                  type="date"
+                  value={routeForm.date}
+                  onChange={(event) => setRouteForm((current) => ({ ...current, date: event.target.value }))}
+                />
+              </label>
+            </div>
+
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Точки маршрута</h3>
+                <span className="text-xs text-neutral-500">{routeForm.storeIds.length} точек</span>
+              </div>
+              <div className="mt-2 space-y-2">
+                {routeForm.storeIds.length === 0 ? (
+                  <div className="rounded-md bg-white p-3 text-sm text-neutral-500">Пока нет точек.</div>
+                ) : null}
+                {routeForm.storeIds.map((storeId, index) => {
+                  const store = storeById.get(storeId)
+                  return (
+                    <div key={storeId} className="flex items-center gap-2 rounded-md bg-white p-2 text-sm">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{store?.name ?? "Точка не найдена"}</div>
+                        <div className="truncate text-xs text-neutral-500">{store?.address ?? store?.code ?? "Без адреса"}</div>
+                      </div>
+                      {!routeLocked ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40"
+                            onClick={() => moveStore(storeId, -1)}
+                            disabled={index === 0}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40"
+                            onClick={() => moveStore(storeId, 1)}
+                            disabled={index === routeForm.storeIds.length - 1}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            onClick={() => removeStore(storeId)}
+                          >
+                            Убрать
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+              {!routeLocked ? (
+                <select
+                  className="mt-2 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+                  value=""
+                  onChange={(event) => addStore(event.target.value)}
+                >
+                  <option value="">Добавить торговую точку</option>
+                  {stores
+                    .filter((store) => !selectedStoreIds.has(store.id))
+                    .map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.name}{store.code ? ` (${store.code})` : ""}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-50"
+                onClick={() => setFormMode(null)}
+              >
+                <X className="h-4 w-4" />
+                Закрыть
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={saving}
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "Сохранение..." : "Сохранить"}
+              </button>
+            </div>
+          </form>
+        ) : selectedRoute ? (
           <div className="mt-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold">Детали маршрута</h2>
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs hover:bg-neutral-50"
+                onClick={openEdit}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Изменить
+              </button>
+            </div>
             <div>
               <div className="text-sm font-semibold">{selectedRoute.name}</div>
               <div className="mt-1 text-xs text-neutral-500">
@@ -568,7 +1040,10 @@ function RoutesView({
             </div>
           </div>
         ) : (
-          <div className="mt-6 rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">Выберите маршрут слева.</div>
+          <div>
+            <h2 className="text-lg font-semibold">Детали маршрута</h2>
+            <div className="mt-6 rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">Выберите маршрут слева.</div>
+          </div>
         )}
       </div>
     </section>
@@ -577,23 +1052,84 @@ function RoutesView({
 
 function AgentsView({
   agents,
+  teams,
+  userCandidates,
   agentSearch,
   agentStatus,
   loading,
+  actionMessage,
   onAgentSearch,
   onAgentStatus,
+  onCreateAgent,
+  onUpdateAgent,
   onExport,
 }: {
   agents: AgentItem[]
+  teams: TeamOption[]
+  userCandidates: UserCandidate[]
   agentSearch: string
   agentStatus: "ALL" | AgentItem["fieldStatus"]
   loading: boolean
+  actionMessage: ActionMessage | null
   onAgentSearch: (value: string) => void
   onAgentStatus: (value: "ALL" | AgentItem["fieldStatus"]) => void
+  onCreateAgent: (payload: AgentCreatePayload) => Promise<void>
+  onUpdateAgent: (agentId: string, payload: AgentUpdatePayload) => Promise<void>
   onExport: () => void
 }) {
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
+  const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [agentForm, setAgentForm] = useState({ userId: "", teamId: "", phone: "" })
+
+  const openCreate = () => {
+    setFormMode("create")
+    setEditingAgent(null)
+    setFormError(null)
+    setAgentForm({ userId: userCandidates[0]?.id ?? "", teamId: "", phone: "" })
+  }
+
+  const openEdit = (agent: AgentItem) => {
+    setFormMode("edit")
+    setEditingAgent(agent)
+    setFormError(null)
+    setAgentForm({ userId: agent.userId, teamId: agent.teamId ?? "", phone: agent.phone ?? "" })
+  }
+
+  const submitAgent = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (formMode === "create" && !agentForm.userId) {
+      setFormError("Выберите пользователя.")
+      return
+    }
+    setSaving(true)
+    setFormError(null)
+    try {
+      if (formMode === "edit" && editingAgent) {
+        await onUpdateAgent(editingAgent.id, {
+          teamId: agentForm.teamId || null,
+          phone: agentForm.phone.trim() || null,
+        })
+      } else {
+        await onCreateAgent({
+          userId: agentForm.userId,
+          teamId: agentForm.teamId || null,
+          phone: agentForm.phone.trim() || null,
+        })
+      }
+      setFormMode(null)
+      setEditingAgent(null)
+    } catch {
+      // Parent sets the visible API error message.
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-3">
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="rounded-lg border border-neutral-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2">
         <ToolbarSearch value={agentSearch} placeholder="Найти агента, команду или код" onChange={onAgentSearch} />
         <select
@@ -614,20 +1150,29 @@ function AgentsView({
           <Download className="h-4 w-4" />
           CSV
         </button>
+        <button
+          className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={openCreate}
+          disabled={userCandidates.length === 0}
+        >
+          <Plus className="h-4 w-4" />
+          Добавить агента
+        </button>
       </div>
 
       <div className="mt-3 overflow-hidden rounded-lg border border-neutral-200">
-        <div className="grid grid-cols-[minmax(220px,1.2fr)_1fr_130px_130px_130px] bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase text-neutral-500">
+        <div className="grid grid-cols-[minmax(220px,1.2fr)_1fr_130px_120px_110px_96px] bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase text-neutral-500">
           <div>Агент</div>
           <div>Команда</div>
           <div>Статус</div>
           <div>Визиты</div>
           <div>Прогресс</div>
+          <div></div>
         </div>
         {loading ? <div className="p-6 text-center text-sm text-neutral-500">Загрузка агентов...</div> : null}
         {!loading && agents.length === 0 ? <div className="p-6 text-center text-sm text-neutral-500">Агенты под фильтр не найдены.</div> : null}
         {agents.map((agent) => (
-          <div key={agent.id} className="grid grid-cols-[minmax(220px,1.2fr)_1fr_130px_130px_130px] items-center border-t border-neutral-100 px-3 py-2 text-sm">
+          <div key={agent.id} className="grid grid-cols-[minmax(220px,1.2fr)_1fr_130px_120px_110px_96px] items-center border-t border-neutral-100 px-3 py-2 text-sm">
             <div className="min-w-0">
               <div className="truncate font-medium">{agent.name}</div>
               <div className="truncate text-xs text-neutral-500">{agent.email ?? agent.employeeCode ?? "Без email"}</div>
@@ -639,8 +1184,121 @@ function AgentsView({
             </div>
             <div>{agent.completedVisitsToday}/{agent.visitsToday}</div>
             <div>{agent.routeCompletion}%</div>
+            <div className="text-right">
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs hover:bg-neutral-50"
+                onClick={() => openEdit(agent)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Изменить
+              </button>
+            </div>
           </div>
         ))}
+      </div>
+      </div>
+
+      <div className="rounded-lg border border-neutral-200 bg-white p-3">
+        {actionMessage ? (
+          <div
+            className={`mb-3 rounded-md border p-2 text-sm ${
+              actionMessage.type === "success"
+                ? "border-green-200 bg-green-50 text-green-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {actionMessage.text}
+          </div>
+        ) : null}
+        {formMode ? (
+          <form onSubmit={submitAgent} className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{formMode === "edit" ? "Редактировать агента" : "Добавить агента"}</h2>
+                {editingAgent ? <p className="mt-1 text-xs text-neutral-500">{editingAgent.name}</p> : null}
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-neutral-300 p-2 text-neutral-600 hover:bg-neutral-50"
+                onClick={() => setFormMode(null)}
+                aria-label="Закрыть форму"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {formError ? <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
+            {formMode === "create" ? (
+              <label className="block">
+                <span className="text-sm font-medium">Пользователь</span>
+                <select
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+                  value={agentForm.userId}
+                  onChange={(event) => setAgentForm((current) => ({ ...current, userId: event.target.value }))}
+                >
+                  <option value="">Выберите пользователя</option>
+                  {userCandidates.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}{user.employeeCode ? ` (${user.employeeCode})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="block">
+              <span className="text-sm font-medium">Команда</span>
+              <select
+                className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+                value={agentForm.teamId}
+                onChange={(event) => setAgentForm((current) => ({ ...current, teamId: event.target.value }))}
+              >
+                <option value="">Без команды</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium">Телефон</span>
+              <input
+                className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                value={agentForm.phone}
+                onChange={(event) => setAgentForm((current) => ({ ...current, phone: event.target.value }))}
+                placeholder="+994..."
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-50"
+                onClick={() => setFormMode(null)}
+              >
+                <X className="h-4 w-4" />
+                Закрыть
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={saving}
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "Сохранение..." : "Сохранить"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            <h2 className="text-lg font-semibold">Управление агентами</h2>
+            <div className="mt-3 space-y-2 text-sm text-neutral-600">
+              <div className="rounded-md bg-neutral-50 p-2">Агент привязывается к активному пользователю LeadShelf.</div>
+              <div className="rounded-md bg-neutral-50 p-2">Команда и телефон редактируются без пересоздания пользователя.</div>
+              {userCandidates.length === 0 ? (
+                <div className="rounded-md bg-amber-50 p-2 text-amber-700">Все активные пользователи уже назначены агентами.</div>
+              ) : null}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )
