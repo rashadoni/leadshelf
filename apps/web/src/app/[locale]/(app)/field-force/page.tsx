@@ -1,5 +1,5 @@
-import { FieldForceDashboard } from "./field-force-dashboard"
+import { FieldForceWorkspace } from "./field-force-workspace"
 
 export default function FieldForcePage() {
-  return <FieldForceDashboard />
+  return <FieldForceWorkspace />
 }
