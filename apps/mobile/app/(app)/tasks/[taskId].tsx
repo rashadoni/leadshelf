@@ -21,6 +21,14 @@ import {
 } from "../../../src/db/local-store"
 import { tokenStore } from "../../../src/auth/token-store"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
+import {
+  GUIDED_SHELF_PROOF_STEPS,
+  extractCaptureStepFromExifJson,
+  getCompletedCaptureStepIds,
+  getNextRequiredCaptureStep,
+  toCaptureStepMetadata,
+  type CaptureScenarioStep,
+} from "../../../src/photos/capture-scenario"
 import { buildProofExifJson } from "../../../src/photos/proof-metadata"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
 import {
@@ -64,6 +72,7 @@ export default function TaskDetailScreen() {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false)
   const [photoSaving, setPhotoSaving] = useState(false)
+  const [activeCaptureStepId, setActiveCaptureStepId] = useState<string | null>(null)
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -91,6 +100,22 @@ export default function TaskDetailScreen() {
     placementSummaries.find((p) => p.placementId === selectedPlacementId) ??
     placementSummaries[0] ??
     null
+  const completedCaptureStepIds = useMemo(
+    () => getCompletedCaptureStepIds(photoProofs),
+    [photoProofs],
+  )
+  const nextRequiredCaptureStep = useMemo(
+    () => getNextRequiredCaptureStep(completedCaptureStepIds),
+    [completedCaptureStepIds],
+  )
+  const firstCaptureStep = GUIDED_SHELF_PROOF_STEPS[0]!
+  const activeCaptureStep =
+    GUIDED_SHELF_PROOF_STEPS.find((step) => step.id === activeCaptureStepId) ??
+    nextRequiredCaptureStep ??
+    firstCaptureStep
+  const requiredCaptureComplete = GUIDED_SHELF_PROOF_STEPS
+    .filter((step) => step.required)
+    .every((step) => completedCaptureStepIds.has(step.id))
 
   if (!task) return null
   const store = getStore(task.storeId)
@@ -113,7 +138,7 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
-  async function queueProofPhoto(sourceUri: string) {
+  async function queueProofPhoto(sourceUri: string, captureStep: CaptureScenarioStep) {
     let expectedTaskStatus: MobileTaskStatus = task!.status
     if (task!.status === "NEW") {
       enqueueTaskStatus({
@@ -136,6 +161,7 @@ export default function TaskDetailScreen() {
       locationHint: locationTitle,
       appVersion: Constants.expoConfig?.version ?? null,
       deviceLocation,
+      captureStep: toCaptureStepMetadata(captureStep),
     })
     await persistAndQueuePhoto({
       taskId: task!.id,
@@ -149,14 +175,19 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
-  async function takePhoto() {
+  async function openProofCamera(captureStep: CaptureScenarioStep) {
     const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
     if (!permission.granted) {
       Alert.alert(t("cameraPermissionDenied"))
       return
     }
     setScannerOpen(false)
+    setActiveCaptureStepId(captureStep.id)
     setPhotoCameraOpen(true)
+  }
+
+  async function takePhoto() {
+    await openProofCamera(nextRequiredCaptureStep ?? activeCaptureStep)
   }
 
   async function captureProofPhoto() {
@@ -165,7 +196,7 @@ export default function TaskDetailScreen() {
     try {
       const picture = await photoCameraRef.current?.takePictureAsync({ quality: 0.7 })
       if (!picture?.uri) return
-      await queueProofPhoto(picture.uri)
+      await queueProofPhoto(picture.uri, activeCaptureStep)
       setPhotoCameraOpen(false)
     } finally {
       setPhotoSaving(false)
@@ -238,19 +269,23 @@ export default function TaskDetailScreen() {
     return parts.filter(Boolean).join(" · ")
   }
 
+  function photoProofStepTitle(proof: TaskPhotoProofRow): string | null {
+    const capturedStep = extractCaptureStepFromExifJson(proof.exifJson)
+    const step = GUIDED_SHELF_PROOF_STEPS.find((item) => item.id === capturedStep?.stepId)
+    return step ? t(step.titleKey) : null
+  }
+
   if (photoCameraOpen) {
     return (
       <SafeAreaView style={styles.proofRoot} edges={["top", "bottom"]}>
         <CameraView ref={photoCameraRef} style={styles.proofCamera} facing="back" />
         <View style={styles.proofTop}>
-          <Text style={styles.proofEyebrow}>{t("photoOverlayHint")}</Text>
+          <Text style={styles.proofEyebrow}>{t("guidedProof")}</Text>
           <Text style={styles.proofTitle} numberOfLines={2}>
-            {selectedPlacement?.name ?? task.title}
+            {t(activeCaptureStep.titleKey)}
           </Text>
           <Text style={styles.proofMeta} numberOfLines={2}>
-            {selectedPlacement
-              ? `${selectedPlacement.sku} · ${t("shelf")} ${selectedPlacement.shelfLabel}`
-              : locationTitle}
+            {t(activeCaptureStep.instructionKey)}
           </Text>
         </View>
         <View style={styles.proofFrame} pointerEvents="none" />
@@ -272,7 +307,7 @@ export default function TaskDetailScreen() {
               onPress={captureProofPhoto}
             >
               <Text style={styles.proofCaptureText}>
-                {photoSaving ? t("savingPhoto") : t("capturePhoto")}
+                {photoSaving ? t("savingPhoto") : t("captureStepPhoto")}
               </Text>
             </Pressable>
           </View>
@@ -309,24 +344,68 @@ export default function TaskDetailScreen() {
             <Text style={styles.proofSummaryEmpty}>{t("noPhotoProofs")}</Text>
           ) : (
             <View style={styles.proofList}>
-              {photoProofs.slice(0, 3).map((proof) => (
-                <View key={proof.clientPhotoId} style={styles.proofRow}>
-                  <View style={styles.proofRowBody}>
-                    <Text style={styles.proofRowTitle}>{photoProofStatus(proof)}</Text>
-                    <Text style={styles.proofRowMeta} numberOfLines={2}>
-                      {photoProofMeta(proof) || `${t("takenAt")}: ${proof.takenAt.slice(0, 16).replace("T", " ")}`}
-                    </Text>
-                    {proof.reviewNote || proof.visionReason ? (
-                      <Text style={styles.proofRowWarning} numberOfLines={2}>
-                        {proof.reviewNote ?? proof.visionReason}
+              {photoProofs.slice(0, 3).map((proof) => {
+                const stepTitle = photoProofStepTitle(proof)
+                return (
+                  <View key={proof.clientPhotoId} style={styles.proofRow}>
+                    <View style={styles.proofRowBody}>
+                      <Text style={styles.proofRowTitle}>
+                        {stepTitle ? `${stepTitle} · ${photoProofStatus(proof)}` : photoProofStatus(proof)}
                       </Text>
-                    ) : null}
+                      <Text style={styles.proofRowMeta} numberOfLines={2}>
+                        {photoProofMeta(proof) || `${t("takenAt")}: ${proof.takenAt.slice(0, 16).replace("T", " ")}`}
+                      </Text>
+                      {proof.reviewNote || proof.visionReason ? (
+                        <Text style={styles.proofRowWarning} numberOfLines={2}>
+                          {proof.reviewNote ?? proof.visionReason}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={[styles.proofStateDot, proof.uploaded && styles.proofStateDotDone]} />
                   </View>
-                  <View style={[styles.proofStateDot, proof.uploaded && styles.proofStateDotDone]} />
-                </View>
-              ))}
+                )
+              })}
             </View>
           )}
+        </View>
+        <View style={styles.guidedProofCard}>
+          <View style={styles.proofSummaryHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.proofSummaryTitle}>{t("guidedProof")}</Text>
+              <Text style={styles.guidedProofSubtitle}>
+                {requiredCaptureComplete ? t("proofScenarioComplete") : t("proofScenarioIncomplete")}
+              </Text>
+            </View>
+            <Text style={[styles.scenarioBadge, requiredCaptureComplete && styles.scenarioBadgeDone]}>
+              {completedCaptureStepIds.size}/{GUIDED_SHELF_PROOF_STEPS.length}
+            </Text>
+          </View>
+          <View style={styles.captureStepList}>
+            {GUIDED_SHELF_PROOF_STEPS.map((step) => {
+              const done = completedCaptureStepIds.has(step.id)
+              return (
+                <View key={step.id} style={[styles.captureStepRow, done && styles.captureStepRowDone]}>
+                  <View style={styles.captureStepNumber}>
+                    <Text style={styles.captureStepNumberText}>{step.sequence}</Text>
+                  </View>
+                  <View style={styles.captureStepBody}>
+                    <Text style={styles.captureStepTitle}>{t(step.titleKey)}</Text>
+                    <Text style={styles.captureStepInstruction} numberOfLines={2}>
+                      {t(step.instructionKey)}
+                    </Text>
+                    <Text style={[styles.captureStepStatus, done && styles.captureStepStatusDone]}>
+                      {done ? t("proofStepDone") : step.required ? t("proofStepRequired") : t("proofStepOptional")}
+                    </Text>
+                  </View>
+                  <Pressable style={styles.captureStepButton} onPress={() => openProofCamera(step)}>
+                    <Text style={styles.captureStepButtonText}>
+                      {done ? t("retakeStep") : t("startStep")}
+                    </Text>
+                  </Pressable>
+                </View>
+              )
+            })}
+          </View>
         </View>
         <Text style={styles.section}>{t("locationHint")}</Text>
         <View style={styles.locationCard}>
@@ -539,7 +618,7 @@ export default function TaskDetailScreen() {
           )}
           {(task.status === "IN_PROGRESS" || task.status === "NEW" || task.status === "PHOTO_SUBMITTED") && (
             <Pressable style={styles.secondary} onPress={takePhoto}>
-              <Text style={styles.secondaryText}>📷 {t("takePhoto")}</Text>
+              <Text style={styles.secondaryText}>{t("takePhoto")}</Text>
             </Pressable>
           )}
         </View>
@@ -627,6 +706,60 @@ const styles = StyleSheet.create({
   proofSummaryTitle: { fontSize: 15, fontWeight: "800", color: "#171717" },
   proofSummaryCount: { fontSize: 12, fontWeight: "700", color: "#737373" },
   proofSummaryEmpty: { fontSize: 12, color: "#737373" },
+  guidedProofCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d6d3d1",
+    backgroundColor: "white",
+    padding: 12,
+    gap: 10,
+  },
+  guidedProofSubtitle: { marginTop: 2, fontSize: 12, color: "#525252", fontWeight: "600" },
+  scenarioBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "#fef3c7",
+    color: "#92400e",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  scenarioBadgeDone: { backgroundColor: "#dcfce7", color: "#166534" },
+  captureStepList: { gap: 8 },
+  captureStepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    backgroundColor: "#fafaf9",
+    padding: 10,
+  },
+  captureStepRowDone: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
+  captureStepNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#171717",
+  },
+  captureStepNumberText: { color: "white", fontSize: 12, fontWeight: "800" },
+  captureStepBody: { flex: 1, gap: 2 },
+  captureStepTitle: { fontSize: 13, fontWeight: "800", color: "#171717" },
+  captureStepInstruction: { fontSize: 11, color: "#525252", lineHeight: 15 },
+  captureStepStatus: { fontSize: 11, color: "#92400e", fontWeight: "700" },
+  captureStepStatusDone: { color: "#166534" },
+  captureStepButton: {
+    minHeight: 36,
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "#171717",
+    paddingHorizontal: 10,
+  },
+  captureStepButtonText: { color: "white", fontSize: 12, fontWeight: "800" },
   proofList: { gap: 8 },
   proofRow: {
     flexDirection: "row",

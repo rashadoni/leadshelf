@@ -107,7 +107,7 @@ LeadShelf использует shelf-execution модели:
 | `src/components/mtm/golden-reference-editor.tsx` | planogram golden reference UI | `PARTIAL/ADAPTED` | В LeadShelf есть golden reference модели; UX еще спорный и требует доработки. |
 | `src/components/mtm/shelf-annotator.tsx` | planogram/photo annotation | `NOT PORTED` | Нужна проверка пригодности для LeadShelf planogram editor. |
 | `src/lib/mtm/photo-quality/*` | LeadShelf photo quality core | `ADAPTED` | Есть pure scorer `packages/core/src/photo-proof/quality.ts`, тесты `quality.test.ts`, integration в `/api/v1/mobile/photos/upload`; это не direct copy Mars. |
-| `src/lib/mtm/photo-watermark/*` | LeadShelf photo proof | `PARTIAL/ADAPTED` | Backend proof-metadata validator добавлен в `packages/core/photo-proof/watermark.ts` и подключен к mobile photo upload; mobile сохраняет EXIF-like proof metadata в SQLite-очередь, отправляет `exifJson` и добавляет device GPS через `expo-location`, если пользователь дал permission. Настоящий burned-in watermark в пикселях фото еще не перенесен/не проверен на устройстве. |
+| `src/lib/mtm/photo-watermark/*` | LeadShelf photo proof | `ADAPTED` | Прямой watermark не нужен. Backend proof-metadata validator теперь проверяет capture metadata в `packages/core/photo-proof/capture-metadata.ts`: user/task/store/GPS/time/software/capture-step. Mobile сохраняет EXIF-like proof metadata в SQLite-очередь, отправляет `exifJson` и добавляет device GPS через `expo-location`, если пользователь дал permission. |
 | `src/lib/mtm/visit-anomaly/*` | LeadShelf route/visit guard | `ADAPTED` | Есть core geofence helper `packages/core/src/field-force/geofence.ts`, web/mobile check-in integration, anomalyFlags, `visit.anomaly` event/alert tests; duration/other anomaly types не переносились. |
 | `src/lib/mtm/territory-scope.ts` | LeadShelf team/agent scope | `PARTIAL/ADAPTED` | Есть pure helper `packages/core/src/field-force/territory-scope.ts` и tests; полное web/API enforcement по территориям еще не считается перенесенным. |
 
@@ -137,9 +137,10 @@ LeadShelf использует shelf-execution модели:
    добавляет device GPS через `expo-location`, если permission выдан.
 3. Shelf-AI: OpenAI provider boundary и signed `/api/vision-media/photos/*`
    URL слой добавлены, но production распознавание заработает только после
-   серверного API key и `VISION_MEDIA_*` env на web. Backend watermark/EXIF
-   validator добавлен; mobile EXIF-like metadata/GPS writing добавлены.
-   Дальше нужны burned-in watermark rendering и native photo pass на устройстве.
+   серверного API key и `VISION_MEDIA_*` env на web. Backend capture-metadata
+   validator добавлен; mobile EXIF-like metadata/GPS/capture-step writing
+   добавлены. Дальше нужны native guided-proof smoke на устройстве и video
+   capture/frame-extraction срез.
 
 ## Честный текущий вывод
 

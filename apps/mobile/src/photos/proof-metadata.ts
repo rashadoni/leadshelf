@@ -1,3 +1,5 @@
+import type { CaptureStepMetadata } from "./capture-scenario"
+
 export interface ProofMetadataInput {
   takenAt: string
   taskId: string
@@ -12,6 +14,7 @@ export interface ProofMetadataInput {
     accuracyM?: number | null
     recordedAt?: string | null
   } | null
+  captureStep?: CaptureStepMetadata | null
 }
 
 export interface ProofExifPayload {
@@ -20,7 +23,7 @@ export interface ProofExifPayload {
   Model: string
   Software: "LeadShelf Mobile"
   ImageDescription: string
-  watermarked: true
+  capturedBy: "LeadShelf Mobile"
   GPSLatitude?: number
   GPSLongitude?: number
   gps?: {
@@ -38,9 +41,23 @@ export function buildProofExifPayload(input: ProofMetadataInput): ProofExifPaylo
     storeId: input.storeId,
     storeName: input.storeName ?? null,
     locationHint: input.locationHint ?? null,
-    watermarked: true,
-    watermarkedAt: input.takenAt,
-    watermarkMode: "camera_overlay",
+    capturedAt: input.takenAt,
+    captureMode: "guided_shelf_proof",
+    captureScenario: input.captureStep
+      ? {
+          id: input.captureStep.scenarioId,
+          version: 1,
+        }
+      : null,
+    captureStep: input.captureStep
+      ? {
+          id: input.captureStep.stepId,
+          kind: input.captureStep.stepKind,
+          required: input.captureStep.required,
+          sequence: input.captureStep.sequence,
+          mediaKind: input.captureStep.mediaKind,
+        }
+      : null,
     gpsUnavailable: !input.deviceLocation,
     gpsAccuracyM: input.deviceLocation?.accuracyM ?? null,
     gpsRecordedAt: input.deviceLocation?.recordedAt ?? null,
@@ -51,7 +68,7 @@ export function buildProofExifPayload(input: ProofMetadataInput): ProofExifPaylo
     Model: input.appVersion ?? "mobile-app",
     Software: "LeadShelf Mobile",
     ImageDescription: JSON.stringify(description),
-    watermarked: true,
+    capturedBy: "LeadShelf Mobile",
   }
   if (!input.deviceLocation) return payload
   return {

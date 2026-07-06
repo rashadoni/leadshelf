@@ -430,6 +430,7 @@ export type TaskPhotoProofRow = {
   clientPhotoId: string
   taskId: string
   takenAt: string
+  exifJson: string | null
   uploaded: boolean
   uploadedAt: string | null
   serverPhotoId: string | null
@@ -454,6 +455,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     clientPhotoId: string
     taskId: string
     takenAt: string
+    exifJson: string | null
     uploaded: number
     uploadedAt: string | null
     serverPhotoId: string | null
@@ -466,7 +468,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
     outboxDetail: string | null
   }>(
-    `SELECT p.clientPhotoId, p.taskId, p.takenAt, p.uploaded, p.uploadedAt,
+    `SELECT p.clientPhotoId, p.taskId, p.takenAt, p.exifJson, p.uploaded, p.uploadedAt,
       p.serverPhotoId, p.objectKey, p.qualityScore, p.qualityCheck,
       p.visionReviewId, p.visionStatus, p.visionReason,
       o.status AS outboxStatus, o.detail AS outboxDetail
@@ -547,6 +549,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
       (row): TaskPhotoProofRow => ({
         clientPhotoId: row.clientPhotoId ?? `server-${row.id}`,
         taskId: row.taskId,
+        exifJson: null,
         takenAt: row.takenAt,
         uploaded: true,
         uploadedAt: null,

@@ -1110,7 +1110,7 @@ model PhotoSubmission {
   // Идемпотентность offline-загрузки: клиентский id повторной отправки.
   clientPhotoId  String?
   takenAt        DateTime
-  // EXIF + watermark метаданные (портируется из mtm-photo-watermark-spec).
+  // EXIF-like capture metadata: user/task/store/GPS/device/capture-step proof.
   exif           Json?
   qualityScore   Float?
   createdAt      DateTime @default(now())

@@ -344,8 +344,9 @@ floor-plan location hint и camera overlay сделаны. Остатки Phase 
   e2e-тест с симуляцией обрывов сети — часть DoD.
 - API-версионирование: замороженный `/api/v1/mobile`, contracts в
   `packages/api-contracts/v1/`, `protocolVersion` в sync, 426 на устаревший.
-- Фото-pipeline ADR: presigned upload, EXIF сохраняется (форензика,
-  watermark-спека), thumbnails в worker, retention/стоимость.
+- Фото-pipeline ADR: presigned upload, EXIF-like capture metadata сохраняется
+  (форензика, GPS/task/store/user/capture-step), thumbnails в worker,
+  retention/стоимость.
 - Decimal → string на границе api-contracts; мобильный считает в копейках.
 
 UX-дифференциаторы (Tier 1 из docs/10):
@@ -477,6 +478,34 @@ Definition of Done:
 
 - Начать с golden reference + human review.
 - Не начинать с обучения собственного детектора на 50 SKU до проверки бизнес-ценности.
+
+### Phase 10.5 - Guided Shelf Proof
+
+Цель: превратить фото/видео-подтверждение в обязательный сценарий съемки,
+как в приложениях аренды самоката/велосипеда: сотрудник проходит шаги
+front/left-depth/right-depth/detail, а система принимает только доказательные
+media с capture metadata.
+
+План: `docs/23-guided-shelf-proof-plan.md`.
+
+Задачи первого среза:
+
+- Убрать watermarks как обязательную proof-семантику; доказательство строить
+  на user/task/store/GPS/time/device/capture-step metadata.
+- Добавить mobile capture scenario: front, left depth, right depth, detail.
+- Хранить `captureScenario` и `captureStep` в EXIF-like JSON каждого proof.
+- Показать progress по обязательным шагам в mobile task detail.
+- Backend validator должен принимать proof metadata без watermark marker и
+  возвращать review только по реальным нарушениям identity/GPS/timestamp.
+- Подготовить модель под видео: оригинал хранить, AI анализировать через
+  extracted frames, но нативную запись видео не делать первым блокером.
+
+Definition of Done:
+
+- Мобильный сотрудник не снимает proof "как хочет", а идет по шагам сценария.
+- Каждая proof media связана с конкретным шагом сценария.
+- Если глубина не снята, система честно видит незакрытый depth step.
+- Водяной знак не требуется для принятия proof.
 
 ## Phase 11 - Field force: маршруты, визиты, live map
 

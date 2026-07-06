@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { GUIDED_SHELF_PROOF_SCENARIO_ID } from "./capture-scenario"
 import { buildProofExifPayload } from "./proof-metadata"
 
 describe("mobile proof metadata", () => {
@@ -17,6 +18,14 @@ describe("mobile proof metadata", () => {
         accuracyM: 12,
         recordedAt: "2026-07-06T08:59:58.000Z",
       },
+      captureStep: {
+        scenarioId: GUIDED_SHELF_PROOF_SCENARIO_ID,
+        stepId: "front",
+        stepKind: "front",
+        required: true,
+        sequence: 1,
+        mediaKind: "photo",
+      },
     })
     const description = JSON.parse(payload.ImageDescription)
 
@@ -25,7 +34,7 @@ describe("mobile proof metadata", () => {
       Make: "LeadShelf",
       Model: "1.0.0",
       Software: "LeadShelf Mobile",
-      watermarked: true,
+      capturedBy: "LeadShelf Mobile",
       GPSLatitude: 40.40931,
       GPSLongitude: 49.86709,
     })
@@ -33,8 +42,9 @@ describe("mobile proof metadata", () => {
       userId: "user-a",
       taskId: "task-a",
       storeId: "store-a",
-      watermarked: true,
-      watermarkMode: "camera_overlay",
+      captureMode: "guided_shelf_proof",
+      captureScenario: { id: GUIDED_SHELF_PROOF_SCENARIO_ID },
+      captureStep: { id: "front", kind: "front", required: true, sequence: 1, mediaKind: "photo" },
       gpsUnavailable: false,
       gpsAccuracyM: 12,
     })

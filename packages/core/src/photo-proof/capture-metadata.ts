@@ -14,8 +14,15 @@ export interface PhotoProofMetadataInput {
 
 export interface PhotoProofMetadataResult {
   status: "PASS" | "REVIEW"
-  hasWatermark: boolean
-  watermarkedAt: string | null
+  hasCaptureProof: boolean
+  capturedAt: string | null
+  capture: {
+    scenarioId: string | null
+    stepId: string | null
+    stepKind: string | null
+    required: boolean | null
+    mediaKind: string | null
+  }
   gps: {
     status: "MATCHED" | "MISSING" | "OUTSIDE" | "UNKNOWN"
     latitude: number | null
@@ -92,8 +99,9 @@ export function evaluatePhotoProofMetadata(input: PhotoProofMetadataInput): Phot
   if (Object.keys(exif).length === 0) {
     return {
       status: "REVIEW",
-      hasWatermark: false,
-      watermarkedAt: null,
+      hasCaptureProof: false,
+      capturedAt: null,
+      capture: { scenarioId: null, stepId: null, stepKind: null, required: null, mediaKind: null },
       gps: { status: "UNKNOWN", latitude: null, longitude: null, distanceM: null, limitM: gpsLimitM },
       identity: { userMatched: input.expectedUserId ? false : null, taskMatched: input.expectedTaskId ? false : null, storeMatched: input.expectedStoreId ? false : null },
       issues: ["missing_exif"],
@@ -104,25 +112,27 @@ export function evaluatePhotoProofMetadata(input: PhotoProofMetadataInput): Phot
   if (Object.keys(description).length === 0) issues.push("missing_image_description")
 
   const software = stringValue(exif, ["Software", "software"])
-  if (!software || !ACCEPTED_SOFTWARE.has(software)) issues.push("invalid_watermark_software")
+  if (!software || !ACCEPTED_SOFTWARE.has(software)) issues.push("invalid_capture_software")
 
-  const hasWatermark = description.watermarked === true || exif.watermarked === true
-  if (!hasWatermark) issues.push("missing_watermark_marker")
+  const captureStep = asRecord(description.captureStep)
+  const captureScenario = asRecord(description.captureScenario)
+  const legacyWatermark = description.watermarked === true || exif.watermarked === true
+  const hasCaptureProof = !!software && ACCEPTED_SOFTWARE.has(software) && (Object.keys(description).length > 0 || legacyWatermark)
 
-  const watermarkedAt =
-    stringValue(exif, ["DateTimeOriginal", "dateTimeOriginal", "watermarkedAt"]) ??
-    stringValue(description, ["watermarkedAt", "takenAt"])
-  if (!watermarkedAt) {
-    issues.push("missing_watermark_timestamp")
+  const capturedAt =
+    stringValue(exif, ["DateTimeOriginal", "dateTimeOriginal", "capturedAt", "takenAt", "watermarkedAt"]) ??
+    stringValue(description, ["capturedAt", "takenAt", "watermarkedAt"])
+  if (!capturedAt) {
+    issues.push("missing_capture_timestamp")
   } else {
-    const parsed = new Date(watermarkedAt)
+    const parsed = new Date(capturedAt)
     if (Number.isNaN(parsed.getTime())) {
-      issues.push("invalid_watermark_timestamp")
+      issues.push("invalid_capture_timestamp")
     } else {
       const driftFromTakenAt = Math.abs(parsed.getTime() - input.takenAt.getTime())
       const driftFromReceivedAt = Math.abs(receivedAt.getTime() - parsed.getTime())
       if (driftFromTakenAt > timestampDriftMs || driftFromReceivedAt > 24 * 60 * 60 * 1000) {
-        issues.push("watermark_timestamp_drift")
+        issues.push("capture_timestamp_drift")
       }
     }
   }
@@ -133,9 +143,9 @@ export function evaluatePhotoProofMetadata(input: PhotoProofMetadataInput): Phot
   const userMatched = matchingId(describedUserId, input.expectedUserId)
   const taskMatched = matchingId(describedTaskId, input.expectedTaskId)
   const storeMatched = matchingId(describedStoreId, input.expectedStoreId)
-  if (userMatched === false) issues.push("watermark_user_mismatch")
-  if (taskMatched === false) issues.push("watermark_task_mismatch")
-  if (storeMatched === false) issues.push("watermark_store_mismatch")
+  if (userMatched === false) issues.push("capture_user_mismatch")
+  if (taskMatched === false) issues.push("capture_task_mismatch")
+  if (storeMatched === false) issues.push("capture_store_mismatch")
 
   const { latitude, longitude } = gpsFromExif(exif)
   let gpsStatus: PhotoProofMetadataResult["gps"]["status"] = "UNKNOWN"
@@ -154,8 +164,15 @@ export function evaluatePhotoProofMetadata(input: PhotoProofMetadataInput): Phot
   const blockingIssues = issues.filter((issue) => issue !== "gps_unavailable")
   return {
     status: blockingIssues.length === 0 ? "PASS" : "REVIEW",
-    hasWatermark,
-    watermarkedAt: watermarkedAt ?? null,
+    hasCaptureProof,
+    capturedAt: capturedAt ?? null,
+    capture: {
+      scenarioId: stringValue(captureScenario, ["id", "scenarioId"]) ?? stringValue(description, ["scenarioId"]),
+      stepId: stringValue(captureStep, ["id", "stepId"]) ?? stringValue(description, ["stepId"]),
+      stepKind: stringValue(captureStep, ["kind", "stepKind"]) ?? stringValue(description, ["stepKind"]),
+      required: typeof captureStep.required === "boolean" ? captureStep.required : null,
+      mediaKind: stringValue(captureStep, ["mediaKind"]) ?? stringValue(description, ["mediaKind"]),
+    },
     gps: { status: gpsStatus, latitude, longitude, distanceM, limitM: gpsLimitM },
     identity: { userMatched, taskMatched, storeMatched },
     issues,

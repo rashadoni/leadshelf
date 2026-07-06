@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { evaluatePhotoProofMetadata } from "./watermark"
+import { evaluatePhotoProofMetadata } from "./capture-metadata"
 
 const baseInput = {
   takenAt: new Date("2026-07-06T09:00:00.000Z"),
@@ -22,18 +22,26 @@ function validExif(overrides: Record<string, unknown> = {}) {
       userId: "user-a",
       taskId: "task-a",
       storeId: "store-a",
-      watermarked: true,
+      captureScenario: { id: "guided-shelf-proof-v1" },
+      captureStep: { id: "front", kind: "front", required: true, mediaKind: "photo" },
     }),
     ...overrides,
   }
 }
 
-describe("photo proof watermark metadata", () => {
-  it("passes valid LeadShelf watermark metadata", () => {
+describe("photo proof capture metadata", () => {
+  it("passes valid LeadShelf capture metadata without requiring a watermark marker", () => {
     const result = evaluatePhotoProofMetadata({ ...baseInput, exif: validExif() })
 
     expect(result.status).toBe("PASS")
-    expect(result.hasWatermark).toBe(true)
+    expect(result.hasCaptureProof).toBe(true)
+    expect(result.capture).toMatchObject({
+      scenarioId: "guided-shelf-proof-v1",
+      stepId: "front",
+      stepKind: "front",
+      required: true,
+      mediaKind: "photo",
+    })
     expect(result.gps.status).toBe("MATCHED")
     expect(result.identity).toEqual({ userMatched: true, taskMatched: true, storeMatched: true })
     expect(result.issues).toEqual([])
@@ -43,7 +51,7 @@ describe("photo proof watermark metadata", () => {
     const result = evaluatePhotoProofMetadata({ ...baseInput, exif: null })
 
     expect(result.status).toBe("REVIEW")
-    expect(result.hasWatermark).toBe(false)
+    expect(result.hasCaptureProof).toBe(false)
     expect(result.issues).toContain("missing_exif")
   })
 
@@ -56,13 +64,14 @@ describe("photo proof watermark metadata", () => {
           userId: "other-user",
           taskId: "task-a",
           storeId: "store-a",
-          watermarked: true,
+          captureScenario: { id: "guided-shelf-proof-v1" },
+          captureStep: { id: "front", kind: "front", required: true, mediaKind: "photo" },
         }),
       }),
     })
 
     expect(result.status).toBe("REVIEW")
-    expect(result.issues).toEqual(expect.arrayContaining(["invalid_watermark_software", "watermark_user_mismatch"]))
+    expect(result.issues).toEqual(expect.arrayContaining(["invalid_capture_software", "capture_user_mismatch"]))
   })
 
   it("detects GPS outside the expected store radius", () => {
