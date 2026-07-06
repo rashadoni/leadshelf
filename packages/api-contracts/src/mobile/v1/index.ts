@@ -143,6 +143,21 @@ export type MobilePlanogramBundle = z.infer<typeof mobilePlanogramBundleSchema>
 export const mobileHumanReviewStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"])
 export type MobileHumanReviewStatus = z.infer<typeof mobileHumanReviewStatusSchema>
 
+export const mobileProofMediaTypeSchema = z.enum(["photo", "video"])
+export type MobileProofMediaType = z.infer<typeof mobileProofMediaTypeSchema>
+
+export const mobileCaptureStepSchema = z.object({
+  scenarioId: z.string().min(1).max(128),
+  stepId: z.string().min(1).max(128),
+  stepKind: z.string().min(1).max(64),
+  required: z.boolean(),
+  sequence: z.number().int().min(0).max(100),
+  mediaKind: mobileProofMediaTypeSchema,
+  minDurationSeconds: z.number().int().min(0).max(120).nullable().optional(),
+  maxDurationSeconds: z.number().int().min(0).max(120).nullable().optional(),
+})
+export type MobileCaptureStep = z.infer<typeof mobileCaptureStepSchema>
+
 export const mobilePhotoSubmissionReviewSchema = z.object({
   id: z.string(),
   reason: z.enum(["PHOTO_QUALITY", "VISION_COMPLIANCE"]),
@@ -160,6 +175,9 @@ export const mobilePhotoSubmissionRowSchema = z.object({
   taskId: z.string(),
   storeId: z.string(),
   key: z.string(),
+  mediaType: mobileProofMediaTypeSchema.default("photo"),
+  durationMs: z.number().int().nullable().optional(),
+  captureStep: mobileCaptureStepSchema.nullable().optional(),
   takenAt: z.string(),
   qualityScore: z.number().nullable(),
   review: mobilePhotoSubmissionReviewSchema.nullable(),
@@ -309,6 +327,9 @@ export const mobilePhotoUploadFieldsSchema = z.object({
   clientPhotoId: z.string().min(8).max(128),
   taskId: z.string().min(1),
   takenAt: z.string().datetime(),
+  mediaType: mobileProofMediaTypeSchema.default("photo"),
+  durationMs: z.coerce.number().int().min(0).max(120000).optional(),
+  captureStepJson: z.string().max(5000).optional(),
   exifJson: z.string().max(20000).optional(),
 })
 export type MobilePhotoUploadFields = z.infer<typeof mobilePhotoUploadFieldsSchema>
@@ -316,6 +337,8 @@ export type MobilePhotoUploadFields = z.infer<typeof mobilePhotoUploadFieldsSche
 export const mobilePhotoUploadResponseSchema = z.object({
   photoId: z.string(),
   key: z.string(),
+  mediaType: mobileProofMediaTypeSchema.default("photo"),
+  durationMs: z.number().int().nullable().optional(),
   qualityScore: z.number().nullable().optional(),
   qualityCheck: z.unknown().nullable().optional(),
   reviewId: z.string().nullable().optional(),

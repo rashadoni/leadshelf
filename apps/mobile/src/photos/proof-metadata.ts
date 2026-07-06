@@ -56,6 +56,8 @@ export function buildProofExifPayload(input: ProofMetadataInput): ProofExifPaylo
           required: input.captureStep.required,
           sequence: input.captureStep.sequence,
           mediaKind: input.captureStep.mediaKind,
+          minDurationSeconds: input.captureStep.minDurationSeconds ?? null,
+          maxDurationSeconds: input.captureStep.maxDurationSeconds ?? null,
         }
       : null,
     gpsUnavailable: !input.deviceLocation,

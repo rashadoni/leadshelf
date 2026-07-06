@@ -24,7 +24,9 @@ describe("mobile proof metadata", () => {
         stepKind: "front",
         required: true,
         sequence: 1,
-        mediaKind: "photo",
+        mediaKind: "video",
+        minDurationSeconds: 5,
+        maxDurationSeconds: 8,
       },
     })
     const description = JSON.parse(payload.ImageDescription)
@@ -44,7 +46,15 @@ describe("mobile proof metadata", () => {
       storeId: "store-a",
       captureMode: "guided_shelf_proof",
       captureScenario: { id: GUIDED_SHELF_PROOF_SCENARIO_ID },
-      captureStep: { id: "front", kind: "front", required: true, sequence: 1, mediaKind: "photo" },
+      captureStep: {
+        id: "front",
+        kind: "front",
+        required: true,
+        sequence: 1,
+        mediaKind: "video",
+        minDurationSeconds: 5,
+        maxDurationSeconds: 8,
+      },
       gpsUnavailable: false,
       gpsAccuracyM: 12,
     })

@@ -13,11 +13,16 @@ export async function persistAndQueuePhoto(input: {
   sourceUri: string
   expectedTaskStatus: MobileTaskStatus
   takenAt: string
+  mediaType?: "photo" | "video"
+  durationMs?: number | null
+  captureStepJson?: string | null
   exifJson?: string | null
 }): Promise<string> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {})
   const clientPhotoId = `photo-${Crypto.randomUUID()}`
-  const fileUri = `${DIR}${clientPhotoId}.jpg`
+  const mediaType = input.mediaType ?? "photo"
+  const extension = mediaType === "video" ? "mp4" : "jpg"
+  const fileUri = `${DIR}${clientPhotoId}.${extension}`
   await FileSystem.copyAsync({ from: input.sourceUri, to: fileUri })
   enqueuePhoto({
     clientPhotoId,
@@ -26,6 +31,9 @@ export async function persistAndQueuePhoto(input: {
     fileUri,
     expectedTaskStatus: input.expectedTaskStatus,
     takenAt: input.takenAt,
+    mediaType,
+    durationMs: input.durationMs ?? null,
+    captureStepJson: input.captureStepJson ?? null,
     exifJson: input.exifJson ?? null,
   })
   return clientPhotoId

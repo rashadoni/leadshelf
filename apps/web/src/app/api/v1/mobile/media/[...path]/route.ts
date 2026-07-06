@@ -5,7 +5,7 @@ import { getObject } from "@/server/storage/s3"
 export const runtime = "nodejs"
 
 // Bearer-медиа для мобильного: те же ключи, что /api/media, но auth по
-// заголовку. Тенант-guard: ключ обязан начинаться с {products|photos}/{org}/.
+// заголовку. Тенант-guard: ключ обязан начинаться с {products|photos|videos}/{org}/.
 
 export async function GET(
   req: NextRequest,
@@ -17,7 +17,9 @@ export async function GET(
   const { path } = await params
   const key = path.join("/")
   const allowed =
-    key.startsWith(`products/${session.org}/`) || key.startsWith(`photos/${session.org}/`)
+    key.startsWith(`products/${session.org}/`) ||
+    key.startsWith(`photos/${session.org}/`) ||
+    key.startsWith(`videos/${session.org}/`)
   if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 })
 
   const object = await getObject(key)

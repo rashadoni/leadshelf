@@ -500,6 +500,23 @@ media с capture metadata.
 - Подготовить модель под видео: оригинал хранить, AI анализировать через
   extracted frames, но нативную запись видео не делать первым блокером.
 
+Статус 2026-07-06:
+
+- `[сделано]` Mobile wizard хранит шаги proof scenario в локальной очереди;
+  обязательные front/left/right depth шаги пишутся как короткие video media,
+  optional detail остается photo.
+- `[сделано]` Upload/API/DB поддерживают `mediaType`, `durationMs`,
+  `captureStepJson`, capture step fields в `PhotoSubmission` и sync обратно
+  на мобильное приложение.
+- `[сделано]` Storage guard расширен на `videos/{org}/`; web reviews/tasks
+  показывают video proof через `<video controls>`.
+- `[сделано]` Добавлен frame timestamp planner для selected-frame AI анализа.
+- `[не закрыто]` Реальный frame extraction worker и OpenAI/GPT vision анализ
+  video frames/crops еще не подключены; video submissions пока получают
+  `vision_waiting_frame_extraction`.
+- `[не проверено устройством]` Native camera video flow требует проверки на
+  физическом iOS/Android или dev-client build.
+
 Definition of Done:
 
 - Мобильный сотрудник не снимает proof "как хочет", а идет по шагам сценария.

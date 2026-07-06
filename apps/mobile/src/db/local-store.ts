@@ -59,7 +59,8 @@ export function initDb(): void {
     );
     CREATE TABLE IF NOT EXISTS photo_queue (
       clientPhotoId TEXT PRIMARY KEY, taskId TEXT, fileUri TEXT,
-      takenAt TEXT, exifJson TEXT, uploaded INTEGER DEFAULT 0,
+      takenAt TEXT, exifJson TEXT, mediaType TEXT DEFAULT 'photo',
+      durationMs INTEGER, captureStepJson TEXT, uploaded INTEGER DEFAULT 0,
       uploadedAt TEXT, serverPhotoId TEXT, objectKey TEXT, qualityScore REAL,
       qualityCheck TEXT, visionReviewId TEXT, visionStatus TEXT, visionReason TEXT
     );
@@ -69,6 +70,9 @@ export function initDb(): void {
       taskId TEXT,
       storeId TEXT,
       objectKey TEXT,
+      mediaType TEXT DEFAULT 'photo',
+      durationMs INTEGER,
+      captureStepJson TEXT,
       takenAt TEXT,
       qualityScore REAL,
       reviewId TEXT,
@@ -101,6 +105,9 @@ export function initDb(): void {
   }
   ensurePhotoColumn("uploadedAt", "ALTER TABLE photo_queue ADD COLUMN uploadedAt TEXT")
   ensurePhotoColumn("exifJson", "ALTER TABLE photo_queue ADD COLUMN exifJson TEXT")
+  ensurePhotoColumn("mediaType", "ALTER TABLE photo_queue ADD COLUMN mediaType TEXT DEFAULT 'photo'")
+  ensurePhotoColumn("durationMs", "ALTER TABLE photo_queue ADD COLUMN durationMs INTEGER")
+  ensurePhotoColumn("captureStepJson", "ALTER TABLE photo_queue ADD COLUMN captureStepJson TEXT")
   ensurePhotoColumn("serverPhotoId", "ALTER TABLE photo_queue ADD COLUMN serverPhotoId TEXT")
   ensurePhotoColumn("objectKey", "ALTER TABLE photo_queue ADD COLUMN objectKey TEXT")
   ensurePhotoColumn("qualityScore", "ALTER TABLE photo_queue ADD COLUMN qualityScore REAL")
@@ -108,6 +115,13 @@ export function initDb(): void {
   ensurePhotoColumn("visionReviewId", "ALTER TABLE photo_queue ADD COLUMN visionReviewId TEXT")
   ensurePhotoColumn("visionStatus", "ALTER TABLE photo_queue ADD COLUMN visionStatus TEXT")
   ensurePhotoColumn("visionReason", "ALTER TABLE photo_queue ADD COLUMN visionReason TEXT")
+  const serverPhotoColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(server_photo_submissions)")
+  const ensureServerPhotoColumn = (name: string, sql: string) => {
+    if (!serverPhotoColumns.some((c) => c.name === name)) db.execSync(sql)
+  }
+  ensureServerPhotoColumn("mediaType", "ALTER TABLE server_photo_submissions ADD COLUMN mediaType TEXT DEFAULT 'photo'")
+  ensureServerPhotoColumn("durationMs", "ALTER TABLE server_photo_submissions ADD COLUMN durationMs INTEGER")
+  ensureServerPhotoColumn("captureStepJson", "ALTER TABLE server_photo_submissions ADD COLUMN captureStepJson TEXT")
 }
 
 export const localStore: LocalStore = {
@@ -186,15 +200,19 @@ export const localStore: LocalStore = {
       for (const photo of data.photoSubmissions) {
         db.runSync(
           `INSERT INTO server_photo_submissions (
-             id, clientPhotoId, taskId, storeId, objectKey, takenAt, qualityScore,
+             id, clientPhotoId, taskId, storeId, objectKey, mediaType, durationMs, captureStepJson,
+             takenAt, qualityScore,
              reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
              visionReviewId, visionStatus, visionReason, visionScore, updatedAt
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET
              clientPhotoId=excluded.clientPhotoId,
              taskId=excluded.taskId,
              storeId=excluded.storeId,
              objectKey=excluded.objectKey,
+             mediaType=excluded.mediaType,
+             durationMs=excluded.durationMs,
+             captureStepJson=excluded.captureStepJson,
              takenAt=excluded.takenAt,
              qualityScore=excluded.qualityScore,
              reviewId=excluded.reviewId,
@@ -214,6 +232,9 @@ export const localStore: LocalStore = {
             photo.taskId,
             photo.storeId,
             photo.key,
+            photo.mediaType,
+            photo.durationMs ?? null,
+            photo.captureStep ? JSON.stringify(photo.captureStep) : null,
             photo.takenAt,
             photo.qualityScore,
             photo.review?.id ?? null,
@@ -367,9 +388,12 @@ export const localStore: LocalStore = {
       taskId: string
       fileUri: string
       takenAt: string
+      mediaType: "photo" | "video" | null
+      durationMs: number | null
+      captureStepJson: string | null
       exifJson: string | null
-    }>("SELECT clientPhotoId, taskId, fileUri, takenAt, exifJson FROM photo_queue WHERE uploaded=0")
-    return rows.map((r): PhotoQueueRow => ({ ...r, uploaded: false }))
+    }>("SELECT clientPhotoId, taskId, fileUri, takenAt, mediaType, durationMs, captureStepJson, exifJson FROM photo_queue WHERE uploaded=0")
+    return rows.map((r): PhotoQueueRow => ({ ...r, mediaType: r.mediaType ?? "photo", uploaded: false }))
   },
 
   async markPhotoUploaded(clientPhotoId, result) {
@@ -431,6 +455,9 @@ export type TaskPhotoProofRow = {
   taskId: string
   takenAt: string
   exifJson: string | null
+  mediaType: "photo" | "video"
+  durationMs: number | null
+  captureStepJson: string | null
   uploaded: boolean
   uploadedAt: string | null
   serverPhotoId: string | null
@@ -456,6 +483,9 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     taskId: string
     takenAt: string
     exifJson: string | null
+    mediaType: "photo" | "video" | null
+    durationMs: number | null
+    captureStepJson: string | null
     uploaded: number
     uploadedAt: string | null
     serverPhotoId: string | null
@@ -468,7 +498,8 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
     outboxDetail: string | null
   }>(
-    `SELECT p.clientPhotoId, p.taskId, p.takenAt, p.exifJson, p.uploaded, p.uploadedAt,
+    `SELECT p.clientPhotoId, p.taskId, p.takenAt, p.exifJson, p.mediaType, p.durationMs,
+      p.captureStepJson, p.uploaded, p.uploadedAt,
       p.serverPhotoId, p.objectKey, p.qualityScore, p.qualityCheck,
       p.visionReviewId, p.visionStatus, p.visionReason,
       o.status AS outboxStatus, o.detail AS outboxDetail
@@ -482,6 +513,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
   )
   const localProofs = localRows.map((row): TaskPhotoProofRow => ({
     ...row,
+    mediaType: row.mediaType ?? "photo",
     uploaded: Boolean(row.uploaded),
     qualityCheck: row.qualityCheck ? JSON.parse(row.qualityCheck) : null,
     reviewId: null,
@@ -498,6 +530,9 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     clientPhotoId: string | null
     taskId: string
     objectKey: string | null
+    mediaType: "photo" | "video" | null
+    durationMs: number | null
+    captureStepJson: string | null
     takenAt: string
     qualityScore: number | null
     reviewId: string | null
@@ -510,7 +545,8 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     visionStatus: string | null
     visionReason: string | null
   }>(
-    `SELECT id, clientPhotoId, taskId, objectKey, takenAt, qualityScore,
+    `SELECT id, clientPhotoId, taskId, objectKey, mediaType, durationMs, captureStepJson,
+      takenAt, qualityScore,
       reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
       visionReviewId, visionStatus, visionReason
      FROM server_photo_submissions
@@ -550,6 +586,9 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
         clientPhotoId: row.clientPhotoId ?? `server-${row.id}`,
         taskId: row.taskId,
         exifJson: null,
+        mediaType: row.mediaType ?? "photo",
+        durationMs: row.durationMs,
+        captureStepJson: row.captureStepJson,
         takenAt: row.takenAt,
         uploaded: true,
         uploadedAt: null,
@@ -704,13 +743,27 @@ export function enqueuePhoto(input: {
   fileUri: string
   expectedTaskStatus: MobileTaskStatus
   takenAt?: string
+  mediaType?: "photo" | "video"
+  durationMs?: number | null
+  captureStepJson?: string | null
   exifJson?: string | null
 }): void {
   const takenAt = input.takenAt ?? new Date().toISOString()
   db.withTransactionSync(() => {
     db.runSync(
-      "INSERT INTO photo_queue (clientPhotoId, taskId, fileUri, takenAt, exifJson) VALUES (?,?,?,?,?)",
-      [input.clientPhotoId, input.taskId, input.fileUri, takenAt, input.exifJson ?? null],
+      `INSERT INTO photo_queue (
+         clientPhotoId, taskId, fileUri, takenAt, exifJson, mediaType, durationMs, captureStepJson
+       ) VALUES (?,?,?,?,?,?,?,?)`,
+      [
+        input.clientPhotoId,
+        input.taskId,
+        input.fileUri,
+        takenAt,
+        input.exifJson ?? null,
+        input.mediaType ?? "photo",
+        input.durationMs ?? null,
+        input.captureStepJson ?? null,
+      ],
     )
     db.runSync(
       "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",

@@ -126,15 +126,21 @@ export const syncApi: SyncApi = {
   },
   uploadPhoto: async (photo) => {
     const form = new FormData()
+    const mediaType = photo.mediaType ?? "photo"
+    const fileExtension = mediaType === "video" ? "mp4" : "jpg"
+    const fileMime = mediaType === "video" ? "video/mp4" : "image/jpeg"
     // RN FormData: файл как {uri, name, type}
     form.append("file", {
       uri: photo.fileUri,
-      name: `${photo.clientPhotoId}.jpg`,
-      type: "image/jpeg",
+      name: `${photo.clientPhotoId}.${fileExtension}`,
+      type: fileMime,
     } as unknown as Blob)
     form.append("clientPhotoId", photo.clientPhotoId)
     form.append("taskId", photo.taskId)
     form.append("takenAt", photo.takenAt)
+    form.append("mediaType", mediaType)
+    if (photo.durationMs != null) form.append("durationMs", String(photo.durationMs))
+    if (photo.captureStepJson) form.append("captureStepJson", photo.captureStepJson)
     if (photo.exifJson) form.append("exifJson", photo.exifJson)
     return request("/api/v1/mobile/photos/upload", {
       method: "POST",

@@ -11,6 +11,15 @@ export interface PhotoQualityInput {
   exif?: unknown
 }
 
+export interface ProofMediaQualityInput extends PhotoQualityInput {
+  mediaType?: "photo" | "video"
+  durationMs?: number | null
+  captureStep?: {
+    minDurationSeconds?: number | null
+    maxDurationSeconds?: number | null
+  } | null
+}
+
 export interface PhotoQualityResult {
   score: number
   status: "GOOD" | "REVIEW" | "POOR"
@@ -168,6 +177,58 @@ export function evaluatePhotoQuality(input: PhotoQualityInput): PhotoQualityResu
     score: normalized,
     status: normalized >= 0.8 ? "GOOD" : normalized >= 0.5 ? "REVIEW" : "POOR",
     dimensions,
+    issues,
+  }
+}
+
+export function evaluateProofMediaQuality(input: ProofMediaQualityInput): PhotoQualityResult {
+  if (input.mediaType !== "video") return evaluatePhotoQuality(input)
+
+  const receivedAt = input.receivedAt ?? new Date()
+  const issues: string[] = []
+  let score = 1
+
+  if (input.bytes.byteLength < 200 * 1024) {
+    issues.push("video_file_too_small")
+    score -= 0.25
+  }
+
+  if (input.durationMs == null || !Number.isFinite(input.durationMs) || input.durationMs <= 0) {
+    issues.push("missing_video_duration")
+    score -= 0.35
+  } else {
+    const minDurationMs = (input.captureStep?.minDurationSeconds ?? 0) * 1000
+    const maxDurationMs = (input.captureStep?.maxDurationSeconds ?? 0) * 1000
+    if (minDurationMs > 0 && input.durationMs < minDurationMs - 250) {
+      issues.push("video_duration_too_short")
+      score -= 0.35
+    }
+    if (maxDurationMs > 0 && input.durationMs > maxDurationMs + 1000) {
+      issues.push("video_duration_too_long")
+      score -= 0.15
+    }
+  }
+
+  const drift = input.takenAt.getTime() - receivedAt.getTime()
+  if (drift > ONE_HOUR_MS) {
+    issues.push("taken_at_in_future")
+    score -= 0.2
+  }
+  if (receivedAt.getTime() - input.takenAt.getTime() > NINETY_DAYS_MS) {
+    issues.push("taken_at_too_old")
+    score -= 0.15
+  }
+
+  if (!input.exif || typeof input.exif !== "object") {
+    issues.push("missing_exif")
+    score -= 0.1
+  }
+
+  const normalized = Math.max(0, Math.min(1, Number(score.toFixed(2))))
+  return {
+    score: normalized,
+    status: normalized >= 0.8 ? "GOOD" : normalized >= 0.5 ? "REVIEW" : "POOR",
+    dimensions: null,
     issues,
   }
 }

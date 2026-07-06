@@ -5,8 +5,8 @@ import { getObject } from "@/server/storage/s3"
 export const runtime = "nodejs"
 
 // Media-proxy: бакет наружу не торчит (docs/12), файлы отдает приложение.
-// КРИТИЧНО: ключ обязан начинаться с products/{org сессии}/ — иначе один
-// тенант читал бы фото другого по прямой ссылке.
+// КРИТИЧНО: ключ обязан начинаться с {products|photos|videos}/{org сессии}/ —
+// иначе один тенант читал бы медиа другого по прямой ссылке.
 
 export async function GET(
   req: NextRequest,
@@ -18,7 +18,9 @@ export async function GET(
   const { path } = await params
   const key = path.join("/")
   const allowed =
-    key.startsWith(`products/${session.org}/`) || key.startsWith(`photos/${session.org}/`)
+    key.startsWith(`products/${session.org}/`) ||
+    key.startsWith(`photos/${session.org}/`) ||
+    key.startsWith(`videos/${session.org}/`)
   if (!allowed) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }

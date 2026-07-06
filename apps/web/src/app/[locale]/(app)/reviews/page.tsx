@@ -6,6 +6,26 @@ import { ReviewActions } from "./review-actions"
 
 const STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const
 
+function ProofMedia({
+  url,
+  mediaType,
+  className,
+}: {
+  url: string
+  mediaType?: "PHOTO" | "VIDEO" | null
+  className: string
+}) {
+  const src = `/api/media/${url}`
+  if (mediaType === "VIDEO") {
+    return (
+      <video className={className} controls muted playsInline preload="metadata">
+        <source src={src} />
+      </video>
+    )
+  }
+  return <img src={src} alt="" className={className} />
+}
+
 function qualityIssues(findings: unknown): string[] {
   if (!findings || typeof findings !== "object" || Array.isArray(findings)) return []
   const qualityCheck = (findings as { qualityCheck?: unknown }).qualityCheck
@@ -101,6 +121,8 @@ export default async function ReviewsPage({
         photoSubmission: {
           select: {
             url: true,
+            mediaType: true,
+            durationMs: true,
             qualityScore: true,
             takenAt: true,
             store: { select: { name: true, code: true } },
@@ -188,14 +210,19 @@ export default async function ReviewsPage({
                 <div className="space-y-2">
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
                     {photo ? (
-                      <img src={`/api/media/${photo.url}`} alt="" className="h-28 w-full object-cover" />
+                      <ProofMedia
+                        url={photo.url}
+                        mediaType={photo.mediaType}
+                        className="h-28 w-full object-cover"
+                      />
                     ) : (
                       <div className="flex h-28 items-center justify-center text-xs text-neutral-400">
                         {t("noPhoto")}
                       </div>
                     )}
                     <div className="border-t border-neutral-200 px-2 py-1 text-[11px] text-neutral-500">
-                      {t("photoProof")}
+                      {photo?.mediaType === "VIDEO" ? t("videoProof") : t("photoProof")}
+                      {photo?.durationMs ? ` · ${Math.round(photo.durationMs / 1000)}s` : ""}
                     </div>
                   </div>
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">

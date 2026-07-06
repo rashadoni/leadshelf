@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { evaluatePhotoQuality, readImageDimensions } from "./quality.ts"
+import { evaluatePhotoQuality, evaluateProofMediaQuality, readImageDimensions } from "./quality.ts"
 
 function pngHeader(width: number, height: number): Uint8Array {
   const bytes = new Uint8Array(120 * 1024)
@@ -80,5 +80,37 @@ describe("photo quality", () => {
     })
     expect(result.status).toBe("REVIEW")
     expect(result.issues).toContain("low_resolution")
+  })
+
+  it("passes a required short shelf-proof video within duration gates", () => {
+    const result = evaluateProofMediaQuality({
+      mediaType: "video",
+      bytes: new Uint8Array(350 * 1024),
+      mimeType: "video/mp4",
+      takenAt: new Date("2026-07-03T10:00:00.000Z"),
+      receivedAt: new Date("2026-07-03T10:00:10.000Z"),
+      durationMs: 5200,
+      captureStep: { minDurationSeconds: 5, maxDurationSeconds: 8 },
+      exif: { device: "test" },
+    })
+
+    expect(result.status).toBe("GOOD")
+    expect(result.issues).toEqual([])
+  })
+
+  it("marks too-short shelf-proof videos for review", () => {
+    const result = evaluateProofMediaQuality({
+      mediaType: "video",
+      bytes: new Uint8Array(350 * 1024),
+      mimeType: "video/mp4",
+      takenAt: new Date("2026-07-03T10:00:00.000Z"),
+      receivedAt: new Date("2026-07-03T10:00:10.000Z"),
+      durationMs: 2100,
+      captureStep: { minDurationSeconds: 5, maxDurationSeconds: 8 },
+      exif: { device: "test" },
+    })
+
+    expect(result.status).toBe("REVIEW")
+    expect(result.issues).toContain("video_duration_too_short")
   })
 })

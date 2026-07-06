@@ -23,7 +23,7 @@ import { tokenStore } from "../../../src/auth/token-store"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import {
   GUIDED_SHELF_PROOF_STEPS,
-  extractCaptureStepFromExifJson,
+  getCaptureStepFromProof,
   getCompletedCaptureStepIds,
   getNextRequiredCaptureStep,
   toCaptureStepMetadata,
@@ -62,6 +62,7 @@ export default function TaskDetailScreen() {
   const { sync } = useSync()
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const photoCameraRef = useRef<CameraView | null>(null)
+  const discardRecordingRef = useRef(false)
   const [task, setTask] = useState<TaskRow | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [photoProofs, setPhotoProofs] = useState<TaskPhotoProofRow[]>([])
@@ -72,6 +73,7 @@ export default function TaskDetailScreen() {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false)
   const [photoSaving, setPhotoSaving] = useState(false)
+  const [videoRecording, setVideoRecording] = useState(false)
   const [activeCaptureStepId, setActiveCaptureStepId] = useState<string | null>(null)
 
   const reload = useCallback(() => {
@@ -138,7 +140,11 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
-  async function queueProofPhoto(sourceUri: string, captureStep: CaptureScenarioStep) {
+  async function queueProofPhoto(
+    sourceUri: string,
+    captureStep: CaptureScenarioStep,
+    durationMs: number | null = null,
+  ) {
     let expectedTaskStatus: MobileTaskStatus = task!.status
     if (task!.status === "NEW") {
       enqueueTaskStatus({
@@ -152,6 +158,7 @@ export default function TaskDetailScreen() {
     const takenAt = new Date().toISOString()
     const userId = await tokenStore.getUserId()
     const deviceLocation = await getCurrentDeviceLocation().catch(() => null)
+    const captureStepMetadata = toCaptureStepMetadata(captureStep)
     const exifJson = buildProofExifJson({
       takenAt,
       userId,
@@ -161,13 +168,16 @@ export default function TaskDetailScreen() {
       locationHint: locationTitle,
       appVersion: Constants.expoConfig?.version ?? null,
       deviceLocation,
-      captureStep: toCaptureStepMetadata(captureStep),
+      captureStep: captureStepMetadata,
     })
     await persistAndQueuePhoto({
       taskId: task!.id,
       sourceUri,
       expectedTaskStatus,
       takenAt,
+      mediaType: captureStep.mediaKind,
+      durationMs,
+      captureStepJson: JSON.stringify(captureStepMetadata),
       exifJson,
     })
     Alert.alert(t("photoQueued"))
@@ -182,6 +192,8 @@ export default function TaskDetailScreen() {
       return
     }
     setScannerOpen(false)
+    setVideoRecording(false)
+    discardRecordingRef.current = false
     setActiveCaptureStepId(captureStep.id)
     setPhotoCameraOpen(true)
   }
@@ -191,6 +203,10 @@ export default function TaskDetailScreen() {
   }
 
   async function captureProofPhoto() {
+    if (activeCaptureStep.mediaKind === "video") {
+      await toggleProofVideo()
+      return
+    }
     if (photoSaving) return
     setPhotoSaving(true)
     try {
@@ -199,6 +215,38 @@ export default function TaskDetailScreen() {
       await queueProofPhoto(picture.uri, activeCaptureStep)
       setPhotoCameraOpen(false)
     } finally {
+      setPhotoSaving(false)
+    }
+  }
+
+  async function toggleProofVideo() {
+    const camera = photoCameraRef.current
+    if (!camera) return
+    if (videoRecording) {
+      camera.stopRecording()
+      setVideoRecording(false)
+      return
+    }
+
+    setPhotoSaving(true)
+    setVideoRecording(true)
+    discardRecordingRef.current = false
+    const startedAt = Date.now()
+    try {
+      const recording = await camera.recordAsync({
+        maxDuration: activeCaptureStep.maxDurationSeconds ?? 8,
+        maxFileSize: 28 * 1024 * 1024,
+      })
+      if (!recording?.uri) return
+      if (discardRecordingRef.current) {
+        setPhotoCameraOpen(false)
+        return
+      }
+      await queueProofPhoto(recording.uri, activeCaptureStep, Date.now() - startedAt)
+      setPhotoCameraOpen(false)
+    } finally {
+      discardRecordingRef.current = false
+      setVideoRecording(false)
       setPhotoSaving(false)
     }
   }
@@ -261,6 +309,9 @@ export default function TaskDetailScreen() {
 
   function photoProofMeta(proof: TaskPhotoProofRow): string {
     const parts = [
+      proof.mediaType === "video" && proof.durationMs != null
+        ? `${t("proofStepVideo")}: ${Math.round(proof.durationMs / 1000)}s`
+        : null,
       proof.uploadedAt ? `${t("uploaded")}: ${proof.uploadedAt.slice(0, 16).replace("T", " ")}` : null,
       proof.qualityScore != null ? `${t("qualityScore")}: ${Math.round(proof.qualityScore * 100)}%` : null,
       proof.reviewStatus ? `${t("reviewStatus")}: ${proof.reviewStatus}` : null,
@@ -270,7 +321,7 @@ export default function TaskDetailScreen() {
   }
 
   function photoProofStepTitle(proof: TaskPhotoProofRow): string | null {
-    const capturedStep = extractCaptureStepFromExifJson(proof.exifJson)
+    const capturedStep = getCaptureStepFromProof(proof)
     const step = GUIDED_SHELF_PROOF_STEPS.find((item) => item.id === capturedStep?.stepId)
     return step ? t(step.titleKey) : null
   }
@@ -278,7 +329,14 @@ export default function TaskDetailScreen() {
   if (photoCameraOpen) {
     return (
       <SafeAreaView style={styles.proofRoot} edges={["top", "bottom"]}>
-        <CameraView ref={photoCameraRef} style={styles.proofCamera} facing="back" />
+        <CameraView
+          ref={photoCameraRef}
+          style={styles.proofCamera}
+          facing="back"
+          mode={activeCaptureStep.mediaKind === "video" ? "video" : "picture"}
+          mute
+          videoQuality="720p"
+        />
         <View style={styles.proofTop}>
           <Text style={styles.proofEyebrow}>{t("guidedProof")}</Text>
           <Text style={styles.proofTitle} numberOfLines={2}>
@@ -291,23 +349,43 @@ export default function TaskDetailScreen() {
         <View style={styles.proofFrame} pointerEvents="none" />
         <View style={styles.proofBottom}>
           <Text style={styles.proofMeta} numberOfLines={2}>
-            {locationTitle}
+            {videoRecording
+              ? `${t("recordingVideo")} · ${locationTitle}`
+              : activeCaptureStep.mediaKind === "video"
+                ? `${t("proofStepVideo")} ${activeCaptureStep.minDurationSeconds}-${activeCaptureStep.maxDurationSeconds}s · ${locationTitle}`
+                : `${t("proofStepPhoto")} · ${locationTitle}`}
           </Text>
           <View style={styles.proofActions}>
             <Pressable
               style={styles.proofSecondary}
-              disabled={photoSaving}
-              onPress={() => setPhotoCameraOpen(false)}
+              disabled={photoSaving && !videoRecording}
+              onPress={() => {
+                if (videoRecording) {
+                  discardRecordingRef.current = true
+                  photoCameraRef.current?.stopRecording()
+                  setVideoRecording(false)
+                  return
+                }
+                setPhotoCameraOpen(false)
+              }}
             >
               <Text style={styles.proofSecondaryText}>{t("cancel")}</Text>
             </Pressable>
             <Pressable
-              style={[styles.proofCapture, photoSaving && styles.disabled]}
-              disabled={photoSaving}
+              style={[styles.proofCapture, photoSaving && !videoRecording && styles.disabled]}
+              disabled={photoSaving && !videoRecording}
               onPress={captureProofPhoto}
             >
               <Text style={styles.proofCaptureText}>
-                {photoSaving ? t("savingPhoto") : t("captureStepPhoto")}
+                {activeCaptureStep.mediaKind === "video"
+                  ? videoRecording
+                    ? t("stopVideo")
+                    : photoSaving
+                      ? t("savingPhoto")
+                      : t("recordVideo")
+                  : photoSaving
+                    ? t("savingPhoto")
+                    : t("captureStepPhoto")}
               </Text>
             </Pressable>
           </View>
@@ -394,6 +472,9 @@ export default function TaskDetailScreen() {
                       {t(step.instructionKey)}
                     </Text>
                     <Text style={[styles.captureStepStatus, done && styles.captureStepStatusDone]}>
+                      {step.mediaKind === "video"
+                        ? `${t("proofStepVideo")} ${step.minDurationSeconds}-${step.maxDurationSeconds}s · `
+                        : `${t("proofStepPhoto")} · `}
                       {done ? t("proofStepDone") : step.required ? t("proofStepRequired") : t("proofStepOptional")}
                     </Text>
                   </View>

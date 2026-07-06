@@ -84,7 +84,7 @@ function makeApi(over: Partial<SyncApi> = {}): SyncApi & { pushed: string[] } {
       return { results: ops.map((o) => ({ clientOpId: o.clientOpId, status: "applied" as const })) }
     },
     async uploadPhoto(p) {
-      return { photoId: "ph", key: `photos/x/${p.clientPhotoId}.jpg` }
+      return { photoId: "ph", key: `photos/x/${p.clientPhotoId}.jpg`, mediaType: p.mediaType ?? "photo" }
     },
     ...over,
   }

@@ -18,7 +18,9 @@ describe("guided shelf proof capture scenario", () => {
           kind: "left_depth",
           required: true,
           sequence: 2,
-          mediaKind: "photo",
+          mediaKind: "video",
+          minDurationSeconds: 3,
+          maxDurationSeconds: 6,
         },
       }),
     })
@@ -29,7 +31,9 @@ describe("guided shelf proof capture scenario", () => {
       stepKind: "left_depth",
       required: true,
       sequence: 2,
-      mediaKind: "photo",
+      mediaKind: "video",
+      minDurationSeconds: 3,
+      maxDurationSeconds: 6,
     })
   })
 
@@ -39,12 +43,31 @@ describe("guided shelf proof capture scenario", () => {
         exifJson: JSON.stringify({
           ImageDescription: JSON.stringify({
             captureScenario: { id: GUIDED_SHELF_PROOF_SCENARIO_ID },
-            captureStep: { id: "front", kind: "front", required: true, sequence: 1, mediaKind: "photo" },
+            captureStep: { id: "front", kind: "front", required: true, sequence: 1, mediaKind: "video" },
           }),
         }),
       },
     ])
 
     expect(getNextRequiredCaptureStep(completed)?.id).toBe("left-depth")
+  })
+
+  it("counts completed steps from synced captureStepJson when EXIF is absent", () => {
+    const completed = getCompletedCaptureStepIds([
+      {
+        captureStepJson: JSON.stringify({
+          scenarioId: GUIDED_SHELF_PROOF_SCENARIO_ID,
+          stepId: "front",
+          stepKind: "front",
+          required: true,
+          sequence: 1,
+          mediaKind: "video",
+          minDurationSeconds: 5,
+          maxDurationSeconds: 8,
+        }),
+      },
+    ])
+
+    expect(completed.has("front")).toBe(true)
   })
 })

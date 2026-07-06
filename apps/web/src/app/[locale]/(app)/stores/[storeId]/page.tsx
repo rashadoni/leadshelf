@@ -183,6 +183,8 @@ export default async function StoreDetailPage({
         select: {
           id: true,
           url: true,
+          mediaType: true,
+          durationMs: true,
           takenAt: true,
           qualityScore: true,
           task: { select: { id: true, title: true } },
@@ -404,6 +406,8 @@ export default async function StoreDetailPage({
                         <span className="text-xs text-neutral-500">{score(photo.qualityScore)}</span>
                       </div>
                       <div className="text-xs text-neutral-500">
+                        {photo.mediaType === "VIDEO" ? t("detail.videoProof") : t("detail.photoProof")}
+                        {photo.durationMs == null ? "" : ` · ${Math.round(photo.durationMs / 1000)}s`} ·{" "}
                         {photo.user.name} · {formatDateTime(photo.takenAt)}
                       </div>
                       <a
@@ -412,7 +416,7 @@ export default async function StoreDetailPage({
                         rel="noreferrer"
                         className="inline-flex rounded border border-neutral-200 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
                       >
-                        {t("detail.openPhoto")}
+                        {t("detail.openMedia")}
                       </a>
                       <div className="flex flex-wrap gap-1">
                         {photo.humanReviews.length === 0 ? (

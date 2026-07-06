@@ -60,6 +60,8 @@ export default async function TasksPage({
           take: 3,
           select: {
             url: true,
+            mediaType: true,
+            durationMs: true,
             takenAt: true,
             qualityScore: true,
             user: { select: { name: true } },
@@ -233,9 +235,12 @@ export default async function TasksPage({
                                 task.photoSubmissions.map((photo) => (
                                   <div key={photo.url}>
                                     <a href={`/api/media/${photo.url}`} className="font-medium hover:underline" target="_blank" rel="noreferrer">
-                                      {formatDate(photo.takenAt)}
+                                      {photo.mediaType === "VIDEO" ? t("detail.videoProof") : formatDate(photo.takenAt)}
                                     </a>
                                     <span className="text-neutral-400"> · {photo.user.name}</span>
+                                    {photo.durationMs == null ? null : (
+                                      <span className="text-neutral-400"> · {Math.round(photo.durationMs / 1000)}s</span>
+                                    )}
                                     {photo.qualityScore == null ? null : (
                                       <span className="text-neutral-400"> · {(photo.qualityScore * 100).toFixed(0)}%</span>
                                     )}

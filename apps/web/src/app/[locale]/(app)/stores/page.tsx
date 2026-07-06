@@ -93,7 +93,7 @@ export default async function StoresPage() {
         photoSubmissions: {
           orderBy: { takenAt: "desc" },
           take: 3,
-          select: { url: true, takenAt: true, qualityScore: true },
+          select: { url: true, mediaType: true, durationMs: true, takenAt: true, qualityScore: true },
         },
         _count: {
           select: {
@@ -305,8 +305,11 @@ export default async function StoresPage() {
                                   store.photoSubmissions.map((photo) => (
                                     <div key={photo.url}>
                                       <a href={`/api/media/${photo.url}`} target="_blank" rel="noreferrer" className="font-medium hover:underline">
-                                        {formatDate(photo.takenAt)}
+                                        {photo.mediaType === "VIDEO" ? t("detail.videoProof") : formatDate(photo.takenAt)}
                                       </a>
+                                      {photo.durationMs == null ? null : (
+                                        <span className="text-neutral-400"> · {Math.round(photo.durationMs / 1000)}s</span>
+                                      )}
                                       {photo.qualityScore == null ? null : (
                                         <span className="text-neutral-400"> · {(photo.qualityScore * 100).toFixed(0)}%</span>
                                       )}

@@ -40,6 +40,9 @@ export interface SyncApi {
     taskId: string
     fileUri: string
     takenAt: string
+    mediaType?: "photo" | "video"
+    durationMs?: number | null
+    captureStepJson?: string | null
     exifJson?: string | null
   }): Promise<MobilePhotoUploadResponse>
 }
@@ -54,6 +57,9 @@ export interface PhotoQueueRow {
   taskId: string
   fileUri: string
   takenAt: string
+  mediaType?: "photo" | "video"
+  durationMs?: number | null
+  captureStepJson?: string | null
   exifJson?: string | null
   uploaded: boolean
 }

@@ -146,3 +146,43 @@ Definition of Done первого среза:
 - Каждое фото в очереди знает, какой шаг сценария закрывает.
 - Backend принимает proof metadata без watermark marker.
 - Тесты подтверждают GPS/task/store/user проверку и capture step metadata.
+
+## Implementation status - 2026-07-06
+
+Срез 2 выполнен как `IMPLEMENTED/ADAPTED`, не как direct transfer из CRM:
+
+- Mobile wizard теперь ведет обязательные шаги `front`, `left-depth`,
+  `right-depth` как короткие видео, `detail` как фото. Локальная очередь
+  хранит `mediaType`, `durationMs`, `captureStepJson` и EXIF-like metadata.
+- Mobile upload contract принимает photo/video media, capture step JSON и
+  duration. Sync/pull возвращает media type и capture step обратно в
+  приложение, чтобы progress не терялся после синхронизации.
+- `PhotoSubmission` расширен под proof media: media type, MIME, file size,
+  duration, capture step fields и индекс по `taskId/captureStepId`.
+- Backend upload сохраняет фото в `photos/`, видео в `videos/`, валидирует
+  MIME/media mismatch, duration gates, capture metadata и не отправляет raw
+  video в image-only vision pipeline. Для видео пока возвращается
+  `vision_waiting_frame_extraction`.
+- Добавлен deterministic frame plan для коротких proof-видео: пример 6 секунд
+  -> кадры `900/3000/5100ms`. Это cost-control основа для worker/OpenAI
+  анализа selected frames.
+- Web review/task/store screens показывают video proof через `<video controls>`
+  и не называют ролик фото.
+
+Проверено локально:
+
+- core photo-proof tests: `13 passed`;
+- mobile tests: `22 passed`;
+- Prisma validate/generate, api-contracts/core/mobile/web/db typecheck;
+- `pnpm lint`;
+- browser smoke на свежем Next runtime: reviews, tasks, task detail с photo
+  proof, task detail и review queue с synthetic 6s video proof.
+
+Осталось не закрыто на 100%:
+
+- Реальная запись на физическом iOS/Android устройстве не проверялась; код
+  опирается на Expo Camera v57 `mode="video"` и `recordAsync`.
+- Worker еще не извлекает реальные JPEG frames из видеофайла; пока хранится
+  frame plan.
+- OpenAI/GPT vision анализ selected frames/crops еще не подключен к video
+  submissions; video proof честно уходит в `vision_waiting_frame_extraction`.
