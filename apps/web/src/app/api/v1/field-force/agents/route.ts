@@ -2,11 +2,12 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
+import { dateFilterForDay, visitDateWhere } from "@/server/field-force/dates"
+import { canAdminFieldForce, canReadFieldForce, isLimitedFieldForceRole } from "@/server/field-force/permissions"
+import { shapeFieldForceAgent } from "@/server/field-force/agents"
+import { shapeFieldForceSettings } from "@/server/field-force/settings"
 
 export const runtime = "nodejs"
-
-const FIELD_FORCE_ADMIN_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR"])
-const FIELD_FORCE_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR", "MERCHANDISER", "STORE_STAFF"])
 
 const bodySchema = z.object({
   userId: z.string().min(1),
@@ -14,96 +15,23 @@ const bodySchema = z.object({
   phone: z.string().trim().max(64).nullable().optional(),
 })
 
-function startOfDay(value: Date) {
-  const date = new Date(value)
-  date.setHours(0, 0, 0, 0)
-  return date
-}
-
-function dateRange(value: Date) {
-  const start = startOfDay(value)
-  const end = new Date(start)
-  end.setDate(end.getDate() + 1)
-  return { start, end }
-}
-
-function visitDateWhere(dateFilter: { gte: Date; lt: Date }) {
-  return {
-    OR: [
-      { createdAt: dateFilter },
-      { checkInAt: dateFilter },
-      { checkOutAt: dateFilter },
-      { routeStop: { plannedAt: dateFilter } },
-    ],
-  }
-}
-
-function shapeAgent(agent: any, now: Date, offlineCutoff: Date) {
-  const latestLocation = agent.locations[0] ?? null
-  const routeStops = agent.routes.flatMap((route: any) => route.stops ?? [])
-  const completedStops = routeStops.filter((stop: any) =>
-    stop.visits?.some((visit: any) => visit.status === "COMPLETED"),
-  ).length
-  const routeCompletion = routeStops.length > 0 ? Math.round((completedStops / routeStops.length) * 100) : 0
-  const activeVisit = agent.visits.find((visit: any) => visit.status === "IN_PROGRESS")
-  const plannedLateStop = routeStops.find(
-    (stop: any) =>
-      stop.plannedAt &&
-      stop.plannedAt < now &&
-      !stop.visits?.some((visit: any) => visit.status === "COMPLETED" || visit.status === "SKIPPED"),
-  )
-  const isOnline = Boolean(latestLocation && latestLocation.recordedAt >= offlineCutoff && agent.user.isActive)
-  const fieldStatus = !isOnline
-    ? "OFFLINE"
-    : activeVisit
-      ? "CHECKED_IN"
-      : plannedLateStop
-        ? "LATE"
-        : "ON_ROAD"
-  const completedVisitsToday = agent.visits.filter((visit: any) => visit.status === "COMPLETED").length
-
-  return {
-    id: agent.id,
-    agentId: agent.id,
-    userId: agent.userId,
-    name: agent.user.name,
-    email: agent.user.email,
-    role: agent.user.role,
-    status: agent.user.isActive ? "ACTIVE" : "INACTIVE",
-    phone: agent.phone,
-    employeeCode: agent.employeeCode,
-    teamId: agent.teamId,
-    team: agent.team ? { id: agent.team.id, name: agent.team.name } : null,
-    isOnline,
-    fieldStatus,
-    routeCompletion,
-    visitsToday: agent.visits.length,
-    completedVisitsToday,
-    activeRoutes: agent.routes.length,
-    routeStopsToday: routeStops.length,
-    lastCustomer: agent.visits[0]?.store?.name ?? null,
-    lastSeenAt: latestLocation?.recordedAt ?? null,
-    latitude: latestLocation?.latitude ?? null,
-    longitude: latestLocation?.longitude ?? null,
-    accuracy: latestLocation?.accuracyM ?? null,
-  }
-}
-
 export async function GET(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ROLES.has(session.role)) return forbidden()
+  if (!canReadFieldForce(session.role)) return forbidden()
 
   const { searchParams } = new URL(req.url)
   const limit = Math.min(200, Math.max(1, Number.parseInt(searchParams.get("limit") || "100", 10)))
   const now = new Date()
-  const { start: today, end: tomorrow } = dateRange(now)
-  const todayFilter = { gte: today, lt: tomorrow }
+  const todayFilter = dateFilterForDay(now)
   const todayVisitWhere = visitDateWhere(todayFilter)
-  const offlineCutoff = new Date(now.getTime() - 45 * 60 * 1000)
-  const isLimitedRole = session.role === "MERCHANDISER" || session.role === "STORE_STAFF"
+  const isLimitedRole = isLimitedFieldForceRole(session.role)
 
-  const agents = await workerDb.fieldAgent.findMany({
+  const [settingsRow, agents] = await Promise.all([
+    workerDb.fieldForceSetting.findUnique({
+      where: { organizationId: session.org },
+    }),
+    workerDb.fieldAgent.findMany({
     where: {
       organizationId: session.org,
       ...(isLimitedRole ? { userId: session.sub } : {}),
@@ -132,9 +60,11 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { user: { name: "asc" } },
     take: limit,
-  })
+    }),
+  ])
+  const settings = shapeFieldForceSettings(settingsRow)
 
-  const [teams, existingAgents] = FIELD_FORCE_ADMIN_ROLES.has(session.role)
+  const [teams, existingAgents] = canAdminFieldForce(session.role)
     ? await Promise.all([
         workerDb.team.findMany({
           where: { organizationId: session.org },
@@ -149,7 +79,7 @@ export async function GET(req: NextRequest) {
     : [[], []]
 
   const assignedUserIds = existingAgents.map((agent) => agent.userId)
-  const users = FIELD_FORCE_ADMIN_ROLES.has(session.role)
+  const users = canAdminFieldForce(session.role)
     ? await workerDb.user.findMany({
         where: {
           organizationId: session.org,
@@ -165,7 +95,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     success: true,
     data: {
-      agents: agents.map((agent) => shapeAgent(agent, now, offlineCutoff)),
+      agents: agents.map((agent) => shapeFieldForceAgent(agent, now, settings)),
       teams,
       users,
       total: agents.length,
@@ -177,7 +107,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ADMIN_ROLES.has(session.role)) return forbidden()
+  if (!canAdminFieldForce(session.role)) return forbidden()
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {

@@ -142,6 +142,23 @@ interface SettingsState {
   alertLateVisits: boolean
 }
 
+interface LeaderboardItem extends AgentItem {
+  score: number
+}
+
+interface ReportShape {
+  totalRoutes: number
+  inProgressRoutes: number
+  completedRoutes: number
+  plannedRoutes: number
+  cancelledRoutes: number
+  totalPoints: number
+  visitedPoints: number
+  completion: number
+  onlineAgents: number
+  lateAgents: number
+}
+
 const TABS: Array<{ key: ViewKey; label: string; description: string; Icon: typeof MapIcon }> = [
   { key: "map", label: "Карта", description: "живое движение", Icon: MapIcon },
   { key: "routes", label: "Маршруты", description: "точки и выполнение", Icon: Route },
@@ -149,7 +166,7 @@ const TABS: Array<{ key: ViewKey; label: string; description: string; Icon: type
   { key: "leaderboard", label: "Лидерборд", description: "рейтинг исполнения", Icon: Trophy },
   { key: "activity", label: "Активность", description: "события визитов", Icon: Activity },
   { key: "reports", label: "Отчеты", description: "дневная сводка", Icon: FileText },
-  { key: "settings", label: "Настройки", description: "демо-политики", Icon: Settings },
+  { key: "settings", label: "Настройки", description: "политики execution", Icon: Settings },
 ]
 
 const ROUTE_STATUS_LABELS: Record<RouteItem["status"], string> = {
@@ -173,6 +190,19 @@ const DEFAULT_SETTINGS: SettingsState = {
   requirePhotoProof: true,
   requireShelfScan: true,
   alertLateVisits: true,
+}
+
+const EMPTY_REPORT: ReportShape = {
+  totalRoutes: 0,
+  inProgressRoutes: 0,
+  completedRoutes: 0,
+  plannedRoutes: 0,
+  cancelledRoutes: 0,
+  totalPoints: 0,
+  visitedPoints: 0,
+  completion: 0,
+  onlineAgents: 0,
+  lateAgents: 0,
 }
 
 function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions) {
@@ -208,15 +238,8 @@ function fieldStatusClass(status: AgentItem["fieldStatus"]) {
   return "bg-neutral-400"
 }
 
-function readSettings() {
-  if (typeof window === "undefined") return DEFAULT_SETTINGS
-  const raw = window.localStorage.getItem("leadshelf.field-force.settings")
-  if (!raw) return DEFAULT_SETTINGS
-  try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as SettingsState
-  } catch {
-    return DEFAULT_SETTINGS
-  }
+function toSettingsState(value: Partial<SettingsState> | null | undefined): SettingsState {
+  return { ...DEFAULT_SETTINGS, ...(value ?? {}) }
 }
 
 function toCsvValue(value: unknown) {
@@ -262,7 +285,9 @@ export function FieldForceWorkspace() {
   const [stores, setStores] = useState<StoreOption[]>([])
   const [teams, setTeams] = useState<TeamOption[]>([])
   const [userCandidates, setUserCandidates] = useState<UserCandidate[]>([])
-  const [liveFeed, setLiveFeed] = useState<LiveEvent[]>([])
+  const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([])
+  const [activityEvents, setActivityEvents] = useState<LiveEvent[]>([])
+  const [report, setReport] = useState<ReportShape>(EMPTY_REPORT)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<ActionMessage | null>(null)
@@ -272,37 +297,52 @@ export function FieldForceWorkspace() {
   const [routeStatus, setRouteStatus] = useState<"ALL" | RouteItem["status"]>("ALL")
   const [agentStatus, setAgentStatus] = useState<"ALL" | AgentItem["fieldStatus"]>("ALL")
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
-  const [settings, setSettings] = useState<SettingsState>(() => readSettings())
+  const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS)
+  const [settingsSaving, setSettingsSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
 
   const loadWorkspace = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [routesRes, agentsRes, locationsRes, storesRes] = await Promise.all([
+      const [routesRes, agentsRes, storesRes, settingsRes, leaderboardRes, activityRes, reportsRes] = await Promise.all([
         fetch("/api/v1/field-force/routes?limit=200", { cache: "no-store" }),
         fetch("/api/v1/field-force/agents?limit=200", { cache: "no-store" }),
-        fetch("/api/v1/field-force/locations", { cache: "no-store" }),
         fetch("/api/v1/field-force/stores?limit=300", { cache: "no-store" }),
+        fetch("/api/v1/field-force/settings", { cache: "no-store" }),
+        fetch("/api/v1/field-force/leaderboard?limit=100", { cache: "no-store" }),
+        fetch("/api/v1/field-force/activity?limit=50", { cache: "no-store" }),
+        fetch("/api/v1/field-force/reports", { cache: "no-store" }),
       ])
-      const [routesJson, agentsJson, locationsJson, storesJson] = await Promise.all([
+      const [routesJson, agentsJson, storesJson, settingsJson, leaderboardJson, activityJson, reportsJson] = await Promise.all([
         routesRes.json(),
         agentsRes.json(),
-        locationsRes.json(),
         storesRes.json(),
+        settingsRes.json(),
+        leaderboardRes.json(),
+        activityRes.json(),
+        reportsRes.json(),
       ])
       if (!routesRes.ok || !routesJson.success) throw new Error("routes_failed")
       if (!agentsRes.ok || !agentsJson.success) throw new Error("agents_failed")
-      if (!locationsRes.ok || !locationsJson.success) throw new Error("locations_failed")
       if (!storesRes.ok || !storesJson.success) throw new Error("stores_failed")
+      if (!settingsRes.ok || !settingsJson.success) throw new Error("settings_failed")
+      if (!leaderboardRes.ok || !leaderboardJson.success) throw new Error("leaderboard_failed")
+      if (!activityRes.ok || !activityJson.success) throw new Error("activity_failed")
+      if (!reportsRes.ok || !reportsJson.success) throw new Error("reports_failed")
 
       const nextRoutes = (routesJson.data?.routes ?? []) as RouteItem[]
+      const nextSettings = settingsJson.data?.settings as (Partial<SettingsState> & { updatedAt?: string | null }) | undefined
       setRoutes(nextRoutes)
       setAgents((agentsJson.data?.agents ?? []) as AgentItem[])
       setTeams((agentsJson.data?.teams ?? []) as TeamOption[])
       setUserCandidates((agentsJson.data?.users ?? []) as UserCandidate[])
       setStores((storesJson.data?.stores ?? []) as StoreOption[])
-      setLiveFeed((locationsJson.data?.liveFeed ?? []) as LiveEvent[])
+      setSettings(toSettingsState(nextSettings))
+      setLeaderboard((leaderboardJson.data?.leaderboard ?? []) as LeaderboardItem[])
+      setActivityEvents((activityJson.data?.events ?? []) as LiveEvent[])
+      setReport((reportsJson.data?.report ?? EMPTY_REPORT) as ReportShape)
+      if (nextSettings?.updatedAt) setSavedAt(new Date(nextSettings.updatedAt))
       setSelectedRouteId((current) => current ?? nextRoutes[0]?.id ?? null)
       setLastLoadedAt(new Date())
     } catch {
@@ -415,56 +455,24 @@ export function FieldForceWorkspace() {
     [selectedRouteId, filteredRoutes],
   )
 
-  const report = useMemo(() => {
-    const totalPoints = routes.reduce((sum, route) => sum + route.totalPoints, 0)
-    const visitedPoints = routes.reduce((sum, route) => sum + route.visitedPoints, 0)
-    return {
-      totalRoutes: routes.length,
-      inProgressRoutes: routes.filter((route) => route.status === "IN_PROGRESS").length,
-      completedRoutes: routes.filter((route) => route.status === "COMPLETED").length,
-      plannedRoutes: routes.filter((route) => route.status === "PLANNED").length,
-      totalPoints,
-      visitedPoints,
-      completion: percent(visitedPoints, totalPoints),
-      onlineAgents: agents.filter((agent) => agent.isOnline).length,
-      lateAgents: agents.filter((agent) => agent.fieldStatus === "LATE").length,
+  const saveSettings = useCallback(async () => {
+    setSettingsSaving(true)
+    try {
+      const body = await apiRequest("/api/v1/field-force/settings", {
+        method: "PUT",
+        body: JSON.stringify(settings),
+      })
+      const nextSettings = body.data?.settings as (Partial<SettingsState> & { updatedAt?: string | null }) | undefined
+      setSettings(toSettingsState(nextSettings))
+      setSavedAt(nextSettings?.updatedAt ? new Date(nextSettings.updatedAt) : new Date())
+      setActionMessage({ type: "success", text: "Настройки field-force сохранены на сервере." })
+      await loadWorkspace()
+    } catch (err) {
+      setActionMessage({ type: "error", text: `Настройки не сохранены: ${(err as Error).message}` })
+    } finally {
+      setSettingsSaving(false)
     }
-  }, [routes, agents])
-
-  const leaderboard = useMemo(() => {
-    return [...agents]
-      .map((agent) => ({
-        ...agent,
-        score:
-          agent.completedVisitsToday * 20 +
-          agent.routeCompletion +
-          (agent.isOnline ? 10 : 0) -
-          (agent.fieldStatus === "LATE" ? 20 : 0),
-      }))
-      .sort((a, b) => b.score - a.score)
-  }, [agents])
-
-  const activityEvents = useMemo(() => {
-    const routeEvents = routes.flatMap((route) =>
-      route.points
-        .filter((point) => point.visitedAt)
-        .map((point) => ({
-          id: `${route.id}-${point.id}`,
-          type: point.status === "PENDING" ? "CHECK_IN" : point.status,
-          agent: route.agent?.name ?? "Без агента",
-          customer: point.customer.name,
-          time: point.visitedAt!,
-        })),
-    )
-    return [...liveFeed, ...routeEvents]
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-      .slice(0, 50)
-  }, [routes, liveFeed])
-
-  const saveSettings = () => {
-    window.localStorage.setItem("leadshelf.field-force.settings", JSON.stringify(settings))
-    setSavedAt(new Date())
-  }
+  }, [settings, loadWorkspace])
 
   return (
     <div className="space-y-4">
@@ -582,7 +590,14 @@ export function FieldForceWorkspace() {
       {activeView === "activity" ? <ActivityView events={activityEvents} /> : null}
       {activeView === "reports" ? <ReportsView report={report} routes={routes} agents={agents} /> : null}
       {activeView === "settings" ? (
-        <SettingsView settings={settings} savedAt={savedAt} onChange={setSettings} onSave={saveSettings} />
+        <SettingsView
+          settings={settings}
+          savedAt={savedAt}
+          saving={settingsSaving}
+          actionMessage={actionMessage}
+          onChange={setSettings}
+          onSave={saveSettings}
+        />
       ) : null}
     </div>
   )
@@ -1304,7 +1319,7 @@ function AgentsView({
   )
 }
 
-function LeaderboardView({ agents }: { agents: Array<AgentItem & { score: number }> }) {
+function LeaderboardView({ agents }: { agents: LeaderboardItem[] }) {
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
@@ -1374,7 +1389,7 @@ function ActivityView({ events }: { events: LiveEvent[] }) {
   )
 }
 
-function ReportsView({ report, routes, agents }: { report: ReturnType<typeof useReportShape>; routes: RouteItem[]; agents: AgentItem[] }) {
+function ReportsView({ report, routes, agents }: { report: ReportShape; routes: RouteItem[]; agents: AgentItem[] }) {
   return (
     <section className="space-y-4">
       <div className="grid gap-3 md:grid-cols-4">
@@ -1423,38 +1438,39 @@ function ReportsView({ report, routes, agents }: { report: ReturnType<typeof use
   )
 }
 
-function useReportShape() {
-  return {
-    totalRoutes: 0,
-    inProgressRoutes: 0,
-    completedRoutes: 0,
-    plannedRoutes: 0,
-    totalPoints: 0,
-    visitedPoints: 0,
-    completion: 0,
-    onlineAgents: 0,
-    lateAgents: 0,
-  }
-}
-
 function SettingsView({
   settings,
   savedAt,
+  saving,
+  actionMessage,
   onChange,
   onSave,
 }: {
   settings: SettingsState
   savedAt: Date | null
+  saving: boolean
+  actionMessage: ActionMessage | null
   onChange: (settings: SettingsState) => void
-  onSave: () => void
+  onSave: () => Promise<void>
 }) {
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
         <h2 className="text-lg font-semibold">Настройки маршрутов</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Это локальные демо-настройки интерфейса. Серверные политики появятся отдельной моделью настроек.
+          Серверные политики для GPS, геозон, offline-статуса и обязательных мобильных проверок.
         </p>
+        {actionMessage ? (
+          <div
+            className={`mt-3 rounded-md border p-2 text-sm ${
+              actionMessage.type === "success"
+                ? "border-green-200 bg-green-50 text-green-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {actionMessage.text}
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <NumberSetting
             label="GPS refresh, сек"
@@ -1495,16 +1511,20 @@ function SettingsView({
             onChange={(checked) => onChange({ ...settings, alertLateVisits: checked })}
           />
         </div>
-        <button className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700" onClick={onSave}>
-          Сохранить демо-настройки
+        <button
+          className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={onSave}
+          disabled={saving}
+        >
+          {saving ? "Сохранение..." : "Сохранить настройки"}
         </button>
       </div>
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
         <h3 className="font-semibold">Что уже подключено</h3>
         <div className="mt-3 space-y-2 text-sm text-neutral-600">
           <div className="rounded-md bg-neutral-50 p-2">Карта агентов и маршрутов работает через LeadShelf API.</div>
-          <div className="rounded-md bg-neutral-50 p-2">Маршруты, агенты, активность и отчеты читают реальные demo-data.</div>
-          <div className="rounded-md bg-neutral-50 p-2">Настройки пока сохраняются в браузере для демо.</div>
+          <div className="rounded-md bg-neutral-50 p-2">Маршруты, агенты, активность, рейтинг и отчеты читают dedicated API.</div>
+          <div className="rounded-md bg-neutral-50 p-2">Offline-статус агентов зависит от сохраненного server-side порога.</div>
           {savedAt ? <div className="rounded-md bg-green-50 p-2 text-green-700">Сохранено {formatDate(savedAt.toISOString(), { timeStyle: "short" })}</div> : null}
         </div>
       </div>

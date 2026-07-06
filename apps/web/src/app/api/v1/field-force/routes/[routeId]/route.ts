@@ -3,10 +3,9 @@ import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 import { plannedAtFor, routeStopsHaveVisits } from "@/server/field-force/routes"
+import { canAdminFieldForce } from "@/server/field-force/permissions"
 
 export const runtime = "nodejs"
-
-const FIELD_FORCE_ADMIN_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR"])
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(160).optional(),
@@ -22,7 +21,7 @@ export async function PATCH(
 ) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ADMIN_ROLES.has(session.role)) return forbidden()
+  if (!canAdminFieldForce(session.role)) return forbidden()
 
   const { routeId } = await params
   const parsed = patchSchema.safeParse(await req.json().catch(() => null))
@@ -115,7 +114,7 @@ export async function DELETE(
 ) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ADMIN_ROLES.has(session.role)) return forbidden()
+  if (!canAdminFieldForce(session.role)) return forbidden()
 
   const { routeId } = await params
   const route = await workerDb.route.findFirst({

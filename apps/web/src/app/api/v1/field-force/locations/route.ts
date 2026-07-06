@@ -2,10 +2,12 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
+import { dateFilterForDay, visitDateWhere } from "@/server/field-force/dates"
+import { shapeFieldForceLocationAgent } from "@/server/field-force/agents"
+import { canReadFieldForce, isLimitedFieldForceRole } from "@/server/field-force/permissions"
+import { shapeFieldForceSettings } from "@/server/field-force/settings"
 
 export const runtime = "nodejs"
-
-const FIELD_FORCE_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR", "MERCHANDISER", "STORE_STAFF"])
 
 const bodySchema = z.object({
   agentId: z.string().min(1),
@@ -15,23 +17,10 @@ const bodySchema = z.object({
   recordedAt: z.string().datetime().optional(),
 })
 
-function startOfDay(value: Date) {
-  const date = new Date(value)
-  date.setHours(0, 0, 0, 0)
-  return date
-}
-
-function dateRange(value: Date) {
-  const start = startOfDay(value)
-  const end = new Date(start)
-  end.setDate(end.getDate() + 1)
-  return { start, end }
-}
-
 export async function GET(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ROLES.has(session.role)) return forbidden()
+  if (!canReadFieldForce(session.role)) return forbidden()
 
   const { searchParams } = new URL(req.url)
   const agentId = searchParams.get("agentId") || ""
@@ -42,7 +31,7 @@ export async function GET(req: NextRequest) {
       select: { id: true, userId: true },
     })
     if (!agent) return NextResponse.json({ success: false, error: "agent_not_found" }, { status: 404 })
-    if ((session.role === "MERCHANDISER" || session.role === "STORE_STAFF") && agent.userId !== session.sub) {
+    if (isLimitedFieldForceRole(session.role) && agent.userId !== session.sub) {
       return forbidden()
     }
 
@@ -70,22 +59,17 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date()
-  const { start: today, end: tomorrow } = dateRange(now)
-  const offlineCutoff = new Date(now.getTime() - 45 * 60 * 1000)
-  const todayFilter = { gte: today, lt: tomorrow }
-  const todayVisitWhere = {
-    OR: [
-      { createdAt: todayFilter },
-      { checkInAt: todayFilter },
-      { checkOutAt: todayFilter },
-      { routeStop: { plannedAt: todayFilter } },
-    ],
-  }
+  const todayFilter = dateFilterForDay(now)
+  const todayVisitWhere = visitDateWhere(todayFilter)
 
-  const agents = await workerDb.fieldAgent.findMany({
+  const [settingsRow, agents] = await Promise.all([
+    workerDb.fieldForceSetting.findUnique({
+      where: { organizationId: session.org },
+    }),
+    workerDb.fieldAgent.findMany({
     where: { organizationId: session.org },
     include: {
-      user: { select: { id: true, name: true, email: true, role: true } },
+      user: { select: { id: true, name: true, email: true, role: true, isActive: true } },
       locations: { orderBy: { recordedAt: "desc" }, take: 5 },
       routes: {
         where: { isActive: true, stops: { some: { plannedAt: todayFilter } } },
@@ -108,46 +92,10 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { user: { name: "asc" } },
     take: 200,
-  })
-
-  const agentLocations = agents.map((agent) => {
-    const loc = agent.locations[0] ?? null
-    const allStops = agent.routes.flatMap((route) => route.stops)
-    const totalPoints = allStops.length
-    const visitedPoints = allStops.filter((stop) => stop.visits.some((visit) => visit.status === "COMPLETED")).length
-    const routeCompletion = totalPoints > 0 ? Math.round((visitedPoints / totalPoints) * 100) : 0
-    const activeVisit = agent.visits.find((visit) => visit.status === "IN_PROGRESS")
-    const plannedLateStop = allStops.find((stop) => stop.plannedAt && stop.plannedAt < now && !stop.visits.some((visit) => visit.status === "COMPLETED"))
-    const isOnline = Boolean(loc && loc.recordedAt >= offlineCutoff)
-    const fieldStatus = !isOnline
-      ? "OFFLINE"
-      : activeVisit
-        ? "CHECKED_IN"
-        : plannedLateStop
-          ? "LATE"
-          : "ON_ROAD"
-
-    return {
-      agentId: agent.id,
-      name: agent.user.name,
-      isOnline,
-      lastSeenAt: loc?.recordedAt ?? null,
-      fieldStatus,
-      routeCompletion,
-      ...(loc
-        ? {
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            accuracy: loc.accuracyM,
-            speed: null,
-            heading: null,
-            battery: null,
-            isMoving: false,
-            recordedAt: loc.recordedAt,
-          }
-        : {}),
-    }
-  })
+    }),
+  ])
+  const settings = shapeFieldForceSettings(settingsRow)
+  const agentLocations = agents.map((agent) => shapeFieldForceLocationAgent(agent, now, settings))
 
   const statusCounts = {
     total: agentLocations.length,
@@ -188,7 +136,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ROLES.has(session.role)) return forbidden()
+  if (!canReadFieldForce(session.role)) return forbidden()
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
@@ -200,7 +148,7 @@ export async function POST(req: NextRequest) {
     select: { id: true, userId: true },
   })
   if (!agent) return NextResponse.json({ error: "agent_not_found" }, { status: 404 })
-  if (session.role === "MERCHANDISER" || session.role === "STORE_STAFF") {
+  if (isLimitedFieldForceRole(session.role)) {
     if (agent.userId !== session.sub) return forbidden()
   }
 

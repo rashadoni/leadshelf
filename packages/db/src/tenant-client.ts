@@ -37,6 +37,7 @@ export const TENANT_MODELS = new Set([
   "HumanReview",
   "Team",
   "FieldAgent",
+  "FieldForceSetting",
   "Route",
   "Visit",
   "Order",

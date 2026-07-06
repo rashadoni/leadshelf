@@ -2,10 +2,9 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
+import { canAdminFieldForce } from "@/server/field-force/permissions"
 
 export const runtime = "nodejs"
-
-const FIELD_FORCE_ADMIN_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR"])
 
 const patchSchema = z.object({
   teamId: z.string().min(1).nullable().optional(),
@@ -18,7 +17,7 @@ export async function PATCH(
 ) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ADMIN_ROLES.has(session.role)) return forbidden()
+  if (!canAdminFieldForce(session.role)) return forbidden()
 
   const { agentId } = await params
   const parsed = patchSchema.safeParse(await req.json().catch(() => null))

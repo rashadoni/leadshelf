@@ -78,6 +78,7 @@ model Organization {
   goldenReferences   GoldenReference[]
   humanReviews       HumanReview[]
   fieldAgents        FieldAgent[]
+  fieldForceSetting  FieldForceSetting?
 
   @@map("organizations")
 }
@@ -1412,6 +1413,22 @@ model AgentLocation {
 
   @@index([agentId, recordedAt])
   @@map("agent_locations")
+}
+
+model FieldForceSetting {
+  id                 String       @id @default(cuid())
+  organizationId     String       @unique
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  gpsRefreshSeconds  Int          @default(15)
+  geofenceRadiusM    Int          @default(120)
+  offlineAfterMinutes Int         @default(45)
+  requirePhotoProof  Boolean      @default(true)
+  requireShelfScan   Boolean      @default(true)
+  alertLateVisits    Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@map("field_force_settings")
 }
 
 // ---------------------------------------------------------------------------

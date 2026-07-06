@@ -3,10 +3,10 @@ import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 import { shapeFieldForceRoute } from "@/server/field-force/routes"
+import { dateFilterForDay, visitDateWhere } from "@/server/field-force/dates"
+import { canAdminFieldForce, canReadFieldForce } from "@/server/field-force/permissions"
 
 export const runtime = "nodejs"
-
-const FIELD_FORCE_ADMIN_ROLES = new Set(["OWNER", "ADMIN", "SUPERVISOR"])
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -22,28 +22,10 @@ const bodySchema = z.object({
   message: "storeIds_or_points_required",
 })
 
-function startOfDay(value: Date) {
-  const date = new Date(value)
-  date.setHours(0, 0, 0, 0)
-  return date
-}
-
-function visitDateWhere(dateFilter: { gte: Date; lt: Date } | null) {
-  if (!dateFilter) return {}
-  return {
-    OR: [
-      { createdAt: dateFilter },
-      { checkInAt: dateFilter },
-      { checkOutAt: dateFilter },
-      { routeStop: { plannedAt: dateFilter } },
-    ],
-  }
-}
-
 export async function GET(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ADMIN_ROLES.has(session.role) && session.role !== "MERCHANDISER" && session.role !== "STORE_STAFF") return forbidden()
+  if (!canReadFieldForce(session.role)) return forbidden()
 
   const { searchParams } = new URL(req.url)
   const agentId = searchParams.get("agentId") || ""
@@ -52,12 +34,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(200, Math.max(1, Number.parseInt(searchParams.get("limit") || "50", 10)))
 
   const dateFilter = date
-    ? (() => {
-        const start = startOfDay(new Date(date))
-        const end = new Date(start)
-        end.setDate(end.getDate() + 1)
-        return { gte: start, lt: end }
-      })()
+    ? dateFilterForDay(new Date(date))
     : null
 
   const routes = await workerDb.route.findMany({
@@ -91,7 +68,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
-  if (!FIELD_FORCE_ADMIN_ROLES.has(session.role)) return forbidden()
+  if (!canAdminFieldForce(session.role)) return forbidden()
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {

@@ -73,10 +73,10 @@ LeadShelf использует shelf-execution модели:
 | `src/components/mtm/route-form.tsx` | `field-force-workspace.tsx`, inline route form | `PORTED` in progress | Перенесены ключевые идеи: агент, дата, список точек, порядок, past-date confirm. Используются `Store`, не `Customer`. |
 | `src/app/(dashboard)/mtm/agents/page.tsx` | `field-force-workspace.tsx`, tab `agents` | `ADAPTED` in progress | Список/статусы есть; create/edit agent добавлены через `User` + `FieldAgent`. |
 | `src/components/mtm/agent-form.tsx` | `field-force-workspace.tsx`, inline agent form | `ADAPTED` | В LeadShelf нельзя создавать отдельного MTM-agent с паролем; агент привязывается к существующему пользователю. |
-| `src/app/(dashboard)/mtm/leaderboard/page.tsx` | `field-force-workspace.tsx`, tab `leaderboard` | `ADAPTED` | UI есть, scoring пока demo-calculation на LeadShelf agent/visit данных. |
-| `src/app/(dashboard)/mtm/activity/page.tsx` | `field-force-workspace.tsx`, tab `activity` | `ADAPTED` | Активность строится из locations + visits; нужен отдельный server endpoint parity. |
-| `src/app/(dashboard)/mtm/reports/page.tsx` | `field-force-workspace.tsx`, tab `reports` | `ADAPTED` | Сводка есть, но report API parity не перенесен. |
-| `src/app/(dashboard)/mtm/settings/page.tsx` | `field-force-workspace.tsx`, tab `settings` | `NOT PORTED` | Сейчас настройки browser-local; нужен server-backed settings model/API. |
+| `src/app/(dashboard)/mtm/leaderboard/page.tsx` | `field-force-workspace.tsx`, tab `leaderboard` | `ADAPTED` | UI читает dedicated LeadShelf leaderboard API; scoring server-side, не direct copy. |
+| `src/app/(dashboard)/mtm/activity/page.tsx` | `field-force-workspace.tsx`, tab `activity` | `ADAPTED` | Активность читает dedicated LeadShelf API из visits + locations. |
+| `src/app/(dashboard)/mtm/reports/page.tsx` | `field-force-workspace.tsx`, tab `reports` | `ADAPTED` | Сводка читает dedicated report API; route/agent rows остаются LeadShelf-shaped. |
+| `src/app/(dashboard)/mtm/settings/page.tsx` | `field-force-workspace.tsx`, tab `settings` | `ADAPTED` | Добавлены `FieldForceSetting`, server API и UI; offline status использует сохраненный порог. |
 
 ## API route module
 
@@ -88,10 +88,10 @@ LeadShelf использует shelf-execution модели:
 | `src/app/api/v1/mtm/agents/[id]/route.ts` | `apps/web/src/app/api/v1/field-force/agents/[agentId]/route.ts` | `ADAPTED` in progress | PATCH добавлен для team/phone. Password/role/status не переносились из-за другой identity model. |
 | `src/app/api/v1/mtm/customers/route.ts` | `apps/web/src/app/api/v1/field-force/stores/route.ts` | `PORTED` in progress | Stores используются как route points. |
 | `src/app/api/v1/mtm/locations/route.ts` | `apps/web/src/app/api/v1/field-force/locations/route.ts` | `ADAPTED` | Уже читает LeadShelf locations/feed. Нужно сравнить фильтры и replay parity. |
-| `src/app/api/v1/mtm/activity/route.ts` | no dedicated target yet | `NOT PORTED` | Сейчас activity собирается на клиенте. Нужен API для audit/activity parity. |
-| `src/app/api/v1/mtm/leaderboard/route.ts` | no dedicated target yet | `NOT PORTED` | Нужен server-side scoring endpoint. |
-| `src/app/api/v1/mtm/reports/route.ts` | no dedicated target yet | `NOT PORTED` | Нужен route/agent/day report endpoint. |
-| `src/app/api/v1/mtm/settings/route.ts` | no dedicated target yet | `NOT PORTED` | Нужна модель настроек или JSON settings table. |
+| `src/app/api/v1/mtm/activity/route.ts` | `apps/web/src/app/api/v1/field-force/activity/route.ts` | `ADAPTED` | Server endpoint добавлен; данные берутся из LeadShelf `Visit`/`AgentLocation`. |
+| `src/app/api/v1/mtm/leaderboard/route.ts` | `apps/web/src/app/api/v1/field-force/leaderboard/route.ts` | `ADAPTED` | Server-side score helper и endpoint добавлены; не direct copy. |
+| `src/app/api/v1/mtm/reports/route.ts` | `apps/web/src/app/api/v1/field-force/reports/route.ts` | `ADAPTED` | Daily route/agent summary endpoint добавлен. |
+| `src/app/api/v1/mtm/settings/route.ts` | `apps/web/src/app/api/v1/field-force/settings/route.ts` | `ADAPTED` | Добавлена tenant-scoped Prisma model `FieldForceSetting` вместо browser-local state. |
 
 ## Mobile and shelf-AI
 
@@ -124,16 +124,13 @@ LeadShelf использует shelf-execution модели:
 
 ## Следующий порядок работ
 
-1. Завершить текущий CRUD-срез маршрутов/агентов и проверить typecheck/test.
-2. Browser-smoke: открыть `field-force`, создать маршрут, изменить порядок
+1. Browser-smoke: открыть `field-force`, создать маршрут, изменить порядок
    точек, изменить агента, отмену проверять только на тестовом маршруте.
-3. Довести server-backed settings: модель/API/UI вместо localStorage.
-4. Портировать dedicated API для activity, leaderboard, reports.
-5. Найти фактический source мобильного приложения или восстановить мобильный
+2. Найти фактический source мобильного приложения или восстановить мобильный
    flow по LeadDrive mobile API: auth, pull, push, location, photo proof.
-6. Портировать shelf-AI по слоям: photo quality -> watermark/exif ->
+3. Портировать shelf-AI по слоям: photo quality -> watermark/exif ->
    golden reference slots -> analyze endpoint -> human review.
-7. OpenAI/GPT vision подключать только через backend provider boundary и
+4. OpenAI/GPT vision подключать только через backend provider boundary и
    серверный API key. Нельзя обещать распознавание через "подписку Codex";
    Codex может помочь написать код, но production-анализ фото должен идти
    через OpenAI API или отдельный vision service.
