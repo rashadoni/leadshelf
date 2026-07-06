@@ -20,6 +20,7 @@ import {
   type TaskPhotoProofRow,
 } from "../../../src/db/local-store"
 import { tokenStore } from "../../../src/auth/token-store"
+import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { buildProofExifJson } from "../../../src/photos/proof-metadata"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
 import {
@@ -125,6 +126,7 @@ export default function TaskDetailScreen() {
     }
     const takenAt = new Date().toISOString()
     const userId = await tokenStore.getUserId()
+    const deviceLocation = await getCurrentDeviceLocation().catch(() => null)
     const exifJson = buildProofExifJson({
       takenAt,
       userId,
@@ -133,6 +135,7 @@ export default function TaskDetailScreen() {
       storeName: store?.name ?? null,
       locationHint: locationTitle,
       appVersion: Constants.expoConfig?.version ?? null,
+      deviceLocation,
     })
     await persistAndQueuePhoto({
       taskId: task!.id,

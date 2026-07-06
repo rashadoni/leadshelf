@@ -11,6 +11,12 @@ describe("mobile proof metadata", () => {
       userId: "user-a",
       locationHint: "Стеллаж 1",
       appVersion: "1.0.0",
+      deviceLocation: {
+        latitude: 40.40931,
+        longitude: 49.86709,
+        accuracyM: 12,
+        recordedAt: "2026-07-06T08:59:58.000Z",
+      },
     })
     const description = JSON.parse(payload.ImageDescription)
 
@@ -20,6 +26,8 @@ describe("mobile proof metadata", () => {
       Model: "1.0.0",
       Software: "LeadShelf Mobile",
       watermarked: true,
+      GPSLatitude: 40.40931,
+      GPSLongitude: 49.86709,
     })
     expect(description).toMatchObject({
       userId: "user-a",
@@ -27,7 +35,8 @@ describe("mobile proof metadata", () => {
       storeId: "store-a",
       watermarked: true,
       watermarkMode: "camera_overlay",
-      gpsUnavailable: true,
+      gpsUnavailable: false,
+      gpsAccuracyM: 12,
     })
   })
 })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import * as Crypto from "expo-crypto"
 import { router, useFocusEffect } from "expo-router"
@@ -12,6 +12,7 @@ import {
   listTasks,
   listVisits,
 } from "../../../src/db/local-store"
+import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import type { RouteRow, TaskRow, VisitRow } from "../../../src/sync/ports"
 import { useSync } from "../../../src/sync/sync-context"
 import { t } from "../../../src/i18n"
@@ -56,17 +57,22 @@ export default function RoutesScreen() {
     setRefreshing(false)
   }
 
-  function checkIn(route: RouteRow, stopId: string, storeId: string) {
+  async function checkIn(route: RouteRow, stopId: string, storeId: string) {
     if (!route.agentId) return
     const store = getStore(storeId)
     if (store?.latitude == null || store.longitude == null) return
+    const deviceLocation = await getCurrentDeviceLocation().catch(() => null)
+    if (!deviceLocation) {
+      Alert.alert(t("locationPermissionDenied"))
+      return
+    }
     enqueueVisitCheckIn({
       clientOpId: `op-${Crypto.randomUUID()}`,
       agentId: route.agentId,
       storeId,
       routeStopId: stopId,
-      latitude: store.latitude,
-      longitude: store.longitude,
+      latitude: deviceLocation.latitude,
+      longitude: deviceLocation.longitude,
     })
     reload()
     void sync()

@@ -106,7 +106,7 @@ LeadShelf использует shelf-execution модели:
 | `src/components/mtm/golden-reference-editor.tsx` | planogram golden reference UI | `PARTIAL/ADAPTED` | В LeadShelf есть golden reference модели; UX еще спорный и требует доработки. |
 | `src/components/mtm/shelf-annotator.tsx` | planogram/photo annotation | `NOT PORTED` | Нужна проверка пригодности для LeadShelf planogram editor. |
 | `src/lib/mtm/photo-quality/*` | LeadShelf photo quality core | `NOT PORTED` | Можно переносить как pure logic после review. |
-| `src/lib/mtm/photo-watermark/*` | LeadShelf photo proof | `PARTIAL/ADAPTED` | Backend proof-metadata validator добавлен в `packages/core/photo-proof/watermark.ts` и подключен к mobile photo upload; mobile теперь сохраняет EXIF-like proof metadata в SQLite-очередь и отправляет `exifJson`. Настоящий burned-in watermark в пикселях фото и device GPS еще не перенесены/не проверены на устройстве. |
+| `src/lib/mtm/photo-watermark/*` | LeadShelf photo proof | `PARTIAL/ADAPTED` | Backend proof-metadata validator добавлен в `packages/core/photo-proof/watermark.ts` и подключен к mobile photo upload; mobile сохраняет EXIF-like proof metadata в SQLite-очередь, отправляет `exifJson` и добавляет device GPS через `expo-location`, если пользователь дал permission. Настоящий burned-in watermark в пикселях фото еще не перенесен/не проверен на устройстве. |
 | `src/lib/mtm/visit-anomaly/*` | LeadShelf route/visit guard | `PARTIAL` | Нужна проверка текущих helpers и API integration. |
 | `src/lib/mtm/territory-scope.ts` | LeadShelf team/agent scope | `NOT PORTED` | Желательно портировать до mobile/supervisor flow. |
 

@@ -30,6 +30,12 @@
         {
           "cameraPermission": "Allow LeadShelf to scan product barcodes and capture shelf proof photos."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow LeadShelf to verify store visits and shelf proof photo location."
+        }
       ]
     ],
     "scheme": "leadshelf"
