@@ -102,7 +102,7 @@ LeadShelf использует shelf-execution модели:
 | `src/app/api/v1/mtm/mobile/sync/push/route.ts` | LeadShelf offline outbox | `ADAPTED` | Push применяет task/photo/comment/visit/location/order операции с идемпотентностью; mobile UI теперь делает optimistic check-in. |
 | `src/app/api/v1/mtm/mobile/location/route.ts` | LeadShelf agent location | `ADAPTED` | Standalone route не нужен: location идет через offline `location.update` и visit check-in пишет `AgentLocation`. |
 | `src/app/api/v1/mtm/mobile/planogram-checks/route.ts` | LeadShelf photo proof / checks | `PARTIAL/ADAPTED` | Фото-задача, upload, photo quality, vision review и статус proof уже есть; отдельный Mars planogram-check endpoint не переносился. |
-| `src/app/api/v1/mtm/mobile/shelf-analytics/analyze/route.ts` | LeadShelf vision service | `NOT PORTED` | Нужен OpenAI vision provider boundary и backend secret. |
+| `src/app/api/v1/mtm/mobile/shelf-analytics/analyze/route.ts` | LeadShelf vision service | `ADAPTED` in progress | Добавлен OpenAI Responses API provider boundary в `services/vision`; это не direct copy Mars endpoint. Для production нужен `VISION_PROVIDER=openai`, серверный `OPENAI_API_KEY` и публичный/presigned image URL. |
 | `src/components/mtm/golden-reference-editor.tsx` | planogram golden reference UI | `PARTIAL/ADAPTED` | В LeadShelf есть golden reference модели; UX еще спорный и требует доработки. |
 | `src/components/mtm/shelf-annotator.tsx` | planogram/photo annotation | `NOT PORTED` | Нужна проверка пригодности для LeadShelf planogram editor. |
 | `src/lib/mtm/photo-quality/*` | LeadShelf photo quality core | `NOT PORTED` | Можно переносить как pure logic после review. |
@@ -128,15 +128,13 @@ LeadShelf использует shelf-execution модели:
    `4396689` — создан `Codex smoke route 2026-07-06`, порядок точек изменен
    через стрелки, агент изменен с Farid Aliyev на Elnur Mammadov, тестовый
    маршрут отменен.
-2. Mobile smoke на устройстве/Expo: native device pass еще нужен; production
-   API smoke уже пройден после среза `11a1cab`: login M-001 -> pull route ->
-   check-in -> checkout -> pull completed visit.
-3. Портировать shelf-AI по слоям: photo quality -> watermark/exif ->
-   golden reference slots -> analyze endpoint -> human review.
-4. OpenAI/GPT vision подключать только через backend provider boundary и
-   серверный API key. Нельзя обещать распознавание через "подписку Codex";
-   Codex может помочь написать код, но production-анализ фото должен идти
-   через OpenAI API или отдельный vision service.
+2. Mobile smoke на устройстве/Expo: native route + camera/photo pass еще
+   нужен; production API smoke уже пройден после среза `11a1cab`: login
+   M-001 -> pull route -> check-in -> checkout -> pull completed visit.
+3. Shelf-AI: OpenAI provider boundary добавлен в `services/vision`, но
+   production распознавание заработает только после серверного API key и
+   доступных для OpenAI image URLs. Дальше нужны watermark/exif перенос и
+   native photo pass.
 
 ## Честный текущий вывод
 

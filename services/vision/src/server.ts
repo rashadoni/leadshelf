@@ -6,9 +6,9 @@ import {
   visionScanRequestSchema,
   visionScanResponseSchema,
 } from "@leadshelf/api-contracts/vision/v1"
-import { ReferenceSlotStubProvider, STUB_MODEL_VERSION, STUB_PROVIDER, type VisionProvider } from "./provider"
+import { createConfiguredVisionProvider, type VisionProvider } from "./provider"
 
-const provider = new ReferenceSlotStubProvider()
+const provider = createConfiguredVisionProvider()
 const port = Number.parseInt(process.env.PORT ?? "4010", 10)
 
 export type VisionHttpResult = {
@@ -37,12 +37,13 @@ export async function handleVisionHttpRequest(input: {
   provider?: VisionProvider
 }): Promise<VisionHttpResult> {
   if (input.method === "GET" && input.url === "/health") {
+    const activeProvider = input.provider ?? provider
     return {
       status: 200,
       body: visionHealthResponseSchema.parse({
         ok: true,
-        provider: STUB_PROVIDER,
-        modelVersion: STUB_MODEL_VERSION,
+        provider: activeProvider.metadata.provider,
+        modelVersion: activeProvider.metadata.modelVersion,
         protocolVersion: VISION_PROTOCOL_VERSION,
       }),
     }

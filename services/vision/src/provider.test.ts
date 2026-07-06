@@ -4,7 +4,16 @@ import {
   visionScanResponseSchema,
   type VisionScanRequest,
 } from "@leadshelf/api-contracts/vision/v1"
-import { ReferenceSlotStubProvider, STUB_MODEL_VERSION, STUB_PROVIDER } from "./provider"
+import {
+  createConfiguredVisionProvider,
+  DEFAULT_OPENAI_VISION_MODEL,
+  OpenAiVisionProvider,
+  OPENAI_PROVIDER,
+  ReferenceSlotStubProvider,
+  STUB_MODEL_VERSION,
+  STUB_PROVIDER,
+  type VisionFetch,
+} from "./provider"
 
 const request: VisionScanRequest = {
   protocolVersion: VISION_PROTOCOL_VERSION,
@@ -69,5 +78,132 @@ describe("ReferenceSlotStubProvider", () => {
     expect(response.status).toBe("failed")
     expect(response.compliance.totalSlots).toBe(0)
     expect(response.warnings).toContain("no_reference_slots_provided")
+  })
+})
+
+describe("OpenAiVisionProvider", () => {
+  it("builds a Responses API vision request and maps structured detections into compliance", async () => {
+    let body: Record<string, unknown> | null = null
+    const fetchImpl: VisionFetch = async (url, init) => {
+      expect(url).toBe("https://api.openai.com/v1/responses")
+      expect(init.headers.Authorization).toBe("Bearer test-key")
+      body = JSON.parse(init.body) as Record<string, unknown>
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            output_text: JSON.stringify({
+              detections: [
+                {
+                  slotId: "slot-a",
+                  productId: "product-a",
+                  productSku: "SKU-A",
+                  label: "Product A",
+                  confidence: 0.92,
+                  bbox: { xPct: 11, yPct: 21, widthPct: 29, heightPct: 39 },
+                },
+              ],
+              warnings: ["low_light"],
+            }),
+          })
+        },
+      }
+    }
+
+    const response = await new OpenAiVisionProvider({
+      apiKey: "test-key",
+      fetchImpl,
+    }).scan({ ...request, photoUrl: "https://cdn.example/photo.jpg", goldenReferenceUrl: "https://cdn.example/ref.jpg" })
+
+    expect(body).toMatchObject({
+      model: DEFAULT_OPENAI_VISION_MODEL,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "leadshelf_shelf_scan",
+          strict: true,
+        },
+      },
+    })
+    expect(body).not.toBeNull()
+    const requestBody = body as unknown as Record<string, unknown>
+    const input = requestBody.input as Array<{ content: Array<{ type: string; image_url?: string; text?: string }> }>
+    expect(input[0]?.content.some((part) => part.type === "input_image" && part.image_url === "https://cdn.example/photo.jpg")).toBe(true)
+    expect(input[0]?.content.some((part) => part.type === "input_image" && part.image_url === "https://cdn.example/ref.jpg")).toBe(true)
+
+    expect(visionScanResponseSchema.parse(response)).toEqual(response)
+    expect(response.provider).toBe(OPENAI_PROVIDER)
+    expect(response.modelVersion).toBe(DEFAULT_OPENAI_VISION_MODEL)
+    expect(response.status).toBe("completed")
+    expect(response.compliance).toMatchObject({ score: 0.92, status: "PASS", matchedSlots: 1 })
+    expect(response.warnings).toContain("low_light")
+  })
+
+  it("fails explicitly when the photo URL is not resolvable for OpenAI", async () => {
+    const response = await new OpenAiVisionProvider({
+      apiKey: "test-key",
+      fetchImpl: async () => {
+        throw new Error("fetch_should_not_be_called")
+      },
+    }).scan(request)
+
+    expect(response.status).toBe("failed")
+    expect(response.detections).toEqual([])
+    expect(response.warnings).toContain("openai_photo_url_not_resolvable")
+  })
+
+  it("can resolve relative media paths through VISION_PUBLIC_BASE_URL", async () => {
+    const fetchImpl: VisionFetch = async (_url, init) => {
+      const body = JSON.parse(init.body) as {
+        input: Array<{ content: Array<{ type: string; image_url?: string }> }>
+      }
+      expect(body.input[0]?.content).toContainEqual({
+        type: "input_image",
+        image_url: "https://media.example/photos/org-a/task-a/photo-a.jpg",
+      })
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            output: [
+              {
+                type: "message",
+                content: [
+                  {
+                    type: "output_text",
+                    text: JSON.stringify({ detections: [], warnings: [] }),
+                  },
+                ],
+              },
+            ],
+          })
+        },
+      }
+    }
+
+    const response = await new OpenAiVisionProvider({
+      apiKey: "test-key",
+      publicBaseUrl: "https://media.example/",
+      fetchImpl,
+    }).scan(request)
+
+    expect(response.status).toBe("needs_human_review")
+    expect(response.compliance.missingSlots).toBe(1)
+  })
+
+  it("selects the stub provider by default and OpenAI only when configured", () => {
+    expect(createConfiguredVisionProvider({}).metadata).toEqual({
+      provider: STUB_PROVIDER,
+      modelVersion: STUB_MODEL_VERSION,
+    })
+    expect(
+      createConfiguredVisionProvider({
+        VISION_PROVIDER: "openai",
+        OPENAI_API_KEY: "test-key",
+        OPENAI_VISION_MODEL: "gpt-test",
+      }).metadata,
+    ).toEqual({ provider: OPENAI_PROVIDER, modelVersion: "gpt-test" })
   })
 })
