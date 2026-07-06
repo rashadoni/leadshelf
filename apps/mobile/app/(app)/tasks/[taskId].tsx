@@ -9,6 +9,7 @@ import {
   type BarcodeType,
 } from "expo-camera"
 import * as Crypto from "expo-crypto"
+import Constants from "expo-constants"
 import {
   enqueueTaskComment,
   enqueueTaskStatus,
@@ -18,6 +19,8 @@ import {
   listTaskPhotoProofs,
   type TaskPhotoProofRow,
 } from "../../../src/db/local-store"
+import { tokenStore } from "../../../src/auth/token-store"
+import { buildProofExifJson } from "../../../src/photos/proof-metadata"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
 import {
   findPlacementSummaryByCode,
@@ -120,10 +123,23 @@ export default function TaskDetailScreen() {
       })
       expectedTaskStatus = "IN_PROGRESS"
     }
+    const takenAt = new Date().toISOString()
+    const userId = await tokenStore.getUserId()
+    const exifJson = buildProofExifJson({
+      takenAt,
+      userId,
+      taskId: task!.id,
+      storeId: task!.storeId,
+      storeName: store?.name ?? null,
+      locationHint: locationTitle,
+      appVersion: Constants.expoConfig?.version ?? null,
+    })
     await persistAndQueuePhoto({
       taskId: task!.id,
       sourceUri,
       expectedTaskStatus,
+      takenAt,
+      exifJson,
     })
     Alert.alert(t("photoQueued"))
     reload()

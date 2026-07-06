@@ -40,6 +40,7 @@ export interface SyncApi {
     taskId: string
     fileUri: string
     takenAt: string
+    exifJson?: string | null
   }): Promise<MobilePhotoUploadResponse>
 }
 
@@ -53,6 +54,7 @@ export interface PhotoQueueRow {
   taskId: string
   fileUri: string
   takenAt: string
+  exifJson?: string | null
   uploaded: boolean
 }
 

@@ -59,7 +59,7 @@ export function initDb(): void {
     );
     CREATE TABLE IF NOT EXISTS photo_queue (
       clientPhotoId TEXT PRIMARY KEY, taskId TEXT, fileUri TEXT,
-      takenAt TEXT, uploaded INTEGER DEFAULT 0,
+      takenAt TEXT, exifJson TEXT, uploaded INTEGER DEFAULT 0,
       uploadedAt TEXT, serverPhotoId TEXT, objectKey TEXT, qualityScore REAL,
       qualityCheck TEXT, visionReviewId TEXT, visionStatus TEXT, visionReason TEXT
     );
@@ -100,6 +100,7 @@ export function initDb(): void {
     if (!photoColumns.some((c) => c.name === name)) db.execSync(sql)
   }
   ensurePhotoColumn("uploadedAt", "ALTER TABLE photo_queue ADD COLUMN uploadedAt TEXT")
+  ensurePhotoColumn("exifJson", "ALTER TABLE photo_queue ADD COLUMN exifJson TEXT")
   ensurePhotoColumn("serverPhotoId", "ALTER TABLE photo_queue ADD COLUMN serverPhotoId TEXT")
   ensurePhotoColumn("objectKey", "ALTER TABLE photo_queue ADD COLUMN objectKey TEXT")
   ensurePhotoColumn("qualityScore", "ALTER TABLE photo_queue ADD COLUMN qualityScore REAL")
@@ -366,7 +367,8 @@ export const localStore: LocalStore = {
       taskId: string
       fileUri: string
       takenAt: string
-    }>("SELECT clientPhotoId, taskId, fileUri, takenAt FROM photo_queue WHERE uploaded=0")
+      exifJson: string | null
+    }>("SELECT clientPhotoId, taskId, fileUri, takenAt, exifJson FROM photo_queue WHERE uploaded=0")
     return rows.map((r): PhotoQueueRow => ({ ...r, uploaded: false }))
   },
 
@@ -698,12 +700,14 @@ export function enqueuePhoto(input: {
   taskId: string
   fileUri: string
   expectedTaskStatus: MobileTaskStatus
+  takenAt?: string
+  exifJson?: string | null
 }): void {
-  const takenAt = new Date().toISOString()
+  const takenAt = input.takenAt ?? new Date().toISOString()
   db.withTransactionSync(() => {
     db.runSync(
-      "INSERT INTO photo_queue (clientPhotoId, taskId, fileUri, takenAt) VALUES (?,?,?,?)",
-      [input.clientPhotoId, input.taskId, input.fileUri, takenAt],
+      "INSERT INTO photo_queue (clientPhotoId, taskId, fileUri, takenAt, exifJson) VALUES (?,?,?,?,?)",
+      [input.clientPhotoId, input.taskId, input.fileUri, takenAt, input.exifJson ?? null],
     )
     db.runSync(
       "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",

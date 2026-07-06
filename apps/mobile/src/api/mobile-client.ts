@@ -86,7 +86,7 @@ export async function mobileLogin(input: {
   orgSlug: string
   employeeCode: string
   pin: string
-}): Promise<{ user: { name: string } } | null> {
+}): Promise<{ user: { id?: string; name: string } } | null> {
   const deviceId = (await tokenStore.getDeviceId())!
   const res = await fetch(`${API_URL}/api/v1/mobile/auth/login`, {
     ...json({
@@ -101,6 +101,7 @@ export async function mobileLogin(input: {
   if (!res.ok) return null
   const body = mobileLoginResponseSchema.parse(await res.json())
   await tokenStore.setTokens(body.tokens.access, body.tokens.refresh)
+  await tokenStore.setUserId(body.user.id ?? null)
   await tokenStore.setUserName(body.user.name)
   await tokenStore.setOrgSlug(input.orgSlug)
   return { user: body.user }
@@ -134,6 +135,7 @@ export const syncApi: SyncApi = {
     form.append("clientPhotoId", photo.clientPhotoId)
     form.append("taskId", photo.taskId)
     form.append("takenAt", photo.takenAt)
+    if (photo.exifJson) form.append("exifJson", photo.exifJson)
     return request("/api/v1/mobile/photos/upload", {
       method: "POST",
       body: form,

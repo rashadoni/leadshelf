@@ -128,6 +128,7 @@ describe("SyncManager", () => {
       taskId: "t1",
       fileUri: "file:///x.jpg",
       takenAt: "2026-07-03T10:00:00Z",
+      exifJson: "{\"Software\":\"LeadShelf Mobile\"}",
       uploaded: false,
     })
     store.outbox.push({

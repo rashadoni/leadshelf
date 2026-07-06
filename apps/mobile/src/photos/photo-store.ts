@@ -12,6 +12,8 @@ export async function persistAndQueuePhoto(input: {
   taskId: string
   sourceUri: string
   expectedTaskStatus: MobileTaskStatus
+  takenAt: string
+  exifJson?: string | null
 }): Promise<string> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {})
   const clientPhotoId = `photo-${Crypto.randomUUID()}`
@@ -23,6 +25,8 @@ export async function persistAndQueuePhoto(input: {
     taskId: input.taskId,
     fileUri,
     expectedTaskStatus: input.expectedTaskStatus,
+    takenAt: input.takenAt,
+    exifJson: input.exifJson ?? null,
   })
   return clientPhotoId
 }
