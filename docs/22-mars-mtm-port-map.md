@@ -124,8 +124,10 @@ LeadShelf использует shelf-execution модели:
 
 ## Следующий порядок работ
 
-1. Browser-smoke: открыть `field-force`, создать маршрут, изменить порядок
-   точек, изменить агента, отмену проверять только на тестовом маршруте.
+1. Browser-smoke `field-force`: production UI smoke пройден после среза
+   `4396689` — создан `Codex smoke route 2026-07-06`, порядок точек изменен
+   через стрелки, агент изменен с Farid Aliyev на Elnur Mammadov, тестовый
+   маршрут отменен.
 2. Mobile smoke на устройстве/Expo: native device pass еще нужен; production
    API smoke уже пройден после среза `11a1cab`: login M-001 -> pull route ->
    check-in -> checkout -> pull completed visit.
@@ -147,4 +149,5 @@ LeadShelf использует shelf-execution модели:
 причины недоступных действий и pull-to-refresh. Production demo tenant отставал
 по данным: у `M-001` не было активного route, поэтому через существующий web API
 создан `Demo mobile route - 2026-07-06`; после этого mobile API smoke подтвердил
-`routes=1`, check-in `applied`, checkout `applied`.
+`routes=1`, check-in `applied`, checkout `applied`. Production browser smoke
+по `/ru/field-force` подтвердил route create/reorder/edit/cancel через UI.
