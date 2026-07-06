@@ -126,8 +126,9 @@ LeadShelf использует shelf-execution модели:
 
 1. Browser-smoke: открыть `field-force`, создать маршрут, изменить порядок
    точек, изменить агента, отмену проверять только на тестовом маршруте.
-2. Mobile smoke на устройстве/Expo: login -> pull маршрута -> check-in ->
-   sync -> checkout -> фото proof по задаче.
+2. Mobile smoke на устройстве/Expo: native device pass еще нужен; production
+   API smoke уже пройден после среза `11a1cab`: login M-001 -> pull route ->
+   check-in -> checkout -> pull completed visit.
 3. Портировать shelf-AI по слоям: photo quality -> watermark/exif ->
    golden reference slots -> analyze endpoint -> human review.
 4. OpenAI/GPT vision подключать только через backend provider boundary и
@@ -143,4 +144,7 @@ LeadShelf использует shelf-execution модели:
 адаптацией существующего LeadShelf app/API: после среза 2026-07-06 check-in
 создает локальный optimistic visit, sync заменяет временный id на серверный
 `visitId`, checkout заблокирован до этой замены, экран маршрутов показывает
-причины недоступных действий и pull-to-refresh.
+причины недоступных действий и pull-to-refresh. Production demo tenant отставал
+по данным: у `M-001` не было активного route, поэтому через существующий web API
+создан `Demo mobile route - 2026-07-06`; после этого mobile API smoke подтвердил
+`routes=1`, check-in `applied`, checkout `applied`.
