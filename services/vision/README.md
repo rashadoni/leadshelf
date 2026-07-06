@@ -26,7 +26,6 @@ OpenAI Responses API provider:
 VISION_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 OPENAI_VISION_MODEL=gpt-5.5
-VISION_PUBLIC_BASE_URL=https://hermescrm.xyz/
 ```
 
 `OPENAI_API_KEY` is a server secret. This is not connected to a Codex or
@@ -37,3 +36,15 @@ strict JSON detections and computes compliance through LeadShelf core scoring.
 `photoUrl` and `goldenReferenceUrl` must be HTTPS/data-image URLs, or relative
 paths resolvable through `VISION_PUBLIC_BASE_URL`. If no public/presigned image
 URL is available, the scan fails explicitly and stays in human-review workflow.
+
+For production LeadShelf web -> vision scans, configure the web app to mint
+short-lived signed media URLs before sending requests to this service:
+
+```bash
+VISION_MEDIA_PUBLIC_BASE_URL=https://hermescrm.xyz
+VISION_MEDIA_SIGNING_SECRET=...
+```
+
+The signed route is `/api/vision-media/photos/...` and is limited to `photos/*`
+object keys with an expiry and HMAC signature. Keep `/api/media` session-guarded
+for normal users.

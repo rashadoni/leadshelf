@@ -8,6 +8,7 @@ import {
 import { calculateShelfCompliance } from "@leadshelf/core"
 import { Prisma } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
+import { buildVisionMediaUrl } from "@/server/services/vision-media-url"
 
 const LOCAL_STUB_PROVIDER = "leadshelf-stub"
 const LOCAL_STUB_MODEL_VERSION = "stub-reference-slots-v1"
@@ -129,9 +130,9 @@ export async function runVisionComplianceForPhoto({
     organizationId,
     planogramVersionId,
     photoSubmissionId: photo.id,
-    photoUrl: photo.url,
+    photoUrl: buildVisionMediaUrl({ key: photo.url }),
     goldenReferenceId: reference.id,
-    goldenReferenceUrl: reference.imageUrl,
+    goldenReferenceUrl: buildVisionMediaUrl({ key: reference.imageUrl }),
     slots: reference.slots.map((slot) => ({
       id: slot.id,
       placementId: slot.placementId,
