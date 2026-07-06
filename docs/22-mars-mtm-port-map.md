@@ -97,11 +97,11 @@ LeadShelf использует shelf-execution модели:
 
 | Source | Target | Status | Notes |
 | --- | --- | --- | --- |
-| `src/app/api/v1/mtm/mobile/auth/route.ts` | LeadShelf mobile auth | `NOT PORTED` | Нужно сверить с текущим LeadShelf mobile API. |
-| `src/app/api/v1/mtm/mobile/sync/pull/route.ts` | LeadShelf offline sync | `NOT PORTED` | Критично для мобильного приложения; без source app smoke не считать готовым. |
-| `src/app/api/v1/mtm/mobile/sync/push/route.ts` | LeadShelf offline outbox | `NOT PORTED` | Нужно портировать идемпотентность и конфликтную модель. |
-| `src/app/api/v1/mtm/mobile/location/route.ts` | LeadShelf agent location | `NOT PORTED` | Нужно связать с `AgentLocation`. |
-| `src/app/api/v1/mtm/mobile/planogram-checks/route.ts` | LeadShelf photo proof / checks | `NOT PORTED` | Ключевой поток для shelf scan. |
+| `src/app/api/v1/mtm/mobile/auth/route.ts` | LeadShelf mobile auth | `ADAPTED` | Текущий LeadShelf API уже имеет employeeCode/PIN/device login; это не direct copy из Mars. |
+| `src/app/api/v1/mtm/mobile/sync/pull/route.ts` | LeadShelf offline sync | `ADAPTED` | Pull уже отдает tasks/stores/planogramBundles/routes/visits/photoSubmissions; серверный route/visit тест есть. |
+| `src/app/api/v1/mtm/mobile/sync/push/route.ts` | LeadShelf offline outbox | `ADAPTED` | Push применяет task/photo/comment/visit/location/order операции с идемпотентностью; mobile UI теперь делает optimistic check-in. |
+| `src/app/api/v1/mtm/mobile/location/route.ts` | LeadShelf agent location | `ADAPTED` | Standalone route не нужен: location идет через offline `location.update` и visit check-in пишет `AgentLocation`. |
+| `src/app/api/v1/mtm/mobile/planogram-checks/route.ts` | LeadShelf photo proof / checks | `PARTIAL/ADAPTED` | Фото-задача, upload, photo quality, vision review и статус proof уже есть; отдельный Mars planogram-check endpoint не переносился. |
 | `src/app/api/v1/mtm/mobile/shelf-analytics/analyze/route.ts` | LeadShelf vision service | `NOT PORTED` | Нужен OpenAI vision provider boundary и backend secret. |
 | `src/components/mtm/golden-reference-editor.tsx` | planogram golden reference UI | `PARTIAL/ADAPTED` | В LeadShelf есть golden reference модели; UX еще спорный и требует доработки. |
 | `src/components/mtm/shelf-annotator.tsx` | planogram/photo annotation | `NOT PORTED` | Нужна проверка пригодности для LeadShelf planogram editor. |
@@ -126,8 +126,8 @@ LeadShelf использует shelf-execution модели:
 
 1. Browser-smoke: открыть `field-force`, создать маршрут, изменить порядок
    точек, изменить агента, отмену проверять только на тестовом маршруте.
-2. Найти фактический source мобильного приложения или восстановить мобильный
-   flow по LeadDrive mobile API: auth, pull, push, location, photo proof.
+2. Mobile smoke на устройстве/Expo: login -> pull маршрута -> check-in ->
+   sync -> checkout -> фото proof по задаче.
 3. Портировать shelf-AI по слоям: photo quality -> watermark/exif ->
    golden reference slots -> analyze endpoint -> human review.
 4. OpenAI/GPT vision подключать только через backend provider boundary и
@@ -138,6 +138,9 @@ LeadShelf использует shelf-execution модели:
 ## Честный текущий вывод
 
 Маршрутный workspace в LeadShelf уже есть и частично работает, но до этого
-документа часть была `ADAPTED/REBUILT`, а не прямым переносом. С этого момента
-каждый следующий срез должен обновлять этот файл: какие source files реально
-смотрели, что перенесли, что осталось и что проверено в браузере.
+документа часть была `ADAPTED/REBUILT`, а не прямым переносом. Mobile source
+`MTMobileApp` не найден, поэтому текущий mobile route flow считается
+адаптацией существующего LeadShelf app/API: после среза 2026-07-06 check-in
+создает локальный optimistic visit, sync заменяет временный id на серверный
+`visitId`, checkout заблокирован до этой замены, экран маршрутов показывает
+причины недоступных действий и pull-to-refresh.

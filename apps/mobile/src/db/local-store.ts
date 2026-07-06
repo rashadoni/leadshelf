@@ -340,11 +340,16 @@ export const localStore: LocalStore = {
   },
 
   async markOutbox(clientOpId, status, detail) {
+    const op = db.getFirstSync<{ kind: string; payload: string }>(
+      "SELECT kind, payload FROM outbox_ops WHERE clientOpId=?",
+      [clientOpId],
+    )
     db.runSync("UPDATE outbox_ops SET status=?, detail=? WHERE clientOpId=?", [
       status,
       detail == null ? null : JSON.stringify(detail),
       clientOpId,
     ])
+    if (op) applyOutboxResultSideEffects(clientOpId, op.kind, op.payload, status, detail)
   },
 
   async bumpOutboxAttempts(ids) {
@@ -589,6 +594,79 @@ export function listVisits(): VisitRow[] {
     }))
 }
 
+function parseJsonObject(raw: string): Record<string, unknown> {
+  const value = JSON.parse(raw) as unknown
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function unknownRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null
+}
+
+function applyOutboxResultSideEffects(
+  clientOpId: string,
+  kind: string,
+  rawPayload: string,
+  status: "pending" | "applied" | "conflict" | "rejected",
+  detail: unknown,
+): void {
+  if (kind !== "visit.checkin") return
+
+  const payload = parseJsonObject(rawPayload)
+  const tempVisitId = `local-${clientOpId}`
+  const serverVisitId = stringValue(unknownRecord(detail)?.visitId)
+
+  if (status === "rejected" || status === "conflict") {
+    db.runSync("DELETE FROM visits WHERE id=?", [tempVisitId])
+    return
+  }
+
+  if (!serverVisitId) return
+  const now = new Date().toISOString()
+  const anomalyFlags = unknownRecord(detail)?.anomalyFlags
+  const anomalyJson = anomalyFlags == null ? null : JSON.stringify(anomalyFlags)
+  const existingServerVisit = db.getFirstSync<{ id: string }>("SELECT id FROM visits WHERE id=?", [
+    serverVisitId,
+  ])
+  if (existingServerVisit) {
+    db.runSync("DELETE FROM visits WHERE id=?", [tempVisitId])
+    return
+  }
+
+  const updated = db.runSync(
+    `UPDATE visits
+       SET id=?, anomalyFlags=COALESCE(?, anomalyFlags), updatedAt=?
+     WHERE id=?`,
+    [serverVisitId, anomalyJson, now, tempVisitId],
+  )
+  if (updated.changes > 0) return
+
+  db.runSync(
+    `INSERT INTO visits (
+       id, agentId, storeId, routeStopId, status, checkInAt, checkOutAt, anomalyFlags, updatedAt
+     ) VALUES (?,?,?,?,?,?,?,?,?)`,
+    [
+      serverVisitId,
+      stringValue(payload.agentId) ?? "",
+      stringValue(payload.storeId) ?? "",
+      stringValue(payload.routeStopId),
+      "IN_PROGRESS",
+      now,
+      null,
+      anomalyJson,
+      now,
+    ],
+  )
+}
+
 /** Оптимистичное локальное обновление + постановка в outbox одной транзакцией. */
 export function enqueueTaskStatus(input: {
   clientOpId: string
@@ -668,21 +746,41 @@ export function enqueueVisitCheckIn(input: {
   latitude: number
   longitude: number
 }): void {
-  db.runSync(
-    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
-    [
-      input.clientOpId,
-      "visit.checkin",
-      JSON.stringify({
-        agentId: input.agentId,
-        storeId: input.storeId,
-        routeStopId: input.routeStopId ?? null,
-        latitude: input.latitude,
-        longitude: input.longitude,
-      }),
-      new Date().toISOString(),
-    ],
-  )
+  const now = new Date().toISOString()
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [
+        input.clientOpId,
+        "visit.checkin",
+        JSON.stringify({
+          agentId: input.agentId,
+          storeId: input.storeId,
+          routeStopId: input.routeStopId ?? null,
+          latitude: input.latitude,
+          longitude: input.longitude,
+        }),
+        now,
+      ],
+    )
+    db.runSync(
+      `INSERT INTO visits (
+         id, agentId, storeId, routeStopId, status, checkInAt, checkOutAt, anomalyFlags, updatedAt
+       ) VALUES (?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET status='IN_PROGRESS', updatedAt=excluded.updatedAt`,
+      [
+        `local-${input.clientOpId}`,
+        input.agentId,
+        input.storeId,
+        input.routeStopId ?? null,
+        "IN_PROGRESS",
+        now,
+        null,
+        null,
+        now,
+      ],
+    )
+  })
 }
 
 export function enqueueVisitCheckOut(input: { clientOpId: string; visitId: string }): void {

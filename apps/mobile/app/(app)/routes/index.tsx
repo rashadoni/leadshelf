@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react"
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import * as Crypto from "expo-crypto"
 import { router, useFocusEffect } from "expo-router"
@@ -8,25 +8,53 @@ import {
   enqueueVisitCheckIn,
   enqueueVisitCheckOut,
   getStore,
-  listRouteStops,
   listRoutes,
   listTasks,
   listVisits,
 } from "../../../src/db/local-store"
-import type { RouteRow, VisitRow } from "../../../src/sync/ports"
+import type { RouteRow, TaskRow, VisitRow } from "../../../src/sync/ports"
 import { useSync } from "../../../src/sync/sync-context"
 import { t } from "../../../src/i18n"
 
+function isLocalVisit(visit: VisitRow | undefined): boolean {
+  return Boolean(visit?.id.startsWith("local-"))
+}
+
 export default function RoutesScreen() {
-  const { sync } = useSync()
+  const { status, sync } = useSync()
   const [routes, setRoutes] = useState<RouteRow[]>([])
   const [visits, setVisits] = useState<VisitRow[]>([])
-  const [queued, setQueued] = useState<string | null>(null)
+  const [tasks, setTasks] = useState<TaskRow[]>([])
+  const [refreshing, setRefreshing] = useState(false)
+
   const reload = useCallback(() => {
     setRoutes(listRoutes())
     setVisits(listVisits())
+    setTasks(listTasks())
   }, [])
   useFocusEffect(reload)
+
+  useEffect(() => {
+    if (status.phase !== "idle") return
+    reload()
+  }, [reload, status.lastSyncAt, status.phase])
+
+  const tasksByStore = useMemo(() => {
+    const map = new Map<string, TaskRow[]>()
+    for (const task of tasks) {
+      const storeTasks = map.get(task.storeId) ?? []
+      storeTasks.push(task)
+      map.set(task.storeId, storeTasks)
+    }
+    return map
+  }, [tasks])
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await sync()
+    reload()
+    setRefreshing(false)
+  }
 
   function checkIn(route: RouteRow, stopId: string, storeId: string) {
     if (!route.agentId) return
@@ -40,7 +68,7 @@ export default function RoutesScreen() {
       latitude: store.latitude,
       longitude: store.longitude,
     })
-    setQueued(storeId)
+    reload()
     void sync()
   }
 
@@ -49,7 +77,6 @@ export default function RoutesScreen() {
       clientOpId: `op-${Crypto.randomUUID()}`,
       visitId: visit.id,
     })
-    setQueued(visit.storeId)
     reload()
     void sync()
   }
@@ -66,37 +93,60 @@ export default function RoutesScreen() {
       <FlatList
         data={routes}
         keyExtractor={(item) => item.id}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={routes.length === 0 && styles.emptyWrap}
         ListEmptyComponent={<Text style={styles.empty}>{t("noRoutes")}</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.routeTitle}>{item.name}</Text>
-            {listRouteStops(item.id).map((stop) => {
+            <View style={styles.routeHeader}>
+              <Text style={styles.routeTitle}>{item.name}</Text>
+              <Text style={styles.routeMeta}>
+                {item.stops.length} {t("routeStops")}
+              </Text>
+            </View>
+            {item.stops.length === 0 ? (
+              <Text style={styles.emptyStop}>{t("noRouteStops")}</Text>
+            ) : null}
+            {item.stops.map((stop) => {
               const store = getStore(stop.storeId)
-              const tasks = listTasks().filter((task) => task.storeId === stop.storeId)
+              const stopTasks = tasksByStore.get(stop.storeId) ?? []
               const stopVisits = visits.filter((visit) => visit.routeStopId === stop.id)
               const activeVisit = stopVisits.find((visit) => visit.status === "IN_PROGRESS")
               const completedVisit = stopVisits.find((visit) => visit.status === "COMPLETED")
+              const activeVisitIsLocal = isLocalVisit(activeVisit)
               const canCheckIn = Boolean(item.agentId && store?.latitude != null && store.longitude != null)
-              const disabled = activeVisit ? false : !canCheckIn || Boolean(completedVisit)
+              const disabled = activeVisit
+                ? activeVisitIsLocal
+                : !canCheckIn || Boolean(completedVisit)
+              const disabledReason = !item.agentId
+                ? t("missingRouteAgent")
+                : store?.latitude == null || store.longitude == null
+                  ? t("missingStoreGeo")
+                  : null
+              const plannedAt = stop.plannedAt ? stop.plannedAt.slice(11, 16) : null
               return (
                 <View key={stop.id} style={styles.stop}>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.stopBody}>
                     <Text style={styles.stopTitle}>
                       {stop.sortOrder}. {store?.name ?? stop.storeId}
                     </Text>
                     <Text style={styles.meta}>
-                      {tasks.length} {t("tasksAtStore")}
+                      {stopTasks.length} {t("tasksAtStore")}
+                      {plannedAt ? ` · ${plannedAt}` : ""}
                       {store?.address ? ` · ${store.address}` : ""}
                     </Text>
-                    {activeVisit ? (
+                    {activeVisitIsLocal ? (
+                      <Text style={styles.visitMeta}>{t("visitWaitingSync")}</Text>
+                    ) : activeVisit ? (
                       <Text style={styles.visitMeta}>{t("visitInProgress")}</Text>
                     ) : completedVisit ? (
                       <Text style={styles.visitMeta}>{t("visitCompleted")}</Text>
+                    ) : disabledReason ? (
+                      <Text style={styles.warningMeta}>{disabledReason}</Text>
                     ) : null}
-                    {tasks.length > 0 ? (
+                    {stopTasks.length > 0 ? (
                       <View style={styles.stopTasks}>
-                        {tasks.slice(0, 4).map((task) => (
+                        {stopTasks.slice(0, 4).map((task) => (
                           <Pressable
                             key={task.id}
                             onPress={() => router.push(`/(app)/tasks/${task.id}` as never)}
@@ -113,13 +163,15 @@ export default function RoutesScreen() {
                             <Text style={styles.openTask}>{t("openTask")}</Text>
                           </Pressable>
                         ))}
-                        {tasks.length > 4 ? (
+                        {stopTasks.length > 4 ? (
                           <Text style={styles.moreTasks}>
-                            +{tasks.length - 4} {t("moreTasks")}
+                            +{stopTasks.length - 4} {t("moreTasks")}
                           </Text>
                         ) : null}
                       </View>
-                    ) : null}
+                    ) : (
+                      <Text style={styles.noTasksAtStop}>{t("noTasksAtStop")}</Text>
+                    )}
                   </View>
                   <Pressable
                     disabled={disabled}
@@ -127,7 +179,7 @@ export default function RoutesScreen() {
                     style={[styles.button, activeVisit && styles.checkoutButton, disabled && styles.buttonDisabled]}
                   >
                     <Text style={styles.buttonText}>
-                      {queued === stop.storeId
+                      {activeVisitIsLocal
                         ? t("queued")
                         : activeVisit
                           ? t("checkOut")
@@ -160,11 +212,24 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, justifyContent: "center" },
   empty: { textAlign: "center", color: "#a3a3a3", paddingHorizontal: 40 },
   card: { backgroundColor: "white", marginHorizontal: 12, marginVertical: 6, padding: 14, borderRadius: 12 },
-  routeTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-  stop: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#f5f5f4", paddingVertical: 10 },
+  routeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  routeTitle: { fontSize: 16, fontWeight: "700" },
+  routeMeta: { color: "#737373", fontSize: 12, fontWeight: "600" },
+  emptyStop: { color: "#a3a3a3", fontSize: 12 },
+  stop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f5f5f4",
+    paddingVertical: 10,
+  },
+  stopBody: { flex: 1 },
   stopTitle: { fontSize: 14, fontWeight: "600" },
   meta: { fontSize: 12, color: "#737373", marginTop: 2 },
   visitMeta: { fontSize: 12, color: "#166534", fontWeight: "600", marginTop: 4 },
+  warningMeta: { fontSize: 12, color: "#b45309", fontWeight: "600", marginTop: 4 },
+  noTasksAtStop: { marginTop: 8, fontSize: 11, color: "#a3a3a3" },
   stopTasks: { gap: 6, marginTop: 8 },
   stopTask: {
     flexDirection: "row",
