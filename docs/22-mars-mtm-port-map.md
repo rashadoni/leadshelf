@@ -135,12 +135,13 @@ LeadShelf использует shelf-execution модели:
    После срезов `748c28e` и `335b449` mobile формирует proof metadata,
    хранит `exifJson` в SQLite photo queue, отправляет его на upload и
    добавляет device GPS через `expo-location`, если permission выдан.
-3. Shelf-AI: OpenAI provider boundary и signed `/api/vision-media/photos/*`
-   URL слой добавлены, но production распознавание заработает только после
-   серверного API key и `VISION_MEDIA_*` env на web. Backend capture-metadata
-   validator добавлен; mobile EXIF-like metadata/GPS/capture-step writing
-   добавлены. Дальше нужны native guided-proof smoke на устройстве и video
-   capture/frame-extraction срез.
+3. Shelf-AI: OpenAI provider boundary, signed `/api/vision-media/photos/*`
+   + `/frames/*`, video frame extraction worker и selected-frame review
+   pipeline добавлены. Production GPT распознавание заработает только после
+   серверного `VISION_PROVIDER=openai` и `OPENAI_API_KEY`; без этого worker
+   извлекает frames и пишет честный `leadshelf-stub`/manual-review result.
+   Дальше нужны native guided-proof smoke на устройстве и pilot dataset
+   Mars/FMCG для оценки точности.
 
 ## Честный текущий вывод
 

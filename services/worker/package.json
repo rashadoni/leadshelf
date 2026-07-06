@@ -9,10 +9,13 @@
     "import:queue:once": "tsx src/import-queue-runner.ts --once",
     "notifications": "tsx src/notification-delivery-runner.ts",
     "notifications:once": "tsx src/notification-delivery-runner.ts --once",
+    "proof-analysis": "tsx src/proof-analysis-runner.ts",
+    "proof-analysis:once": "tsx src/proof-analysis-runner.ts --once",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1078.0",
     "@leadshelf/api-contracts": "workspace:*",
     "@leadshelf/core": "workspace:*",
     "@leadshelf/db": "workspace:*",

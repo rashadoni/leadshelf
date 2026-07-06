@@ -851,6 +851,13 @@
       "APPROVED": "Принято",
       "REJECTED": "Отклонено"
     },
+    "analysisStatus": {
+      "PENDING": "AI в очереди",
+      "PROCESSING": "AI анализируется",
+      "COMPLETED": "AI готов",
+      "SKIPPED": "AI пропущен",
+      "FAILED": "AI ошибка"
+    },
     "reason": {
       "PHOTO_QUALITY": "Качество фото",
       "VISION_COMPLIANCE": "Vision compliance"
@@ -865,6 +872,7 @@
       "missingSku": "Нет SKU",
       "wrongSku": "Не тот SKU",
       "extraSku": "Лишний SKU",
+      "finding": "Наблюдение",
       "warnings": "Предупреждения"
     }
   },

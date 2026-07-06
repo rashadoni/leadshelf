@@ -511,11 +511,20 @@ media с capture metadata.
 - `[сделано]` Storage guard расширен на `videos/{org}/`; web reviews/tasks
   показывают video proof через `<video controls>`.
 - `[сделано]` Добавлен frame timestamp planner для selected-frame AI анализа.
-- `[не закрыто]` Реальный frame extraction worker и OpenAI/GPT vision анализ
-  video frames/crops еще не подключены; video submissions пока получают
-  `vision_waiting_frame_extraction`.
+- `[сделано]` Добавлен `ProofAnalysisStatus` и `worker-proof-analysis`:
+  video submissions попадают в очередь, worker скачивает оригинал из S3,
+  извлекает JPEG frames через ffmpeg, сохраняет `frames/{org}/...` и
+  обновляет `HumanReview` selected-frame findings.
+- `[сделано/требует env]` OpenAI/GPT provider boundary добавлен для selected
+  frames (`VISION_PROVIDER=openai`, `OPENAI_API_KEY`, optional
+  `OPENAI_VISION_MODEL`). Без ключа worker честно пишет stub/manual-review
+  результат и не выдает его за GPT inference.
+- `[сделано]` `/reviews` показывает analysis status, worker status,
+  selected frames и AI findings для video proof.
 - `[не проверено устройством]` Native camera video flow требует проверки на
   физическом iOS/Android или dev-client build.
+- `[не проверено на production secret]` Реальный OpenAI вызов не может быть
+  подтвержден без production `OPENAI_API_KEY`/provider env.
 
 Definition of Done:
 

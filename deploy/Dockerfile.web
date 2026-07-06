@@ -31,6 +31,7 @@ CMD ["pnpm", "--filter", "@leadshelf/db", "seed:demo"]
 FROM builder AS worker
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache ffmpeg
 CMD ["pnpm", "--filter", "@leadshelf/worker", "import:queue"]
 
 # --- рантайм ---

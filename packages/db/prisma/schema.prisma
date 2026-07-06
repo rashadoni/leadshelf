@@ -1095,19 +1095,19 @@ model TaskComment {
 }
 
 model PhotoSubmission {
-  id                        String         @id @default(cuid())
+  id                        String              @id @default(cuid())
   organizationId            String
   storeId                   String
-  store                     Store          @relation(fields: [storeId], references: [id])
+  store                     Store               @relation(fields: [storeId], references: [id])
   taskId                    String?
-  task                      Task?          @relation(fields: [taskId], references: [id])
+  task                      Task?               @relation(fields: [taskId], references: [id])
   visitId                   String?
-  visit                     Visit?         @relation(fields: [visitId], references: [id])
+  visit                     Visit?              @relation(fields: [visitId], references: [id])
   userId                    String
-  user                      User           @relation(fields: [userId], references: [id])
+  user                      User                @relation(fields: [userId], references: [id])
   url                       String
   thumbnailUrl              String?
-  mediaType                 ProofMediaType @default(PHOTO)
+  mediaType                 ProofMediaType      @default(PHOTO)
   mimeType                  String?
   fileSizeBytes             Int?
   durationMs                Int?
@@ -1125,13 +1125,21 @@ model PhotoSubmission {
   // EXIF-like capture metadata: user/task/store/GPS/device/capture-step proof.
   exif                      Json?
   qualityScore              Float?
-  createdAt                 DateTime       @default(now())
+  analysisStatus            ProofAnalysisStatus @default(PENDING)
+  analysisAttempts          Int                 @default(0)
+  analysisProvider          String?
+  analysisModelVersion      String?
+  analysisError             String?
+  analysisStartedAt         DateTime?
+  analysisFinishedAt        DateTime?
+  createdAt                 DateTime            @default(now())
 
   goldenReferences GoldenReference[]
   humanReviews     HumanReview[]
 
   @@unique([organizationId, clientPhotoId])
   @@index([organizationId, storeId, takenAt])
+  @@index([organizationId, mediaType, analysisStatus, createdAt])
   @@index([taskId])
   @@index([taskId, captureStepId])
   @@map("photo_submissions")
@@ -1144,6 +1152,14 @@ model PhotoSubmission {
 enum ProofMediaType {
   PHOTO
   VIDEO
+}
+
+enum ProofAnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  SKIPPED
+  FAILED
 }
 
 enum GoldenReferenceStatus {

@@ -47,14 +47,32 @@ function visionDetails(findings: unknown) {
   if (Object.keys(vision).length === 0) return null
   const compliance = asRecord(vision.compliance)
   const nestedFindings = asRecord(vision.findings)
+  const selectedFrames = Array.isArray(vision.selectedFrames) ? vision.selectedFrames.map(asRecord) : []
+  const aiFindings = Array.isArray(vision.aiFindings) ? vision.aiFindings.map(asRecord) : []
   const missing = Array.isArray(nestedFindings.missing) ? nestedFindings.missing.map(asRecord) : []
   const wrong = Array.isArray(nestedFindings.wrong) ? nestedFindings.wrong.map(asRecord) : []
   const extra = Array.isArray(nestedFindings.extra) ? nestedFindings.extra.map(asRecord) : []
   return {
     provider: typeof vision.provider === "string" ? vision.provider : null,
     modelVersion: typeof vision.modelVersion === "string" ? vision.modelVersion : null,
+    workerStatus: typeof vision.workerStatus === "string" ? vision.workerStatus : null,
     status: typeof vision.status === "string" ? vision.status : null,
+    summary: typeof vision.summary === "string" ? vision.summary : null,
     warnings: stringList(vision.warnings),
+    selectedFrames: selectedFrames
+      .map((item) => ({
+        key: typeof item.key === "string" ? item.key : null,
+        timestampMs: typeof item.timestampMs === "number" ? item.timestampMs : null,
+      }))
+      .filter((item) => item.key),
+    aiFindings: aiFindings
+      .map((item) => ({
+        type: typeof item.type === "string" ? item.type : null,
+        severity: typeof item.severity === "string" ? item.severity : null,
+        sku: typeof item.productSku === "string" ? item.productSku : null,
+        note: typeof item.note === "string" ? item.note : null,
+      }))
+      .filter((item) => item.type || item.note),
     compliance: {
       status: typeof compliance.status === "string" ? compliance.status : null,
       score: typeof compliance.score === "number" ? compliance.score : null,
@@ -123,6 +141,7 @@ export default async function ReviewsPage({
             url: true,
             mediaType: true,
             durationMs: true,
+            analysisStatus: true,
             qualityScore: true,
             takenAt: true,
             store: { select: { name: true, code: true } },
@@ -223,6 +242,7 @@ export default async function ReviewsPage({
                     <div className="border-t border-neutral-200 px-2 py-1 text-[11px] text-neutral-500">
                       {photo?.mediaType === "VIDEO" ? t("videoProof") : t("photoProof")}
                       {photo?.durationMs ? ` · ${Math.round(photo.durationMs / 1000)}s` : ""}
+                      {photo?.analysisStatus ? ` · ${t(`analysisStatus.${photo.analysisStatus}` as never)}` : ""}
                     </div>
                   </div>
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
@@ -282,8 +302,28 @@ export default async function ReviewsPage({
                         <span className="font-medium text-neutral-700">{t("vision.title")}</span>
                         {vision.provider && <span>{vision.provider}</span>}
                         {vision.modelVersion && <span>{vision.modelVersion}</span>}
+                        {vision.workerStatus && <span>{vision.workerStatus}</span>}
                         {vision.status && <span>{vision.status}</span>}
                       </div>
+                      {vision.summary && <div className="mt-2 text-xs text-neutral-600">{vision.summary}</div>}
+                      {vision.selectedFrames.length > 0 && (
+                        <div className="mt-2 grid grid-cols-3 gap-2">
+                          {vision.selectedFrames.slice(0, 6).map((frame) => (
+                            <a
+                              key={`${frame.key}-${frame.timestampMs}`}
+                              href={`/api/media/${frame.key}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="overflow-hidden rounded border border-neutral-200 bg-white"
+                            >
+                              <img src={`/api/media/${frame.key}`} alt="" className="h-20 w-full object-cover" />
+                              <div className="border-t border-neutral-100 px-1 py-0.5 text-[10px] text-neutral-500">
+                                {frame.timestampMs == null ? "frame" : `${(frame.timestampMs / 1000).toFixed(1)}s`}
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       <div className="mt-2 grid gap-2 sm:grid-cols-5">
                         {[
                           ["vision.score", vision.compliance.score === null ? "—" : `${Math.round(vision.compliance.score * 100)}%`],
@@ -322,6 +362,17 @@ export default async function ReviewsPage({
                             <span key={`${item.slotId}-${item.sku}`} className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
                               {t("vision.extraSku")}: {item.sku ?? item.slotId}
                             </span>
+                          ))}
+                        </div>
+                      )}
+                      {vision.aiFindings.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {vision.aiFindings.slice(0, 6).map((item, index) => (
+                            <div key={`${item.type}-${index}`} className="rounded bg-white px-2 py-1 text-xs text-neutral-600">
+                              <span className="font-medium text-neutral-800">{item.type ?? t("vision.finding")}</span>
+                              {item.sku ? ` · ${item.sku}` : ""}
+                              {item.note ? ` · ${item.note}` : ""}
+                            </div>
                           ))}
                         </div>
                       )}

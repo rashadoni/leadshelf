@@ -79,6 +79,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  worker-proof-analysis:
+    build:
+      context: ./app
+      dockerfile: deploy/Dockerfile.web
+      target: worker
+    command: ["pnpm", "--filter", "@leadshelf/worker", "proof-analysis"]
+    env_file: .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     # POSTGRES_USER/DB/PASSWORD приходят из .env.production (env_file, не

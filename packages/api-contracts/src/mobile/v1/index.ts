@@ -339,6 +339,7 @@ export const mobilePhotoUploadResponseSchema = z.object({
   key: z.string(),
   mediaType: mobileProofMediaTypeSchema.default("photo"),
   durationMs: z.number().int().nullable().optional(),
+  analysisStatus: z.enum(["PENDING", "PROCESSING", "COMPLETED", "SKIPPED", "FAILED"]).optional(),
   qualityScore: z.number().nullable().optional(),
   qualityCheck: z.unknown().nullable().optional(),
   reviewId: z.string().nullable().optional(),

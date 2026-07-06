@@ -13,7 +13,7 @@ export async function GET(
 
   const { path } = await params
   const key = path.join("/")
-  if (!key.startsWith("photos/")) {
+  if (!key.startsWith("photos/") && !key.startsWith("frames/")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }
 

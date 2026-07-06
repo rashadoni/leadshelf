@@ -281,6 +281,9 @@ importers:
 
   services/worker:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: 3.1078.0
+        version: 3.1078.0
       '@leadshelf/api-contracts':
         specifier: workspace:*
         version: link:../../packages/api-contracts

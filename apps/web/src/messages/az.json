@@ -851,6 +851,13 @@
       "APPROVED": "Qəbul edilib",
       "REJECTED": "Rədd edilib"
     },
+    "analysisStatus": {
+      "PENDING": "AI növbədə",
+      "PROCESSING": "AI analiz edir",
+      "COMPLETED": "AI hazırdır",
+      "SKIPPED": "AI buraxılıb",
+      "FAILED": "AI xətası"
+    },
     "reason": {
       "PHOTO_QUALITY": "Foto keyfiyyəti",
       "VISION_COMPLIANCE": "Vision compliance"
@@ -865,6 +872,7 @@
       "missingSku": "SKU yoxdur",
       "wrongSku": "Yanlış SKU",
       "extraSku": "Artıq SKU",
+      "finding": "Müşahidə",
       "warnings": "Xəbərdarlıqlar"
     }
   },

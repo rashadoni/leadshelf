@@ -161,13 +161,27 @@ Definition of Done первого среза:
   duration, capture step fields и индекс по `taskId/captureStepId`.
 - Backend upload сохраняет фото в `photos/`, видео в `videos/`, валидирует
   MIME/media mismatch, duration gates, capture metadata и не отправляет raw
-  video в image-only vision pipeline. Для видео пока возвращается
-  `vision_waiting_frame_extraction`.
+  video в image-only vision pipeline. Video proof получает pending
+  `VISION_COMPLIANCE` review и `ProofAnalysisStatus`.
 - Добавлен deterministic frame plan для коротких proof-видео: пример 6 секунд
   -> кадры `900/3000/5100ms`. Это cost-control основа для worker/OpenAI
   анализа selected frames.
 - Web review/task/store screens показывают video proof через `<video controls>`
   и не называют ролик фото.
+
+Срез 3 добавлен 2026-07-06:
+
+- `worker-proof-analysis` подключен в production compose/deploy. Worker
+  claim-ит `VIDEO/PENDING`, скачивает оригинал из S3, извлекает JPEG frames
+  через ffmpeg и сохраняет их в `frames/{org}/{photoSubmissionId}/...`.
+- `PhotoSubmission` получил `analysisStatus`, attempts, provider/model,
+  started/finished timestamps и error.
+- `/reviews` показывает analysis status, worker status, selected frames,
+  OpenAI/stub provider и AI findings.
+- OpenAI/GPT selected-frame provider boundary реализован через Responses API
+  и включается только env-переменными `VISION_PROVIDER=openai`,
+  `OPENAI_API_KEY`, optional `OPENAI_VISION_MODEL`. Без ключа результат
+  честно помечается как `leadshelf-stub`, а не GPT inference.
 
 Проверено локально:
 
@@ -177,12 +191,14 @@ Definition of Done первого среза:
 - `pnpm lint`;
 - browser smoke на свежем Next runtime: reviews, tasks, task detail с photo
   proof, task detail и review queue с synthetic 6s video proof.
+- worker proof-analysis integration test: fake video queue -> selected frames
+  -> `VISION_COMPLIANCE` review update.
 
 Осталось не закрыто на 100%:
 
 - Реальная запись на физическом iOS/Android устройстве не проверялась; код
   опирается на Expo Camera v57 `mode="video"` и `recordAsync`.
-- Worker еще не извлекает реальные JPEG frames из видеофайла; пока хранится
-  frame plan.
-- OpenAI/GPT vision анализ selected frames/crops еще не подключен к video
-  submissions; video proof честно уходит в `vision_waiting_frame_extraction`.
+- Production OpenAI/GPT вызов не проверялся без `OPENAI_API_KEY` и
+  `VISION_PROVIDER=openai` в server env.
+- Pilot-точность по Mars/FMCG невозможна без 20-50 реальных shelf proofs и
+  ручной разметки expected result.
