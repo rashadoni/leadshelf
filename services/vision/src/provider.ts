@@ -10,7 +10,7 @@ import { z } from "zod"
 export const STUB_PROVIDER = "leadshelf-stub"
 export const STUB_MODEL_VERSION = "stub-reference-slots-v1"
 export const OPENAI_PROVIDER = "openai-responses"
-export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.5"
+export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4"
 
 export interface VisionProvider {
   readonly metadata: {

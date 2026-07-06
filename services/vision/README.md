@@ -25,7 +25,7 @@ OpenAI Responses API provider:
 ```bash
 VISION_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-OPENAI_VISION_MODEL=gpt-5.5
+OPENAI_VISION_MODEL=gpt-5.4
 ```
 
 `OPENAI_API_KEY` is a server secret. This is not connected to a Codex or
