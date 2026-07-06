@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
+import { plannedAtFor, routeStopsHaveVisits } from "@/server/field-force/routes"
 
 export const runtime = "nodejs"
 
@@ -14,10 +15,6 @@ const patchSchema = z.object({
   storeIds: z.array(z.string().min(1)).min(1).max(100).optional(),
   isActive: z.boolean().optional(),
 })
-
-function plannedAtFor(date: string | null | undefined, index: number) {
-  return date ? new Date(`${date}T09:${String(index).padStart(2, "0")}:00.000Z`) : null
-}
 
 export async function PATCH(
   req: NextRequest,
@@ -57,8 +54,7 @@ export async function PATCH(
 
   const uniqueStoreIds = parsed.data.storeIds ? [...new Set(parsed.data.storeIds)] : null
   if (uniqueStoreIds) {
-    const hasVisits = route.stops.some((stop) => stop.visits.length > 0)
-    if (hasVisits) {
+    if (routeStopsHaveVisits(route.stops)) {
       return NextResponse.json({ error: "route_has_visits" }, { status: 409 })
     }
 

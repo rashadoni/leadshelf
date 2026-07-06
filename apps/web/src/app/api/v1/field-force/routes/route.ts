@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
+import { shapeFieldForceRoute } from "@/server/field-force/routes"
 
 export const runtime = "nodejs"
 
@@ -36,52 +37,6 @@ function visitDateWhere(dateFilter: { gte: Date; lt: Date } | null) {
       { checkOutAt: dateFilter },
       { routeStop: { plannedAt: dateFilter } },
     ],
-  }
-}
-
-function shapeRoute(route: any) {
-  const points = [...route.stops]
-    .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
-    .map((stop: any, index: number) => {
-      const completedVisit = stop.visits?.find((visit: any) => visit.status === "COMPLETED")
-      const skippedVisit = stop.visits?.find((visit: any) => visit.status === "SKIPPED")
-      const inProgressVisit = stop.visits?.find((visit: any) => visit.status === "IN_PROGRESS")
-      return {
-        id: stop.id,
-        customerId: stop.storeId,
-        orderIndex: index,
-        status: completedVisit ? "VISITED" : skippedVisit ? "SKIPPED" : "PENDING",
-        plannedTime: stop.plannedAt,
-        visitedAt: completedVisit?.checkOutAt ?? inProgressVisit?.checkInAt ?? null,
-        customer: {
-          id: stop.store.id,
-          name: stop.store.name,
-          code: stop.store.code,
-          address: stop.store.address,
-          latitude: stop.store.latitude,
-          longitude: stop.store.longitude,
-        },
-      }
-    })
-  const totalPoints = points.length
-  const visitedPoints = points.filter((point: any) => point.status === "VISITED").length
-  const hasInProgress = route.stops.some((stop: any) => stop.visits?.some((visit: any) => visit.status === "IN_PROGRESS"))
-  const status = !route.isActive ? "CANCELLED" : totalPoints > 0 && visitedPoints === totalPoints ? "COMPLETED" : hasInProgress ? "IN_PROGRESS" : "PLANNED"
-  const plannedDates = route.stops.map((stop: any) => stop.plannedAt).filter(Boolean)
-  const date = plannedDates[0] ?? route.createdAt
-  return {
-    id: route.id,
-    name: route.name,
-    agentId: route.agentId,
-    date,
-    status,
-    totalPoints,
-    visitedPoints,
-    startedAt: route.stops.flatMap((stop: any) => stop.visits ?? []).find((visit: any) => visit.checkInAt)?.checkInAt ?? null,
-    completedAt: status === "COMPLETED" ? route.stops.flatMap((stop: any) => stop.visits ?? []).at(-1)?.checkOutAt ?? null : null,
-    notes: null,
-    agent: route.agent ? { id: route.agent.id, name: route.agent.user.name } : null,
-    points,
   }
 }
 
@@ -129,7 +84,7 @@ export async function GET(req: NextRequest) {
     take: limit,
   })
 
-  const shaped = routes.map(shapeRoute).filter((route) => !status || route.status === status)
+  const shaped = routes.map(shapeFieldForceRoute).filter((route) => !status || route.status === status)
   return NextResponse.json({ success: true, data: { routes: shaped, total: shaped.length, page: 1, limit } })
 }
 
