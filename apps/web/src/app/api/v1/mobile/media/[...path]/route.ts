@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
+import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
 import { getObject } from "@/server/storage/s3"
 
 export const runtime = "nodejs"
@@ -13,6 +14,10 @@ export async function GET(
 ) {
   const session = await requireApiSession(req)
   if (!session) return unauthorized()
+  // GET-медиа: валидируем протокол, только если клиент его прислал (тег
+  // <img>/<video> не может выставить заголовок) — docs/26.
+  const mismatch = protocolMismatchFromHeader(req, { required: false })
+  if (mismatch) return mismatch
 
   const { path } = await params
   const key = path.join("/")

@@ -55,6 +55,8 @@ async function request<T>(
     ...rest,
     headers: {
       ...(rest.headers as Record<string, string>),
+      // Протокол на не-JSON путях (multipart upload, media) едет заголовком.
+      "x-leadshelf-protocol": String(PROTOCOL_VERSION),
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
     },
   })
@@ -103,6 +105,15 @@ export async function mobileLogin(input: {
   await tokenStore.setUserName(body.user.name)
   await tokenStore.setOrgSlug(input.orgSlug)
   return { user: body.user }
+}
+
+// Серверный logout: отзывает refresh-сессию. Best-effort — если сети нет,
+// вызывающий всё равно чистит локальную сессию (docs/26 §5).
+export async function mobileLogout(): Promise<void> {
+  const refresh = await tokenStore.getRefresh()
+  await fetch(`${API_URL}/api/v1/mobile/auth/logout`, {
+    ...json({ protocolVersion: PROTOCOL_VERSION, refreshToken: refresh ?? undefined }),
+  }).catch(() => {})
 }
 
 export const syncApi: SyncApi = {

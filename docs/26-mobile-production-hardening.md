@@ -12,13 +12,34 @@
 
 Пункт считается закрытым только с тестом или проверкой на устройстве.
 
+## Статус реализации — 2026-07-07
+
+Сделано в этой сессии (P0 + часть P1), всё покрыто тестами, полный
+`pnpm test` (233), lint, typecheck, `next build` зелёные:
+
+- **[P0] Доставка пересъёмки** — `requestCaptureRetake`/`resolve...`
+  бампают `task.updatedAt` в транзакции; тесты на touch задачи.
+- **[P0] Изоляция битого фото** — per-фото try/catch в sync-manager,
+  `HttpError` со статусом, карантин на 4xx, счётчик попыток на 5xx/сети,
+  видимость `quarantinedPhotos` в SyncBar; тесты изоляции.
+- **[P1] protocolVersion enforcement** — заголовок `x-leadshelf-protocol`
+  во всех mobile-запросах, enforce на upload (обязателен) и media
+  (validate-if-present); logout теперь требует protocolVersion и клиент
+  зовёт серверный logout best-effort (отзыв refresh); unit-тесты.
+- **[P1] Роль исполнителя** — assign API ограничен полевыми ролями через
+  единый `ASSIGNABLE_ROLES`; тест office↔field.
+- **[P1] Сборка** — `eas.json` (dev-client/preview-APK/prod-AAB) +
+  `expo-sensors` motionPermission в `app.json`. Сам build не запускался
+  (нужен EAS-аккаунт).
+
+Осталось (блокеры не на разработчике): device smoke, запуск `eas build`
+и раздача APK, `OPENAI_API_KEY` на проде, face-blur/CV (срез 2, решение по
+CV-инфраструктуре), Sentry DSN.
+
 ## 1. Корректность (P0)
 
-- [ ] **Доставка запросов пересъёмки.** `requestCaptureRetake` не трогает
-  `task.updatedAt`, поэтому курсорный pull не переотдаёт уже
-  синхронизированную задачу и агент запрос не видит (основной сценарий
-  фичи). Фикс: в одной транзакции обновлять `task.updatedAt` при create и
-  при resolve. Тест: сквозная доставка pull→retake→pull.
+- [x] **Доставка запросов пересъёмки.** Реализовано 2026-07-07: create и
+  resolve бампают `task.updatedAt` в транзакции, тесты на touch.
   Файлы: `packages/db/src/repos/capture.ts`, `mobile-sync.ts`.
 - [ ] **Тест сквозной доставки captureTemplate** после изменения шаблона
   (сейчас known limitation: смена шаблона не переотдаёт task rows).

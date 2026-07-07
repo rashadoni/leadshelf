@@ -10,6 +10,7 @@ import {
   selectProofVideoFrameTimestamps,
 } from "@leadshelf/core"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
+import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
 import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
 import {
@@ -145,6 +146,9 @@ async function ensureQueuedVideoVisionReview(input: {
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session?.did) return unauthorized()
+  // multipart-путь несёт протокол заголовком (docs/18/26): incompatible -> 426
+  const mismatch = protocolMismatchFromHeader(req)
+  if (mismatch) return mismatch
 
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")

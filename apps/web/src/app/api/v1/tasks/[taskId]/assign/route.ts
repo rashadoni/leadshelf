@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { tenantDb } from "@/server/db/client"
+import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
 
 export const runtime = "nodejs"
 
@@ -24,11 +25,13 @@ export async function PATCH(
 
   const db = tenantDb(session.org)
   if (parsed.data.assigneeId) {
+    // Исполнителем может быть только полевая роль (docs/26 §6): офисного
+    // пользователя нельзя повесить как исполнителя задачи выкладки.
     const assignee = await db.user.findFirst({
-      where: { id: parsed.data.assigneeId, isActive: true },
+      where: { id: parsed.data.assigneeId, isActive: true, role: { in: [...ASSIGNABLE_ROLES] } },
       select: { id: true },
     })
-    if (!assignee) return NextResponse.json({ error: "assignee_not_found" }, { status: 404 })
+    if (!assignee) return NextResponse.json({ error: "assignee_not_assignable" }, { status: 422 })
   }
 
   const updated = await db.task.updateMany({

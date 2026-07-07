@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation"
 import { AssigneeSelect } from "../assignee-select"
 import { TaskStatusActions } from "../task-status-actions"
 import { CaptureRetakeButton } from "./capture-retake-button"
+import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
 
 function formatDate(value: Date | null | undefined): string {
   return value ? value.toLocaleDateString() : "—"
@@ -174,7 +175,7 @@ export default async function TaskDetailPage({
       },
     }),
     db.user.findMany({
-      where: { isActive: true, role: { in: ["MERCHANDISER", "SUPERVISOR", "STORE_STAFF", "FIELD_AGENT"] } },
+      where: { isActive: true, role: { in: [...ASSIGNABLE_ROLES] } },
       select: { id: true, name: true, employeeCode: true },
       orderBy: { name: "asc" },
     }),
