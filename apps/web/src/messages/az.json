@@ -29,6 +29,10 @@
   "dashboard": {
     "title": "Demo hazırlıq paneli",
     "subtitle": "LeadShelf əməliyyat icmalı: kataloq, avadanlıq, zal planı, yayımlanmış planoqram, mağaza tapşırığı və foto yoxlama bir axına bağlanmalıdır.",
+    "hero": {
+      "planogram": "Son yayımlanmış planoqram",
+      "photo": "Son foto təsdiqi"
+    },
     "kpi": {
       "products": "Aktiv məhsullar",
       "ready": "kataloq hazırlığı {value}%",
