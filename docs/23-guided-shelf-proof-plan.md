@@ -202,3 +202,12 @@ Definition of Done первого среза:
   `VISION_PROVIDER=openai` в server env.
 - Pilot-точность по Mars/FMCG невозможна без 20-50 реальных shelf proofs и
   ручной разметки expected result.
+
+## Связанные планы
+
+- `docs/24-guided-capture-plan.md` — гид съемки в видоискателе, photo-first
+  пересмотр обязательных шагов, серверное выпрямление кадра и
+  мм-калибровка, capture templates по типу оборудования.
+- `docs/25-product-scenario.md` — сквозной сценарий продукта: клиент-сеть
+  vs клиент-бренд, режимы depth-проверки, in-visit correction loop,
+  демо-сценарий.
