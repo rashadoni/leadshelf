@@ -119,6 +119,11 @@
   исключение.
 - Клик по AI finding должен открывать кадр/зону/планограмму.
 - Менеджер может принять, отклонить или запросить пересъемку конкретного шага.
+  `[сделано 2026-07-07: per-step retake loop — CaptureRetakeRequest,
+  роут /api/v1/tasks/[taskId]/capture-retake (office roles), кнопка и
+  бейджи в task detail; открытые запросы едут в sync pull и переоткрывают
+  шаг в мобильном wizard; новое фото шага авто-закрывает запрос на
+  upload]`
 - В отчетах отделять `proof_submitted` от `proof_scenario_complete`.
 
 ## Pilot backlog

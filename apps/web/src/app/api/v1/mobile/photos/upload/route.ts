@@ -10,7 +10,7 @@ import {
   selectProofVideoFrameTimestamps,
 } from "@leadshelf/core"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
-import { emitProductEvent } from "@leadshelf/db"
+import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
 import {
   runVisionComplianceForPhoto,
@@ -388,6 +388,13 @@ export async function POST(req: NextRequest) {
         : null
     return { photo, reviewId: qualityReview?.id ?? null, queuedVisionReviewId: queuedVisionReview?.id ?? null }
   })
+  // Новое фото шага закрывает открытый запрос пересъемки офиса (docs/23).
+  const submittedStepId = captureStep?.stepId ?? proofMetadata.capture.stepId
+  if (submittedStepId) {
+    await resolveCaptureRetakesForStep(workerDb, session.org, task.id, submittedStepId).catch(() => {
+      // best effort: фото сохранено, запрос закроется при следующей загрузке
+    })
+  }
   if (equipmentMismatch) {
     await emitProductEvent(workerDb, session.org, {
       kind: "capture.equipment_mismatch",

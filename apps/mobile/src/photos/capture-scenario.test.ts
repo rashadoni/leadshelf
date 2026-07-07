@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { MobileCaptureTemplate } from "@leadshelf/api-contracts/mobile/v1"
 import {
   GUIDED_SHELF_PROOF_SCENARIO_ID,
+  activeRetakeStepIds,
   extractCaptureStepFromExifJson,
   getCompletedCaptureStepIds,
   getNextRequiredCaptureStep,
@@ -126,6 +127,40 @@ describe("guided shelf proof capture scenario", () => {
     const completed = new Set(["front", "right-depth"])
     expect(isRequiredScenarioComplete(scenario.steps, completed)).toBe(false)
     expect(isRequiredScenarioComplete(scenario.steps, completed, new Set(["left-depth"]))).toBe(true)
+  })
+
+  it("marks a step as active retake only until a newer proof exists", () => {
+    const retakes = [{ stepId: "front", stepKind: "front", note: null, requestedAt: "2026-07-07T10:00:00.000Z" }]
+    // старое фото до запроса -> retake активен
+    expect(
+      activeRetakeStepIds(retakes, [
+        {
+          takenAt: "2026-07-07T09:00:00.000Z",
+          captureStepJson: JSON.stringify({ stepId: "front", stepKind: "front" }),
+        },
+      ]).has("front"),
+    ).toBe(true)
+    // фото после запроса -> retake закрыт локально
+    expect(
+      activeRetakeStepIds(retakes, [
+        {
+          takenAt: "2026-07-07T10:05:00.000Z",
+          captureStepJson: JSON.stringify({ stepId: "front", stepKind: "front" }),
+        },
+      ]).has("front"),
+    ).toBe(false)
+    // без фото шага -> активен
+    expect(activeRetakeStepIds(retakes, []).has("front")).toBe(true)
+    expect(activeRetakeStepIds(null, []).size).toBe(0)
+  })
+
+  it("keeps the required scenario open while a retake is active", () => {
+    const scenario = resolveCaptureScenario(null, "ru")
+    const completed = new Set(["front", "left-depth", "right-depth"])
+    expect(isRequiredScenarioComplete(scenario.steps, completed)).toBe(true)
+    expect(
+      isRequiredScenarioComplete(scenario.steps, completed, new Set(), new Set(["front"])),
+    ).toBe(false)
   })
 
   it("counts completed steps from synced captureStepJson when EXIF is absent", () => {

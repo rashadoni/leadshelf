@@ -595,6 +595,9 @@
       "videoProof": "İcra videosu",
       "noReview": "Review yoxdur",
       "equipmentMismatch": "Avadanlıq uyğun gəlmir",
+      "requestRetake": "Yenidən çəkiliş istə",
+      "retakeRequested": "Yenidən çəkiliş istənilib",
+      "retakeRequests": "Yenidən çəkiliş sorğuları",
       "captureExceptions": "İstisna edilmiş çəkiliş addımları",
       "captureExceptionReason": {
         "no_access": "Rəfə giriş yoxdur",

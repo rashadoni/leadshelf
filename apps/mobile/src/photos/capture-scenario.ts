@@ -4,6 +4,7 @@
 // типу оборудования планограммы); без шаблона работает встроенный сценарий.
 
 import type {
+  MobileCaptureRetake,
   MobileCaptureTemplate,
   MobileCaptureTemplateStep,
 } from "@leadshelf/api-contracts/mobile/v1"
@@ -333,8 +334,39 @@ export function isRequiredScenarioComplete(
   steps: CaptureScenarioStep[],
   completedStepIds: Set<string>,
   exceptionStepIds: Set<string> = new Set(),
+  activeRetakeStepIds: Set<string> = new Set(),
 ): boolean {
   return steps
     .filter((step) => step.required)
-    .every((step) => completedStepIds.has(step.id) || exceptionStepIds.has(step.id))
+    .every(
+      (step) =>
+        !activeRetakeStepIds.has(step.id) &&
+        (completedStepIds.has(step.id) || exceptionStepIds.has(step.id)),
+    )
+}
+
+/**
+ * Активные запросы пересъемки: офис попросил переснять шаг и после этого
+ * запроса еще нет свежего фото. Сравниваем requestedAt с временем последнего
+ * локального фото шага, чтобы не показывать retake на только что переснятом
+ * (сервер закроет запрос при следующей синхронизации).
+ */
+export function activeRetakeStepIds(
+  retakes: MobileCaptureRetake[] | null | undefined,
+  proofs: Array<{ takenAt: string; captureStepJson?: string | null; exifJson?: string | null }>,
+): Set<string> {
+  const active = new Set<string>()
+  if (!retakes || retakes.length === 0) return active
+  const latestProofByStep = new Map<string, string>()
+  for (const proof of proofs) {
+    const stepId = getCaptureStepFromProof(proof)?.stepId
+    if (!stepId) continue
+    const current = latestProofByStep.get(stepId)
+    if (!current || proof.takenAt > current) latestProofByStep.set(stepId, proof.takenAt)
+  }
+  for (const retake of retakes) {
+    const latestProof = latestProofByStep.get(retake.stepId)
+    if (!latestProof || latestProof < retake.requestedAt) active.add(retake.stepId)
+  }
+  return active
 }

@@ -117,6 +117,16 @@ export const mobileCaptureTemplateSchema = z.object({
 })
 export type MobileCaptureTemplate = z.infer<typeof mobileCaptureTemplateSchema>
 
+// Открытый запрос офиса переснять шаг (docs/23). requestedAt позволяет
+// приложению отличить старое фото шага от свежей пересъемки.
+export const mobileCaptureRetakeSchema = z.object({
+  stepId: z.string().min(1).max(64),
+  stepKind: z.string().max(64).nullable().optional(),
+  note: z.string().nullable().optional(),
+  requestedAt: z.string(),
+})
+export type MobileCaptureRetake = z.infer<typeof mobileCaptureRetakeSchema>
+
 export const mobileTaskRowSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -126,6 +136,7 @@ export const mobileTaskRowSchema = z.object({
   planogramVersionId: z.string().nullable(),
   locationHint: mobileTaskLocationHintSchema.nullable().optional(),
   captureTemplate: mobileCaptureTemplateSchema.nullable().optional(),
+  captureRetakes: z.array(mobileCaptureRetakeSchema).optional(),
   updatedAt: z.string(),
 })
 export type MobileTaskRow = z.infer<typeof mobileTaskRowSchema>

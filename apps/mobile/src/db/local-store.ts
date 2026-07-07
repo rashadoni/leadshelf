@@ -97,6 +97,9 @@ export function initDb(): void {
   if (!taskColumns.some((c) => c.name === "captureTemplate")) {
     db.execSync("ALTER TABLE tasks ADD COLUMN captureTemplate TEXT")
   }
+  if (!taskColumns.some((c) => c.name === "captureRetakes")) {
+    db.execSync("ALTER TABLE tasks ADD COLUMN captureRetakes TEXT")
+  }
   const storeColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(stores)")
   if (!storeColumns.some((c) => c.name === "latitude")) {
     db.execSync("ALTER TABLE stores ADD COLUMN latitude REAL")
@@ -139,12 +142,12 @@ export const localStore: LocalStore = {
     db.withTransactionSync(() => {
       for (const t of data.tasks) {
         db.runSync(
-          `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, locationHint, captureTemplate, updatedAt)
-           VALUES (?,?,?,?,?,?,?,?,?)
+          `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, locationHint, captureTemplate, captureRetakes, updatedAt)
+           VALUES (?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status,
              dueAt=excluded.dueAt, storeId=excluded.storeId,
              planogramVersionId=excluded.planogramVersionId, locationHint=excluded.locationHint,
-             captureTemplate=excluded.captureTemplate,
+             captureTemplate=excluded.captureTemplate, captureRetakes=excluded.captureRetakes,
              updatedAt=excluded.updatedAt`,
           [
             t.id,
@@ -155,6 +158,7 @@ export const localStore: LocalStore = {
             t.planogramVersionId,
             t.locationHint ? JSON.stringify(t.locationHint) : null,
             t.captureTemplate ? JSON.stringify(t.captureTemplate) : null,
+            t.captureRetakes && t.captureRetakes.length > 0 ? JSON.stringify(t.captureRetakes) : null,
             t.updatedAt,
           ],
         )
@@ -444,9 +448,10 @@ export const localStore: LocalStore = {
 
 // --- локальные чтения/записи для UI ---
 
-type TaskDbRow = Omit<TaskRow, "locationHint" | "captureTemplate"> & {
+type TaskDbRow = Omit<TaskRow, "locationHint" | "captureTemplate" | "captureRetakes"> & {
   locationHint?: string | null
   captureTemplate?: string | null
+  captureRetakes?: string | null
 }
 
 function parseJsonOrNull<T>(raw: string | null | undefined): T | null {
@@ -463,6 +468,7 @@ function mapTaskRow(row: TaskDbRow): TaskRow {
     ...row,
     locationHint: parseJsonOrNull(row.locationHint),
     captureTemplate: parseJsonOrNull(row.captureTemplate),
+    captureRetakes: parseJsonOrNull(row.captureRetakes) ?? undefined,
   }
 }
 

@@ -27,6 +27,7 @@ import {
 import { tokenStore } from "../../../src/auth/token-store"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import {
+  activeRetakeStepIds,
   getCaptureStepFromProof,
   getCompletedCaptureStepIds,
   getNextRequiredCaptureStep,
@@ -140,13 +141,19 @@ export default function TaskDetailScreen() {
     () => new Set(captureExceptions.map((exception) => exception.stepId)),
     [captureExceptions],
   )
+  const retakeStepIds = useMemo(
+    () => activeRetakeStepIds(task?.captureRetakes, photoProofs),
+    [task?.captureRetakes, photoProofs],
+  )
   const nextRequiredCaptureStep = useMemo(
     () =>
       getNextRequiredCaptureStep(
-        new Set([...completedCaptureStepIds, ...exceptionStepIds]),
+        new Set(
+          [...completedCaptureStepIds, ...exceptionStepIds].filter((id) => !retakeStepIds.has(id)),
+        ),
         scenario.steps,
       ),
-    [completedCaptureStepIds, exceptionStepIds, scenario.steps],
+    [completedCaptureStepIds, exceptionStepIds, retakeStepIds, scenario.steps],
   )
   const firstCaptureStep = scenario.steps[0]!
   const activeCaptureStep =
@@ -157,6 +164,7 @@ export default function TaskDetailScreen() {
     scenario.steps,
     completedCaptureStepIds,
     exceptionStepIds,
+    retakeStepIds,
   )
   const equipmentSilhouette = useMemo(
     () =>
@@ -676,10 +684,21 @@ export default function TaskDetailScreen() {
           </View>
           <View style={styles.captureStepList}>
             {scenario.steps.map((step) => {
-              const done = completedCaptureStepIds.has(step.id)
-              const excepted = !done && exceptionStepIds.has(step.id)
+              const retake = retakeStepIds.has(step.id)
+              const done = completedCaptureStepIds.has(step.id) && !retake
+              const excepted = !done && !retake && exceptionStepIds.has(step.id)
+              const retakeNote = retake
+                ? (task.captureRetakes?.find((item) => item.stepId === step.id)?.note ?? null)
+                : null
               return (
-                <View key={step.id} style={[styles.captureStepRow, done && styles.captureStepRowDone]}>
+                <View
+                  key={step.id}
+                  style={[
+                    styles.captureStepRow,
+                    done && styles.captureStepRowDone,
+                    retake && styles.captureStepRowRetake,
+                  ]}
+                >
                   <View style={styles.captureStepNumber}>
                     <Text style={styles.captureStepNumberText}>{step.sequence}</Text>
                   </View>
@@ -688,19 +707,32 @@ export default function TaskDetailScreen() {
                     <Text style={styles.captureStepInstruction} numberOfLines={2}>
                       {stepInstruction(step)}
                     </Text>
-                    <Text style={[styles.captureStepStatus, done && styles.captureStepStatusDone]}>
+                    <Text
+                      style={[
+                        styles.captureStepStatus,
+                        done && styles.captureStepStatusDone,
+                        retake && styles.captureStepStatusRetake,
+                      ]}
+                    >
                       {step.mediaKind === "video"
                         ? `${t("proofStepVideo")} ${step.minDurationSeconds}-${step.maxDurationSeconds}s · `
                         : `${t("proofStepPhoto")} · `}
-                      {done
-                        ? t("proofStepDone")
-                        : excepted
-                          ? t("stepExceptionBadge")
-                          : step.required
-                            ? t("proofStepRequired")
-                            : t("proofStepOptional")}
+                      {retake
+                        ? t("retakeRequested")
+                        : done
+                          ? t("proofStepDone")
+                          : excepted
+                            ? t("stepExceptionBadge")
+                            : step.required
+                              ? t("proofStepRequired")
+                              : t("proofStepOptional")}
                     </Text>
-                    {step.required && !done && !excepted ? (
+                    {retakeNote ? (
+                      <Text style={styles.captureStepRetakeNote} numberOfLines={2}>
+                        {retakeNote}
+                      </Text>
+                    ) : null}
+                    {step.required && !done && !excepted && !retake ? (
                       <Pressable onPress={() => setExceptionStepId(step.id)}>
                         <Text style={styles.captureStepExceptionLink}>{t("cantCaptureStep")}</Text>
                       </Pressable>
@@ -708,7 +740,7 @@ export default function TaskDetailScreen() {
                   </View>
                   <Pressable style={styles.captureStepButton} onPress={() => openProofCamera(step)}>
                     <Text style={styles.captureStepButtonText}>
-                      {done ? t("retakeStep") : t("startStep")}
+                      {done || retake ? t("retakeStep") : t("startStep")}
                     </Text>
                   </Pressable>
                 </View>
@@ -1135,6 +1167,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   captureStepRowDone: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
+  captureStepRowRetake: { borderColor: "#fed7aa", backgroundColor: "#fff7ed" },
   captureStepNumber: {
     width: 28,
     height: 28,
@@ -1149,6 +1182,8 @@ const styles = StyleSheet.create({
   captureStepInstruction: { fontSize: 11, color: "#525252", lineHeight: 15 },
   captureStepStatus: { fontSize: 11, color: "#92400e", fontWeight: "700" },
   captureStepStatusDone: { color: "#166534" },
+  captureStepStatusRetake: { color: "#c2410c" },
+  captureStepRetakeNote: { marginTop: 2, fontSize: 11, color: "#c2410c", fontWeight: "600" },
   captureStepButton: {
     minHeight: 36,
     justifyContent: "center",

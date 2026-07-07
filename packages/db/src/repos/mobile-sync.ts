@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient, TaskStatus } from "@prisma/client"
 import { evaluateVisitGeofence } from "@leadshelf/core"
 import { emitProductEvent } from "./alerts.ts"
+import { listOpenCaptureRetakes } from "./capture.ts"
 import { createOrder, OrderRepoError } from "./orders.ts"
 import { transitionTaskStatus } from "./publish.ts"
 import { PlanogramRepoError } from "./planogram.ts"
@@ -235,6 +236,13 @@ export async function pullChanges(
     }
   }
 
+  // Открытые запросы пересъемки только для задач в этом окне pull.
+  const retakesByTask = await listOpenCaptureRetakes(
+    prisma,
+    organizationId,
+    tasks.map((t) => t.id),
+  )
+
   const assignedTaskIds = allAssigned.map((task) => task.id)
   const photoCursor = decodeCursor(cursors.photoSubmissions)
   const photoCandidates =
@@ -438,6 +446,12 @@ export async function pullChanges(
         captureTemplate: t.planogramVersionId
           ? (captureTemplateByVersion.get(t.planogramVersionId) ?? null)
           : null,
+        captureRetakes: (retakesByTask.get(t.id) ?? []).map((retake) => ({
+          stepId: retake.stepId,
+          stepKind: retake.stepKind,
+          note: retake.note,
+          requestedAt: retake.requestedAt,
+        })),
         updatedAt: t.updatedAt.toISOString(),
       }
     }),

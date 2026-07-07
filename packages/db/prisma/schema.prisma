@@ -81,6 +81,7 @@ model Organization {
   fieldForceSetting      FieldForceSetting?
   captureTemplates       CaptureTemplate[]
   captureStepExceptions  CaptureStepException[]
+  captureRetakeRequests  CaptureRetakeRequest[]
 
   @@map("organizations")
 }
@@ -106,6 +107,7 @@ model User {
   taskComments          TaskComment[]
   assignedTasks         Task[]                 @relation("TaskAssignee")
   captureStepExceptions CaptureStepException[]
+  captureRetakeRequests CaptureRetakeRequest[]
 
   @@unique([organizationId, email])
   @@unique([organizationId, employeeCode])
@@ -1066,6 +1068,7 @@ model Task {
   photoSubmissions      PhotoSubmission[]
   humanReviews          HumanReview[]
   captureStepExceptions CaptureStepException[]
+  captureRetakeRequests CaptureRetakeRequest[]
 
   @@index([organizationId, status, dueAt])
   @@index([storeId, status])
@@ -1211,6 +1214,32 @@ model CaptureStepException {
 
   @@index([organizationId, taskId])
   @@map("capture_step_exceptions")
+}
+
+// Офис просит переснять конкретный шаг сценария (docs/23 web review
+// backlog): замыкает петлю ревью. Открыт, пока resolvedAt=null; сбрасывается
+// авто при загрузке нового фото этого шага. requestedAt двигается при
+// повторном запросе, чтобы мобильное приложение отличило старое фото от
+// пересъемки. Один активный запрос на (org, task, step).
+model CaptureRetakeRequest {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  stepId         String
+  stepKind       String?
+  note           String?
+  requestedById  String
+  requestedBy    User         @relation(fields: [requestedById], references: [id])
+  requestedAt    DateTime     @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, taskId, stepId])
+  @@index([organizationId, taskId, resolvedAt])
+  @@map("capture_retake_requests")
 }
 
 enum GoldenReferenceStatus {

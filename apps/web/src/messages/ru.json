@@ -595,6 +595,9 @@
       "videoProof": "Видео выполнения",
       "noReview": "Без review",
       "equipmentMismatch": "Оборудование не совпадает",
+      "requestRetake": "Запросить пересъемку",
+      "retakeRequested": "Пересъемка запрошена",
+      "retakeRequests": "Запросы пересъемки",
       "captureExceptions": "Шаги съемки с исключениями",
       "captureExceptionReason": {
         "no_access": "Нет доступа к полке",
