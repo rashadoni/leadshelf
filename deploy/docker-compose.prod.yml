@@ -93,6 +93,21 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # Vision HTTP boundary для photo-proof: web зовёт http://vision:4010/v1/scan
+  # (VISION_SERVICE_URL в .env.production). Провайдер выбирается VISION_PROVIDER
+  # (stub|openai|gemini). Наружу не публикуется. Картинки тянет по signed
+  # /api/vision-media URL, поэтому нужен доступ к web/caddy на рантайме.
+  vision:
+    build:
+      context: ./app
+      dockerfile: deploy/Dockerfile.web
+      target: worker
+    command: ["pnpm", "--filter", "@leadshelf/vision", "serve"]
+    env_file: .env.production
+    expose:
+      - "4010"
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     # POSTGRES_USER/DB/PASSWORD приходят из .env.production (env_file, не

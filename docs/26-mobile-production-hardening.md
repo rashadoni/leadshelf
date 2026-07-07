@@ -140,6 +140,15 @@ CV-инфраструктуре), Sentry DSN.
   фактический прод-путь: отдельный vision-сервис в compose не деплоится,
   распознавание идёт через `worker-proof-analysis`. Ключ в
   `deploy/.env.production` (env_file) на сервере.
+- [x] **Photo-path задеплоен** (2026-07-07): `vision`-сервис добавлен в
+  `deploy/docker-compose.prod.yml` (target worker, `serve`=tsx,
+  expose 4010, env_file), Dockerfile копирует `services/vision/package.json`
+  до install. Web зовёт его через `VISION_SERVICE_URL=http://vision:4010`;
+  картинку vision тянет по signed `/api/vision-media` URL
+  (`VISION_MEDIA_PUBLIC_BASE_URL` + `VISION_MEDIA_SIGNING_SECRET`).
+  Boot-smoke: `serve` стартует с `VISION_PROVIDER=gemini`, `/health`
+  отдаёт `google-gemini`. Env-инструкции — `deploy/SERVER_SETUP.md` §4a.
+  Docker build/deploy на сервере не выполнялся (нет доступа/push заблокирован).
 - [ ] Включить `VISION_PROVIDER=openai|gemini` + ключ на сервере; без
   ключа — честный `leadshelf-stub`.
 - [ ] Verification-not-recognition: подавать per-zone ожидаемые SKU +
