@@ -6,13 +6,17 @@ import {
 } from "@leadshelf/api-contracts/vision/v1"
 import {
   createConfiguredVisionProvider,
+  DEFAULT_GEMINI_VISION_MODEL,
   DEFAULT_OPENAI_VISION_MODEL,
+  GeminiVisionProvider,
+  GEMINI_PROVIDER,
   OpenAiVisionProvider,
   OPENAI_PROVIDER,
   ReferenceSlotStubProvider,
   STUB_MODEL_VERSION,
   STUB_PROVIDER,
   type VisionFetch,
+  type VisionImageFetch,
 } from "./provider"
 
 const request: VisionScanRequest = {
@@ -205,5 +209,97 @@ describe("OpenAiVisionProvider", () => {
         OPENAI_VISION_MODEL: "gpt-test",
       }).metadata,
     ).toEqual({ provider: OPENAI_PROVIDER, modelVersion: "gpt-test" })
+  })
+})
+
+describe("GeminiVisionProvider", () => {
+  it("inlines the shelf photo as base64 and maps structured detections into compliance", async () => {
+    let calledUrl: string | null = null
+    let body: Record<string, unknown> | null = null
+    const imageFetchImpl: VisionImageFetch = async () => ({
+      ok: true,
+      status: 200,
+      async arrayBuffer() {
+        return new TextEncoder().encode("fake-jpeg-bytes").buffer
+      },
+      headers: { get: (name: string) => (name.toLowerCase() === "content-type" ? "image/jpeg" : null) },
+    })
+    const fetchImpl: VisionFetch = async (url, init) => {
+      calledUrl = url
+      expect(init.headers["x-goog-api-key"]).toBe("gemini-key")
+      body = JSON.parse(init.body) as Record<string, unknown>
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        detections: [
+                          {
+                            slotId: "slot-a",
+                            productId: "product-a",
+                            productSku: "SKU-A",
+                            label: "Product A",
+                            confidence: 0.9,
+                            bbox: { xPct: 12, yPct: 22, widthPct: 28, heightPct: 38 },
+                          },
+                        ],
+                        warnings: ["depth_not_confirmed"],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          })
+        },
+      }
+    }
+
+    const response = await new GeminiVisionProvider({ apiKey: "gemini-key", fetchImpl, imageFetchImpl }).scan({
+      ...request,
+      photoUrl: "https://cdn.example/photo.jpg",
+      goldenReferenceUrl: undefined,
+    })
+
+    expect(calledUrl).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    )
+    expect(body).not.toBeNull()
+    const parts = (body as unknown as { contents: Array<{ parts: Array<Record<string, unknown>> }> })
+      .contents[0]!.parts
+    expect(parts.some((p) => "inline_data" in p)).toBe(true)
+    expect(visionScanResponseSchema.parse(response)).toEqual(response)
+    expect(response.provider).toBe(GEMINI_PROVIDER)
+    expect(response.modelVersion).toBe(DEFAULT_GEMINI_VISION_MODEL)
+    expect(response.status).toBe("completed")
+    expect(response.compliance).toMatchObject({ score: 0.9, status: "PASS", matchedSlots: 1 })
+    expect(response.warnings).toContain("depth_not_confirmed")
+  })
+
+  it("fails explicitly when there are no reference slots", async () => {
+    const response = await new GeminiVisionProvider({
+      apiKey: "gemini-key",
+      fetchImpl: async () => {
+        throw new Error("fetch_should_not_be_called")
+      },
+    }).scan({ ...request, slots: [] })
+    expect(response.status).toBe("failed")
+    expect(response.warnings).toContain("no_reference_slots_provided")
+  })
+
+  it("is selected by the factory when VISION_PROVIDER=gemini", () => {
+    expect(
+      createConfiguredVisionProvider({
+        VISION_PROVIDER: "gemini",
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_VISION_MODEL: "gemini-2.5-pro",
+      }).metadata,
+    ).toEqual({ provider: GEMINI_PROVIDER, modelVersion: "gemini-2.5-pro" })
   })
 })
