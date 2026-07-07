@@ -870,6 +870,12 @@
       "SKIPPED": "AI пропущен",
       "FAILED": "AI ошибка"
     },
+    "overlay": {
+      "match": "совпало",
+      "issue": "нарушение",
+      "uncertain": "не подтверждено",
+      "unknownSku": "SKU не распознан"
+    },
     "reason": {
       "PHOTO_QUALITY": "Качество фото",
       "VISION_COMPLIANCE": "Vision compliance"
