@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
+import { PlanogramThumbnail } from "./planograms/planogram-thumbnail"
 
 function qualityTone(value: number) {
   if (value === 0) return "bg-emerald-50 text-emerald-700"
@@ -28,6 +29,8 @@ export default async function OverviewPage() {
     photoSubmittedTasks,
     pendingReviews,
     photoSubmissions,
+    heroPlanogram,
+    heroPhoto,
   ] = await Promise.all([
     db.product.count({ where: { isActive: true } }),
     db.product.count({
@@ -55,6 +58,31 @@ export default async function OverviewPage() {
     db.task.count({ where: { status: "PHOTO_SUBMITTED" } }),
     db.humanReview.count({ where: { status: "PENDING" } }),
     db.photoSubmission.count(),
+    db.planogramVersion.findFirst({
+      where: { state: "PUBLISHED" },
+      orderBy: { publishedAt: "desc" },
+      select: {
+        id: true,
+        versionNumber: true,
+        planogram: { select: { id: true, name: true } },
+        equipment: {
+          select: {
+            equipmentVersion: {
+              select: { shelves: { select: { shelfIndex: true, yMm: true, thicknessMm: true }, take: 12 } },
+            },
+          },
+          take: 1,
+        },
+        placements: {
+          select: { xMm: true, yMm: true, widthMm: true, heightMm: true, facingsX: true, facingsY: true, productId: true },
+          take: 80,
+        },
+      },
+    }),
+    db.photoSubmission.findFirst({
+      orderBy: { takenAt: "desc" },
+      select: { url: true, mediaType: true, store: { select: { name: true } } },
+    }),
   ])
 
   const readiness = products === 0 ? 0 : Math.round((readyProducts / products) * 100)
@@ -88,6 +116,49 @@ export default async function OverviewPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="mt-2 text-sm leading-6 text-neutral-600">{t("subtitle")}</p>
       </div>
+
+      {(heroPlanogram || heroPhoto) && (
+        <section className="grid gap-4 md:grid-cols-2">
+          {heroPlanogram ? (
+            <Link
+              href={`/planograms/${heroPlanogram.planogram.id}/${heroPlanogram.id}`}
+              className="rounded-lg border border-neutral-200 bg-white p-4 hover:border-neutral-300"
+            >
+              <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">{t("hero.planogram")}</div>
+              <div className="mt-1 text-sm font-medium">
+                {heroPlanogram.planogram.name} · v{heroPlanogram.versionNumber}
+              </div>
+              <PlanogramThumbnail
+                className="mt-2 h-44 w-full"
+                shelves={heroPlanogram.equipment[0]?.equipmentVersion.shelves ?? []}
+                placements={heroPlanogram.placements}
+              />
+            </Link>
+          ) : null}
+          {heroPhoto ? (
+            <div className="rounded-lg border border-neutral-200 bg-white p-4">
+              <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">{t("hero.photo")}</div>
+              <div className="mt-1 text-sm text-neutral-500">{heroPhoto.store?.name ?? ""}</div>
+              {heroPhoto.mediaType === "VIDEO" ? (
+                <video
+                  className="mt-2 h-44 w-full rounded-md border border-neutral-200 bg-neutral-900 object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                >
+                  <source src={`/api/media/${heroPhoto.url}`} />
+                </video>
+              ) : (
+                <img
+                  src={`/api/media/${heroPhoto.url}`}
+                  alt=""
+                  className="mt-2 h-44 w-full rounded-md border border-neutral-200 bg-neutral-100 object-cover"
+                />
+              )}
+            </div>
+          ) : null}
+        </section>
+      )}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => (
