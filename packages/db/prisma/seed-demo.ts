@@ -12,7 +12,7 @@ const DEMO_PASSWORD = "demo1234"
 const prisma = createSystemClient("seed-demo")
 
 const USERS = [
-  ["admin@demo.leadshelf.local", "Демо администратор", "ADMIN"],
+  ["admin@leadshelf.com", "Демо администратор", "ADMIN"],
   ["category@demo.leadshelf.local", "Категорийный менеджер", "CATEGORY_MANAGER"],
   ["merch@demo.leadshelf.local", "Мерчендайзер офиса", "MERCHANDISER"],
   ["supervisor@demo.leadshelf.local", "Супервайзер сети", "SUPERVISOR"],
