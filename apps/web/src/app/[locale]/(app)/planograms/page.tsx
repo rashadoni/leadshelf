@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
+import { PlanogramThumbnail } from "./planogram-thumbnail"
 
 function formatDate(value: Date | null | undefined): string {
   return value ? value.toLocaleDateString() : "—"
@@ -40,11 +41,23 @@ export default async function PlanogramsPage() {
               equipmentVersion: {
                 select: {
                   template: { select: { name: true } },
-                  shelves: { select: { id: true }, take: 12 },
+                  shelves: { select: { shelfIndex: true, yMm: true, thicknessMm: true }, take: 12 },
                 },
               },
             },
             take: 1,
+          },
+          placements: {
+            select: {
+              xMm: true,
+              yMm: true,
+              widthMm: true,
+              heightMm: true,
+              facingsX: true,
+              facingsY: true,
+              productId: true,
+            },
+            take: 80,
           },
           _count: { select: { placements: true } },
         },
@@ -97,7 +110,6 @@ export default async function PlanogramsPage() {
                 }) ?? []
                 const openTasks = v?.tasks.filter((task) => !["COMPLETED", "EXPIRED", "EMPTY"].includes(task.status)).length ?? 0
                 const completedTasks = v?.tasks.filter((task) => task.status === "COMPLETED").length ?? 0
-                const shelfCount = v?.equipment[0]?.equipmentVersion.shelves.length ?? 0
                 return (
                   <tr key={p.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
                     <td className="px-3 py-3">
@@ -114,20 +126,11 @@ export default async function PlanogramsPage() {
                       <div className="mt-1 text-xs text-neutral-500">{p.category?.name ?? t("list.noCategory")}</div>
                     </td>
                     <td className="px-3 py-3">
-                      <div className="h-16 w-36 rounded-md border border-neutral-200 bg-neutral-50 p-2">
-                        <div className="flex h-full flex-col justify-between gap-1">
-                          {Array.from({ length: Math.max(1, Math.min(4, shelfCount)) }, (_, index) => (
-                            <div key={index} className="relative h-2 rounded bg-neutral-300">
-                              {index === 0 ? (
-                                <span
-                                  className="absolute left-0 top-0 h-2 rounded bg-neutral-900"
-                                  style={{ width: `${Math.min(100, Math.max(18, (v?._count.placements ?? 0) * 11))}%` }}
-                                />
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      <PlanogramThumbnail
+                        className="h-16 w-36"
+                        shelves={v?.equipment[0]?.equipmentVersion.shelves ?? []}
+                        placements={v?.placements ?? []}
+                      />
                       <div className="mt-1 text-xs text-neutral-500">
                         {v?.equipment[0]?.equipmentVersion.template.name ?? "—"}
                       </div>
