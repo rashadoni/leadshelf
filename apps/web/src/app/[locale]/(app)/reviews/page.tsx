@@ -242,7 +242,9 @@ export default async function ReviewsPage({
                     <div className="border-t border-neutral-200 px-2 py-1 text-[11px] text-neutral-500">
                       {photo?.mediaType === "VIDEO" ? t("videoProof") : t("photoProof")}
                       {photo?.durationMs ? ` · ${Math.round(photo.durationMs / 1000)}s` : ""}
-                      {photo?.analysisStatus ? ` · ${t(`analysisStatus.${photo.analysisStatus}` as never)}` : ""}
+                      {photo?.mediaType === "VIDEO" && photo.analysisStatus
+                        ? ` · ${t(`analysisStatus.${photo.analysisStatus}` as never)}`
+                        : ""}
                     </div>
                   </div>
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
