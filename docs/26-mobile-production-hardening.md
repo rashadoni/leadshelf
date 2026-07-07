@@ -132,10 +132,14 @@ CV-инфраструктуре), Sentry DSN.
   в `services/vision/provider.ts` (inline_data base64, `x-goog-api-key`,
   responseMimeType JSON + zod), выбор `VISION_PROVIDER=gemini` +
   `GEMINI_API_KEY` (+ `GEMINI_VISION_MODEL`, default `gemini-2.5-flash`);
-  тесты. Ключ ставится в env vision-сервиса (docker-compose на проде),
-  никогда в git/приложение. Осталось: воркерный video-путь
-  (`services/worker/.../analyzer.ts`) пока только openai/stub — добавить
-  туда gemini-ветку.
+  тесты. Ключ — только в env сервиса, никогда в git/приложение.
+- [x] **Gemini в прод-воркере** (2026-07-07): `scanWithGemini` в
+  `services/worker/.../analyzer.ts` (кадры инлайнятся как base64, общий
+  `finalizeFrameAnalysis` с OpenAI-путём), выбор `VISION_PROVIDER=gemini`
+  или `LEADSHELF_PROOF_AI_PROVIDER=gemini`; тест с mock fetch. Это
+  фактический прод-путь: отдельный vision-сервис в compose не деплоится,
+  распознавание идёт через `worker-proof-analysis`. Ключ в
+  `deploy/.env.production` (env_file) на сервере.
 - [ ] Включить `VISION_PROVIDER=openai|gemini` + ключ на сервере; без
   ключа — честный `leadshelf-stub`.
 - [ ] Verification-not-recognition: подавать per-zone ожидаемые SKU +
