@@ -870,6 +870,12 @@
       "SKIPPED": "AI buraxılıb",
       "FAILED": "AI xətası"
     },
+    "overlay": {
+      "match": "uyğun",
+      "issue": "pozuntu",
+      "uncertain": "təsdiqlənməyib",
+      "unknownSku": "SKU tanınmadı"
+    },
     "reason": {
       "PHOTO_QUALITY": "Foto keyfiyyəti",
       "VISION_COMPLIANCE": "Vision compliance"

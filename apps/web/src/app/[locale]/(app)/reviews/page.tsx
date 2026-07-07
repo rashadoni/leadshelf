@@ -3,6 +3,7 @@ import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { ReviewActions } from "./review-actions"
+import { ProofOverlay } from "./proof-overlay"
 
 const STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const
 
@@ -61,7 +62,27 @@ function visionDetails(findings: unknown) {
   const missing = Array.isArray(nestedFindings.missing) ? nestedFindings.missing.map(asRecord) : []
   const wrong = Array.isArray(nestedFindings.wrong) ? nestedFindings.wrong.map(asRecord) : []
   const extra = Array.isArray(nestedFindings.extra) ? nestedFindings.extra.map(asRecord) : []
+  const wrongSlotIds = new Set(
+    wrong.map((item) => (typeof item.slotId === "string" ? item.slotId : null)).filter(Boolean),
+  )
+  const detections = (Array.isArray(vision.detections) ? vision.detections.map(asRecord) : [])
+    .map((d, index) => {
+      const bbox = asRecord(d.bbox)
+      const xPct = typeof bbox.xPct === "number" ? bbox.xPct : null
+      const yPct = typeof bbox.yPct === "number" ? bbox.yPct : null
+      const widthPct = typeof bbox.widthPct === "number" ? bbox.widthPct : null
+      const heightPct = typeof bbox.heightPct === "number" ? bbox.heightPct : null
+      if (xPct === null || yPct === null || widthPct === null || heightPct === null) return null
+      const slotId = typeof d.slotId === "string" ? d.slotId : null
+      const sku = typeof d.productSku === "string" ? d.productSku : null
+      const confidence = typeof d.confidence === "number" ? d.confidence : 0
+      const status: "match" | "issue" | "uncertain" =
+        slotId && wrongSlotIds.has(slotId) ? "issue" : confidence >= 0.5 && slotId ? "match" : "uncertain"
+      return { id: slotId ?? `det-${index}`, xPct, yPct, widthPct, heightPct, sku, confidence, status }
+    })
+    .filter((d): d is NonNullable<typeof d> => d !== null)
   return {
+    detections,
     provider: typeof vision.provider === "string" ? vision.provider : null,
     modelVersion: typeof vision.modelVersion === "string" ? vision.modelVersion : null,
     workerStatus: typeof vision.workerStatus === "string" ? vision.workerStatus : null,
@@ -315,6 +336,20 @@ export default async function ReviewsPage({
                   )}
                   {vision && (
                     <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      {photo && photo.mediaType !== "VIDEO" && vision.detections.length > 0 ? (
+                        <div className="mb-3">
+                          <ProofOverlay
+                            src={`/api/media/${photo.url}`}
+                            boxes={vision.detections}
+                            statusLabels={{
+                              match: t("overlay.match"),
+                              issue: t("overlay.issue"),
+                              uncertain: t("overlay.uncertain"),
+                            }}
+                            emptyLabel={t("overlay.unknownSku")}
+                          />
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
                         <span className="font-medium text-neutral-700">{t("vision.title")}</span>
                         {vision.provider && <span>{vision.provider}</span>}
