@@ -65,6 +65,7 @@ export interface PhotoQueueRow {
   exifJson?: string | null
   captureFlagsJson?: string | null
   captureTelemetryJson?: string | null
+  attempts?: number
   uploaded: boolean
 }
 
@@ -78,6 +79,9 @@ export interface LocalStore {
   bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
   pendingPhotos(): Promise<PhotoQueueRow[]>
   markPhotoUploaded(clientPhotoId: string, result: MobilePhotoUploadResponse): Promise<void>
+  bumpPhotoAttempts(clientPhotoIds: string[]): Promise<void>
+  quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
+  quarantinedPhotoCount(): Promise<number>
 }
 
 export type SyncPhase =
@@ -95,5 +99,6 @@ export interface SyncStatus {
   lastSyncAt: string | null
   pendingOps: number
   pendingPhotos: number
+  quarantinedPhotos: number
   error: string | null
 }

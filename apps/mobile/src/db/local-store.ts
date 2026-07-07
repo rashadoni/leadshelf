@@ -128,6 +128,9 @@ export function initDb(): void {
     "captureTelemetryJson",
     "ALTER TABLE photo_queue ADD COLUMN captureTelemetryJson TEXT",
   )
+  ensurePhotoColumn("attempts", "ALTER TABLE photo_queue ADD COLUMN attempts INTEGER DEFAULT 0")
+  ensurePhotoColumn("status", "ALTER TABLE photo_queue ADD COLUMN status TEXT DEFAULT 'pending'")
+  ensurePhotoColumn("lastError", "ALTER TABLE photo_queue ADD COLUMN lastError TEXT")
   const serverPhotoColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(server_photo_submissions)")
   const ensureServerPhotoColumn = (name: string, sql: string) => {
     if (!serverPhotoColumns.some((c) => c.name === name)) db.execSync(sql)
@@ -420,10 +423,16 @@ export const localStore: LocalStore = {
       exifJson: string | null
       captureFlagsJson: string | null
       captureTelemetryJson: string | null
+      attempts: number | null
     }>(
-      "SELECT clientPhotoId, taskId, fileUri, takenAt, mediaType, durationMs, captureStepJson, exifJson, captureFlagsJson, captureTelemetryJson FROM photo_queue WHERE uploaded=0",
+      `SELECT clientPhotoId, taskId, fileUri, takenAt, mediaType, durationMs, captureStepJson, exifJson,
+        captureFlagsJson, captureTelemetryJson, attempts
+       FROM photo_queue
+       WHERE uploaded=0 AND (status IS NULL OR status='pending')`,
     )
-    return rows.map((r): PhotoQueueRow => ({ ...r, mediaType: r.mediaType ?? "photo", uploaded: false }))
+    return rows.map(
+      (r): PhotoQueueRow => ({ ...r, mediaType: r.mediaType ?? "photo", attempts: r.attempts ?? 0, uploaded: false }),
+    )
   },
 
   async markPhotoUploaded(clientPhotoId, result) {
@@ -443,6 +452,28 @@ export const localStore: LocalStore = {
         clientPhotoId,
       ],
     )
+  },
+
+  async bumpPhotoAttempts(clientPhotoIds) {
+    db.withTransactionSync(() => {
+      for (const id of clientPhotoIds) {
+        db.runSync("UPDATE photo_queue SET attempts = COALESCE(attempts,0) + 1 WHERE clientPhotoId=?", [id])
+      }
+    })
+  },
+
+  async quarantinePhoto(clientPhotoId, reason) {
+    db.runSync(
+      "UPDATE photo_queue SET status='quarantined', lastError=?, attempts = COALESCE(attempts,0) + 1 WHERE clientPhotoId=?",
+      [reason.slice(0, 500), clientPhotoId],
+    )
+  },
+
+  async quarantinedPhotoCount() {
+    const row = db.getFirstSync<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM photo_queue WHERE uploaded=0 AND status='quarantined'",
+    )
+    return row?.n ?? 0
   },
 }
 

@@ -34,32 +34,39 @@ export async function requestCaptureRetake(
   if (!task) throw new CaptureRepoError("task_not_found")
   const now = new Date()
   const note = input.note?.trim() || null
-  return prisma.captureRetakeRequest.upsert({
-    where: {
-      organizationId_taskId_stepId: {
+  // Бампаем task.updatedAt в той же транзакции: pull курсорный, и без
+  // изменения задачи запрос пересъемки не переотдался бы на устройство
+  // (docs/26 P0). Один $transaction — либо оба, либо ничего.
+  const [request] = await prisma.$transaction([
+    prisma.captureRetakeRequest.upsert({
+      where: {
+        organizationId_taskId_stepId: {
+          organizationId,
+          taskId: input.taskId,
+          stepId: input.stepId,
+        },
+      },
+      create: {
         organizationId,
         taskId: input.taskId,
         stepId: input.stepId,
+        stepKind: input.stepKind ?? null,
+        note,
+        requestedById: input.requestedById,
+        requestedAt: now,
       },
-    },
-    create: {
-      organizationId,
-      taskId: input.taskId,
-      stepId: input.stepId,
-      stepKind: input.stepKind ?? null,
-      note,
-      requestedById: input.requestedById,
-      requestedAt: now,
-    },
-    update: {
-      stepKind: input.stepKind ?? null,
-      note,
-      requestedById: input.requestedById,
-      requestedAt: now,
-      resolvedAt: null,
-    },
-    select: { id: true, stepId: true, requestedAt: true },
-  })
+      update: {
+        stepKind: input.stepKind ?? null,
+        note,
+        requestedById: input.requestedById,
+        requestedAt: now,
+        resolvedAt: null,
+      },
+      select: { id: true, stepId: true, requestedAt: true },
+    }),
+    prisma.task.update({ where: { id: input.taskId }, data: { updatedAt: now } }),
+  ])
+  return request
 }
 
 /**
@@ -72,11 +79,18 @@ export async function resolveCaptureRetakesForStep(
   taskId: string,
   stepId: string,
 ): Promise<number> {
-  const result = await prisma.captureRetakeRequest.updateMany({
-    where: { organizationId, taskId, stepId, resolvedAt: null },
-    data: { resolvedAt: new Date() },
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.captureRetakeRequest.updateMany({
+      where: { organizationId, taskId, stepId, resolvedAt: null },
+      data: { resolvedAt: new Date() },
+    })
+    // Только если что-то реально закрыли — иначе не плодим лишние re-pull
+    // задачи на каждое загруженное фото (docs/26 P0).
+    if (result.count > 0) {
+      await tx.task.update({ where: { id: taskId }, data: { updatedAt: new Date() } })
+    }
+    return result.count
   })
-  return result.count
 }
 
 export interface OpenCaptureRetake {

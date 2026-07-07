@@ -1,7 +1,7 @@
 // Клиент замороженного mobile API (docs/18): bearer, protocolVersion=1,
 // singleflight-refresh (гонка рефрешей ломает grace-ротацию), 426 -> upgrade.
 
-import { UpgradeRequiredError } from "../sync/ports-error"
+import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
 import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
 import {
   MOBILE_PROTOCOL_VERSION,
@@ -16,11 +16,7 @@ import { tokenStore } from "../auth/token-store"
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://hermescrm.xyz"
 export const PROTOCOL_VERSION = MOBILE_PROTOCOL_VERSION
 
-export class AuthLostError extends Error {
-  constructor() {
-    super("session lost")
-  }
-}
+export { AuthLostError } from "../sync/ports-error"
 
 let refreshInFlight: Promise<boolean> | null = null
 
@@ -69,7 +65,9 @@ async function request<T>(
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error((body as { message?: string; error?: string }).message ?? `HTTP ${res.status}`)
+    const message = (body as { message?: string; error?: string }).message ??
+      (body as { error?: string }).error
+    throw new HttpError(res.status, message)
   }
   return (await res.json()) as T
 }
