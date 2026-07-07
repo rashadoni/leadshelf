@@ -1,6 +1,9 @@
 import "dotenv/config"
 import { createSystemClient } from "@leadshelf/db"
 import { processNextCatalogImportJob } from "./catalog-import/queue"
+import { initErrorReporting } from "./observability"
+
+initErrorReporting("import-queue")
 
 const prisma = createSystemClient("import-worker")
 const pollMs = Number(process.env.LEADSHELF_IMPORT_QUEUE_POLL_MS ?? 5000)

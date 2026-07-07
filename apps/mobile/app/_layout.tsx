@@ -4,11 +4,13 @@ import { initDb } from "../src/db/local-store"
 import { getOrCreateDeviceId } from "../src/auth/device-id"
 import { tokenStore } from "../src/auth/token-store"
 import { setLocale, type Locale } from "../src/i18n"
+import { initErrorReporting } from "../src/observability"
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    initErrorReporting()
     void (async () => {
       initDb()
       await getOrCreateDeviceId()

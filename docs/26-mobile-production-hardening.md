@@ -190,7 +190,17 @@ CV-инфраструктуре), Sentry DSN.
 
 ## 10. Наблюдаемость (P1-P2)
 
-- [ ] Crash reporting (Sentry / expo). Сейчас падений не видно.
+- [x] Crash reporting (Sentry) — 2026-07-07, env-gated. Зависимость-free
+  репортёр (envelope через fetch) в `packages/core/observability/sentry.ts`
+  (web+worker) и RN-safe копия в `apps/mobile/src/observability`
+  (regex-DSN, ErrorUtils hook). Web: `instrumentation.ts` `onRequestError`;
+  worker: process-обработчики во всех раннерах; mobile: init в `_layout`.
+  Sentry-проекты `leadshelf-web`/`leadshelf-mobile` созданы; оба DSN
+  проверены live (HTTP 200). DSN в gitignored env (`SENTRY_DSN`,
+  `EXPO_PUBLIC_SENTRY_DSN`), пусто = выключено. Ограничение: это не полный
+  `@sentry/react-native` — нативные краши/breadcrumbs/tracing не ловятся,
+  только JS-исключения; апгрейд на официальный SDK — при переходе на
+  dev-client/EAS сборку.
 - [ ] Структурные логи sync-фаз и ошибок upload/push с device/opId.
 - [ ] Метрики: успех/латентность синхронизации, глубина очереди, доля
   пересъёмок, время-до-принятого-кадра (телеметрия гида уже пишется —

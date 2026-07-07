@@ -8,6 +8,7 @@ export default defineConfig({
       "src/planogram/**/*.test.ts",
       "src/photos/**/*.test.ts",
       "src/i18n/**/*.test.ts",
+      "src/observability/**/*.test.ts",
     ],
     environment: "node",
   },

@@ -1,6 +1,9 @@
 import "dotenv/config"
 import { createSystemClient } from "@leadshelf/db"
 import { processPendingNotificationsForAllOrganizations } from "./notifications/push"
+import { initErrorReporting } from "./observability"
+
+initErrorReporting("notifications")
 
 const prisma = createSystemClient("notification-delivery-worker")
 const pollMs = Number(process.env.LEADSHELF_NOTIFICATION_POLL_MS ?? 5000)
