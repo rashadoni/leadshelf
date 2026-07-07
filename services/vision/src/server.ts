@@ -1,3 +1,4 @@
+import { config as loadDotenv } from "dotenv"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { pathToFileURL } from "node:url"
 import {
@@ -7,6 +8,10 @@ import {
   visionScanResponseSchema,
 } from "@leadshelf/api-contracts/vision/v1"
 import { createConfiguredVisionProvider, type VisionProvider } from "./provider"
+
+// .env грузим только в реальном запуске; в vitest — нет, иначе локальный
+// VISION_PROVIDER=gemini подменил бы дефолтный stub в тестах.
+if (!process.env.VITEST) loadDotenv()
 
 const provider = createConfiguredVisionProvider()
 const port = Number.parseInt(process.env.PORT ?? "4010", 10)

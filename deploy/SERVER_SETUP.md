@@ -95,6 +95,38 @@ GitHub Actions (появится с web-скаффолдом):
 Секреты в GitHub: `SSH_HOST`, `SSH_KEY`, `DATABASE_URL`, `JWT_SECRET`,
 `S3_*`. На сервере — `.env` рядом с compose (не в git).
 
+## Шаг 4a. Vision / AI (photo-proof анализ)
+
+Photo-proof анализируется отдельным сервисом `vision` (см. compose). Он не
+публикуется наружу; web зовёт его по внутреннему имени. Video-proof идёт
+через `worker-proof-analysis`. Обоим ключ даётся через `.env.production`.
+
+Добавить в `/opt/leadshelf/prod/.env.production` (root:600):
+
+```
+# web -> vision boundary
+VISION_SERVICE_URL=http://vision:4010
+# signed URL, по которому vision скачивает картинку (Gemini инлайнит байты)
+VISION_MEDIA_PUBLIC_BASE_URL=https://hermescrm.xyz
+VISION_MEDIA_SIGNING_SECRET=<длинный случайный секрет>
+
+# провайдер распознавания: stub | openai | gemini
+VISION_PROVIDER=gemini
+GEMINI_API_KEY=<ключ Google AI Studio>
+GEMINI_VISION_MODEL=gemini-2.5-flash
+```
+
+Замечания:
+
+- Без `VISION_SERVICE_URL` web честно пишет stub и НЕ зовёт сервис.
+- Без `VISION_MEDIA_*` `buildVisionMediaUrl` отдаёт сырой ключ, который
+  Gemini скачать не сможет — фото-скан не пройдёт. Оба обязательны для
+  реального распознавания.
+- `vision` с `VISION_PROVIDER=gemini` без `GEMINI_API_KEY` падает на старте
+  (fail-fast). Ставь ключ до `up -d`, иначе restart-loop.
+- Ключ — секрет: только в `.env.production` на сервере, никогда в git и не
+  в мобильное приложение.
+
 ## Шаг 5. Бэкапы (до загрузки пилотных данных)
 
 - Ночной `pg_dump` в MinIO/Storage Box + ротация 14 дней.

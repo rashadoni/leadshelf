@@ -15,6 +15,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { t, type MessageKey } from "../../../src/i18n"
 import { tokenStore } from "../../../src/auth/token-store"
+import { mobileLogout } from "../../../src/api/mobile-client"
 
 const STATUS_COLORS: Record<string, string> = {
   NEW: "#2563eb",
@@ -46,6 +47,7 @@ export default function TasksScreen() {
   }
 
   async function logout() {
+    await mobileLogout() // best-effort отзыв refresh-сессии на сервере
     await tokenStore.clearSession()
     router.replace("/(auth)/login" as never)
   }

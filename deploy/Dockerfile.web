@@ -11,6 +11,7 @@ COPY packages/core/package.json packages/core/
 COPY packages/api-contracts/package.json packages/api-contracts/
 COPY packages/ui/package.json packages/ui/
 COPY services/worker/package.json services/worker/
+COPY services/vision/package.json services/vision/
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter @leadshelf/db exec prisma generate

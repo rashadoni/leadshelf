@@ -594,6 +594,17 @@
       "noPhotos": "Фото по задаче пока нет.",
       "videoProof": "Видео выполнения",
       "noReview": "Без review",
+      "equipmentMismatch": "Оборудование не совпадает",
+      "requestRetake": "Запросить пересъемку",
+      "retakeRequested": "Пересъемка запрошена",
+      "retakeRequests": "Запросы пересъемки",
+      "captureExceptions": "Шаги съемки с исключениями",
+      "captureExceptionReason": {
+        "no_access": "Нет доступа к полке",
+        "equipment_missing": "Оборудование отсутствует",
+        "obstruction": "Физическая помеха",
+        "other": "Другая причина"
+      },
       "metrics": {
         "due": "Срок",
         "assignee": "Исполнитель",
@@ -832,6 +843,7 @@
     "noPhoto": "Фото нет",
     "photoProof": "Фото выполнения",
     "videoProof": "Видео выполнения",
+    "equipmentMismatch": "Оборудование не совпадает с базой",
     "goldenReference": "Эталон",
     "noReference": "Эталон не задан",
     "untitled": "Без названия",

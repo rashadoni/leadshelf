@@ -45,6 +45,9 @@ export const TENANT_MODELS = new Set([
   "ProductEvent",
   "Alert",
   "NotificationDelivery",
+  "CaptureTemplate",
+  "CaptureStepException",
+  "CaptureRetakeRequest",
 ])
 
 // Операции, где скоуп добавляется в where.

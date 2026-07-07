@@ -1,7 +1,7 @@
 // Клиент замороженного mobile API (docs/18): bearer, protocolVersion=1,
 // singleflight-refresh (гонка рефрешей ломает grace-ротацию), 426 -> upgrade.
 
-import { UpgradeRequiredError } from "../sync/ports-error"
+import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
 import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
 import {
   MOBILE_PROTOCOL_VERSION,
@@ -16,11 +16,7 @@ import { tokenStore } from "../auth/token-store"
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://hermescrm.xyz"
 export const PROTOCOL_VERSION = MOBILE_PROTOCOL_VERSION
 
-export class AuthLostError extends Error {
-  constructor() {
-    super("session lost")
-  }
-}
+export { AuthLostError } from "../sync/ports-error"
 
 let refreshInFlight: Promise<boolean> | null = null
 
@@ -59,6 +55,8 @@ async function request<T>(
     ...rest,
     headers: {
       ...(rest.headers as Record<string, string>),
+      // Протокол на не-JSON путях (multipart upload, media) едет заголовком.
+      "x-leadshelf-protocol": String(PROTOCOL_VERSION),
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
     },
   })
@@ -69,7 +67,9 @@ async function request<T>(
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error((body as { message?: string; error?: string }).message ?? `HTTP ${res.status}`)
+    const message = (body as { message?: string; error?: string }).message ??
+      (body as { error?: string }).error
+    throw new HttpError(res.status, message)
   }
   return (await res.json()) as T
 }
@@ -107,6 +107,15 @@ export async function mobileLogin(input: {
   return { user: body.user }
 }
 
+// Серверный logout: отзывает refresh-сессию. Best-effort — если сети нет,
+// вызывающий всё равно чистит локальную сессию (docs/26 §5).
+export async function mobileLogout(): Promise<void> {
+  const refresh = await tokenStore.getRefresh()
+  await fetch(`${API_URL}/api/v1/mobile/auth/logout`, {
+    ...json({ protocolVersion: PROTOCOL_VERSION, refreshToken: refresh ?? undefined }),
+  }).catch(() => {})
+}
+
 export const syncApi: SyncApi = {
   pull: (cursors) =>
     request<PullResponse>(
@@ -142,6 +151,8 @@ export const syncApi: SyncApi = {
     if (photo.durationMs != null) form.append("durationMs", String(photo.durationMs))
     if (photo.captureStepJson) form.append("captureStepJson", photo.captureStepJson)
     if (photo.exifJson) form.append("exifJson", photo.exifJson)
+    if (photo.captureFlagsJson) form.append("captureFlagsJson", photo.captureFlagsJson)
+    if (photo.captureTelemetryJson) form.append("captureTelemetryJson", photo.captureTelemetryJson)
     return request("/api/v1/mobile/photos/upload", {
       method: "POST",
       body: form,

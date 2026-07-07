@@ -79,6 +79,9 @@ model Organization {
   humanReviews           HumanReview[]
   fieldAgents            FieldAgent[]
   fieldForceSetting      FieldForceSetting?
+  captureTemplates       CaptureTemplate[]
+  captureStepExceptions  CaptureStepException[]
+  captureRetakeRequests  CaptureRetakeRequest[]
 
   @@map("organizations")
 }
@@ -98,11 +101,13 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  fieldAgent       FieldAgent?
-  mobileDevices    MobileDevice[]
-  photoSubmissions PhotoSubmission[]
-  taskComments     TaskComment[]
-  assignedTasks    Task[]            @relation("TaskAssignee")
+  fieldAgent            FieldAgent?
+  mobileDevices         MobileDevice[]
+  photoSubmissions      PhotoSubmission[]
+  taskComments          TaskComment[]
+  assignedTasks         Task[]                 @relation("TaskAssignee")
+  captureStepExceptions CaptureStepException[]
+  captureRetakeRequests CaptureRetakeRequest[]
 
   @@unique([organizationId, email])
   @@unique([organizationId, employeeCode])
@@ -680,7 +685,8 @@ model EquipmentType {
   name           String
   kind           String // rack | pallet | fridge | pegboard | cabinet | table | stand
 
-  templates EquipmentTemplate[]
+  templates        EquipmentTemplate[]
+  captureTemplates CaptureTemplate[]
 
   @@unique([organizationId, name])
   @@map("equipment_types")
@@ -1057,10 +1063,12 @@ model Task {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
-  statusHistory    TaskStatusHistory[]
-  comments         TaskComment[]
-  photoSubmissions PhotoSubmission[]
-  humanReviews     HumanReview[]
+  statusHistory         TaskStatusHistory[]
+  comments              TaskComment[]
+  photoSubmissions      PhotoSubmission[]
+  humanReviews          HumanReview[]
+  captureStepExceptions CaptureStepException[]
+  captureRetakeRequests CaptureRetakeRequest[]
 
   @@index([organizationId, status, dueAt])
   @@index([storeId, status])
@@ -1124,6 +1132,10 @@ model PhotoSubmission {
   takenAt                   DateTime
   // EXIF-like capture metadata: user/task/store/GPS/device/capture-step proof.
   exif                      Json?
+  // Флаги съемки: equipmentMismatch, acceptedWithWarnings и т.п. (docs/24).
+  captureFlags              Json?
+  // Телеметрия гида: время до принятого кадра, пересъемки, override (docs/24).
+  captureTelemetry          Json?
   qualityScore              Float?
   analysisStatus            ProofAnalysisStatus @default(PENDING)
   analysisAttempts          Int                 @default(0)
@@ -1160,6 +1172,74 @@ enum ProofAnalysisStatus {
   COMPLETED
   SKIPPED
   FAILED
+}
+
+// Сценарий guided-съемки по типу оборудования (docs/24, Phase 10.6).
+// steps — JSON, валидируемый zod-контрактом mobileCaptureTemplateStepSchema
+// на записи и при выдаче в sync pull. equipmentTypeId = null -> org default.
+model CaptureTemplate {
+  id              String         @id @default(cuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  equipmentTypeId String?
+  equipmentType   EquipmentType? @relation(fields: [equipmentTypeId], references: [id])
+  name            String
+  isActive        Boolean        @default(true)
+  version         Int            @default(1)
+  steps           Json
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([organizationId, equipmentTypeId])
+  @@index([organizationId, isActive])
+  @@map("capture_templates")
+}
+
+// Причина, по которой полевой сотрудник не смог снять шаг сценария
+// (docs/24 manual_exception). Идемпотентность приходит из push-протокола
+// (deviceId+clientOpId), сама запись — факт для офиса/ревью.
+model CaptureStepException {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  stepId         String
+  stepKind       String?
+  reason         String // no_access | equipment_missing | obstruction | other
+  note           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, taskId])
+  @@map("capture_step_exceptions")
+}
+
+// Офис просит переснять конкретный шаг сценария (docs/23 web review
+// backlog): замыкает петлю ревью. Открыт, пока resolvedAt=null; сбрасывается
+// авто при загрузке нового фото этого шага. requestedAt двигается при
+// повторном запросе, чтобы мобильное приложение отличило старое фото от
+// пересъемки. Один активный запрос на (org, task, step).
+model CaptureRetakeRequest {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  stepId         String
+  stepKind       String?
+  note           String?
+  requestedById  String
+  requestedBy    User         @relation(fields: [requestedById], references: [id])
+  requestedAt    DateTime     @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, taskId, stepId])
+  @@index([organizationId, taskId, resolvedAt])
+  @@map("capture_retake_requests")
 }
 
 enum GoldenReferenceStatus {

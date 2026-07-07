@@ -6,6 +6,8 @@ import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { AssigneeSelect } from "../assignee-select"
 import { TaskStatusActions } from "../task-status-actions"
+import { CaptureRetakeButton } from "./capture-retake-button"
+import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
 
 function formatDate(value: Date | null | undefined): string {
   return value ? value.toLocaleDateString() : "—"
@@ -24,6 +26,15 @@ function statusClass(status: string): string {
   if (status === "EXPIRED" || status === "REJECTED") return "bg-red-50 text-red-700"
   if (status === "NEW") return "bg-blue-50 text-blue-700"
   return "bg-amber-50 text-amber-700"
+}
+
+function hasEquipmentMismatch(flags: unknown): boolean {
+  return (
+    !!flags &&
+    typeof flags === "object" &&
+    !Array.isArray(flags) &&
+    (flags as { equipmentMismatch?: unknown }).equipmentMismatch === true
+  )
 }
 
 function ProofMedia({
@@ -130,12 +141,32 @@ export default async function TaskDetailPage({
             durationMs: true,
             takenAt: true,
             qualityScore: true,
+            captureFlags: true,
+            captureStepId: true,
+            captureStepKind: true,
             user: { select: { name: true } },
             humanReviews: {
               orderBy: { updatedAt: "desc" },
               select: { id: true, reason: true, status: true, score: true, note: true, reviewedAt: true },
             },
           },
+        },
+        captureStepExceptions: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            stepId: true,
+            stepKind: true,
+            reason: true,
+            note: true,
+            createdAt: true,
+            user: { select: { name: true } },
+          },
+        },
+        captureRetakeRequests: {
+          where: { resolvedAt: null },
+          orderBy: { requestedAt: "desc" },
+          select: { id: true, stepId: true, stepKind: true, note: true, requestedAt: true },
         },
         humanReviews: {
           orderBy: { updatedAt: "desc" },
@@ -144,7 +175,7 @@ export default async function TaskDetailPage({
       },
     }),
     db.user.findMany({
-      where: { isActive: true, role: { in: ["MERCHANDISER", "SUPERVISOR", "STORE_STAFF", "FIELD_AGENT"] } },
+      where: { isActive: true, role: { in: [...ASSIGNABLE_ROLES] } },
       select: { id: true, name: true, employeeCode: true },
       orderBy: { name: "asc" },
     }),
@@ -154,6 +185,7 @@ export default async function TaskDetailPage({
 
   const pendingReviews = task.humanReviews.filter((review) => review.status === "PENDING").length
   const latestPhoto = task.photoSubmissions[0]
+  const openRetakeStepIds = new Set(task.captureRetakeRequests.map((request) => request.stepId))
 
   return (
     <div className="space-y-5">
@@ -220,6 +252,11 @@ export default async function TaskDetailPage({
                         {photo.durationMs ? ` · ${Math.round(photo.durationMs / 1000)}s` : ""} · {photo.user.name}
                       </div>
                       <div className="flex flex-wrap gap-1">
+                        {hasEquipmentMismatch(photo.captureFlags) ? (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                            {t("detail.equipmentMismatch")}
+                          </span>
+                        ) : null}
                         {photo.humanReviews.length === 0 ? (
                           <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
                             {t("detail.noReview")}
@@ -235,12 +272,57 @@ export default async function TaskDetailPage({
                           ))
                         )}
                       </div>
+                      {photo.captureStepId ? (
+                        <div className="flex items-center justify-end">
+                          <CaptureRetakeButton
+                            taskId={task.id}
+                            stepId={photo.captureStepId}
+                            stepKind={photo.captureStepKind}
+                            requested={openRetakeStepIds.has(photo.captureStepId)}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </Panel>
+
+          {task.captureRetakeRequests.length > 0 ? (
+            <Panel title={t("detail.retakeRequests")}>
+              <div className="space-y-2">
+                {task.captureRetakeRequests.map((request) => (
+                  <div key={request.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-neutral-800">{request.stepId}</span>
+                      <span className="text-xs text-neutral-500">{formatDateTime(request.requestedAt)}</span>
+                    </div>
+                    {request.note ? <div className="mt-1 text-neutral-600">{request.note}</div> : null}
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          ) : null}
+
+          {task.captureStepExceptions.length > 0 ? (
+            <Panel title={t("detail.captureExceptions")}>
+              <div className="space-y-2">
+                {task.captureStepExceptions.map((exception) => (
+                  <div key={exception.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-amber-900">
+                        {exception.stepId} · {t(`detail.captureExceptionReason.${exception.reason}` as never)}
+                      </span>
+                      <span className="text-xs text-amber-700">{formatDateTime(exception.createdAt)}</span>
+                    </div>
+                    {exception.note ? <div className="mt-1 text-amber-800">{exception.note}</div> : null}
+                    <div className="mt-1 text-xs text-amber-700">{exception.user.name}</div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          ) : null}
 
           <Panel title={t("detail.history")}>
             {task.statusHistory.length === 0 ? (

@@ -76,6 +76,57 @@ export const mobileTaskLocationHintSchema = z.object({
 })
 export type MobileTaskLocationHint = z.infer<typeof mobileTaskLocationHintSchema>
 
+// Guided Capture (docs/24 slice 1): сценарий съемки, резолвится сервером
+// по типу оборудования планограммы и приходит снапшотом на task row.
+// Все изменения аддитивны: старое приложение просто не видит поле.
+export const mobileProofMediaKindSchema = z.enum(["photo", "video"])
+
+export const mobileCaptureDepthModeSchema = z.enum([
+  "angle_photo",
+  "manual_attestation",
+  "stock_triangulation",
+])
+export type MobileCaptureDepthMode = z.infer<typeof mobileCaptureDepthModeSchema>
+
+export const mobileCaptureTemplateStepSchema = z.object({
+  id: z.string().min(1).max(64),
+  kind: z.string().min(1).max(64),
+  required: z.boolean(),
+  sequence: z.number().int().min(0).max(100),
+  mediaKind: mobileProofMediaKindSchema.default("photo"),
+  burstCount: z.number().int().min(1).max(5).nullable().optional(),
+  tiltToleranceDeg: z.number().int().min(1).max(45).nullable().optional(),
+  compositionHint: z.string().max(64).nullable().optional(),
+  doorPolicy: z.enum(["open_allowed", "open_forbidden"]).nullable().optional(),
+  depthMode: mobileCaptureDepthModeSchema.nullable().optional(),
+  minDurationSeconds: z.number().int().min(0).max(120).nullable().optional(),
+  maxDurationSeconds: z.number().int().min(0).max(120).nullable().optional(),
+  titleOverrides: z.record(z.string(), z.string().max(200)).nullable().optional(),
+  instructionOverrides: z.record(z.string(), z.string().max(500)).nullable().optional(),
+})
+export type MobileCaptureTemplateStep = z.infer<typeof mobileCaptureTemplateStepSchema>
+
+export const mobileCaptureTemplateSchema = z.object({
+  id: z.string().min(1),
+  scenarioId: z.string().min(1).max(128),
+  name: z.string(),
+  equipmentKind: z.string().nullable().optional(),
+  version: z.number().int().min(1),
+  steps: z.array(mobileCaptureTemplateStepSchema).min(1).max(12),
+  updatedAt: z.string(),
+})
+export type MobileCaptureTemplate = z.infer<typeof mobileCaptureTemplateSchema>
+
+// Открытый запрос офиса переснять шаг (docs/23). requestedAt позволяет
+// приложению отличить старое фото шага от свежей пересъемки.
+export const mobileCaptureRetakeSchema = z.object({
+  stepId: z.string().min(1).max(64),
+  stepKind: z.string().max(64).nullable().optional(),
+  note: z.string().nullable().optional(),
+  requestedAt: z.string(),
+})
+export type MobileCaptureRetake = z.infer<typeof mobileCaptureRetakeSchema>
+
 export const mobileTaskRowSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -84,6 +135,8 @@ export const mobileTaskRowSchema = z.object({
   storeId: z.string(),
   planogramVersionId: z.string().nullable(),
   locationHint: mobileTaskLocationHintSchema.nullable().optional(),
+  captureTemplate: mobileCaptureTemplateSchema.nullable().optional(),
+  captureRetakes: z.array(mobileCaptureRetakeSchema).optional(),
   updatedAt: z.string(),
 })
 export type MobileTaskRow = z.infer<typeof mobileTaskRowSchema>
@@ -244,6 +297,16 @@ export const mobileVisitCheckOutPayloadSchema = z.object({
 })
 export type MobileVisitCheckOutPayload = z.infer<typeof mobileVisitCheckOutPayloadSchema>
 
+// Шаг сценария физически невозможен (docs/24 manual_exception).
+export const mobileProofExceptionPayloadSchema = z.object({
+  taskId: z.string().min(1),
+  stepId: z.string().min(1).max(64),
+  stepKind: z.string().max(64).nullable().optional(),
+  reason: z.enum(["no_access", "equipment_missing", "obstruction", "other"]),
+  note: z.string().trim().max(500).optional(),
+})
+export type MobileProofExceptionPayload = z.infer<typeof mobileProofExceptionPayloadSchema>
+
 export const mobileLocationUpdatePayloadSchema = z.object({
   agentId: z.string().min(1),
   latitude: z.number().min(-90).max(90),
@@ -296,6 +359,12 @@ export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
     payload: orderCreateRequestSchema,
     clientCreatedAt: z.string().optional(),
   }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("proof.exception"),
+    payload: mobileProofExceptionPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
 ])
 export type MobilePushOperation = z.infer<typeof mobilePushOperationSchema>
 
@@ -331,6 +400,10 @@ export const mobilePhotoUploadFieldsSchema = z.object({
   durationMs: z.coerce.number().int().min(0).max(120000).optional(),
   captureStepJson: z.string().max(5000).optional(),
   exifJson: z.string().max(20000).optional(),
+  // Guided Capture (docs/24): флаги (equipmentMismatch и т.п.) и телеметрия
+  // гида (время до принятого кадра, пересъемки, override).
+  captureFlagsJson: z.string().max(2000).optional(),
+  captureTelemetryJson: z.string().max(4000).optional(),
 })
 export type MobilePhotoUploadFields = z.infer<typeof mobilePhotoUploadFieldsSchema>
 

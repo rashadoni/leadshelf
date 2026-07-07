@@ -44,6 +44,13 @@ export {
 } from "./repos/mobile-sync.ts"
 export { createOrder, OrderRepoError, type CreateOrderInput, type OrderSummary } from "./repos/orders.ts"
 export {
+  requestCaptureRetake,
+  resolveCaptureRetakesForStep,
+  listOpenCaptureRetakes,
+  CaptureRepoError,
+  type OpenCaptureRetake,
+} from "./repos/capture.ts"
+export {
   AlertRepoError,
   emitProductEvent,
   buildOfficeMorningDigest,

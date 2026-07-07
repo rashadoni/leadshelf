@@ -38,6 +38,15 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
+function hasEquipmentMismatch(flags: unknown): boolean {
+  return (
+    !!flags &&
+    typeof flags === "object" &&
+    !Array.isArray(flags) &&
+    (flags as { equipmentMismatch?: unknown }).equipmentMismatch === true
+  )
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
@@ -143,6 +152,7 @@ export default async function ReviewsPage({
             durationMs: true,
             analysisStatus: true,
             qualityScore: true,
+            captureFlags: true,
             takenAt: true,
             store: { select: { name: true, code: true } },
             user: { select: { name: true } },
@@ -242,8 +252,15 @@ export default async function ReviewsPage({
                     <div className="border-t border-neutral-200 px-2 py-1 text-[11px] text-neutral-500">
                       {photo?.mediaType === "VIDEO" ? t("videoProof") : t("photoProof")}
                       {photo?.durationMs ? ` · ${Math.round(photo.durationMs / 1000)}s` : ""}
-                      {photo?.analysisStatus ? ` · ${t(`analysisStatus.${photo.analysisStatus}` as never)}` : ""}
+                      {photo?.mediaType === "VIDEO" && photo.analysisStatus
+                        ? ` · ${t(`analysisStatus.${photo.analysisStatus}` as never)}`
+                        : ""}
                     </div>
+                    {hasEquipmentMismatch(photo?.captureFlags) ? (
+                      <div className="border-t border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+                        {t("equipmentMismatch")}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
                     {review.goldenReference ? (

@@ -1,6 +1,9 @@
 import "dotenv/config"
 import { createSystemClient } from "@leadshelf/db"
 import { processNextProofVideoAnalysisJob } from "./proof-analysis/processor"
+import { initErrorReporting } from "./observability"
+
+initErrorReporting("proof-analysis")
 
 const prisma = createSystemClient("proof-analysis-worker")
 const pollMs = Number(process.env.LEADSHELF_PROOF_ANALYSIS_POLL_MS ?? 5000)

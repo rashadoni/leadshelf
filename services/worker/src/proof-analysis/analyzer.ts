@@ -199,15 +199,103 @@ function extractOutputText(body: unknown): string | null {
   return null
 }
 
-function parseOpenAIAnalysis(body: unknown): OpenAIProofAnalysisBody {
-  const text = extractOutputText(body)
-  if (!text) throw new Error("openai_response_missing_output_text")
+function parseAnalysisText(text: string | null, errorPrefix: string): OpenAIProofAnalysisBody {
+  if (!text) throw new Error(`${errorPrefix}_missing_output_text`)
   const parsed = JSON.parse(text) as OpenAIProofAnalysisBody
   if (!Array.isArray(parsed.detections) || !Array.isArray(parsed.findings) || !Array.isArray(parsed.warnings)) {
-    throw new Error("openai_response_invalid_shape")
+    throw new Error(`${errorPrefix}_invalid_shape`)
   }
   return parsed
 }
+
+function parseOpenAIAnalysis(body: unknown): OpenAIProofAnalysisBody {
+  return parseAnalysisText(extractOutputText(body), "openai_response")
+}
+
+function extractGeminiText(body: unknown): string | null {
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
+  const candidates = Array.isArray(record.candidates) ? record.candidates : []
+  for (const candidate of candidates) {
+    const content =
+      candidate && typeof candidate === "object" ? (candidate as { content?: unknown }).content : null
+    const parts = content && typeof content === "object" ? (content as { parts?: unknown }).parts : null
+    if (!Array.isArray(parts)) continue
+    for (const part of parts) {
+      const text = part && typeof part === "object" ? (part as Record<string, unknown>).text : null
+      if (typeof text === "string") return text
+    }
+  }
+  return null
+}
+
+// Общий маппинг распарсенного ответа модели в результат — чтобы OpenAI и
+// Gemini давали идентичную форму compliance/findings.
+function finalizeFrameAnalysis(
+  request: VisionScanRequest,
+  parsed: OpenAIProofAnalysisBody,
+  provider: string,
+  model: string,
+): ProofFrameAnalysisResult {
+  const slotById = new Map(request.slots.map((slot) => [slot.id, slot]))
+  const detections: VisionDetection[] = parsed.detections.map((detection) => {
+    const slot = detection.slotId ? slotById.get(detection.slotId) : null
+    const skuMatchesSlot = slot?.productSku && detection.productSku === slot.productSku
+    return {
+      slotId: detection.slotId,
+      productId: skuMatchesSlot ? slot.productId : null,
+      productSku: detection.productSku,
+      label: detection.label,
+      confidence: detection.confidence,
+      bbox: detection.bbox,
+    }
+  })
+  const complianceResult = calculateShelfCompliance({
+    slots: request.slots.map((slot) => ({
+      id: slot.id,
+      productId: slot.productId,
+      productSku: slot.productSku,
+    })),
+    detections,
+  })
+  const warnings = [
+    ...parsed.warnings,
+    ...(parsed.depthConfirmed ? [] : ["depth_not_confirmed_by_selected_frames"]),
+  ]
+  return {
+    response: visionScanResponseSchema.parse({
+      protocolVersion: VISION_PROTOCOL_VERSION,
+      provider,
+      modelVersion: model,
+      status: complianceResult.status === "PASS" && parsed.status === "PASS" ? "completed" : "needs_human_review",
+      detections,
+      embedding: null,
+      compliance: {
+        score: complianceResult.score,
+        status: complianceResult.status,
+        totalSlots: complianceResult.totalSlots,
+        matchedSlots: complianceResult.matchedSlots,
+        missingSlots: complianceResult.missingSlots,
+        wrongProducts: complianceResult.wrongProducts,
+        extraDetections: complianceResult.extraDetections,
+      },
+      findings: complianceResult.findings,
+      warnings,
+    }),
+    aiFindings: parsed.findings,
+    rawSummary: parsed.summary,
+  }
+}
+
+const GEMINI_JSON_INSTRUCTION = [
+  "Return ONLY a JSON object with this exact shape:",
+  '{"status":"PASS"|"REVIEW"|"FAIL","summary":string,"depthConfirmed":boolean,',
+  '"detections":[{"slotId":string|null,"productSku":string|null,"label":string|null,',
+  '"confidence":number,"bbox":{"xPct":number,"yPct":number,"widthPct":number,"heightPct":number}}],',
+  '"findings":[{"type":string,"severity":"info"|"warning"|"critical","slotId":string|null,',
+  '"productSku":string|null,"evidenceFrameTimestampMs":number|null,"note":string}],"warnings":[string]}',
+  "Be conservative: if depth/back rows are not visible, set depthConfirmed=false and add a depth_not_confirmed finding.",
+  "No markdown, no prose.",
+].join(" ")
 
 function framePrompt(request: VisionScanRequest, frames: ExtractedProofFrame[]): string {
   const slots = request.slots.map((slot) => ({
@@ -287,55 +375,47 @@ async function scanWithOpenAI(request: VisionScanRequest, frames: ExtractedProof
   }
 
   const parsed = parseOpenAIAnalysis(await response.json())
-  const slotById = new Map(request.slots.map((slot) => [slot.id, slot]))
-  const detections: VisionDetection[] = parsed.detections.map((detection) => {
-    const slot = detection.slotId ? slotById.get(detection.slotId) : null
-    const skuMatchesSlot = slot?.productSku && detection.productSku === slot.productSku
-    return {
-      slotId: detection.slotId,
-      productId: skuMatchesSlot ? slot.productId : null,
-      productSku: detection.productSku,
-      label: detection.label,
-      confidence: detection.confidence,
-      bbox: detection.bbox,
-    }
-  })
-  const complianceResult = calculateShelfCompliance({
-    slots: request.slots.map((slot) => ({
-      id: slot.id,
-      productId: slot.productId,
-      productSku: slot.productSku,
-    })),
-    detections,
-  })
-  const warnings = [
-    ...parsed.warnings,
-    ...(parsed.depthConfirmed ? [] : ["depth_not_confirmed_by_selected_frames"]),
-  ]
+  return finalizeFrameAnalysis(request, parsed, "openai", model)
+}
 
-  return {
-    response: visionScanResponseSchema.parse({
-      protocolVersion: VISION_PROTOCOL_VERSION,
-      provider: "openai",
-      modelVersion: model,
-      status: complianceResult.status === "PASS" && parsed.status === "PASS" ? "completed" : "needs_human_review",
-      detections,
-      embedding: null,
-      compliance: {
-        score: complianceResult.score,
-        status: complianceResult.status,
-        totalSlots: complianceResult.totalSlots,
-        matchedSlots: complianceResult.matchedSlots,
-        missingSlots: complianceResult.missingSlots,
-        wrongProducts: complianceResult.wrongProducts,
-        extraDetections: complianceResult.extraDetections,
+async function scanWithGemini(request: VisionScanRequest, frames: ExtractedProofFrame[]): Promise<ProofFrameAnalysisResult> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error("gemini_api_key_missing")
+
+  const model = process.env.GEMINI_VISION_MODEL ?? "gemini-2.5-flash"
+  const baseUrl = (process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "")
+  const response = await fetch(`${baseUrl}/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: `${framePrompt(request, frames)}\n${GEMINI_JSON_INSTRUCTION}` },
+            ...frames.map((frame) => ({
+              inline_data: { mime_type: "image/jpeg", data: frame.buffer.toString("base64") },
+            })),
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: 4000,
+        responseMimeType: "application/json",
       },
-      findings: complianceResult.findings,
-      warnings,
     }),
-    aiFindings: parsed.findings,
-    rawSummary: parsed.summary,
+  })
+  if (!response.ok) {
+    const message = await response.text().catch(() => "")
+    throw new Error(`gemini_generatecontent_failed:${response.status}:${message.slice(0, 500)}`)
   }
+
+  const parsed = parseAnalysisText(extractGeminiText(await response.json()), "gemini_response")
+  return finalizeFrameAnalysis(request, parsed, "gemini", model)
 }
 
 export async function analyzeSelectedProofFrames(
@@ -344,5 +424,6 @@ export async function analyzeSelectedProofFrames(
 ): Promise<ProofFrameAnalysisResult> {
   const provider = process.env.LEADSHELF_PROOF_AI_PROVIDER ?? process.env.VISION_PROVIDER ?? "stub"
   if (provider === "openai") return scanWithOpenAI(request, frames)
+  if (provider === "gemini") return scanWithGemini(request, frames)
   return localSelectedFrameScan(request, frames)
 }

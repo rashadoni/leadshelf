@@ -11,6 +11,8 @@ export const STUB_PROVIDER = "leadshelf-stub"
 export const STUB_MODEL_VERSION = "stub-reference-slots-v1"
 export const OPENAI_PROVIDER = "openai-responses"
 export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4"
+export const GEMINI_PROVIDER = "google-gemini"
+export const DEFAULT_GEMINI_VISION_MODEL = "gemini-2.5-flash"
 
 export interface VisionProvider {
   readonly metadata: {
@@ -229,7 +231,12 @@ function extractOpenAiOutputText(payload: unknown): string {
   throw new Error("openai_response_missing_output_text")
 }
 
-function failedOpenAiResponse(request: VisionScanRequest, modelVersion: string, warnings: string[]): VisionScanResponse {
+function failedProviderResponse(
+  request: VisionScanRequest,
+  provider: string,
+  modelVersion: string,
+  warnings: string[],
+): VisionScanResponse {
   const complianceResult = calculateShelfCompliance({
     slots: request.slots.map((slot) => ({
       id: slot.id,
@@ -241,7 +248,7 @@ function failedOpenAiResponse(request: VisionScanRequest, modelVersion: string, 
 
   return {
     protocolVersion: VISION_PROTOCOL_VERSION,
-    provider: OPENAI_PROVIDER,
+    provider,
     modelVersion,
     status: "failed",
     detections: [],
@@ -285,12 +292,14 @@ export class OpenAiVisionProvider implements VisionProvider {
 
   async scan(request: VisionScanRequest): Promise<VisionScanResponse> {
     if (request.slots.length === 0) {
-      return failedOpenAiResponse(request, this.metadata.modelVersion, ["no_reference_slots_provided"])
+      return failedProviderResponse(request, OPENAI_PROVIDER, this.metadata.modelVersion, [
+        "no_reference_slots_provided",
+      ])
     }
 
     const photoUrl = resolveImageUrl(request.photoUrl, this.publicBaseUrl)
     if (!photoUrl) {
-      return failedOpenAiResponse(request, this.metadata.modelVersion, [
+      return failedProviderResponse(request, OPENAI_PROVIDER, this.metadata.modelVersion, [
         "openai_photo_url_not_resolvable",
         "provide_https_or_data_url_or_configure_vision_public_base_url",
       ])
@@ -396,9 +405,219 @@ export class OpenAiVisionProvider implements VisionProvider {
   }
 }
 
+// Gemini (Google Generative Language API). В отличие от OpenAI Responses,
+// Gemini не тянет image URL сам — картинку надо инлайнить как base64
+// (inline_data), поэтому провайдер сам качает байты по photoUrl. Строгую
+// json_schema не используем: Gemini дает JSON через responseMimeType, а
+// форму гарантирует zod-парсинг того же контракта.
+export type VisionImageFetch = (
+  url: string,
+  init: { signal?: AbortSignal },
+) => Promise<{
+  ok: boolean
+  status: number
+  arrayBuffer(): Promise<ArrayBuffer>
+  headers: { get(name: string): string | null }
+}>
+
+export type GeminiVisionProviderConfig = {
+  apiKey: string
+  model?: string
+  baseUrl?: string
+  publicBaseUrl?: string
+  timeoutMs?: number
+  minConfidence?: number
+  fetchImpl?: VisionFetch
+  imageFetchImpl?: VisionImageFetch
+}
+
+const geminiOutputInstruction = [
+  "Return ONLY a JSON object with this exact shape:",
+  '{"detections":[{"slotId":string,"productId":string,"productSku":string,"label":string,',
+  '"confidence":number,"bbox":{"xPct":number,"yPct":number,"widthPct":number,"heightPct":number}}],',
+  '"warnings":[string]}',
+  "Use empty strings for unknown slotId/productId/productSku/label. No markdown, no prose.",
+].join(" ")
+
+type InlineImage = { mimeType: string; data: string }
+
+function inlineImageFromDataUrl(url: string): InlineImage | null {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(url)
+  if (!match) return null
+  return { mimeType: match[1]!, data: match[2]! }
+}
+
+function extractGeminiText(payload: unknown): string {
+  if (!payload || typeof payload !== "object") throw new Error("gemini_response_not_object")
+  const candidates = (payload as Record<string, unknown>).candidates
+  if (!Array.isArray(candidates)) throw new Error("gemini_response_missing_candidates")
+  for (const candidate of candidates) {
+    const content = candidate && typeof candidate === "object" ? (candidate as Record<string, unknown>).content : null
+    const parts = content && typeof content === "object" ? (content as Record<string, unknown>).parts : null
+    if (!Array.isArray(parts)) continue
+    for (const part of parts) {
+      const text = part && typeof part === "object" ? (part as Record<string, unknown>).text : null
+      if (typeof text === "string") return text
+    }
+  }
+  throw new Error("gemini_response_missing_text")
+}
+
+export class GeminiVisionProvider implements VisionProvider {
+  readonly metadata: { provider: string; modelVersion: string }
+
+  private readonly apiKey: string
+  private readonly baseUrl: string
+  private readonly publicBaseUrl?: string
+  private readonly timeoutMs: number
+  private readonly minConfidence: number
+  private readonly fetchImpl: VisionFetch
+  private readonly imageFetchImpl: VisionImageFetch
+
+  constructor(config: GeminiVisionProviderConfig) {
+    const apiKey = config.apiKey.trim()
+    if (!apiKey) throw new Error("GEMINI_API_KEY is required when VISION_PROVIDER=gemini")
+    const model = config.model?.trim() || DEFAULT_GEMINI_VISION_MODEL
+    this.metadata = { provider: GEMINI_PROVIDER, modelVersion: model }
+    this.apiKey = apiKey
+    this.baseUrl = (config.baseUrl?.trim() || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "")
+    this.publicBaseUrl = config.publicBaseUrl?.trim()
+    this.timeoutMs = config.timeoutMs ?? 30_000
+    this.minConfidence = config.minConfidence ?? 0.5
+    this.fetchImpl = config.fetchImpl ?? fetch
+    this.imageFetchImpl =
+      config.imageFetchImpl ??
+      ((url, init) => fetch(url, { method: "GET", signal: init.signal }) as ReturnType<VisionImageFetch>)
+  }
+
+  private async toInlineImage(url: string, signal: AbortSignal): Promise<InlineImage> {
+    const fromData = inlineImageFromDataUrl(url)
+    if (fromData) return fromData
+    const res = await this.imageFetchImpl(url, { signal })
+    if (!res.ok) throw new Error(`gemini_image_fetch_failed:${res.status}`)
+    const mimeType = res.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg"
+    const data = Buffer.from(await res.arrayBuffer()).toString("base64")
+    return { mimeType, data }
+  }
+
+  async scan(request: VisionScanRequest): Promise<VisionScanResponse> {
+    if (request.slots.length === 0) {
+      return failedProviderResponse(request, GEMINI_PROVIDER, this.metadata.modelVersion, [
+        "no_reference_slots_provided",
+      ])
+    }
+    const photoUrl = resolveImageUrl(request.photoUrl, this.publicBaseUrl)
+    if (!photoUrl) {
+      return failedProviderResponse(request, GEMINI_PROVIDER, this.metadata.modelVersion, [
+        "gemini_photo_url_not_resolvable",
+        "provide_https_or_data_url_or_configure_vision_public_base_url",
+      ])
+    }
+    const goldenReferenceUrl = request.goldenReferenceUrl
+      ? resolveImageUrl(request.goldenReferenceUrl, this.publicBaseUrl)
+      : null
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+    try {
+      const parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> = [
+        { text: `${buildPrompt(request)}\n${geminiOutputInstruction}` },
+        { text: "Target shelf photo:" },
+      ]
+      const photoImage = await this.toInlineImage(photoUrl, controller.signal)
+      parts.push({ inline_data: { mime_type: photoImage.mimeType, data: photoImage.data } })
+      const warnings: string[] = []
+      if (goldenReferenceUrl) {
+        parts.push({ text: "Golden reference photo:" })
+        const goldenImage = await this.toInlineImage(goldenReferenceUrl, controller.signal)
+        parts.push({ inline_data: { mime_type: goldenImage.mimeType, data: goldenImage.data } })
+      } else if (request.goldenReferenceUrl) {
+        warnings.push("golden_reference_url_not_resolvable")
+      }
+
+      const response = await this.fetchImpl(
+        `${this.baseUrl}/models/${encodeURIComponent(this.metadata.modelVersion)}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": this.apiKey,
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ role: "user", parts }],
+            generationConfig: {
+              temperature: 0,
+              maxOutputTokens: 4000,
+              responseMimeType: "application/json",
+            },
+          }),
+        },
+      )
+      const responseText = await response.text()
+      if (!response.ok) {
+        throw new Error(`gemini_vision_request_failed:${response.status}:${responseText.slice(0, 240)}`)
+      }
+
+      const outputText = extractGeminiText(parseJsonObject(responseText))
+      const output = openAiScanOutputSchema.parse(parseJsonObject(outputText))
+      const detections: VisionDetection[] = output.detections.map((detection) => ({
+        slotId: emptyToNull(detection.slotId),
+        productId: emptyToNull(detection.productId),
+        productSku: emptyToNull(detection.productSku),
+        label: emptyToNull(detection.label),
+        confidence: detection.confidence,
+        bbox: {
+          xPct: clampPct(detection.bbox.xPct, 0),
+          yPct: clampPct(detection.bbox.yPct, 0),
+          widthPct: clampPct(detection.bbox.widthPct, 0.1),
+          heightPct: clampPct(detection.bbox.heightPct, 0.1),
+        },
+      }))
+
+      const complianceResult = calculateShelfCompliance({
+        slots: request.slots.map((slot) => ({
+          id: slot.id,
+          productId: slot.productId,
+          productSku: slot.productSku,
+        })),
+        detections,
+        minConfidence: this.minConfidence,
+      })
+
+      return {
+        protocolVersion: VISION_PROTOCOL_VERSION,
+        provider: GEMINI_PROVIDER,
+        modelVersion: this.metadata.modelVersion,
+        status: complianceResult.status === "PASS" ? "completed" : "needs_human_review",
+        detections,
+        embedding: null,
+        compliance: {
+          score: complianceResult.score,
+          status: complianceResult.status,
+          totalSlots: complianceResult.totalSlots,
+          matchedSlots: complianceResult.matchedSlots,
+          missingSlots: complianceResult.missingSlots,
+          wrongProducts: complianceResult.wrongProducts,
+          extraDetections: complianceResult.extraDetections,
+        },
+        findings: complianceResult.findings,
+        warnings: [...output.warnings, ...warnings],
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("gemini_vision_request_timeout")
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+}
+
 export function createConfiguredVisionProvider(
   env: NodeJS.ProcessEnv = process.env,
-  overrides: { fetchImpl?: VisionFetch } = {},
+  overrides: { fetchImpl?: VisionFetch; imageFetchImpl?: VisionImageFetch } = {},
 ): VisionProvider {
   const provider = env.VISION_PROVIDER?.trim().toLowerCase() || "stub"
   if (provider === "stub") return new ReferenceSlotStubProvider()
@@ -411,6 +630,18 @@ export function createConfiguredVisionProvider(
       timeoutMs: env.OPENAI_VISION_TIMEOUT_MS ? Number.parseInt(env.OPENAI_VISION_TIMEOUT_MS, 10) : undefined,
       minConfidence: env.OPENAI_VISION_MIN_CONFIDENCE ? Number.parseFloat(env.OPENAI_VISION_MIN_CONFIDENCE) : undefined,
       fetchImpl: overrides.fetchImpl,
+    })
+  }
+  if (provider === "gemini") {
+    return new GeminiVisionProvider({
+      apiKey: env.GEMINI_API_KEY ?? "",
+      model: env.GEMINI_VISION_MODEL,
+      baseUrl: env.GEMINI_BASE_URL,
+      publicBaseUrl: env.VISION_PUBLIC_BASE_URL,
+      timeoutMs: env.GEMINI_VISION_TIMEOUT_MS ? Number.parseInt(env.GEMINI_VISION_TIMEOUT_MS, 10) : undefined,
+      minConfidence: env.GEMINI_VISION_MIN_CONFIDENCE ? Number.parseFloat(env.GEMINI_VISION_MIN_CONFIDENCE) : undefined,
+      fetchImpl: overrides.fetchImpl,
+      imageFetchImpl: overrides.imageFetchImpl,
     })
   }
   throw new Error(`Unsupported VISION_PROVIDER: ${provider}`)

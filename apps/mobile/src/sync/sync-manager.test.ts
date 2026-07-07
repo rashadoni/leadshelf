@@ -1,17 +1,21 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
+import { HttpError } from "./ports-error"
 import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi, SyncCursors } from "./ports"
 
 function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
   calls: string[]
   outbox: OutboxRow[]
   photos: PhotoQueueRow[]
+  quarantined: Set<string>
 } {
   const calls: string[] = []
+  const quarantined = new Set<string>()
   const state = {
     calls,
     outbox: [] as OutboxRow[],
     photos: [] as PhotoQueueRow[],
+    quarantined,
     cursors: {
       tasks: null as string | null,
       planogramBundles: null as string | null,
@@ -24,6 +28,7 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
     calls,
     outbox: state.outbox,
     photos: state.photos,
+    quarantined,
     async applyPull() {
       calls.push("applyPull")
     },
@@ -50,12 +55,23 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
     },
     async pendingPhotos() {
       calls.push("pendingPhotos")
-      return state.photos.filter((p) => !p.uploaded)
+      return state.photos.filter((p) => !p.uploaded && !quarantined.has(p.clientPhotoId))
     },
     async markPhotoUploaded(id) {
       calls.push(`photoUploaded:${id}`)
       const p = state.photos.find((x) => x.clientPhotoId === id)
       if (p) p.uploaded = true
+    },
+    async bumpPhotoAttempts(ids) {
+      calls.push(`bumpPhoto:${ids.length}`)
+      for (const p of state.photos) if (ids.includes(p.clientPhotoId)) p.attempts = (p.attempts ?? 0) + 1
+    },
+    async quarantinePhoto(id) {
+      calls.push(`quarantine:${id}`)
+      quarantined.add(id)
+    },
+    async quarantinedPhotoCount() {
+      return quarantined.size
     },
     ...over,
   }
@@ -147,6 +163,61 @@ describe("SyncManager", () => {
     const pushIdx = store.calls.findIndex((c) => c.startsWith("markOutbox"))
     expect(upIdx).toBeGreaterThan(-1)
     expect(upIdx).toBeLessThan(pushIdx)
+  })
+
+  test("битое фото (4xx) уходит в карантин, остальные грузятся, push идёт", async () => {
+    const store = makeStore()
+    store.photos.push(
+      { clientPhotoId: "photo-bad-0001", taskId: "t1", fileUri: "file:///bad.mp4", takenAt: "2026-07-03T10:00:00Z", uploaded: false },
+      { clientPhotoId: "photo-ok-0002", taskId: "t1", fileUri: "file:///ok.jpg", takenAt: "2026-07-03T10:01:00Z", uploaded: false },
+    )
+    store.outbox.push({
+      clientOpId: "op-after-photo01",
+      kind: "task.comment",
+      payload: { taskId: "t1", body: "done" },
+      status: "pending",
+      attempts: 0,
+    })
+    const api = makeApi({
+      async uploadPhoto(p) {
+        if (p.clientPhotoId === "photo-bad-0001") throw new HttpError(415, "unsupported_type")
+        return { photoId: "ph", key: `photos/x/${p.clientPhotoId}.jpg`, mediaType: p.mediaType ?? "photo" }
+      },
+    })
+    const m = new SyncManager({ api, store })
+    const s = await m.runSync()
+
+    expect(s.phase).toBe("idle")
+    expect(store.quarantined.has("photo-bad-0001")).toBe(true)
+    // хорошее фото загрузилось, несмотря на соседний битый файл
+    expect(store.photos.find((p) => p.clientPhotoId === "photo-ok-0002")!.uploaded).toBe(true)
+    // push всё равно выполнился
+    expect(api.pushed).toContain("op-after-photo01")
+    expect(s.quarantinedPhotos).toBe(1)
+  })
+
+  test("транзиентная ошибка (5xx) не карантинит — счётчик попыток и ретрай", async () => {
+    const store = makeStore()
+    store.photos.push({
+      clientPhotoId: "photo-flaky-001",
+      taskId: "t1",
+      fileUri: "file:///f.jpg",
+      takenAt: "2026-07-03T10:00:00Z",
+      uploaded: false,
+      attempts: 0,
+    })
+    const api = makeApi({
+      async uploadPhoto() {
+        throw new HttpError(503, "service_unavailable")
+      },
+    })
+    const m = new SyncManager({ api, store })
+    const s = await m.runSync()
+
+    expect(s.phase).toBe("idle")
+    expect(store.quarantined.size).toBe(0)
+    expect(store.photos[0]!.attempts).toBe(1)
+    expect(store.photos[0]!.uploaded).toBe(false)
   })
 
   test("conflict от сервера помечает операцию, sync не падает", async () => {

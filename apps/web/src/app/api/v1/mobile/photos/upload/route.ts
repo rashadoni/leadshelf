@@ -10,6 +10,8 @@ import {
   selectProofVideoFrameTimestamps,
 } from "@leadshelf/core"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
+import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
+import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
 import {
   runVisionComplianceForPhoto,
@@ -50,6 +52,20 @@ function parseCaptureStep(raw: string | undefined): MobileCaptureStep | null | "
   try {
     const parsed = mobileCaptureStepSchema.safeParse(JSON.parse(raw))
     return parsed.success ? parsed.data : "invalid"
+  } catch {
+    return "invalid"
+  }
+}
+
+// Guided Capture (docs/24): флаги/телеметрия — свободный JSON-объект от
+// приложения; кривой JSON отклоняем, чтобы mismatch-флаг не терялся молча.
+function parseJsonObjectField(raw: string | undefined): JsonObject | null | "invalid" {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as JsonObject)
+      : "invalid"
   } catch {
     return "invalid"
   }
@@ -130,6 +146,9 @@ async function ensureQueuedVideoVisionReview(input: {
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session?.did) return unauthorized()
+  // multipart-путь несёт протокол заголовком (docs/18/26): incompatible -> 426
+  const mismatch = protocolMismatchFromHeader(req)
+  if (mismatch) return mismatch
 
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
@@ -142,6 +161,8 @@ export async function POST(req: NextRequest) {
     durationMs: form!.get("durationMs") ?? undefined,
     captureStepJson: form!.get("captureStepJson") ?? undefined,
     exifJson: form!.get("exifJson") ?? undefined,
+    captureFlagsJson: form!.get("captureFlagsJson") ?? undefined,
+    captureTelemetryJson: form!.get("captureTelemetryJson") ?? undefined,
   })
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 })
 
@@ -160,6 +181,15 @@ export async function POST(req: NextRequest) {
   if (captureStep && captureStep.mediaKind !== uploadType.mediaType) {
     return NextResponse.json({ error: "capture_step_media_mismatch" }, { status: 400 })
   }
+  const captureFlags = parseJsonObjectField(parsed.data.captureFlagsJson)
+  if (captureFlags === "invalid") {
+    return NextResponse.json({ error: "invalid_capture_flags" }, { status: 400 })
+  }
+  const captureTelemetry = parseJsonObjectField(parsed.data.captureTelemetryJson)
+  if (captureTelemetry === "invalid") {
+    return NextResponse.json({ error: "invalid_capture_telemetry" }, { status: 400 })
+  }
+  const equipmentMismatch = captureFlags?.equipmentMismatch === true
 
   // дедуп до записи файла
   const existing = await workerDb.photoSubmission.findFirst({
@@ -309,11 +339,15 @@ export async function POST(req: NextRequest) {
         clientPhotoId: parsed.data.clientPhotoId,
         takenAt: new Date(parsed.data.takenAt),
         exif: exifWithQuality,
+        captureFlags: captureFlags ?? undefined,
+        captureTelemetry: captureTelemetry ?? undefined,
         qualityScore: combinedQualityScore,
       },
     })
+    // equipmentMismatch всегда получает human review: полка снята «как есть»
+    // и офис должен увидеть расхождение с базой оборудования (docs/24).
     const qualityReview =
-      combinedQualityStatus === "GOOD" && proofMetadata.status === "PASS"
+      combinedQualityStatus === "GOOD" && proofMetadata.status === "PASS" && !equipmentMismatch
         ? null
         : await tx.humanReview.create({
             data: {
@@ -322,7 +356,13 @@ export async function POST(req: NextRequest) {
               taskId: task.id,
               photoSubmissionId: photo.id,
               score: combinedQualityScore,
-              findings: { qualityCheck: exifWithQuality.qualityCheck },
+              findings: {
+                qualityCheck: exifWithQuality.qualityCheck,
+                ...(captureFlags ? { captureFlags } : {}),
+              },
+              ...(equipmentMismatch
+                ? { note: "Field agent flagged that the physical equipment does not match the planned one." }
+                : {}),
             },
             select: { id: true },
           })
@@ -352,6 +392,31 @@ export async function POST(req: NextRequest) {
         : null
     return { photo, reviewId: qualityReview?.id ?? null, queuedVisionReviewId: queuedVisionReview?.id ?? null }
   })
+  // Новое фото шага закрывает открытый запрос пересъемки офиса (docs/23).
+  const submittedStepId = captureStep?.stepId ?? proofMetadata.capture.stepId
+  if (submittedStepId) {
+    await resolveCaptureRetakesForStep(workerDb, session.org, task.id, submittedStepId).catch(() => {
+      // best effort: фото сохранено, запрос закроется при следующей загрузке
+    })
+  }
+  if (equipmentMismatch) {
+    await emitProductEvent(workerDb, session.org, {
+      kind: "capture.equipment_mismatch",
+      severity: "warning",
+      storeId: task.storeId,
+      entityType: "photo_submission",
+      entityId: photo.id,
+      dedupeKey: `capture.equipment_mismatch:${task.id}`,
+      payload: {
+        title: "Оборудование в точке не совпадает с базой",
+        taskId: task.id,
+        photoSubmissionId: photo.id,
+        captureStepId: captureStep?.stepId ?? null,
+      },
+    }).catch(() => {
+      // событие — best effort: фото уже сохранено, флаг лежит на нем
+    })
+  }
   const visionResult =
     uploadType.mediaType === "photo"
       ? await runVisionComplianceForPhoto({

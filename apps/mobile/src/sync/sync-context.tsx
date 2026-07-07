@@ -1,10 +1,11 @@
 // Провайдер синка: собирает движок из адаптеров, триггеры — старт,
 // возврат в foreground, восстановление сети, ручной pull-to-refresh.
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { AppState } from "react-native"
 import NetInfo from "@react-native-community/netinfo"
 import { router } from "expo-router"
 import { SyncManager } from "./sync-manager"
+import { nextBackoffMs } from "./backoff"
 import type { SyncStatus } from "./ports"
 import { syncApi } from "../api/mobile-client"
 import { localStore } from "../db/local-store"
@@ -22,12 +23,32 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [],
   )
   const [status, setStatus] = useState<SyncStatus>(manager.getStatus())
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const consecutiveErrors = useRef(0)
 
   useEffect(() => {
+    const clearRetry = () => {
+      if (retryTimer.current) {
+        clearTimeout(retryTimer.current)
+        retryTimer.current = null
+      }
+    }
     const unsub = manager.subscribe((next) => {
       setStatus(next)
+      // Backoff-ретрай только после реальной ошибки; успех/offline/upgrade
+      // отменяют его (offline восстановится по NetInfo, docs/26 §2).
       if (next.phase === "upgradeRequired") {
+        clearRetry()
         router.replace("/upgrade-required" as never)
+      } else if (next.phase === "error") {
+        consecutiveErrors.current += 1
+        clearRetry()
+        retryTimer.current = setTimeout(() => void manager.runSync(), nextBackoffMs(consecutiveErrors.current))
+      } else if (next.phase === "idle") {
+        consecutiveErrors.current = 0
+        clearRetry()
+      } else if (next.phase === "offline") {
+        clearRetry()
       }
     })
     void manager.runSync()
@@ -41,6 +62,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       unsub()
       appSub.remove()
       netSub()
+      clearRetry()
     }
   }, [manager])
 

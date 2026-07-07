@@ -35,6 +35,7 @@ export function SyncBar() {
       <Text style={styles.text}>
         {label}
         {queued > 0 ? ` · ${queued} ${t("pendingOps")}` : ""}
+        {status.quarantinedPhotos > 0 ? ` · ${status.quarantinedPhotos} ${t("photosStuck")}` : ""}
       </Text>
       {canRetry ? (
         <Pressable

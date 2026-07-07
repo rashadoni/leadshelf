@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react"
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import {
@@ -9,26 +9,41 @@ import {
   type BarcodeType,
 } from "expo-camera"
 import * as Crypto from "expo-crypto"
+import * as FileSystem from "expo-file-system/legacy"
 import Constants from "expo-constants"
+import { Accelerometer } from "expo-sensors"
 import {
+  enqueueProofException,
   enqueueTaskComment,
   enqueueTaskStatus,
   getBundle,
   getStore,
   getTask,
+  listTaskCaptureExceptions,
   listTaskPhotoProofs,
+  type TaskCaptureExceptionRow,
   type TaskPhotoProofRow,
 } from "../../../src/db/local-store"
 import { tokenStore } from "../../../src/auth/token-store"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import {
-  GUIDED_SHELF_PROOF_STEPS,
+  activeRetakeStepIds,
   getCaptureStepFromProof,
   getCompletedCaptureStepIds,
   getNextRequiredCaptureStep,
+  isRequiredScenarioComplete,
+  resolveCaptureScenario,
   toCaptureStepMetadata,
   type CaptureScenarioStep,
 } from "../../../src/photos/capture-scenario"
+import { selectBestBurstShot, type BurstIssue, type BurstShot } from "../../../src/photos/burst-select"
+import {
+  buildEquipmentSilhouette,
+  buildTelemetryPayload,
+  computeTilt,
+  evaluateTilt,
+  type EquipmentGeometry,
+} from "../../../src/photos/capture-guide"
 import { buildProofExifJson } from "../../../src/photos/proof-metadata"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
 import {
@@ -39,9 +54,11 @@ import {
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
-import { t, type MessageKey } from "../../../src/i18n"
+import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import type { TaskRow } from "../../../src/sync/ports"
+
+const EXCEPTION_REASONS = ["no_access", "equipment_missing", "obstruction", "other"] as const
 
 const BARCODE_TYPES: BarcodeType[] = [
   "ean13",
@@ -75,6 +92,15 @@ export default function TaskDetailScreen() {
   const [photoSaving, setPhotoSaving] = useState(false)
   const [videoRecording, setVideoRecording] = useState(false)
   const [activeCaptureStepId, setActiveCaptureStepId] = useState<string | null>(null)
+  const locale = useLocale()
+  const [captureExceptions, setCaptureExceptions] = useState<TaskCaptureExceptionRow[]>([])
+  const [exceptionStepId, setExceptionStepId] = useState<string | null>(null)
+  const [mismatchFlagged, setMismatchFlagged] = useState(false)
+  const [gyroAvailable, setGyroAvailable] = useState(false)
+  const [tiltSample, setTiltSample] = useState<{ x: number; y: number; z: number } | null>(null)
+  const stepOpenedAtRef = useRef(0)
+  const retakesRef = useRef(0)
+  const wasLevelRef = useRef(false)
 
   const reload = useCallback(() => {
     const fresh = getTask(taskId)
@@ -83,6 +109,7 @@ export default function TaskDetailScreen() {
       setBundle(getBundle(fresh.planogramVersionId) as Bundle | null)
     }
     setPhotoProofs(listTaskPhotoProofs(taskId))
+    setCaptureExceptions(listTaskCaptureExceptions(taskId))
   }, [taskId])
   useFocusEffect(reload)
 
@@ -102,22 +129,83 @@ export default function TaskDetailScreen() {
     placementSummaries.find((p) => p.placementId === selectedPlacementId) ??
     placementSummaries[0] ??
     null
+  const scenario = useMemo(
+    () => resolveCaptureScenario(task?.captureTemplate ?? null, locale),
+    [task?.captureTemplate, locale],
+  )
   const completedCaptureStepIds = useMemo(
     () => getCompletedCaptureStepIds(photoProofs),
     [photoProofs],
   )
-  const nextRequiredCaptureStep = useMemo(
-    () => getNextRequiredCaptureStep(completedCaptureStepIds),
-    [completedCaptureStepIds],
+  const exceptionStepIds = useMemo(
+    () => new Set(captureExceptions.map((exception) => exception.stepId)),
+    [captureExceptions],
   )
-  const firstCaptureStep = GUIDED_SHELF_PROOF_STEPS[0]!
+  const retakeStepIds = useMemo(
+    () => activeRetakeStepIds(task?.captureRetakes, photoProofs),
+    [task?.captureRetakes, photoProofs],
+  )
+  const nextRequiredCaptureStep = useMemo(
+    () =>
+      getNextRequiredCaptureStep(
+        new Set(
+          [...completedCaptureStepIds, ...exceptionStepIds].filter((id) => !retakeStepIds.has(id)),
+        ),
+        scenario.steps,
+      ),
+    [completedCaptureStepIds, exceptionStepIds, retakeStepIds, scenario.steps],
+  )
+  const firstCaptureStep = scenario.steps[0]!
   const activeCaptureStep =
-    GUIDED_SHELF_PROOF_STEPS.find((step) => step.id === activeCaptureStepId) ??
+    scenario.steps.find((step) => step.id === activeCaptureStepId) ??
     nextRequiredCaptureStep ??
     firstCaptureStep
-  const requiredCaptureComplete = GUIDED_SHELF_PROOF_STEPS
-    .filter((step) => step.required)
-    .every((step) => completedCaptureStepIds.has(step.id))
+  const requiredCaptureComplete = isRequiredScenarioComplete(
+    scenario.steps,
+    completedCaptureStepIds,
+    exceptionStepIds,
+    retakeStepIds,
+  )
+  const equipmentSilhouette = useMemo(
+    () =>
+      buildEquipmentSilhouette(
+        ((bundle?.equipment?.[0] as unknown) as EquipmentGeometry | undefined) ?? null,
+      ),
+    [bundle],
+  )
+
+  // Пузырьковый уровень: акселерометр активен только внутри шага съемки
+  // с tilt-гейтом (docs/24: батарея, деградация без гироскопа).
+  const tiltToleranceDeg = activeCaptureStep.tiltToleranceDeg
+  useEffect(() => {
+    if (!photoCameraOpen || tiltToleranceDeg == null) return
+    let removed = false
+    let subscription: { remove: () => void } | null = null
+    Accelerometer.isAvailableAsync()
+      .catch(() => false)
+      .then((available) => {
+        if (removed) return
+        setGyroAvailable(!!available)
+        if (!available) return
+        Accelerometer.setUpdateInterval(150)
+        subscription = Accelerometer.addListener((sample) => setTiltSample(sample))
+      })
+    return () => {
+      removed = true
+      subscription?.remove()
+      setTiltSample(null)
+    }
+  }, [photoCameraOpen, tiltToleranceDeg])
+
+  const tiltLevel = useMemo(() => {
+    if (tiltToleranceDeg == null || !tiltSample) return null
+    return evaluateTilt(computeTilt(tiltSample), tiltToleranceDeg).level
+  }, [tiltSample, tiltToleranceDeg])
+
+  useEffect(() => {
+    if (tiltLevel && !wasLevelRef.current) Vibration.vibrate(60)
+    wasLevelRef.current = !!tiltLevel
+  }, [tiltLevel])
 
   if (!task) return null
   const store = getStore(task.storeId)
@@ -144,6 +232,8 @@ export default function TaskDetailScreen() {
     sourceUri: string,
     captureStep: CaptureScenarioStep,
     durationMs: number | null = null,
+    captureFlags: Record<string, unknown> | null = null,
+    captureTelemetry: Record<string, unknown> | null = null,
   ) {
     let expectedTaskStatus: MobileTaskStatus = task!.status
     if (task!.status === "NEW") {
@@ -158,7 +248,7 @@ export default function TaskDetailScreen() {
     const takenAt = new Date().toISOString()
     const userId = await tokenStore.getUserId()
     const deviceLocation = await getCurrentDeviceLocation().catch(() => null)
-    const captureStepMetadata = toCaptureStepMetadata(captureStep)
+    const captureStepMetadata = toCaptureStepMetadata(captureStep, scenario.scenarioId)
     const exifJson = buildProofExifJson({
       takenAt,
       userId,
@@ -179,6 +269,8 @@ export default function TaskDetailScreen() {
       durationMs,
       captureStepJson: JSON.stringify(captureStepMetadata),
       exifJson,
+      captureFlagsJson: captureFlags ? JSON.stringify(captureFlags) : null,
+      captureTelemetryJson: captureTelemetry ? JSON.stringify(captureTelemetry) : null,
     })
     Alert.alert(t("photoQueued"))
     reload()
@@ -195,11 +287,41 @@ export default function TaskDetailScreen() {
     setVideoRecording(false)
     discardRecordingRef.current = false
     setActiveCaptureStepId(captureStep.id)
+    setMismatchFlagged(false)
+    retakesRef.current = 0
+    stepOpenedAtRef.current = Date.now()
     setPhotoCameraOpen(true)
   }
 
   async function takePhoto() {
     await openProofCamera(nextRequiredCaptureStep ?? activeCaptureStep)
+  }
+
+  async function acceptBurstShot(
+    shot: BurstShot,
+    issues: BurstIssue[],
+    manualOverride: boolean,
+  ) {
+    const captureFlags: Record<string, unknown> = {}
+    if (mismatchFlagged) captureFlags.equipmentMismatch = true
+    if (manualOverride) captureFlags.acceptedWithWarnings = true
+    const captureTelemetry = buildTelemetryPayload({
+      stepId: activeCaptureStep.id,
+      openedAt: stepOpenedAtRef.current,
+      acceptedAt: Date.now(),
+      retakes: retakesRef.current,
+      manualOverride,
+      gyroAvailable,
+      issues,
+    })
+    await queueProofPhoto(
+      shot.uri,
+      activeCaptureStep,
+      null,
+      Object.keys(captureFlags).length > 0 ? captureFlags : null,
+      captureTelemetry,
+    )
+    setPhotoCameraOpen(false)
   }
 
   async function captureProofPhoto() {
@@ -210,13 +332,73 @@ export default function TaskDetailScreen() {
     if (photoSaving) return
     setPhotoSaving(true)
     try {
-      const picture = await photoCameraRef.current?.takePictureAsync({ quality: 0.7 })
-      if (!picture?.uri) return
-      await queueProofPhoto(picture.uri, activeCaptureStep)
-      setPhotoCameraOpen(false)
+      // Burst-серия: лучший кадр по размеру файла, остальные удаляем.
+      const shots: BurstShot[] = []
+      const burstCount = Math.max(1, activeCaptureStep.burstCount)
+      for (let i = 0; i < burstCount; i += 1) {
+        const picture = await photoCameraRef.current?.takePictureAsync({ quality: 0.7, exif: true })
+        if (picture?.uri) {
+          const info = await FileSystem.getInfoAsync(picture.uri).catch(() => null)
+          shots.push({
+            uri: picture.uri,
+            byteSize: info && info.exists && typeof info.size === "number" ? info.size : null,
+            exif: (picture.exif as Record<string, unknown> | undefined) ?? null,
+          })
+        }
+      }
+      if (shots.length === 0) return
+      const selection = selectBestBurstShot(shots)
+      const best = shots[selection.bestIndex]!
+      await Promise.all(
+        shots
+          .filter((_, index) => index !== selection.bestIndex)
+          .map((shot) => FileSystem.deleteAsync(shot.uri, { idempotent: true }).catch(() => {})),
+      )
+      if (selection.issues.length === 0) {
+        await acceptBurstShot(best, [], false)
+        return
+      }
+      // Гид советует, но не блокирует (docs/24): всегда можно отправить как есть.
+      const issueKey = selection.issues.includes("too_dark")
+        ? "captureIssueTooDark"
+        : "captureIssueLowLight"
+      Alert.alert(t(issueKey as MessageKey), undefined, [
+        {
+          text: t("retakeShot"),
+          onPress: () => {
+            retakesRef.current += 1
+            void FileSystem.deleteAsync(best.uri, { idempotent: true }).catch(() => {})
+          },
+        },
+        {
+          text: t("useAnyway"),
+          onPress: () => {
+            void acceptBurstShot(best, selection.issues, true)
+          },
+        },
+      ])
     } finally {
       setPhotoSaving(false)
     }
+  }
+
+  function submitStepException(reason: (typeof EXCEPTION_REASONS)[number]) {
+    const step = scenario.steps.find((item) => item.id === exceptionStepId)
+    if (!step) {
+      setExceptionStepId(null)
+      return
+    }
+    enqueueProofException({
+      clientOpId: `op-${Crypto.randomUUID()}`,
+      taskId: task!.id,
+      stepId: step.id,
+      stepKind: step.kind,
+      reason,
+    })
+    setExceptionStepId(null)
+    Alert.alert(t("exceptionQueued"))
+    reload()
+    void sync()
   }
 
   async function toggleProofVideo() {
@@ -320,10 +502,18 @@ export default function TaskDetailScreen() {
     return parts.filter(Boolean).join(" · ")
   }
 
+  function stepTitle(step: CaptureScenarioStep): string {
+    return step.titleText ?? t(step.titleKey)
+  }
+
+  function stepInstruction(step: CaptureScenarioStep): string {
+    return step.instructionText ?? t(step.instructionKey)
+  }
+
   function photoProofStepTitle(proof: TaskPhotoProofRow): string | null {
     const capturedStep = getCaptureStepFromProof(proof)
-    const step = GUIDED_SHELF_PROOF_STEPS.find((item) => item.id === capturedStep?.stepId)
-    return step ? t(step.titleKey) : null
+    const step = scenario.steps.find((item) => item.id === capturedStep?.stepId)
+    return step ? stepTitle(step) : (capturedStep?.stepId ?? null)
   }
 
   if (photoCameraOpen) {
@@ -340,14 +530,46 @@ export default function TaskDetailScreen() {
         <View style={styles.proofTop}>
           <Text style={styles.proofEyebrow}>{t("guidedProof")}</Text>
           <Text style={styles.proofTitle} numberOfLines={2}>
-            {t(activeCaptureStep.titleKey)}
+            {stepTitle(activeCaptureStep)}
           </Text>
           <Text style={styles.proofMeta} numberOfLines={2}>
-            {t(activeCaptureStep.instructionKey)}
+            {stepInstruction(activeCaptureStep)}
           </Text>
         </View>
-        <View style={styles.proofFrame} pointerEvents="none" />
+        {/* Силуэт именно этого оборудования из мм-модели planogram bundle */}
+        <View style={styles.silhouetteWrap} pointerEvents="none">
+          <View
+            style={[
+              styles.silhouette,
+              { aspectRatio: equipmentSilhouette?.aspect ?? 0.72 },
+              tiltLevel === true && styles.silhouetteLevel,
+            ]}
+          >
+            {(equipmentSilhouette?.shelfFractions ?? []).map((fraction) => (
+              <View
+                key={fraction}
+                style={[styles.silhouetteShelf, { top: `${Math.round(fraction * 100)}%` }]}
+              />
+            ))}
+          </View>
+        </View>
         <View style={styles.proofBottom}>
+          {tiltToleranceDeg != null && gyroAvailable ? (
+            <View style={styles.levelRow}>
+              <View style={[styles.levelDot, tiltLevel ? styles.levelDotOk : styles.levelDotBad]} />
+              <Text style={styles.proofMeta}>
+                {tiltLevel ? t("guideLevelOk") : t("guideHoldLevel")}
+              </Text>
+            </View>
+          ) : null}
+          <Pressable
+            style={[styles.mismatchButton, mismatchFlagged && styles.mismatchButtonOn]}
+            onPress={() => setMismatchFlagged((value) => !value)}
+          >
+            <Text style={styles.mismatchButtonText}>
+              {mismatchFlagged ? t("equipmentMismatchOn") : t("equipmentMismatchButton")}
+            </Text>
+          </Pressable>
           <Text style={styles.proofMeta} numberOfLines={2}>
             {videoRecording
               ? `${t("recordingVideo")} · ${locationTitle}`
@@ -384,7 +606,9 @@ export default function TaskDetailScreen() {
                       ? t("savingPhoto")
                       : t("recordVideo")
                   : photoSaving
-                    ? t("savingPhoto")
+                    ? activeCaptureStep.burstCount > 1
+                      ? t("captureBurst")
+                      : t("savingPhoto")
                     : t("captureStepPhoto")}
               </Text>
             </Pressable>
@@ -455,32 +679,68 @@ export default function TaskDetailScreen() {
               </Text>
             </View>
             <Text style={[styles.scenarioBadge, requiredCaptureComplete && styles.scenarioBadgeDone]}>
-              {completedCaptureStepIds.size}/{GUIDED_SHELF_PROOF_STEPS.length}
+              {completedCaptureStepIds.size}/{scenario.steps.length}
             </Text>
           </View>
           <View style={styles.captureStepList}>
-            {GUIDED_SHELF_PROOF_STEPS.map((step) => {
-              const done = completedCaptureStepIds.has(step.id)
+            {scenario.steps.map((step) => {
+              const retake = retakeStepIds.has(step.id)
+              const done = completedCaptureStepIds.has(step.id) && !retake
+              const excepted = !done && !retake && exceptionStepIds.has(step.id)
+              const retakeNote = retake
+                ? (task.captureRetakes?.find((item) => item.stepId === step.id)?.note ?? null)
+                : null
               return (
-                <View key={step.id} style={[styles.captureStepRow, done && styles.captureStepRowDone]}>
+                <View
+                  key={step.id}
+                  style={[
+                    styles.captureStepRow,
+                    done && styles.captureStepRowDone,
+                    retake && styles.captureStepRowRetake,
+                  ]}
+                >
                   <View style={styles.captureStepNumber}>
                     <Text style={styles.captureStepNumberText}>{step.sequence}</Text>
                   </View>
                   <View style={styles.captureStepBody}>
-                    <Text style={styles.captureStepTitle}>{t(step.titleKey)}</Text>
+                    <Text style={styles.captureStepTitle}>{stepTitle(step)}</Text>
                     <Text style={styles.captureStepInstruction} numberOfLines={2}>
-                      {t(step.instructionKey)}
+                      {stepInstruction(step)}
                     </Text>
-                    <Text style={[styles.captureStepStatus, done && styles.captureStepStatusDone]}>
+                    <Text
+                      style={[
+                        styles.captureStepStatus,
+                        done && styles.captureStepStatusDone,
+                        retake && styles.captureStepStatusRetake,
+                      ]}
+                    >
                       {step.mediaKind === "video"
                         ? `${t("proofStepVideo")} ${step.minDurationSeconds}-${step.maxDurationSeconds}s · `
                         : `${t("proofStepPhoto")} · `}
-                      {done ? t("proofStepDone") : step.required ? t("proofStepRequired") : t("proofStepOptional")}
+                      {retake
+                        ? t("retakeRequested")
+                        : done
+                          ? t("proofStepDone")
+                          : excepted
+                            ? t("stepExceptionBadge")
+                            : step.required
+                              ? t("proofStepRequired")
+                              : t("proofStepOptional")}
                     </Text>
+                    {retakeNote ? (
+                      <Text style={styles.captureStepRetakeNote} numberOfLines={2}>
+                        {retakeNote}
+                      </Text>
+                    ) : null}
+                    {step.required && !done && !excepted && !retake ? (
+                      <Pressable onPress={() => setExceptionStepId(step.id)}>
+                        <Text style={styles.captureStepExceptionLink}>{t("cantCaptureStep")}</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   <Pressable style={styles.captureStepButton} onPress={() => openProofCamera(step)}>
                     <Text style={styles.captureStepButtonText}>
-                      {done ? t("retakeStep") : t("startStep")}
+                      {done || retake ? t("retakeStep") : t("startStep")}
                     </Text>
                   </Pressable>
                 </View>
@@ -704,6 +964,32 @@ export default function TaskDetailScreen() {
           )}
         </View>
       </ScrollView>
+      <Modal
+        visible={exceptionStepId != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExceptionStepId(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t("exceptionReasonTitle")}</Text>
+            {EXCEPTION_REASONS.map((reason) => (
+              <Pressable
+                key={reason}
+                style={styles.modalOption}
+                onPress={() => submitStepException(reason)}
+              >
+                <Text style={styles.modalOptionText}>
+                  {t(`exceptionReason_${reason}` as MessageKey)}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable style={styles.modalCancel} onPress={() => setExceptionStepId(null)}>
+              <Text style={styles.modalCancelText}>{t("cancel")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -722,17 +1008,79 @@ const styles = StyleSheet.create({
   proofEyebrow: { color: "#d6d3d1", fontSize: 11, fontWeight: "700" },
   proofTitle: { color: "white", fontSize: 18, fontWeight: "800" },
   proofMeta: { color: "#e7e5e4", fontSize: 12, fontWeight: "600" },
-  proofFrame: {
+  silhouetteWrap: {
     position: "absolute",
-    left: 28,
-    right: 28,
-    top: "29%",
-    height: "34%",
+    top: "16%",
+    bottom: "26%",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  silhouette: {
+    width: "76%",
+    maxHeight: "100%",
     borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.9)",
+    borderColor: "rgba(255, 255, 255, 0.85)",
     borderRadius: 10,
     backgroundColor: "transparent",
   },
+  silhouetteLevel: { borderColor: "rgba(74, 222, 128, 0.95)" },
+  silhouetteShelf: {
+    position: "absolute",
+    left: 4,
+    right: 4,
+    height: 1.5,
+    backgroundColor: "rgba(255, 255, 255, 0.55)",
+  },
+  levelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  levelDot: { width: 12, height: 12, borderRadius: 6 },
+  levelDotOk: { backgroundColor: "#4ade80" },
+  levelDotBad: { backgroundColor: "#f59e0b" },
+  mismatchButton: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  mismatchButtonOn: { backgroundColor: "#b45309", borderColor: "#b45309" },
+  mismatchButtonText: { color: "white", fontSize: 12, fontWeight: "700" },
+  captureStepExceptionLink: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#b45309",
+    textDecorationLine: "underline",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(23, 23, 23, 0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    borderRadius: 12,
+    backgroundColor: "white",
+    padding: 16,
+    gap: 8,
+  },
+  modalTitle: { fontSize: 15, fontWeight: "800", color: "#171717", marginBottom: 4 },
+  modalOption: {
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    paddingHorizontal: 12,
+    backgroundColor: "#fafaf9",
+  },
+  modalOptionText: { fontSize: 14, fontWeight: "600", color: "#171717" },
+  modalCancel: { minHeight: 40, alignItems: "center", justifyContent: "center" },
+  modalCancelText: { fontSize: 13, fontWeight: "700", color: "#737373" },
   proofBottom: {
     position: "absolute",
     left: 12,
@@ -819,6 +1167,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   captureStepRowDone: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
+  captureStepRowRetake: { borderColor: "#fed7aa", backgroundColor: "#fff7ed" },
   captureStepNumber: {
     width: 28,
     height: 28,
@@ -833,6 +1182,8 @@ const styles = StyleSheet.create({
   captureStepInstruction: { fontSize: 11, color: "#525252", lineHeight: 15 },
   captureStepStatus: { fontSize: 11, color: "#92400e", fontWeight: "700" },
   captureStepStatusDone: { color: "#166534" },
+  captureStepStatusRetake: { color: "#c2410c" },
+  captureStepRetakeNote: { marginTop: 2, fontSize: 11, color: "#c2410c", fontWeight: "600" },
   captureStepButton: {
     minHeight: 36,
     justifyContent: "center",

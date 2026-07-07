@@ -8,15 +8,26 @@ import type {
   SyncApi,
   SyncStatus,
 } from "./ports"
+import { AuthLostError, HttpError, UpgradeRequiredError } from "./ports-error"
 
-export class UpgradeRequiredError extends Error {
-  constructor() {
-    super("protocol upgrade required")
-  }
-}
+// Реэкспорт для обратной совместимости импортов из "./sync-manager".
+export { UpgradeRequiredError } from "./ports-error"
 
 const MAX_PUSH_BATCH = 50
 const MAX_ATTEMPTS = 8
+
+// Перманентный клиентский отказ загрузки медиа: файл никогда не пройдёт
+// (битый MIME, слишком большой, невалидный запрос) — в карантин, чтобы не
+// клинить очередь. 408/429 — транзиентные, ретраим. docs/26 §2.
+function isPermanentUploadError(error: unknown): boolean {
+  return (
+    error instanceof HttpError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  )
+}
 
 function toPushOperation(op: PushOperation): PushOperation {
   if (op.kind === "task.status") {
@@ -44,6 +55,7 @@ export class SyncManager {
     lastSyncAt: null,
     pendingOps: 0,
     pendingPhotos: 0,
+    quarantinedPhotos: 0,
     error: null,
   }
   private listeners = new Set<(s: SyncStatus) => void>()
@@ -69,11 +81,12 @@ export class SyncManager {
   }
 
   private async refreshCounters() {
-    const [ops, photos] = await Promise.all([
+    const [ops, photos, quarantined] = await Promise.all([
       this.deps.store.pendingOutbox(),
       this.deps.store.pendingPhotos(),
+      this.deps.store.quarantinedPhotoCount(),
     ])
-    this.patch({ pendingOps: ops.length, pendingPhotos: photos.length })
+    this.patch({ pendingOps: ops.length, pendingPhotos: photos.length, quarantinedPhotos: quarantined })
   }
 
   private patch(p: Partial<SyncStatus>) {
@@ -103,11 +116,27 @@ export class SyncManager {
       await this.deps.api.ack(pulled.cursors)
       await this.deps.store.setCursors(pulled.cursors)
 
-      // 3. Фото: upload до push (photo.submit ссылается на загруженный файл)
+      // 3. Фото: upload до push (photo.submit ссылается на загруженный файл).
+      // Изоляция: один битый файл не должен валить весь sync и блокировать
+      // push (docs/26 §2). Перманентный 4xx -> карантин; транзиентный ->
+      // счётчик попыток и ретрай на следующем sync. auth/upgrade — наверх.
       this.patch({ phase: "uploadingPhotos" })
       for (const photo of await this.deps.store.pendingPhotos()) {
-        const result = await this.deps.api.uploadPhoto(photo) // дедуп по clientPhotoId на сервере
-        await this.deps.store.markPhotoUploaded(photo.clientPhotoId, result)
+        try {
+          const result = await this.deps.api.uploadPhoto(photo) // дедуп по clientPhotoId на сервере
+          await this.deps.store.markPhotoUploaded(photo.clientPhotoId, result)
+        } catch (e) {
+          if (e instanceof UpgradeRequiredError || e instanceof AuthLostError) throw e
+          if (isPermanentUploadError(e)) {
+            await this.deps.store.quarantinePhoto(
+              photo.clientPhotoId,
+              e instanceof Error ? e.message : String(e),
+            )
+          } else {
+            await this.deps.store.bumpPhotoAttempts([photo.clientPhotoId])
+          }
+          // не прерываем цикл — остальные фото и push должны пройти
+        }
       }
 
       // 4. PUSH outbox

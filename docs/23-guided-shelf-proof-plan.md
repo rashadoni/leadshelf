@@ -119,6 +119,11 @@
   исключение.
 - Клик по AI finding должен открывать кадр/зону/планограмму.
 - Менеджер может принять, отклонить или запросить пересъемку конкретного шага.
+  `[сделано 2026-07-07: per-step retake loop — CaptureRetakeRequest,
+  роут /api/v1/tasks/[taskId]/capture-retake (office roles), кнопка и
+  бейджи в task detail; открытые запросы едут в sync pull и переоткрывают
+  шаг в мобильном wizard; новое фото шага авто-закрывает запрос на
+  upload]`
 - В отчетах отделять `proof_submitted` от `proof_scenario_complete`.
 
 ## Pilot backlog
@@ -202,3 +207,12 @@ Definition of Done первого среза:
   `VISION_PROVIDER=openai` в server env.
 - Pilot-точность по Mars/FMCG невозможна без 20-50 реальных shelf proofs и
   ручной разметки expected result.
+
+## Связанные планы
+
+- `docs/24-guided-capture-plan.md` — гид съемки в видоискателе, photo-first
+  пересмотр обязательных шагов, серверное выпрямление кадра и
+  мм-калибровка, capture templates по типу оборудования.
+- `docs/25-product-scenario.md` — сквозной сценарий продукта: клиент-сеть
+  vs клиент-бренд, режимы depth-проверки, in-visit correction loop,
+  демо-сценарий.
