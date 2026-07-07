@@ -874,6 +874,7 @@
       "match": "uyğun",
       "issue": "pozuntu",
       "uncertain": "təsdiqlənməyib",
+      "expected": "etalona görə gözlənilir",
       "unknownSku": "SKU tanınmadı"
     },
     "reason": {

@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 
+export type ProofOverlayStatus = "match" | "issue" | "uncertain" | "expected"
+
 export interface ProofOverlayBox {
   id: string
   xPct: number
@@ -10,19 +12,21 @@ export interface ProofOverlayBox {
   heightPct: number
   sku: string | null
   confidence: number
-  status: "match" | "issue" | "uncertain"
+  status: ProofOverlayStatus
 }
 
-const BOX_STYLE: Record<ProofOverlayBox["status"], string> = {
+const BOX_STYLE: Record<ProofOverlayStatus, string> = {
   match: "border-emerald-400 bg-emerald-400/10",
   issue: "border-red-500 bg-red-500/10",
   uncertain: "border-amber-400 bg-amber-400/10",
+  expected: "border-sky-400 border-dashed bg-sky-400/5",
 }
 
-const DOT_STYLE: Record<ProofOverlayBox["status"], string> = {
+const DOT_STYLE: Record<ProofOverlayStatus, string> = {
   match: "bg-emerald-500",
   issue: "bg-red-500",
   uncertain: "bg-amber-500",
+  expected: "bg-sky-500",
 }
 
 // Визуальная проверка полки (docs/27 P0 #1): рамки находок vision поверх
@@ -32,13 +36,17 @@ export function ProofOverlay({
   boxes,
   statusLabels,
   emptyLabel,
+  showConfidence = true,
 }: {
   src: string
   boxes: ProofOverlayBox[]
-  statusLabels: Record<ProofOverlayBox["status"], string>
+  statusLabels: Partial<Record<ProofOverlayStatus, string>>
   emptyLabel: string
+  showConfidence?: boolean
 }) {
   const [active, setActive] = useState<string | null>(null)
+  const label = (status: ProofOverlayStatus) => statusLabels[status] ?? status
+  const legendStatuses = Array.from(new Set(boxes.map((b) => b.status)))
 
   return (
     <div>
@@ -69,10 +77,10 @@ export function ProofOverlay({
         })}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-neutral-500">
-        {(["match", "issue", "uncertain"] as const).map((s) => (
+        {legendStatuses.map((s) => (
           <span key={s} className="inline-flex items-center gap-1">
             <span className={`h-2.5 w-2.5 rounded-full ${DOT_STYLE[s]}`} />
-            {statusLabels[s]}
+            {label(s)}
           </span>
         ))}
       </div>
@@ -84,10 +92,12 @@ export function ProofOverlay({
             <div className="mt-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs">
               <span className={`mr-2 inline-flex items-center gap-1 font-medium`}>
                 <span className={`h-2.5 w-2.5 rounded-full ${DOT_STYLE[box.status]}`} />
-                {statusLabels[box.status]}
+                {label(box.status)}
               </span>
               <span className="text-neutral-700">{box.sku ?? emptyLabel}</span>
-              <span className="ml-2 tabular-nums text-neutral-500">{Math.round(box.confidence * 100)}%</span>
+              {showConfidence ? (
+                <span className="ml-2 tabular-nums text-neutral-500">{Math.round(box.confidence * 100)}%</span>
+              ) : null}
             </div>
           )
         })()
