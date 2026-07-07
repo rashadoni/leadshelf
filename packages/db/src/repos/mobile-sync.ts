@@ -168,6 +168,73 @@ export async function pullChanges(
     ? encodeCursor({ u: lastVisit.updatedAt.toISOString(), id: lastVisit.id })
     : (cursors.visits ?? null)
 
+  // Guided Capture (docs/24): сценарий съемки резолвится по типу первого
+  // оборудования планограммы задачи; fallback — org default (typeId=null).
+  // Снапшот шаблона едет прямо на task row; steps отдаются как raw JSON,
+  // финальная валидация контрактом — на границе API (pull route).
+  const pulledVersionIds = [
+    ...new Set(tasks.map((t) => t.planogramVersionId).filter((v): v is string => !!v)),
+  ]
+  const captureTemplateByVersion = new Map<
+    string,
+    {
+      id: string
+      scenarioId: string
+      name: string
+      equipmentKind: string | null
+      version: number
+      steps: unknown
+      updatedAt: string
+    }
+  >()
+  if (pulledVersionIds.length > 0) {
+    const equipmentRows = await prisma.planogramEquipment.findMany({
+      where: { planogramVersionId: { in: pulledVersionIds } },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      select: {
+        planogramVersionId: true,
+        equipmentVersion: {
+          select: {
+            template: { select: { typeId: true, type: { select: { kind: true } } } },
+          },
+        },
+      },
+    })
+    const primaryTypeByVersion = new Map<string, { typeId: string; kind: string }>()
+    for (const row of equipmentRows) {
+      if (!primaryTypeByVersion.has(row.planogramVersionId)) {
+        primaryTypeByVersion.set(row.planogramVersionId, {
+          typeId: row.equipmentVersion.template.typeId,
+          kind: row.equipmentVersion.template.type.kind,
+        })
+      }
+    }
+    const captureTemplates = await prisma.captureTemplate.findMany({
+      where: { organizationId, isActive: true },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    })
+    const templateByTypeId = new Map(
+      captureTemplates
+        .filter((t): t is typeof t & { equipmentTypeId: string } => !!t.equipmentTypeId)
+        .map((t) => [t.equipmentTypeId, t]),
+    )
+    const defaultTemplate = captureTemplates.find((t) => t.equipmentTypeId === null) ?? null
+    for (const versionId of pulledVersionIds) {
+      const primary = primaryTypeByVersion.get(versionId) ?? null
+      const template = (primary ? templateByTypeId.get(primary.typeId) : null) ?? defaultTemplate
+      if (!template) continue
+      captureTemplateByVersion.set(versionId, {
+        id: template.id,
+        scenarioId: `capture-template:${template.id}:v${template.version}`,
+        name: template.name,
+        equipmentKind: primary?.kind ?? null,
+        version: template.version,
+        steps: template.steps,
+        updatedAt: template.updatedAt.toISOString(),
+      })
+    }
+  }
+
   const assignedTaskIds = allAssigned.map((task) => task.id)
   const photoCursor = decodeCursor(cursors.photoSubmissions)
   const photoCandidates =
@@ -368,6 +435,9 @@ export async function pullChanges(
         storeId: t.storeId,
         planogramVersionId: t.planogramVersionId,
         locationHint,
+        captureTemplate: t.planogramVersionId
+          ? (captureTemplateByVersion.get(t.planogramVersionId) ?? null)
+          : null,
         updatedAt: t.updatedAt.toISOString(),
       }
     }),
@@ -496,6 +566,7 @@ export interface PushOperation {
     | "visit.checkout"
     | "location.update"
     | "order.create"
+    | "proof.exception"
   payload: Record<string, unknown>
   clientCreatedAt?: string
 }
@@ -596,6 +667,55 @@ async function applyTaskComment(
     },
   })
   return { status: "applied" }
+}
+
+// Шаг сценария невозможен (docs/24 manual_exception): фиксируем причину и
+// поднимаем warning-событие, чтобы офис увидел незакрытый шаг, а не тишину.
+async function applyProofException(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  payload: {
+    taskId: string
+    stepId: string
+    stepKind?: string | null
+    reason: string
+    note?: string
+  },
+): Promise<Omit<PushResult, "clientOpId">> {
+  const task = await prisma.task.findFirst({
+    where: { id: payload.taskId, organizationId, assigneeId: userId },
+    select: { id: true, storeId: true, title: true },
+  })
+  if (!task) return { status: "rejected", detail: "task_not_found_or_not_assigned" }
+  const exception = await prisma.captureStepException.create({
+    data: {
+      organizationId,
+      taskId: task.id,
+      userId,
+      stepId: payload.stepId,
+      stepKind: payload.stepKind ?? null,
+      reason: payload.reason,
+      note: payload.note?.trim() || null,
+    },
+    select: { id: true },
+  })
+  await emitProductEvent(prisma, organizationId, {
+    kind: "capture.step_exception",
+    severity: "warning",
+    storeId: task.storeId,
+    entityType: "task",
+    entityId: task.id,
+    dedupeKey: `capture.step_exception:${task.id}:${payload.stepId}`,
+    payload: {
+      title: `Шаг съемки не выполнен: ${task.title}`,
+      stepId: payload.stepId,
+      stepKind: payload.stepKind ?? null,
+      reason: payload.reason,
+      note: payload.note?.trim() || null,
+    },
+  })
+  return { status: "applied", detail: { exceptionId: exception.id } }
 }
 
 async function findUserAgent(prisma: PrismaClient, organizationId: string, userId: string) {
@@ -813,6 +933,8 @@ export async function pushOperations(
       result = await applyLocationUpdate(prisma, organizationId, userId, op.payload as never)
     } else if (op.kind === "order.create") {
       result = await applyOrderCreate(prisma, organizationId, userId, deviceId, op.clientOpId, op.payload as never)
+    } else if (op.kind === "proof.exception") {
+      result = await applyProofException(prisma, organizationId, userId, op.payload as never)
     } else {
       result = { status: "rejected", detail: "unknown_kind" }
     }

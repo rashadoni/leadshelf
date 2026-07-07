@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { mobileSyncPullRequestSchema } from "@leadshelf/api-contracts/mobile/v1"
+import {
+  mobileCaptureTemplateSchema,
+  mobileSyncPullRequestSchema,
+} from "@leadshelf/api-contracts/mobile/v1"
 import { pullChanges, storedCursors } from "@leadshelf/db"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { protocolMismatch } from "@/server/mobile/protocol"
@@ -28,5 +31,13 @@ export async function POST(req: NextRequest) {
   }
 
   const changes = await pullChanges(workerDb, session.org, session.sub, cursors)
-  return NextResponse.json(changes)
+  // Guided Capture: steps лежат в БД как raw JSON — валидируем контрактом на
+  // границе; кривой шаблон превращается в null (fallback на встроенный
+  // сценарий в приложении), а не ломает весь pull.
+  const tasks = changes.tasks.map((task) => {
+    if (!task.captureTemplate) return task
+    const parsed = mobileCaptureTemplateSchema.safeParse(task.captureTemplate)
+    return { ...task, captureTemplate: parsed.success ? parsed.data : null }
+  })
+  return NextResponse.json({ ...changes, tasks })
 }

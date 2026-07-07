@@ -26,6 +26,15 @@ function statusClass(status: string): string {
   return "bg-amber-50 text-amber-700"
 }
 
+function hasEquipmentMismatch(flags: unknown): boolean {
+  return (
+    !!flags &&
+    typeof flags === "object" &&
+    !Array.isArray(flags) &&
+    (flags as { equipmentMismatch?: unknown }).equipmentMismatch === true
+  )
+}
+
 function ProofMedia({
   url,
   mediaType,
@@ -130,11 +139,24 @@ export default async function TaskDetailPage({
             durationMs: true,
             takenAt: true,
             qualityScore: true,
+            captureFlags: true,
             user: { select: { name: true } },
             humanReviews: {
               orderBy: { updatedAt: "desc" },
               select: { id: true, reason: true, status: true, score: true, note: true, reviewedAt: true },
             },
+          },
+        },
+        captureStepExceptions: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            stepId: true,
+            stepKind: true,
+            reason: true,
+            note: true,
+            createdAt: true,
+            user: { select: { name: true } },
           },
         },
         humanReviews: {
@@ -220,6 +242,11 @@ export default async function TaskDetailPage({
                         {photo.durationMs ? ` · ${Math.round(photo.durationMs / 1000)}s` : ""} · {photo.user.name}
                       </div>
                       <div className="flex flex-wrap gap-1">
+                        {hasEquipmentMismatch(photo.captureFlags) ? (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                            {t("detail.equipmentMismatch")}
+                          </span>
+                        ) : null}
                         {photo.humanReviews.length === 0 ? (
                           <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
                             {t("detail.noReview")}
@@ -241,6 +268,25 @@ export default async function TaskDetailPage({
               </div>
             )}
           </Panel>
+
+          {task.captureStepExceptions.length > 0 ? (
+            <Panel title={t("detail.captureExceptions")}>
+              <div className="space-y-2">
+                {task.captureStepExceptions.map((exception) => (
+                  <div key={exception.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-amber-900">
+                        {exception.stepId} · {t(`detail.captureExceptionReason.${exception.reason}` as never)}
+                      </span>
+                      <span className="text-xs text-amber-700">{formatDateTime(exception.createdAt)}</span>
+                    </div>
+                    {exception.note ? <div className="mt-1 text-amber-800">{exception.note}</div> : null}
+                    <div className="mt-1 text-xs text-amber-700">{exception.user.name}</div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          ) : null}
 
           <Panel title={t("detail.history")}>
             {task.statusHistory.length === 0 ? (

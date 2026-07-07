@@ -594,6 +594,14 @@
       "noPhotos": "Bu tapşırıq üzrə hələ foto yoxdur.",
       "videoProof": "İcra videosu",
       "noReview": "Review yoxdur",
+      "equipmentMismatch": "Avadanlıq uyğun gəlmir",
+      "captureExceptions": "İstisna edilmiş çəkiliş addımları",
+      "captureExceptionReason": {
+        "no_access": "Rəfə giriş yoxdur",
+        "equipment_missing": "Avadanlıq yoxdur",
+        "obstruction": "Fiziki maneə",
+        "other": "Digər səbəb"
+      },
       "metrics": {
         "due": "Müddət",
         "assignee": "İcraçı",
@@ -832,6 +840,7 @@
     "noPhoto": "Foto yoxdur",
     "photoProof": "İcra fotosu",
     "videoProof": "İcra videosu",
+    "equipmentMismatch": "Avadanlıq baza ilə uyğun gəlmir",
     "goldenReference": "Etalon",
     "noReference": "Etalon yoxdur",
     "untitled": "Adsız",

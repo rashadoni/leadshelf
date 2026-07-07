@@ -44,6 +44,8 @@ export interface SyncApi {
     durationMs?: number | null
     captureStepJson?: string | null
     exifJson?: string | null
+    captureFlagsJson?: string | null
+    captureTelemetryJson?: string | null
   }): Promise<MobilePhotoUploadResponse>
 }
 
@@ -61,6 +63,8 @@ export interface PhotoQueueRow {
   durationMs?: number | null
   captureStepJson?: string | null
   exifJson?: string | null
+  captureFlagsJson?: string | null
+  captureTelemetryJson?: string | null
   uploaded: boolean
 }
 

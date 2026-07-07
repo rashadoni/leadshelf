@@ -547,14 +547,29 @@ Definition of Done:
 Задачи первого среза (уровень 1, без нативных модулей):
 
 - `CaptureTemplate`: шаги съемки задаются типом оборудования/задачей.
+  `[сделано: Prisma model + seed rack/fridge/default, резолв в sync pull,
+  снапшот на task row, контрактная валидация на границе API, мобильный
+  fallback на встроенный сценарий]`
 - Wizard: силуэт из geometry, гироскоп-уровень, вибрация, burst-фото с
   локальным отбором лучшего кадра, немедленный совет пересъемки.
+  `[сделано: силуэт с аспектом и полками из planogram bundle, expo-sensors
+  Accelerometer + Vibration, burst 3 кадра с выбором по размеру файла и
+  EXIF-эвристиками; совет не блокирует — accepted_with_warnings]`
 - Люк `equipment_mismatch` (полевая ревизия оборудования) и
-  `manual_exception` с причиной.
+  `manual_exception` с причиной. `[сделано: captureFlags на
+  PhotoSubmission + forced review + событие capture.equipment_mismatch;
+  push op proof.exception + CaptureStepException + событие
+  capture.step_exception; офис видит бейджи и панель исключений]`
 - Photo-first для обязательных шагов; видео -> optional/lazy по WiFi.
+  `[сделано: встроенный сценарий переведен на burst-фото; видео осталось
+  поддержанным для шаблонных шагов; lazy-upload видео не делался — видео
+  больше не в обязательном пути]`
 - Базовая телеметрия гида (время до принятого кадра, пересъемки).
+  `[сделано: captureTelemetry JSON на PhotoSubmission]`
 
-Статус 2026-07-07: план зафиксирован, реализация не начата.
+Статус 2026-07-07: срез 1 реализован и покрыт тестами (см. docs/24
+Implementation status). Не проверено на физическом устройстве — device
+smoke остается блокером перед пилотом.
 
 ## Phase 11 - Field force: маршруты, визиты, live map
 

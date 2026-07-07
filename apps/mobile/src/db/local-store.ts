@@ -6,10 +6,12 @@ import * as SQLite from "expo-sqlite"
 import {
   mobilePhotoSubmitPayloadSchema,
   mobileLocationUpdatePayloadSchema,
+  mobileProofExceptionPayloadSchema,
   mobileTaskCommentPayloadSchema,
   mobileTaskStatusPayloadSchema,
   mobileVisitCheckInPayloadSchema,
   mobileVisitCheckOutPayloadSchema,
+  type MobileProofExceptionPayload,
   type MobileTaskStatus,
 } from "@leadshelf/api-contracts/mobile/v1"
 import { orderCreateRequestSchema, type OrderCreateRequest } from "@leadshelf/api-contracts/orders/v1"
@@ -92,6 +94,9 @@ export function initDb(): void {
   if (!taskColumns.some((c) => c.name === "locationHint")) {
     db.execSync("ALTER TABLE tasks ADD COLUMN locationHint TEXT")
   }
+  if (!taskColumns.some((c) => c.name === "captureTemplate")) {
+    db.execSync("ALTER TABLE tasks ADD COLUMN captureTemplate TEXT")
+  }
   const storeColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(stores)")
   if (!storeColumns.some((c) => c.name === "latitude")) {
     db.execSync("ALTER TABLE stores ADD COLUMN latitude REAL")
@@ -115,6 +120,11 @@ export function initDb(): void {
   ensurePhotoColumn("visionReviewId", "ALTER TABLE photo_queue ADD COLUMN visionReviewId TEXT")
   ensurePhotoColumn("visionStatus", "ALTER TABLE photo_queue ADD COLUMN visionStatus TEXT")
   ensurePhotoColumn("visionReason", "ALTER TABLE photo_queue ADD COLUMN visionReason TEXT")
+  ensurePhotoColumn("captureFlagsJson", "ALTER TABLE photo_queue ADD COLUMN captureFlagsJson TEXT")
+  ensurePhotoColumn(
+    "captureTelemetryJson",
+    "ALTER TABLE photo_queue ADD COLUMN captureTelemetryJson TEXT",
+  )
   const serverPhotoColumns = db.getAllSync<{ name: string }>("PRAGMA table_info(server_photo_submissions)")
   const ensureServerPhotoColumn = (name: string, sql: string) => {
     if (!serverPhotoColumns.some((c) => c.name === name)) db.execSync(sql)
@@ -129,11 +139,12 @@ export const localStore: LocalStore = {
     db.withTransactionSync(() => {
       for (const t of data.tasks) {
         db.runSync(
-          `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, locationHint, updatedAt)
-           VALUES (?,?,?,?,?,?,?,?)
+          `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, locationHint, captureTemplate, updatedAt)
+           VALUES (?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET title=excluded.title, status=excluded.status,
              dueAt=excluded.dueAt, storeId=excluded.storeId,
              planogramVersionId=excluded.planogramVersionId, locationHint=excluded.locationHint,
+             captureTemplate=excluded.captureTemplate,
              updatedAt=excluded.updatedAt`,
           [
             t.id,
@@ -143,6 +154,7 @@ export const localStore: LocalStore = {
             t.storeId,
             t.planogramVersionId,
             t.locationHint ? JSON.stringify(t.locationHint) : null,
+            t.captureTemplate ? JSON.stringify(t.captureTemplate) : null,
             t.updatedAt,
           ],
         )
@@ -350,6 +362,16 @@ export const localStore: LocalStore = {
             attempts: r.attempts,
           }
         }
+        if (r.kind === "proof.exception") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "proof.exception",
+            payload: mobileProofExceptionPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
         return {
           clientOpId: r.clientOpId,
           kind: "task.comment",
@@ -392,7 +414,11 @@ export const localStore: LocalStore = {
       durationMs: number | null
       captureStepJson: string | null
       exifJson: string | null
-    }>("SELECT clientPhotoId, taskId, fileUri, takenAt, mediaType, durationMs, captureStepJson, exifJson FROM photo_queue WHERE uploaded=0")
+      captureFlagsJson: string | null
+      captureTelemetryJson: string | null
+    }>(
+      "SELECT clientPhotoId, taskId, fileUri, takenAt, mediaType, durationMs, captureStepJson, exifJson, captureFlagsJson, captureTelemetryJson FROM photo_queue WHERE uploaded=0",
+    )
     return rows.map((r): PhotoQueueRow => ({ ...r, mediaType: r.mediaType ?? "photo", uploaded: false }))
   },
 
@@ -418,12 +444,25 @@ export const localStore: LocalStore = {
 
 // --- локальные чтения/записи для UI ---
 
-type TaskDbRow = Omit<TaskRow, "locationHint"> & { locationHint?: string | null }
+type TaskDbRow = Omit<TaskRow, "locationHint" | "captureTemplate"> & {
+  locationHint?: string | null
+  captureTemplate?: string | null
+}
+
+function parseJsonOrNull<T>(raw: string | null | undefined): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
 
 function mapTaskRow(row: TaskDbRow): TaskRow {
   return {
     ...row,
-    locationHint: row.locationHint ? JSON.parse(row.locationHint) : null,
+    locationHint: parseJsonOrNull(row.locationHint),
+    captureTemplate: parseJsonOrNull(row.captureTemplate),
   }
 }
 
@@ -747,13 +786,16 @@ export function enqueuePhoto(input: {
   durationMs?: number | null
   captureStepJson?: string | null
   exifJson?: string | null
+  captureFlagsJson?: string | null
+  captureTelemetryJson?: string | null
 }): void {
   const takenAt = input.takenAt ?? new Date().toISOString()
   db.withTransactionSync(() => {
     db.runSync(
       `INSERT INTO photo_queue (
-         clientPhotoId, taskId, fileUri, takenAt, exifJson, mediaType, durationMs, captureStepJson
-       ) VALUES (?,?,?,?,?,?,?,?)`,
+         clientPhotoId, taskId, fileUri, takenAt, exifJson, mediaType, durationMs, captureStepJson,
+         captureFlagsJson, captureTelemetryJson
+       ) VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [
         input.clientPhotoId,
         input.taskId,
@@ -763,6 +805,8 @@ export function enqueuePhoto(input: {
         input.mediaType ?? "photo",
         input.durationMs ?? null,
         input.captureStepJson ?? null,
+        input.captureFlagsJson ?? null,
+        input.captureTelemetryJson ?? null,
       ],
     )
     db.runSync(
@@ -779,6 +823,57 @@ export function enqueuePhoto(input: {
       ],
     )
     db.runSync("UPDATE tasks SET status='PHOTO_SUBMITTED' WHERE id=?", [input.taskId])
+  })
+}
+
+/** Шаг сценария невозможен: причина уходит через outbox (docs/24). */
+export function enqueueProofException(
+  input: MobileProofExceptionPayload & { clientOpId: string },
+): void {
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [
+      input.clientOpId,
+      "proof.exception",
+      JSON.stringify({
+        taskId: input.taskId,
+        stepId: input.stepId,
+        stepKind: input.stepKind ?? null,
+        reason: input.reason,
+        note: input.note ?? undefined,
+      }),
+      new Date().toISOString(),
+    ],
+  )
+}
+
+export interface TaskCaptureExceptionRow {
+  stepId: string
+  reason: string
+  note: string | null
+  status: "pending" | "applied" | "conflict" | "rejected"
+}
+
+/** Исключения по шагам задачи — из локального outbox (переживает офлайн). */
+export function listTaskCaptureExceptions(taskId: string): TaskCaptureExceptionRow[] {
+  const rows = db.getAllSync<{ payload: string; status: string }>(
+    `SELECT payload, status FROM outbox_ops
+     WHERE kind='proof.exception' AND json_extract(payload, '$.taskId') = ?
+     ORDER BY clientCreatedAt`,
+    [taskId],
+  )
+  return rows.flatMap((row) => {
+    const payload = parseJsonOrNull<Record<string, unknown>>(row.payload)
+    const stepId = typeof payload?.stepId === "string" ? payload.stepId : null
+    if (!stepId) return []
+    return [
+      {
+        stepId,
+        reason: typeof payload?.reason === "string" ? payload.reason : "other",
+        note: typeof payload?.note === "string" ? payload.note : null,
+        status: (row.status as TaskCaptureExceptionRow["status"]) ?? "pending",
+      },
+    ]
   })
 }
 

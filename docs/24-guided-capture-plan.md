@@ -1,6 +1,7 @@
 # LeadShelf: Guided Capture assistant (гид съемки в объективе)
 
-Обновлено: 2026-07-07. Статус: план, реализация не начата.
+Обновлено: 2026-07-07. Статус: срез 1 реализован (см. Implementation status
+внизу), срезы 2-4 — план.
 
 Документ развивает `docs/23-guided-shelf-proof-plan.md`. Там зафиксирован
 обязательный сценарий шагов (front/left/right/detail); здесь — как система
@@ -180,6 +181,58 @@ Spike `react-native-vision-camera` + frame processors (dev-client build),
 - Обучение собственного детектора до подтверждения ценности пилотом.
 - AR до готовности rectification/calibration.
 - On-device нейронки до среза 3.
+
+## Implementation status - 2026-07-07 (срез 1)
+
+Реализовано:
+
+- `CaptureTemplate` (org + nullable equipmentTypeId, steps как JSON,
+  валидируемый `mobileCaptureTemplateStepSchema`) и `CaptureStepException`
+  в Prisma; аддитивная миграция `20260707090000_capture_templates`;
+  `PhotoSubmission.captureFlags` + `captureTelemetry`. Обе модели включены
+  в `TENANT_MODELS`.
+- Seed-demo: шаблоны для `rack` (front + left/right depth фото-burst),
+  `fridge` (front + top_down при открытой двери) и org default.
+- Sync pull резолвит шаблон по типу первого оборудования планограммы
+  задачи и кладет снапшот на task row (`captureTemplate`); граница API
+  (pull route) валидирует steps контрактом, кривой шаблон -> null ->
+  мобильный fallback на встроенный сценарий. Известное ограничение:
+  изменение шаблона не переотдает уже синхронизированные task rows, пока
+  сама задача не обновится.
+- Push op `proof.exception`: запись причины + warning-событие
+  `capture.step_exception`; upload принимает `captureFlagsJson` /
+  `captureTelemetryJson`, `equipmentMismatch` всегда получает human
+  review и событие `capture.equipment_mismatch`.
+- Photo-first: обязательные шаги встроенного сценария переведены с видео
+  на burst-фото (3 кадра), выбор лучшего кадра по размеру файла при
+  одинаковых параметрах + EXIF-эвристики яркости (`too_dark`/`low_light`);
+  совет пересъемки не блокирует — `useAnyway` помечает
+  `acceptedWithWarnings`.
+- Гид уровня 1 в мобильном wizard: силуэт оборудования с реальным
+  аспектом и линиями полок из мм-геометрии planogram bundle (офлайн),
+  пузырьковый уровень на `expo-sensors` Accelerometer с допуском наклона
+  из шаблона шага, вибрация при выравнивании, деградация без
+  акселерометра; люк «оборудование не такое» на экране камеры; исключение
+  шага с причиной из wizard-списка.
+- Телеметрия шага: time-to-accepted, retakes, manualOverride,
+  gyroAvailable, issues -> `captureTelemetry` на PhotoSubmission.
+- Офис: бейдж mismatch в `/reviews` и на карточке фото задачи, панель
+  «Шаги съемки с исключениями» в задаче, ru/az переводы.
+
+Проверено локально: prisma validate/generate + migrate deploy + seed:demo;
+полный `pnpm test` (mobile 38, core 76, db 48, worker 12, web 33, vision
+10); `pnpm lint`; typecheck всех пакетов; `next build`.
+
+Не закрыто в срезе 1 (честно):
+
+- Реальная съемка/акселерометр/вибрация на физическом устройстве не
+  проверялись — нужен device smoke (тот же блокер, что в docs/23).
+- Направление стрелок наклона не показывается (знак pitch
+  платформозависим) — гейт только по модулю угла.
+- Размер файла как proxy резкости не различает кадры с разным зумом;
+  wide-линза не запрещается шаблоном на устройстве (поле есть, enforcement
+  нет).
+- Срез 2 (серверное выпрямление, мм-наложение зон, face blur) не начат.
 
 ## Связанные документы
 

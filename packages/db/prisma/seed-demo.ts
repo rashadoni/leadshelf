@@ -356,10 +356,128 @@ async function ensureCatalogCompleteness(organizationId: string) {
   }
 }
 
+// Guided Capture шаблоны (docs/24 slice 1): photo-first, burst 3 кадра.
+// Форма шагов = mobileCaptureTemplateStepSchema из api-contracts mobile/v1.
+async function ensureCaptureTemplate(
+  organizationId: string,
+  equipmentTypeId: string | null,
+  name: string,
+  steps: object[],
+) {
+  const existing = await prisma.captureTemplate.findFirst({
+    where: { organizationId, equipmentTypeId },
+  })
+  if (existing) {
+    return prisma.captureTemplate.update({
+      where: { id: existing.id },
+      data: { name, steps, isActive: true },
+    })
+  }
+  return prisma.captureTemplate.create({
+    data: { organizationId, equipmentTypeId, name, steps },
+  })
+}
+
+const RACK_CAPTURE_STEPS = [
+  {
+    id: "front",
+    kind: "front",
+    required: true,
+    sequence: 1,
+    mediaKind: "photo",
+    burstCount: 3,
+    tiltToleranceDeg: 6,
+    depthMode: null,
+  },
+  {
+    id: "left-depth",
+    kind: "left_depth",
+    required: true,
+    sequence: 2,
+    mediaKind: "photo",
+    burstCount: 3,
+    tiltToleranceDeg: null,
+    compositionHint: "edge_left",
+    depthMode: "angle_photo",
+  },
+  {
+    id: "right-depth",
+    kind: "right_depth",
+    required: true,
+    sequence: 3,
+    mediaKind: "photo",
+    burstCount: 3,
+    tiltToleranceDeg: null,
+    compositionHint: "edge_right",
+    depthMode: "angle_photo",
+  },
+  {
+    id: "detail",
+    kind: "detail",
+    required: false,
+    sequence: 4,
+    mediaKind: "photo",
+    burstCount: 1,
+    compositionHint: "close_up",
+  },
+]
+
+const FRIDGE_CAPTURE_STEPS = [
+  {
+    id: "front",
+    kind: "front",
+    required: true,
+    sequence: 1,
+    mediaKind: "photo",
+    burstCount: 3,
+    tiltToleranceDeg: 6,
+    doorPolicy: "open_allowed",
+  },
+  {
+    id: "top-down",
+    kind: "top_down",
+    required: true,
+    sequence: 2,
+    mediaKind: "photo",
+    burstCount: 3,
+    compositionHint: "top_down",
+    doorPolicy: "open_allowed",
+    depthMode: "angle_photo",
+  },
+  {
+    id: "detail",
+    kind: "detail",
+    required: false,
+    sequence: 3,
+    mediaKind: "photo",
+    burstCount: 1,
+    compositionHint: "close_up",
+  },
+]
+
 async function ensureEquipment(organizationId: string) {
   const rackType = await ensureEquipmentType(organizationId, "rack", "Стеллаж")
   await ensureEquipmentType(organizationId, "pallet", "Паллета")
-  await ensureEquipmentType(organizationId, "fridge", "Холодильная витрина")
+  const fridgeType = await ensureEquipmentType(organizationId, "fridge", "Холодильная витрина")
+
+  await ensureCaptureTemplate(
+    organizationId,
+    rackType.id,
+    "Стеллаж: front + глубина слева/справа",
+    RACK_CAPTURE_STEPS,
+  )
+  await ensureCaptureTemplate(
+    organizationId,
+    fridgeType.id,
+    "Холодильник: front + сверху",
+    FRIDGE_CAPTURE_STEPS,
+  )
+  await ensureCaptureTemplate(
+    organizationId,
+    null,
+    "Общий сценарий полки",
+    RACK_CAPTURE_STEPS,
+  )
 
   const template =
     (await prisma.equipmentTemplate.findFirst({

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest"
+import type { MobileCaptureTemplate } from "@leadshelf/api-contracts/mobile/v1"
 import {
   GUIDED_SHELF_PROOF_SCENARIO_ID,
   extractCaptureStepFromExifJson,
   getCompletedCaptureStepIds,
   getNextRequiredCaptureStep,
+  isRequiredScenarioComplete,
+  resolveCaptureScenario,
 } from "./capture-scenario"
 
 describe("guided shelf proof capture scenario", () => {
@@ -50,6 +53,79 @@ describe("guided shelf proof capture scenario", () => {
     ])
 
     expect(getNextRequiredCaptureStep(completed)?.id).toBe("left-depth")
+  })
+
+  it("falls back to the built-in photo-first scenario without a template", () => {
+    const scenario = resolveCaptureScenario(null, "ru")
+    expect(scenario.scenarioId).toBe(GUIDED_SHELF_PROOF_SCENARIO_ID)
+    expect(scenario.steps.map((step) => step.id)).toEqual([
+      "front",
+      "left-depth",
+      "right-depth",
+      "detail",
+    ])
+    // photo-first: обязательные шаги — burst-фото, не видео
+    for (const step of scenario.steps.filter((s) => s.required)) {
+      expect(step.mediaKind).toBe("photo")
+      expect(step.burstCount).toBeGreaterThan(1)
+    }
+  })
+
+  it("builds the scenario from a server capture template with overrides", () => {
+    const template: MobileCaptureTemplate = {
+      id: "tpl-1",
+      scenarioId: "capture-template:tpl-1:v2",
+      name: "Холодильник",
+      equipmentKind: "fridge",
+      version: 2,
+      updatedAt: "2026-07-07T09:00:00.000Z",
+      steps: [
+        {
+          id: "top-down",
+          kind: "top_down",
+          required: true,
+          sequence: 2,
+          mediaKind: "photo",
+          burstCount: 2,
+          doorPolicy: "open_allowed",
+          instructionOverrides: { ru: "Откройте дверь и снимите сверху" },
+        },
+        {
+          id: "front",
+          kind: "front",
+          required: true,
+          sequence: 1,
+          mediaKind: "photo",
+          tiltToleranceDeg: 6,
+        },
+      ],
+    }
+    const scenario = resolveCaptureScenario(template, "ru")
+    expect(scenario.scenarioId).toBe("capture-template:tpl-1:v2")
+    // сортировка по sequence
+    expect(scenario.steps.map((step) => step.id)).toEqual(["front", "top-down"])
+    expect(scenario.steps[0]!.tiltToleranceDeg).toBe(6)
+    expect(scenario.steps[1]!.instructionText).toBe("Откройте дверь и снимите сверху")
+    expect(scenario.steps[1]!.titleKey).toBe("proofStepTopDownTitle")
+  })
+
+  it("falls back to built-in steps for an empty or broken template", () => {
+    const broken = {
+      id: "tpl-x",
+      scenarioId: "capture-template:tpl-x:v1",
+      name: "X",
+      version: 1,
+      updatedAt: "2026-07-07T09:00:00.000Z",
+      steps: [],
+    } as unknown as MobileCaptureTemplate
+    expect(resolveCaptureScenario(broken, "ru").scenarioId).toBe(GUIDED_SHELF_PROOF_SCENARIO_ID)
+  })
+
+  it("treats excepted steps as closing the required scenario", () => {
+    const scenario = resolveCaptureScenario(null, "ru")
+    const completed = new Set(["front", "right-depth"])
+    expect(isRequiredScenarioComplete(scenario.steps, completed)).toBe(false)
+    expect(isRequiredScenarioComplete(scenario.steps, completed, new Set(["left-depth"]))).toBe(true)
   })
 
   it("counts completed steps from synced captureStepJson when EXIF is absent", () => {

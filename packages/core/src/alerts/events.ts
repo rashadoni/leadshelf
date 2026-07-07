@@ -4,6 +4,8 @@ export type ProductEventKind =
   | "stock.gap"
   | "import.errors"
   | "office.digest"
+  | "capture.step_exception"
+  | "capture.equipment_mismatch"
 export type AlertSeverity = "info" | "warning" | "critical"
 
 export interface ProductEventInput {
@@ -41,6 +43,8 @@ const kindLabels: Record<ProductEventKind, string> = {
   "stock.gap": "Stock gaps",
   "import.errors": "Import errors",
   "office.digest": "Morning shelf digest",
+  "capture.step_exception": "Capture step exceptions",
+  "capture.equipment_mismatch": "Equipment mismatches",
 }
 
 const emptyKindCounts: Record<ProductEventKind, number> = {
@@ -49,6 +53,8 @@ const emptyKindCounts: Record<ProductEventKind, number> = {
   "stock.gap": 0,
   "import.errors": 0,
   "office.digest": 0,
+  "capture.step_exception": 0,
+  "capture.equipment_mismatch": 0,
 }
 
 export function buildAlertMessage(input: ProductEventInput): AlertMessage {
@@ -80,6 +86,20 @@ export function buildAlertMessage(input: ProductEventInput): AlertMessage {
     return {
       title,
       body: input.entityTitle ?? "Morning shelf digest is ready.",
+      severity,
+    }
+  }
+  if (input.kind === "capture.step_exception") {
+    return {
+      title,
+      body: `${input.entityTitle ?? "A capture step"} was skipped with a reason${place}.`,
+      severity,
+    }
+  }
+  if (input.kind === "capture.equipment_mismatch") {
+    return {
+      title,
+      body: `${input.entityTitle ?? "Shelf equipment"} does not match the planned equipment${place}.`,
       severity,
     }
   }

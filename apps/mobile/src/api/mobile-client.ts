@@ -142,6 +142,8 @@ export const syncApi: SyncApi = {
     if (photo.durationMs != null) form.append("durationMs", String(photo.durationMs))
     if (photo.captureStepJson) form.append("captureStepJson", photo.captureStepJson)
     if (photo.exifJson) form.append("exifJson", photo.exifJson)
+    if (photo.captureFlagsJson) form.append("captureFlagsJson", photo.captureFlagsJson)
+    if (photo.captureTelemetryJson) form.append("captureTelemetryJson", photo.captureTelemetryJson)
     return request("/api/v1/mobile/photos/upload", {
       method: "POST",
       body: form,
