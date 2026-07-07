@@ -13,6 +13,7 @@
   "dependencies": {
     "@leadshelf/api-contracts": "workspace:*",
     "@leadshelf/core": "workspace:*",
+    "dotenv": "^16.4.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
