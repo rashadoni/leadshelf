@@ -182,7 +182,23 @@ export default async function ReviewsPage({
         planogramVersion: {
           select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
         },
-        goldenReference: { select: { id: true, imageUrl: true } },
+        goldenReference: {
+          select: {
+            id: true,
+            imageUrl: true,
+            slots: {
+              orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+              select: {
+                id: true,
+                xPct: true,
+                yPct: true,
+                widthPct: true,
+                heightPct: true,
+                product: { select: { sku: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -285,7 +301,26 @@ export default async function ReviewsPage({
                   </div>
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
                     {review.goldenReference ? (
-                      <img src={`/api/media/${review.goldenReference.imageUrl}`} alt="" className="h-24 w-full object-cover" />
+                      review.goldenReference.slots.length > 0 ? (
+                        <ProofOverlay
+                          src={`/api/media/${review.goldenReference.imageUrl}`}
+                          showConfidence={false}
+                          emptyLabel={t("overlay.unknownSku")}
+                          statusLabels={{ expected: t("overlay.expected") }}
+                          boxes={review.goldenReference.slots.map((slot) => ({
+                            id: slot.id,
+                            xPct: slot.xPct,
+                            yPct: slot.yPct,
+                            widthPct: slot.widthPct,
+                            heightPct: slot.heightPct,
+                            sku: slot.product?.sku ?? null,
+                            confidence: 0,
+                            status: "expected" as const,
+                          }))}
+                        />
+                      ) : (
+                        <img src={`/api/media/${review.goldenReference.imageUrl}`} alt="" className="h-24 w-full object-cover" />
+                      )
                     ) : (
                       <div className="flex h-24 items-center justify-center text-xs text-neutral-400">
                         {t("noReference")}
