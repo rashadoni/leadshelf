@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation"
 import { AssigneeSelect } from "../assignee-select"
 import { TaskStatusActions } from "../task-status-actions"
 import { CaptureRetakeButton } from "./capture-retake-button"
+import { PlanogramThumbnail } from "../../planograms/planogram-thumbnail"
 import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
 
 function formatDate(value: Date | null | undefined): string {
@@ -122,6 +123,26 @@ export default async function TaskDetailPage({
             publishedAt: true,
             planogram: { select: { id: true, name: true } },
             _count: { select: { placements: true, equipment: true, assignments: true, tasks: true } },
+            equipment: {
+              select: {
+                equipmentVersion: {
+                  select: { shelves: { select: { shelfIndex: true, yMm: true, thicknessMm: true }, take: 12 } },
+                },
+              },
+              take: 1,
+            },
+            placements: {
+              select: {
+                xMm: true,
+                yMm: true,
+                widthMm: true,
+                heightMm: true,
+                facingsX: true,
+                facingsY: true,
+                productId: true,
+              },
+              take: 80,
+            },
           },
         },
         comments: {
@@ -385,6 +406,11 @@ export default async function TaskDetailPage({
                 >
                   {task.planogramVersion.planogram.name} · v{task.planogramVersion.versionNumber}
                 </Link>
+                <PlanogramThumbnail
+                  className="h-32 w-full"
+                  shelves={task.planogramVersion.equipment[0]?.equipmentVersion.shelves ?? []}
+                  placements={task.planogramVersion.placements}
+                />
                 <div className="grid grid-cols-2 gap-2 text-xs text-neutral-500">
                   <Metric label={t("detail.metrics.placements")} value={task.planogramVersion._count.placements} />
                   <Metric label={t("detail.metrics.equipment")} value={task.planogramVersion._count.equipment} />
