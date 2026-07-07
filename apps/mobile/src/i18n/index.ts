@@ -1,7 +1,7 @@
 // Пилотный i18n без зависимостей: az (default) / ru, переключатель на логине.
 import { useSyncExternalStore } from "react"
 
-const DICT = {
+export const DICT = {
   az: {
     appName: "LeadShelf",
     login: "Daxil ol",
