@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native"
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect } from "expo-router"
 import { listTasks, getStore } from "../../../src/db/local-store"
@@ -27,7 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function TasksScreen() {
-  const { status, sync } = useSync()
+  const { sync, status } = useSync()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [refreshing, setRefreshing] = useState(false)
 
@@ -52,16 +45,23 @@ export default function TasksScreen() {
     router.replace("/(auth)/login" as never)
   }
 
+  const openCount = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "EMPTY").length
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t("tasks")}</Text>
+        <View>
+          <Text style={styles.title}>{t("tasks")}</Text>
+          <Text style={styles.subtitle}>
+            {t("todayWord")}: {openCount}
+          </Text>
+        </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => router.push("/(app)/routes" as never)}>
-            <Text style={styles.logout}>{t("routes")}</Text>
+          <Pressable hitSlop={8} onPress={() => router.push("/(app)/routes" as never)}>
+            <Text style={styles.headerLink}>{t("routes")}</Text>
           </Pressable>
-          <Pressable onPress={logout}>
-            <Text style={styles.logout}>{t("logout")}</Text>
+          <Pressable hitSlop={8} onPress={logout}>
+            <Text style={styles.headerLink}>{t("logout")}</Text>
           </Pressable>
         </View>
       </View>
@@ -70,32 +70,38 @@ export default function TasksScreen() {
         data={tasks}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={tasks.length === 0 && styles.emptyWrap}
-        ListEmptyComponent={<Text style={styles.empty}>{t("noTasks")}</Text>}
+        contentContainerStyle={tasks.length === 0 ? styles.emptyWrap : styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyEmoji}>✅</Text>
+            <Text style={styles.emptyTitle}>{t("noTasks")}</Text>
+            <Text style={styles.emptyHint}>{t("pullToRefresh")}</Text>
+          </View>
+        }
         renderItem={({ item }) => {
           const store = getStore(item.storeId)
+          const color = STATUS_COLORS[item.status] ?? "#737373"
           return (
             <Pressable
-              style={styles.card}
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               onPress={() => router.push(`/(app)/tasks/${item.id}` as never)}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.taskTitle}>{item.title}</Text>
-                <Text style={styles.meta}>
-                  {store?.name ?? item.storeId}
-                  {item.dueAt ? ` · ${t("due")}: ${item.dueAt.slice(0, 10)}` : ""}
+              <View style={styles.cardMain}>
+                <Text style={styles.taskTitle} numberOfLines={2}>
+                  {item.title}
                 </Text>
-              </View>
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: `${STATUS_COLORS[item.status] ?? "#737373"}20` },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: STATUS_COLORS[item.status] ?? "#737373" }]}>
-                  {t(`status_${item.status}` as MessageKey)}
+                <Text style={styles.meta} numberOfLines={1}>
+                  📍 {store?.name ?? item.storeId}
+                  {item.dueAt ? ` · ${t("due")} ${item.dueAt.slice(0, 10)}` : ""}
                 </Text>
+                <View style={styles.statusRow}>
+                  <View style={[styles.dot, { backgroundColor: color }]} />
+                  <Text style={[styles.statusText, { color }]}>
+                    {t(`status_${item.status}` as MessageKey)}
+                  </Text>
+                </View>
               </View>
+              <Text style={styles.chevron}>›</Text>
             </Pressable>
           )
         }}
@@ -105,31 +111,44 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#fafaf9" },
+  root: { flex: 1, backgroundColor: "#f5f5f4" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
-  title: { fontSize: 24, fontWeight: "700" },
-  headerActions: { flexDirection: "row", gap: 12 },
-  logout: { color: "#737373", fontSize: 13 },
+  title: { fontSize: 26, fontWeight: "800", color: "#1c1917" },
+  subtitle: { fontSize: 13, color: "#78716c", marginTop: 2 },
+  headerActions: { flexDirection: "row", gap: 16, paddingTop: 6 },
+  headerLink: { color: "#57534e", fontSize: 14, fontWeight: "600" },
+  listContent: { paddingVertical: 6, paddingBottom: 24 },
   emptyWrap: { flex: 1, justifyContent: "center" },
-  empty: { textAlign: "center", color: "#a3a3a3", paddingHorizontal: 40 },
+  emptyBox: { alignItems: "center", paddingHorizontal: 40, gap: 8 },
+  emptyEmoji: { fontSize: 56 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#44403c" },
+  emptyHint: { fontSize: 14, color: "#a8a29e", textAlign: "center" },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     backgroundColor: "white",
     marginHorizontal: 12,
-    marginVertical: 4,
-    padding: 14,
-    borderRadius: 12,
+    marginVertical: 5,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#eeece9",
   },
-  taskTitle: { fontSize: 15, fontWeight: "600" },
-  meta: { fontSize: 12, color: "#737373", marginTop: 2 },
-  badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  badgeText: { fontSize: 11, fontWeight: "600" },
+  cardPressed: { backgroundColor: "#fafaf9", borderColor: "#e7e5e4" },
+  cardMain: { flex: 1, gap: 6 },
+  taskTitle: { fontSize: 17, fontWeight: "700", color: "#1c1917" },
+  meta: { fontSize: 13, color: "#78716c" },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  statusText: { fontSize: 12, fontWeight: "700" },
+  chevron: { fontSize: 28, color: "#d6d3d1", fontWeight: "700" },
 })

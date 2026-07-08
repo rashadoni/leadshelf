@@ -8,6 +8,7 @@ const KEYS = {
   orgSlug: "ls.orgSlug",
   userName: "ls.userName",
   locale: "ls.locale",
+  lastEmployeeCode: "ls.lastEmployeeCode",
 } as const
 
 async function get(key: string): Promise<string | null> {
@@ -26,6 +27,10 @@ export const tokenStore = {
   getOrgSlug: () => get(KEYS.orgSlug),
   getUserName: () => get(KEYS.userName),
   getLocale: () => get(KEYS.locale),
+  // Запоминаем код сотрудника для быстрого повторного входа (не секрет,
+  // не чистится при выходе) — docs/28 «запомнить меня».
+  getLastEmployeeCode: () => get(KEYS.lastEmployeeCode),
+  setLastEmployeeCode: (v: string) => set(KEYS.lastEmployeeCode, v),
   async setTokens(access: string, refresh: string) {
     await set(KEYS.access, access)
     await set(KEYS.refresh, refresh)
