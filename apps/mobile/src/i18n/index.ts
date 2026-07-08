@@ -5,6 +5,7 @@ export const DICT = {
   az: {
     appName: "LeadShelf",
     login: "Daxil ol",
+    welcomeHint: "Daxil ol və işə başla",
     orgSlug: "Şirkət kodu",
     employeeCode: "Əməkdaş kodu",
     pin: "PIN",
@@ -29,6 +30,8 @@ export const DICT = {
     missingStoreGeo: "Nöqtənin koordinatı yoxdur",
     queued: "Növbədə",
     noTasks: "Tapşırıq yoxdur. Aşağı çəkib yeniləyin.",
+    todayWord: "Bu gün",
+    pullToRefresh: "Yeniləmək üçün aşağı çək",
     due: "Müddət",
     start: "Başla",
     takePhoto: "Foto çək",
@@ -157,6 +160,7 @@ export const DICT = {
   ru: {
     appName: "LeadShelf",
     login: "Войти",
+    welcomeHint: "Войди, чтобы начать работу",
     orgSlug: "Код компании",
     employeeCode: "Код сотрудника",
     pin: "PIN",
@@ -181,6 +185,8 @@ export const DICT = {
     missingStoreGeo: "У точки нет координат",
     queued: "В очереди",
     noTasks: "Задач нет. Потяните вниз для обновления.",
+    todayWord: "Сегодня",
+    pullToRefresh: "Потяни вниз, чтобы обновить",
     due: "Срок",
     start: "Начать",
     takePhoto: "Сделать фото",
