@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View } from "react-native"
+import { Alert, BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import {
@@ -173,6 +173,37 @@ export default function TaskDetailScreen() {
       ),
     [bundle],
   )
+
+  // Аппаратный «Назад» закрывает открытый оверлей (камера/сканер/причина),
+  // а не выкидывает весь экран задачи в список (docs/28 P0).
+  useEffect(() => {
+    const onBack = () => {
+      if (photoCameraOpen) {
+        if (videoRecording) {
+          discardRecordingRef.current = true
+          photoCameraRef.current?.stopRecording()
+          setVideoRecording(false)
+        }
+        setPhotoCameraOpen(false)
+        return true
+      }
+      if (scannerOpen) {
+        setScannerOpen(false)
+        return true
+      }
+      if (exceptionStepId) {
+        setExceptionStepId(null)
+        return true
+      }
+      return false
+    }
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack)
+    return () => sub.remove()
+  }, [photoCameraOpen, scannerOpen, exceptionStepId, videoRecording])
+
+  const captureStepIndex =
+    scenario.steps.findIndex((step) => step.id === activeCaptureStep.id) + 1
+  const captureStepTotal = scenario.steps.length
 
   // Пузырьковый уровень: акселерометр активен только внутри шага съемки
   // с tilt-гейтом (docs/24: батарея, деградация без гироскопа).
@@ -528,7 +559,9 @@ export default function TaskDetailScreen() {
           videoQuality="720p"
         />
         <View style={styles.proofTop}>
-          <Text style={styles.proofEyebrow}>{t("guidedProof")}</Text>
+          <Text style={styles.proofEyebrow}>
+            {t("stepWord")} {captureStepIndex}/{captureStepTotal}
+          </Text>
           <Text style={styles.proofTitle} numberOfLines={2}>
             {stepTitle(activeCaptureStep)}
           </Text>
@@ -536,22 +569,34 @@ export default function TaskDetailScreen() {
             {stepInstruction(activeCaptureStep)}
           </Text>
         </View>
-        {/* Силуэт именно этого оборудования из мм-модели planogram bundle */}
+        {/* Гид зависит от шага: прямой силуэт (front/top_down), косой под
+            углом (left/right depth), прицел по центру (detail) — docs/28. */}
         <View style={styles.silhouetteWrap} pointerEvents="none">
-          <View
-            style={[
-              styles.silhouette,
-              { aspectRatio: equipmentSilhouette?.aspect ?? 0.72 },
-              tiltLevel === true && styles.silhouetteLevel,
-            ]}
-          >
-            {(equipmentSilhouette?.shelfFractions ?? []).map((fraction) => (
-              <View
-                key={fraction}
-                style={[styles.silhouetteShelf, { top: `${Math.round(fraction * 100)}%` }]}
-              />
-            ))}
-          </View>
+          {activeCaptureStep.kind === "detail" ? (
+            <View style={styles.detailTarget} />
+          ) : (
+            <View
+              style={[
+                styles.silhouette,
+                { aspectRatio: equipmentSilhouette?.aspect ?? 0.72 },
+                activeCaptureStep.kind === "left_depth" && styles.silhouetteAngleLeft,
+                activeCaptureStep.kind === "right_depth" && styles.silhouetteAngleRight,
+                tiltLevel === true && styles.silhouetteLevel,
+              ]}
+            >
+              {(equipmentSilhouette?.shelfFractions ?? []).map((fraction) => (
+                <View
+                  key={fraction}
+                  style={[styles.silhouetteShelf, { top: `${Math.round(fraction * 100)}%` }]}
+                />
+              ))}
+            </View>
+          )}
+          {activeCaptureStep.kind === "left_depth" ? (
+            <Text style={[styles.guideArrow, styles.guideArrowLeft]}>◀</Text>
+          ) : activeCaptureStep.kind === "right_depth" ? (
+            <Text style={[styles.guideArrow, styles.guideArrowRight]}>▶</Text>
+          ) : null}
         </View>
         <View style={styles.proofBottom}>
           {tiltToleranceDeg != null && gyroAvailable ? (
@@ -1026,6 +1071,24 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   silhouetteLevel: { borderColor: "rgba(74, 222, 128, 0.95)" },
+  silhouetteAngleLeft: { transform: [{ perspective: 900 }, { rotateY: "30deg" }] },
+  silhouetteAngleRight: { transform: [{ perspective: 900 }, { rotateY: "-30deg" }] },
+  detailTarget: {
+    width: "46%",
+    aspectRatio: 1,
+    borderWidth: 3,
+    borderColor: "rgba(255, 255, 255, 0.9)",
+    borderStyle: "dashed",
+    borderRadius: 18,
+  },
+  guideArrow: {
+    position: "absolute",
+    color: "rgba(255, 255, 255, 0.92)",
+    fontSize: 44,
+    fontWeight: "900",
+  },
+  guideArrowLeft: { left: 16 },
+  guideArrowRight: { right: 16 },
   silhouetteShelf: {
     position: "absolute",
     left: 4,
