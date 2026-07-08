@@ -98,6 +98,9 @@ export default function TaskDetailScreen() {
   const [mismatchFlagged, setMismatchFlagged] = useState(false)
   const [gyroAvailable, setGyroAvailable] = useState(false)
   const [tiltSample, setTiltSample] = useState<{ x: number; y: number; z: number } | null>(null)
+  const [showDone, setShowDone] = useState(false)
+  const hasCapturedRef = useRef(false)
+  const wasCompleteRef = useRef(false)
   const stepOpenedAtRef = useRef(0)
   const retakesRef = useRef(0)
   const wasLevelRef = useRef(false)
@@ -205,6 +208,16 @@ export default function TaskDetailScreen() {
     scenario.steps.findIndex((step) => step.id === activeCaptureStep.id) + 1
   const captureStepTotal = scenario.steps.length
 
+  // Празднуем закрытие обязательного сценария один раз — после реального
+  // кадра в этой сессии (docs/28 P0: экран «Готово» + вибро).
+  useEffect(() => {
+    if (requiredCaptureComplete && !wasCompleteRef.current && hasCapturedRef.current) {
+      setShowDone(true)
+      Vibration.vibrate(60)
+    }
+    wasCompleteRef.current = requiredCaptureComplete
+  }, [requiredCaptureComplete])
+
   // Пузырьковый уровень: акселерометр активен только внутри шага съемки
   // с tilt-гейтом (docs/24: батарея, деградация без гироскопа).
   const tiltToleranceDeg = activeCaptureStep.tiltToleranceDeg
@@ -303,7 +316,8 @@ export default function TaskDetailScreen() {
       captureFlagsJson: captureFlags ? JSON.stringify(captureFlags) : null,
       captureTelemetryJson: captureTelemetry ? JSON.stringify(captureTelemetry) : null,
     })
-    Alert.alert(t("photoQueued"))
+    hasCapturedRef.current = true
+    Vibration.vibrate(40) // тактильное «снято», без блокирующего Alert
     reload()
     void sync()
   }
@@ -545,6 +559,23 @@ export default function TaskDetailScreen() {
     const capturedStep = getCaptureStepFromProof(proof)
     const step = scenario.steps.find((item) => item.id === capturedStep?.stepId)
     return step ? stepTitle(step) : (capturedStep?.stepId ?? null)
+  }
+
+  if (showDone) {
+    return (
+      <SafeAreaView style={styles.doneRoot} edges={["top", "bottom"]}>
+        <View style={styles.doneCard}>
+          <Text style={styles.doneCheck}>✅</Text>
+          <Text style={styles.doneTitle}>{t("doneTitle")}</Text>
+          <Text style={styles.doneMeta} numberOfLines={2}>
+            {t("doneMeta")}
+          </Text>
+        </View>
+        <Pressable style={styles.doneButton} onPress={() => setShowDone(false)}>
+          <Text style={styles.doneButtonText}>{t("doneNext")}</Text>
+        </Pressable>
+      </SafeAreaView>
+    )
   }
 
   if (photoCameraOpen) {
@@ -1154,26 +1185,47 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
   },
-  proofActions: { flexDirection: "row", gap: 10 },
+  proofActions: { flexDirection: "row", gap: 12, alignItems: "center" },
   proofSecondary: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 64,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.35)",
   },
-  proofSecondaryText: { color: "white", fontSize: 15, fontWeight: "700" },
+  proofSecondaryText: { color: "white", fontSize: 16, fontWeight: "700" },
   proofCapture: {
-    flex: 1.2,
-    minHeight: 48,
+    flex: 2,
+    minHeight: 64,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 14,
     backgroundColor: "white",
   },
-  proofCaptureText: { color: "#171717", fontSize: 15, fontWeight: "800" },
+  proofCaptureText: { color: "#171717", fontSize: 18, fontWeight: "900" },
+  doneRoot: {
+    flex: 1,
+    backgroundColor: "#052e16",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    gap: 24,
+  },
+  doneCard: { alignItems: "center", gap: 10 },
+  doneCheck: { fontSize: 96 },
+  doneTitle: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center" },
+  doneMeta: { color: "#bbf7d0", fontSize: 15, fontWeight: "600", textAlign: "center" },
+  doneButton: {
+    minHeight: 64,
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#22c55e",
+  },
+  doneButtonText: { color: "#052e16", fontSize: 18, fontWeight: "900" },
   header: {
     flexDirection: "row",
     alignItems: "center",
