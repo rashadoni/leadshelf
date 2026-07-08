@@ -23,9 +23,19 @@ export default function TasksScreen() {
   const { sync, status } = useSync()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [refreshing, setRefreshing] = useState(false)
+  const [showHint, setShowHint] = useState(false)
 
   const reload = useCallback(() => setTasks(listTasks()), [])
   useFocusEffect(reload)
+
+  useEffect(() => {
+    void tokenStore.getOnboardedTasks().then((seen) => setShowHint(!seen))
+  }, [])
+
+  function dismissHint() {
+    setShowHint(false)
+    void tokenStore.setOnboardedTasks()
+  }
 
   useEffect(() => {
     if (status.phase !== "idle") return
@@ -66,6 +76,18 @@ export default function TasksScreen() {
         </View>
       </View>
       <SyncBar />
+      {showHint ? (
+        <View style={styles.hint}>
+          <Text style={styles.hintEmoji}>👆</Text>
+          <View style={styles.hintBody}>
+            <Text style={styles.hintTitle}>{t("onboardTitle")}</Text>
+            <Text style={styles.hintText}>{t("onboardBody")}</Text>
+          </View>
+          <Pressable hitSlop={8} onPress={dismissHint} style={styles.hintBtn}>
+            <Text style={styles.hintBtnText}>{t("onboardGot")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <FlatList
         data={tasks}
         keyExtractor={(item) => item.id}
@@ -124,6 +146,24 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: "#78716c", marginTop: 2 },
   headerActions: { flexDirection: "row", gap: 16, paddingTop: 6 },
   headerLink: { color: "#57534e", fontSize: 14, fontWeight: "600" },
+  hint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#ecfccb",
+    borderWidth: 1,
+    borderColor: "#d9f99d",
+  },
+  hintEmoji: { fontSize: 24 },
+  hintBody: { flex: 1 },
+  hintTitle: { fontSize: 14, fontWeight: "800", color: "#3f6212" },
+  hintText: { fontSize: 13, color: "#4d7c0f", marginTop: 2 },
+  hintBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: "#65a30d" },
+  hintBtnText: { color: "white", fontWeight: "800", fontSize: 13 },
   listContent: { paddingVertical: 6, paddingBottom: 24 },
   emptyWrap: { flex: 1, justifyContent: "center" },
   emptyBox: { alignItems: "center", paddingHorizontal: 40, gap: 8 },
