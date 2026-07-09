@@ -29,7 +29,7 @@ export default async function OverviewPage() {
     photoSubmittedTasks,
     pendingReviews,
     photoSubmissions,
-    heroPlanogram,
+    heroPlanogramRow,
     heroPhoto,
   ] = await Promise.all([
     db.product.count({ where: { isActive: true } }),
@@ -58,24 +58,35 @@ export default async function OverviewPage() {
     db.task.count({ where: { status: "PHOTO_SUBMITTED" } }),
     db.humanReview.count({ where: { status: "PENDING" } }),
     db.photoSubmission.count(),
-    db.planogramVersion.findFirst({
-      where: { state: "PUBLISHED" },
-      orderBy: { publishedAt: "desc" },
+    // PlanogramVersion не имеет organizationId — tenant-клиент запрещает
+    // прямой доступ. Тянем через scoped-родителя Planogram, версию берём
+    // вложенным select (изоляция по организации сохраняется).
+    db.planogram.findFirst({
+      where: { versions: { some: { state: "PUBLISHED" } } },
+      orderBy: { updatedAt: "desc" },
       select: {
         id: true,
-        versionNumber: true,
-        planogram: { select: { id: true, name: true } },
-        equipment: {
+        name: true,
+        versions: {
+          where: { state: "PUBLISHED" },
+          orderBy: { publishedAt: "desc" },
+          take: 1,
           select: {
-            equipmentVersion: {
-              select: { shelves: { select: { shelfIndex: true, yMm: true, thicknessMm: true }, take: 12 } },
+            id: true,
+            versionNumber: true,
+            equipment: {
+              select: {
+                equipmentVersion: {
+                  select: { shelves: { select: { shelfIndex: true, yMm: true, thicknessMm: true }, take: 12 } },
+                },
+              },
+              take: 1,
+            },
+            placements: {
+              select: { xMm: true, yMm: true, widthMm: true, heightMm: true, facingsX: true, facingsY: true, productId: true },
+              take: 80,
             },
           },
-          take: 1,
-        },
-        placements: {
-          select: { xMm: true, yMm: true, widthMm: true, heightMm: true, facingsX: true, facingsY: true, productId: true },
-          take: 80,
         },
       },
     }),
@@ -84,6 +95,17 @@ export default async function OverviewPage() {
       select: { url: true, mediaType: true, store: { select: { name: true } } },
     }),
   ])
+
+  const heroVersion = heroPlanogramRow?.versions[0]
+  const heroPlanogram = heroVersion
+    ? {
+        id: heroVersion.id,
+        versionNumber: heroVersion.versionNumber,
+        planogram: { id: heroPlanogramRow.id, name: heroPlanogramRow.name },
+        equipment: heroVersion.equipment,
+        placements: heroVersion.placements,
+      }
+    : null
 
   const readiness = products === 0 ? 0 : Math.round((readyProducts / products) * 100)
   const cards = [
