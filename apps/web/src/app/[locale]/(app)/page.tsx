@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server"
 import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
-import { tenantDb } from "@/server/db/client"
+import { tenantDb, workerDb } from "@/server/db/client"
 import { PlanogramThumbnail } from "./planograms/planogram-thumbnail"
 
 function qualityTone(value: number) {
@@ -58,8 +58,11 @@ export default async function OverviewPage() {
     db.task.count({ where: { status: "PHOTO_SUBMITTED" } }),
     db.humanReview.count({ where: { status: "PENDING" } }),
     db.photoSubmission.count(),
-    db.planogramVersion.findFirst({
-      where: { state: "PUBLISHED" },
+    // PlanogramVersion не имеет organizationId — tenantDb его запрещает.
+    // Скоуп по тенанту через parent-path (planogram.organizationId) на workerDb,
+    // как в planogram-editor и golden-reference роутах.
+    workerDb.planogramVersion.findFirst({
+      where: { state: "PUBLISHED", planogram: { organizationId: session.org } },
       orderBy: { publishedAt: "desc" },
       select: {
         id: true,
