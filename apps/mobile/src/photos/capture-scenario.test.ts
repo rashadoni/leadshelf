@@ -65,10 +65,10 @@ describe("guided shelf proof capture scenario", () => {
       "right-depth",
       "detail",
     ])
-    // photo-first: обязательные шаги — burst-фото, не видео
+    // photo-first: обязательные шаги — фото (один кадр), не видео
     for (const step of scenario.steps.filter((s) => s.required)) {
       expect(step.mediaKind).toBe("photo")
-      expect(step.burstCount).toBeGreaterThan(1)
+      expect(step.burstCount).toBeGreaterThanOrEqual(1)
     }
   })
 

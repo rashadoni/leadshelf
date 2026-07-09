@@ -529,6 +529,7 @@ export function getBundle(versionId: string): Record<string, unknown> | null {
 export type TaskPhotoProofRow = {
   clientPhotoId: string
   taskId: string
+  fileUri: string | null
   takenAt: string
   exifJson: string | null
   mediaType: "photo" | "video"
@@ -557,6 +558,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
   const localRows = db.getAllSync<{
     clientPhotoId: string
     taskId: string
+    fileUri: string | null
     takenAt: string
     exifJson: string | null
     mediaType: "photo" | "video" | null
@@ -574,7 +576,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
     outboxDetail: string | null
   }>(
-    `SELECT p.clientPhotoId, p.taskId, p.takenAt, p.exifJson, p.mediaType, p.durationMs,
+    `SELECT p.clientPhotoId, p.taskId, p.fileUri, p.takenAt, p.exifJson, p.mediaType, p.durationMs,
       p.captureStepJson, p.uploaded, p.uploadedAt,
       p.serverPhotoId, p.objectKey, p.qualityScore, p.qualityCheck,
       p.visionReviewId, p.visionStatus, p.visionReason,
@@ -661,6 +663,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
       (row): TaskPhotoProofRow => ({
         clientPhotoId: row.clientPhotoId ?? `server-${row.id}`,
         taskId: row.taskId,
+        fileUri: null,
         exifJson: null,
         mediaType: row.mediaType ?? "photo",
         durationMs: row.durationMs,
