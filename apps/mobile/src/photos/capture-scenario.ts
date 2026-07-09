@@ -91,7 +91,7 @@ function instructionKeyForKind(kind: string): CaptureStepInstructionKey {
   return STEP_INSTRUCTION_KEYS[kind as CaptureStepKind] ?? "proofStepGenericInstruction"
 }
 
-export const DEFAULT_BURST_COUNT = 3
+export const DEFAULT_BURST_COUNT = 1
 
 // Встроенный photo-first сценарий: работает без шаблона и офлайн всегда.
 export const GUIDED_SHELF_PROOF_STEPS: CaptureScenarioStep[] = [

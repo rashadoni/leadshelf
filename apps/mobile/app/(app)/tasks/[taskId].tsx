@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Alert, BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View } from "react-native"
+import { Alert, BackHandler, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import {
@@ -726,6 +726,13 @@ export default function TaskDetailScreen() {
                 const stepTitle = photoProofStepTitle(proof)
                 return (
                   <View key={proof.clientPhotoId} style={styles.proofRow}>
+                    {proof.fileUri && proof.mediaType === "photo" ? (
+                      <Image source={{ uri: proof.fileUri }} style={styles.proofThumb} />
+                    ) : (
+                      <View style={[styles.proofThumb, styles.proofThumbEmpty]}>
+                        <Text style={styles.proofThumbIcon}>{proof.mediaType === "video" ? "🎬" : "🖼"}</Text>
+                      </View>
+                    )}
                     <View style={styles.proofRowBody}>
                       <Text style={styles.proofRowTitle}>
                         {stepTitle ? `${stepTitle} · ${photoProofStatus(proof)}` : photoProofStatus(proof)}
@@ -1316,6 +1323,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#fafaf9",
     padding: 10,
   },
+  proofThumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: "#e7e5e4" },
+  proofThumbEmpty: { alignItems: "center", justifyContent: "center" },
+  proofThumbIcon: { fontSize: 22 },
   proofRowBody: { flex: 1, gap: 2 },
   proofRowTitle: { fontSize: 13, fontWeight: "800", color: "#171717" },
   proofRowMeta: { fontSize: 11, color: "#525252" },
