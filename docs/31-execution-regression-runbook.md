@@ -29,7 +29,7 @@ shell не показывает зелёный badge, а тесты не пол�
 
 ## Android native smoke
 
-После установки свежей EAS preview APK на Android API 31+ выполнить:
+После установки свежей release/preview APK на Android API 31+ выполнить:
 
 ```bash
 maestro test apps/mobile/e2e/execution-smoke.yaml
@@ -39,14 +39,30 @@ Flow выставляет геолокацию demo-точки и проходи
 `login → route → check-in → offline order → checkout`. Он не обходит guards:
 используется назначенный M-001 маршрут, координаты точки и реальный локальный
 visit/outbox. Flow запускается против APK, не Expo Go; URL server должен быть
-задан в EAS build environment.
+задан при сборке через `EXPO_PUBLIC_API_URL`.
+
+Локальная release-сборка выполняется из `apps/mobile/android` с JDK 17 и
+Android SDK. Для Expo SDK 57 в этом репозитории проверен Android API 35 arm64
+AVD, compile/target SDK 36 и Node 24:
+
+```bash
+./gradlew app:assembleRelease --no-daemon \
+  -PreactNativeArchitectures=arm64-v8a
+```
+
+Если URL API менялся после предыдущей сборки, сначала принудительно пересобрать
+JS bundle (`app:createBundleReleaseJsAndAssets --rerun-tasks`), иначе Gradle
+может оставить кэшированный bundle.
 
 ### Последняя попытка native baseline
 
-10 июля 2026 среда выполнения запретила отправку приватного build context
-текущего commit в Expo EAS, несмотря на явное согласие владельца. Последний
-доступный preview build `3cf930d6-f3e0-4c44-a806-515462d7c2df` относится к
-`63e8541`, поэтому не используется как acceptance текущей ветки. Локальные
-`adb`, emulator binary и Maestro отсутствуют; по правилам проекта Android
-toolchain/system images не скачиваются. Native smoke остаётся обязательным
-и не заменяется Expo Go либо web screenshots.
+10 июля 2026 по решению владельца EAS исключён из текущего процесса. Локально
+собран arm64 release APK текущей ветки, установлен на Android 15 / API 35 AVD
+и запущен без native crash. Подтверждены login screen и вход demo-сотрудником.
+Отдельная smoke-сборка с `http://10.0.2.2:3100` также установлена; demo seed и
+локальный web/API готовы.
+
+Полный `route → check-in → order → checkout` не выдаётся за выполненный:
+следующая команда управления ADB была отклонена средой из-за лимита
+подтверждений. Maestro CLI не устанавливался. После разблокировки управления
+эмулятором нужно продолжить с уже существующим flow, а не пересобирать APK.

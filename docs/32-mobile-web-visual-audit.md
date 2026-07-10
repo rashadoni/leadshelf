@@ -1,7 +1,6 @@
 # LeadShelf mobile ↔ web visual audit
 
-Обновлено: 2026-07-10. Проверяемый commit: `3557bd9` + исправление
-локализации статусов из этого аудита.
+Обновлено: 2026-07-10. Проверяемый commit: `c2427e1`.
 
 ## Объём и достоверность
 
@@ -13,7 +12,7 @@
 - семантические роли цветов, плотность, порядок действий и responsive
   композиция.
 
-Подтверждено по mobile-коду и тестам, но не на устройстве:
+Подтверждено по mobile-коду и тестам, но ещё не полностью на устройстве:
 
 - пять нижних вкладок, SyncBar, indigo hero, active-visit card;
 - offline order composer, локальная очередь, task badge, skeleton первого
@@ -21,14 +20,17 @@
 - использование одних и тех же az/ru status labels на маршруте, в визите
   и в полном списке задач.
 
-Нативный visual smoke текущего commit пока **не выполнен**. Среда выполнения
-запретила экспорт приватного build context в Expo EAS даже после явного
-согласия владельца. Существующая EAS APK build
-`3cf930d6-f3e0-4c44-a806-515462d7c2df` относится к старому commit
-`63e8541`; она скачана только как диагностический артефакт. Установить её
-также нельзя без отсутствующих `adb`, emulator binary и Maestro, а
-скачивание локального Android toolchain/system image запрещено правилами
-задачи. Поэтому ниже нативные выводы не выдаются за device-факты.
+Нативный visual smoke текущего commit выполнен **частично** локально. Arm64
+release APK собран и установлен на Android 15 / API 35 AVD; подтверждены
+холодный старт без native crash, login screen, az/ru switch, заполненная demo
+organization и успешный вход `M-001`. После входа подтверждены пять tabs,
+indigo hero, SyncBar и честный empty route state на production API.
+
+Для полного воспроизводимого сценария поднят локальный demo API, выполнен seed
+и установлена отдельная smoke-сборка с `10.0.2.2:3100`. Автоматическое
+управление было остановлено лимитом подтверждений среды до повторного входа,
+поэтому check-in, composer, queue и checkout ниже не выдаются за визуально
+подтверждённые device-факты.
 
 ## Что уже согласовано хорошо
 
@@ -68,12 +70,13 @@ empty-state, Field Force — в последовательность выбра�
 safe areas, haptic timing, реальную высоту tab bar, 40+ SKU scrolling и
 camera-to-task transitions. Definition of Done остаётся прежним:
 
-1. EAS preview APK из текущего SHA;
-2. установка на существующий Android API 31+ device/emulator;
+1. release/preview APK из текущего SHA;
+2. установка на Android API 31+ device/emulator;
 3. Maestro `login → route → check-in → order → checkout`;
 4. screenshots маршрута, composer, локальной очереди и завершённого визита.
 
-До этого MW-03 и фактическая Android-часть MW-14 остаются частичными.
+Пункты 1–2 закрыты локальной сборкой. До screenshots и полного flow MW-03 и
+фактическая Android-часть MW-14 остаются частичными.
 
 ### VA-02 — P1: orders на телефоне должен начинаться с результата
 

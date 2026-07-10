@@ -85,11 +85,11 @@ mobile cards, summary и честный empty state. Non-empty состояни�
 
 ### MW-03. Нативный preview baseline
 
-Статус: **частично сделано 2026-07-10; APK smoke остаётся**.
+Статус: **частично сделано 2026-07-10; APK собран и запущен, полный flow остаётся**.
 
 - Использовать Node >=22.13 для Expo SDK 57 tooling.
 - Выровнять Expo SDK 57 patch-версии по `expo install --check`.
-- Собрать свежую EAS preview APK из текущей ветки.
+- Собрать свежую release/preview APK из текущей ветки.
 - Выполнить Android smoke: login → route → check-in → order → checkout.
 - Зафиксировать отдельно app defect и Expo Go/emulator defect; не
   смешивать их в отчёте.
@@ -101,16 +101,13 @@ Definition of Done:
 
 Текущий результат: шесть существующих Expo-пакетов выровнены, dependency
 check чистый. Expo Go 57.0.2 на Android 15 arm64 AVD продолжает падать до
-первого app screen с `SIGSEGV` в `libhermesvm/libworklets`; свежая
-переустановка Expo Go и смена GPU не помогли. Попытка создать EAS preview
-из `3557bd9` остановлена policy среды, запрещающей экспорт приватного build
-context даже после явного согласия владельца. Последний существующий EAS
-build `3cf930d6-f3e0-4c44-a806-515462d7c2df` собран из старого `63e8541` и
-не является доказательством текущего UI. Локальный Android smoke также не
-запускается: `adb`, emulator binary и Maestro отсутствуют, а установка
-local Android toolchain/system images исключена правилами задачи. Это не
-засчитывается как app smoke — нужен свежий EAS preview/dev-client APK и
-фактический Maestro run.
+первого app screen с `SIGSEGV` в `libhermesvm/libworklets`; это не crash
+standalone app. По обновлённому решению владельца EAS не используется:
+локально собран arm64 release APK текущей ветки, установлен через `adb` и
+запущен на Android API 35 без native crash. Подтверждены login и вход demo
+агентом; отдельная сборка подключена к локально seeded API через
+`10.0.2.2:3100`. Полный check-in/order/checkout остаётся: управление ADB
+остановлено лимитом подтверждений среды, Maestro CLI не установлен.
 
 ### MW-04. Demo tenant hygiene
 
@@ -163,7 +160,7 @@ detail показывает связанный визит/маршрут и за
 44 px quantity controls и закреплённым summary. Ограничение контракта в
 200 строк соблюдается до enqueue; local visit id по-прежнему не уходит на
 сервер. TypeScript и mobile unit suite чистые. Device-проверка клавиатуры
-и длинного каталога будет закрыта свежей EAS APK в MW-03.
+и длинного каталога будет закрыта локальной APK в MW-03.
 
 ### MW-07. Информативная мобильная история заказов
 
@@ -296,7 +293,7 @@ overflow и сохраняет PNG/report artifacts. CI переведён на 
 отдельно запускает frozen mobile protocol compatibility. Добавлен Maestro
 flow `login → route → check-in → offline order → checkout`, использующий
 назначенный demo-маршрут M-001 и координаты DEMO-001; его фактический run
-на свежей preview APK входит в MW-03.
+на свежей локальной release APK входит в MW-03.
 
 ## Визуальный аудит
 
