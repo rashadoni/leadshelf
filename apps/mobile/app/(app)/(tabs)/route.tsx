@@ -91,9 +91,6 @@ export default function RoutesScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("routes")}</Text>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.link}>{t("tasks")}</Text>
-        </Pressable>
       </View>
       <SyncBar />
       <FlatList
@@ -155,7 +152,7 @@ export default function RoutesScreen() {
                         {stopTasks.slice(0, 4).map((task) => (
                           <Pressable
                             key={task.id}
-                            onPress={() => router.push(`/(app)/tasks/${task.id}` as never)}
+                            onPress={() => router.push(`/(app)/task/${task.id}` as never)}
                             style={styles.stopTask}
                           >
                             <View style={styles.stopTaskBody}>

@@ -8,7 +8,6 @@ import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { t, type MessageKey } from "../../../src/i18n"
 import { tokenStore } from "../../../src/auth/token-store"
-import { mobileLogout } from "../../../src/api/mobile-client"
 
 const STATUS_COLORS: Record<string, string> = {
   NEW: "#2563eb",
@@ -49,31 +48,15 @@ export default function TasksScreen() {
     setRefreshing(false)
   }
 
-  async function logout() {
-    await mobileLogout() // best-effort отзыв refresh-сессии на сервере
-    await tokenStore.clearSession()
-    router.replace("/(auth)/login" as never)
-  }
-
   const openCount = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "EMPTY").length
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{t("tasks")}</Text>
-          <Text style={styles.subtitle}>
-            {t("todayWord")}: {openCount}
-          </Text>
-        </View>
-        <View style={styles.headerActions}>
-          <Pressable hitSlop={8} onPress={() => router.push("/(app)/routes" as never)}>
-            <Text style={styles.headerLink}>{t("routes")}</Text>
-          </Pressable>
-          <Pressable hitSlop={8} onPress={logout}>
-            <Text style={styles.headerLink}>{t("logout")}</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.title}>{t("tasks")}</Text>
+        <Text style={styles.subtitle}>
+          {t("todayWord")}: {openCount}
+        </Text>
       </View>
       <SyncBar />
       {showHint ? (
@@ -106,7 +89,7 @@ export default function TasksScreen() {
           return (
             <Pressable
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              onPress={() => router.push(`/(app)/tasks/${item.id}` as never)}
+              onPress={() => router.push(`/(app)/task/${item.id}` as never)}
             >
               <View style={styles.cardMain}>
                 <Text style={styles.taskTitle} numberOfLines={2}>
@@ -135,17 +118,12 @@ export default function TasksScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f5f5f4" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 10,
   },
   title: { fontSize: 26, fontWeight: "800", color: "#1c1917" },
   subtitle: { fontSize: 13, color: "#78716c", marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: 16, paddingTop: 6 },
-  headerLink: { color: "#57534e", fontSize: 14, fontWeight: "600" },
   hint: {
     flexDirection: "row",
     alignItems: "center",
