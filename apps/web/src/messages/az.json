@@ -24,7 +24,44 @@
     "tasks": "Tapşırıqlar",
     "reviews": "Foto yoxlama",
     "fieldForce": "Saha komandası",
+    "orders": "Sifarişlər",
     "analytics": "Analitika"
+  },
+  "orders": {
+    "title": "Sifarişlər",
+    "subtitle": "Sahədən sinxronlaşdırılmış sifarişlər: satış nöqtəsi, agent, vizit və kommersiya nəticəsi bir yerdə.",
+    "summary": {
+      "total": "Bütün sifarişlər",
+      "active": "İcradadır",
+      "offline": "Mobil cihazdan",
+      "value": "Ümumi məbləğ"
+    },
+    "table": {
+      "order": "Sifariş",
+      "store": "Satış nöqtəsi",
+      "agent": "Agent",
+      "source": "Mənbə",
+      "items": "Tərkib",
+      "total": "Məbləğ",
+      "status": "Status",
+      "createdAt": "Yaradılıb"
+    },
+    "status": {
+      "DRAFT": "Qaralama",
+      "SUBMITTED": "Göndərilib",
+      "CONFIRMED": "Təsdiqlənib",
+      "DELIVERED": "Çatdırılıb",
+      "CANCELLED": "Ləğv edilib"
+    },
+    "sourceVisit": "Vizitdən",
+    "sourceDirect": "Birbaşa sifariş",
+    "offlineOrigin": "Mobil offline",
+    "unknownAgent": "Agent göstərilməyib",
+    "lineCount": "{count} məhsul mövqeyi",
+    "unitCount": "{count} vahid",
+    "emptyTitle": "Hələ sifariş yoxdur",
+    "emptyHint": "Agent mobil tətbiqdə sifariş yaradıb sinxronlaşdırdıqdan sonra o burada görünəcək.",
+    "recentLimit": "Son 200 sifariş göstərilir."
   },
   "dashboard": {
     "title": "Demo hazırlıq paneli",

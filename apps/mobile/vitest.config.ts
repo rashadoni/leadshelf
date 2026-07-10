@@ -7,6 +7,7 @@ export default defineConfig({
       "src/sync/**/*.test.ts",
       "src/planogram/**/*.test.ts",
       "src/photos/**/*.test.ts",
+      "src/tasks/**/*.test.ts",
       "src/i18n/**/*.test.ts",
       "src/observability/**/*.test.ts",
     ],

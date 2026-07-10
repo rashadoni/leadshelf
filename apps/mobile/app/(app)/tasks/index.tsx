@@ -8,6 +8,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { t, type MessageKey } from "../../../src/i18n"
 import { tokenStore } from "../../../src/auth/token-store"
+import { countOpenTaskStatuses } from "../../../src/tasks/status"
 
 const STATUS_COLORS: Record<string, string> = {
   NEW: "#2563eb",
@@ -48,7 +49,7 @@ export default function TasksScreen() {
     setRefreshing(false)
   }
 
-  const openCount = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "EMPTY").length
+  const openCount = countOpenTaskStatuses(tasks.map((task) => task.status))
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>

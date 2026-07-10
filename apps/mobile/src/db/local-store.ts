@@ -27,6 +27,7 @@ import type {
   VisitRow,
 } from "../sync/ports"
 import type { MobilePhotoUploadResponse } from "@leadshelf/api-contracts/mobile/v1"
+import { OPEN_TASK_STATUSES } from "../tasks/status"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -511,8 +512,10 @@ export function listTasks(): TaskRow[] {
 
 /** Совпадает с определением «открытых» на локальном dashboard. */
 export function countOpenTasks(): number {
+  const placeholders = OPEN_TASK_STATUSES.map(() => "?").join(",")
   const row = db.getFirstSync<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM tasks WHERE status NOT IN ('COMPLETED', 'EMPTY')",
+    `SELECT COUNT(*) AS count FROM tasks WHERE status IN (${placeholders})`,
+    [...OPEN_TASK_STATUSES],
   )
   return row?.count ?? 0
 }

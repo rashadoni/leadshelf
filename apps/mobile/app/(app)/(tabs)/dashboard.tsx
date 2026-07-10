@@ -9,6 +9,7 @@ import type { TaskRow, VisitRow } from "../../../src/sync/ports"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { countOpenTaskStatuses } from "../../../src/tasks/status"
 
 function StatCard({ labelKey, value, accent }: { labelKey: MessageKey; value: number; accent?: string }) {
   return (
@@ -46,7 +47,7 @@ export default function DashboardTab() {
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
-    const open = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "EMPTY").length
+    const open = countOpenTaskStatuses(tasks.map((task) => task.status))
     const done = tasks.filter((task) => task.status === "COMPLETED").length
     const visitsToday = visits.filter(
       (visit) => visit.status === "COMPLETED" && (visit.checkOutAt ?? visit.updatedAt).startsWith(today),

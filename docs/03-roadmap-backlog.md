@@ -678,3 +678,10 @@ demo-story до уверенного показа. Он зафиксирован
 cleanup, floor-plan demo, photo-proof demo, table/responsive polish,
 planogram/3D consistency, task/store detail, analytics demo data и
 field-force/mobile walkthrough.
+
+Активный слой согласованности полевого приложения и офисного интерфейса
+зафиксирован в `docs/29-mobile-web-execution-coherence-roadmap.md`.
+Первый срез закрыт 2026-07-10: единая семантика открытых задач и read-only
+web-раздел синхронизированных заказов без изменения mobile sync/API-
+контрактов. Native preview baseline выполнен частично: зависимости
+выровнены, свежая EAS preview/dev-client APK ещё нужна для device smoke.

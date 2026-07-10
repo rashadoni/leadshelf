@@ -1,0 +1,207 @@
+# LeadShelf: mobile ↔ web execution coherence roadmap
+
+Обновлено: 2026-07-10. Статус: активная разработка.
+
+## Зачем нужен этот слой
+
+Phase 11 и Phase 12 уже дали маршруты, визиты и offline-заказы, но
+полевой и офисный интерфейсы пока не образуют один прозрачный рабочий
+цикл. Мобильный агент видит маршрут, активный визит и очередь заказов,
+а офису не хватает связанного представления `маршрут → визит → задачи →
+заказ`. Статусы и счётчики также должны означать одно и то же на обеих
+поверхностях.
+
+Цель дорожной карты — довести существующие функции до единого
+операционного продукта без изменения замороженного mobile sync-протокола
+и `packages/api-contracts`.
+
+## Ограничения
+
+- Не менять `/api/v1/mobile`, sync-outbox payloads и API-контракты без
+  отдельного решения.
+- Mobile продолжает читать рабочие данные только из SQLite/local-store и
+  `useSync`; `SyncBar` остаётся видимым.
+- Не ослаблять check-in/check-out guards и offline idempotency.
+- Не вводить второй набор иконок или новую UI-библиотеку.
+- Существующие тёмные поверхности камеры, сканера и photo viewer не
+  переводить в светлую тему.
+- Любой новый пользовательский текст проходит az/ru parity.
+
+## North star: сквозной сценарий
+
+1. Офис назначает маршрут и задачи агенту.
+2. Агент синхронизируется, проходит check-in и работает офлайн.
+3. В активном визите агент выполняет задачи и создаёт заказ.
+4. Заказ сразу виден в мобильной локальной очереди.
+5. После sync офис видит заказ с магазином, агентом, визитом и состоянием
+   обработки.
+6. Счётчики задач, статусы визита и состояние заказа совпадают по смыслу
+   в mobile и web.
+
+## P0 — целостность и возможность проверки
+
+### MW-01. Единая семантика открытых задач
+
+Статус: **сделано 2026-07-10**.
+
+- Зафиксировать `NEW`, `IN_PROGRESS`, `PHOTO_SUBMITTED` как открытые.
+- Не включать `EXPIRED`, `COMPLETED`, `EMPTY` в мобильный badge.
+- Добавить regression-тест локального счётчика.
+- Проверить одинаковый результат на mobile dashboard, route badge и web
+  dashboard.
+
+Definition of Done:
+
+- Один набор тестовых задач даёт одинаковое число открытых задач в mobile
+  и web.
+
+Реализация: mobile использует общий pure-helper для dashboard/task list и
+SQL `IN (NEW, IN_PROGRESS, PHOTO_SUBMITTED)` для tab badge; regression
+покрыт unit-тестом.
+
+### MW-02. Офисный раздел заказов
+
+Статус: **сделано 2026-07-10 (read-only slice)**.
+
+- Добавить `/orders` в web navigation и az/ru словари.
+- Читать только tenant-scoped `Order`/`OrderLine` из существующей БД.
+- Показывать магазин, агента, источник (`визит`/`напрямую`), время,
+  количество строк и единиц, сумму и статус.
+- Сделать desktop table и mobile card composition без горизонтального
+  скролла.
+- Добавить честные empty/error states; никаких фальшивых демо-заказов.
+- Не добавлять мутации заказа в первом срезе.
+
+Definition of Done:
+
+- Синхронизированный offline-заказ можно найти в офисе и однозначно
+  связать с магазином и агентом.
+- Страница удобна при 390 px и на desktop.
+
+Реализация: добавлены `/orders`, navigation, az/ru parity, desktop table,
+mobile cards, summary и честный empty state. Non-empty состояние проверено
+на временном локальном fixture; fixture удалён после проверки.
+
+### MW-03. Нативный preview baseline
+
+Статус: **частично сделано 2026-07-10; APK smoke остаётся**.
+
+- Использовать Node >=22.13 для Expo SDK 57 tooling.
+- Выровнять Expo SDK 57 patch-версии по `expo install --check`.
+- Собрать свежую EAS preview APK из текущей ветки.
+- Выполнить Android smoke: login → route → check-in → order → checkout.
+- Зафиксировать отдельно app defect и Expo Go/emulator defect; не
+  смешивать их в отчёте.
+
+Definition of Done:
+
+- Текущий commit установлен как APK и проходит сквозной smoke без
+  нативного crash.
+
+Текущий результат: шесть существующих Expo-пакетов выровнены, dependency
+check чистый. Expo Go 57.0.2 на Android 15 arm64 AVD продолжает падать до
+первого app screen с `SIGSEGV` в `libhermesvm/libworklets`; свежая
+переустановка Expo Go и смена GPU не помогли. Это не засчитывается как
+app smoke — нужен свежий EAS preview/dev-client APK.
+
+### MW-04. Demo tenant hygiene
+
+Статус: **не начато**.
+
+- Удалить `Codex smoke`/`UI E2E` сущности из клиентского demo tenant.
+- Развести seed demo и e2e fixtures.
+- Обновлять даты маршрутов и задач относительно даты seed.
+- Показывать `demo tenant готов` только при пройденном readiness-check.
+
+## P1 — рабочий цикл и скорость агента
+
+### MW-05. Связи route → visit → task → order
+
+- Добавить взаимные ссылки в web Field Force, task detail и orders.
+- Показывать источник заказа и состояние связанного визита.
+- Обозначать offline-created order, который ещё не получил server visitId,
+  без потери client operation trace.
+
+### MW-06. Мобильный order composer
+
+- Вынести каталог из длинного visit ScrollView в отдельную экранную
+  композицию.
+- Использовать виртуализированный список, поиск и фильтр «Выбрано».
+- Закрепить снизу summary: виды товаров, общее количество, подтверждение.
+- Сохранять текущее offline-first поведение и `enqueueOrderCreate()`.
+- Проверить клавиатуру, длинные названия, 0/1/99+ единиц и 40+ SKU.
+
+### MW-07. Информативная мобильная история заказов
+
+- Показывать короткий локальный номер, суммарное количество единиц и
+  связь с визитом.
+- Форматировать дату через locale/timezone helper, а не ISO slice.
+- Для rejected/conflict показывать причину и безопасное recovery-действие.
+
+### MW-08. Задача на проверку как одно действие
+
+- На web task detail сделать proof главным содержимым состояния
+  `PHOTO_SUBMITTED`.
+- Устранить противоречие `PHOTO_SUBMITTED` + `0 pending review` +
+  «Без review».
+- Дать один явный next action: принять, отклонить или запросить пересъёмку.
+
+## P1 — responsive, i18n и accessibility
+
+### MW-09. Компактный mobile web shell
+
+- Заменить обрезаемую горизонтальную навигацию на устойчивую композицию
+  с явным overflow/«Ещё».
+- Сократить высоту header на 390–768 px; email не должен ломать layout.
+- Сохранить keyboard navigation и `aria-current`.
+
+### MW-10. Responsive tasks
+
+- Desktop сохраняет плотную таблицу.
+- Mobile получает task cards вместо `min-width: 1120px`.
+- SLA summary на телефоне использует компактную 2-column композицию.
+
+### MW-11. Locale and a11y pass
+
+- Убрать hardcoded русский из Field Force и даты без locale.
+- Добавить видимые `focus-visible` состояния.
+- Добавить accessible names для icon-only controls и `aria-live` для
+  async ошибок.
+- Дать значимым proof/planogram изображениям описательные alt labels.
+- Любую анимацию покрыть `prefers-reduced-motion`.
+
+## P2 — единый визуальный язык и наблюдаемость
+
+### MW-12. Shared semantic vocabulary
+
+- Согласовать роли `primary`, `success`, `warning`, `danger`, `surface`,
+  не связывая runtime-пакеты mobile и web.
+- Применить индиго к primary action/current selection в web; оставить
+  нейтральные поверхности для высокой информационной плотности.
+- Зафиксировать button, field, status pill и empty-state patterns.
+
+### MW-13. Execution observability
+
+- Метрики sync latency, queue depth, conflict/rejected orders.
+- Офисная видимость застрявших операций без раскрытия чувствительного
+  payload.
+- Алерт на рост sync conflict и failed order processing.
+
+### MW-14. Автоматизированный regression layer
+
+- Web responsive screenshots: 390, 768, 1440 px.
+- Android E2E smoke для основного execution flow.
+- Контрактные проверки старый app ↔ новый server остаются аддитивными.
+- Demo readiness-check перед презентацией.
+
+## Рекомендуемая последовательность поставки
+
+1. **Slice A:** MW-01 + read-only MW-02.
+2. **Slice B:** MW-03 + native smoke.
+3. **Slice C:** MW-06 + MW-07.
+4. **Slice D:** MW-05 + MW-08.
+5. **Slice E:** MW-09 + MW-10 + MW-11.
+6. **Slice F:** MW-04 + MW-12 + MW-13 + MW-14.
+
+Каждый slice завершается typecheck, тестами затронутых пакетов и
+визуальной проверкой соответствующих viewport/device states.
