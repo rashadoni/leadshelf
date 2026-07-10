@@ -42,7 +42,7 @@ export default function LoginScreen() {
       const res = await mobileLogin({ orgSlug: orgSlug.trim(), employeeCode: code, pin })
       if (res) {
         await tokenStore.setLastEmployeeCode(code)
-        router.replace("/(app)/tasks" as never)
+        router.replace("/(app)/(tabs)" as never)
       } else {
         setError(true)
       }

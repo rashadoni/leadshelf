@@ -993,6 +993,46 @@ export function enqueueVisitCheckOut(input: { clientOpId: string; visitId: strin
   })
 }
 
+export interface QueuedOrderRow {
+  clientOpId: string
+  status: "pending" | "applied" | "conflict" | "rejected"
+  clientCreatedAt: string
+  storeId: string
+  visitId: string | null
+  lineCount: number
+}
+
+/** Заказы из локальной очереди (order.create) для вкладки «Заказы». */
+export function listQueuedOrders(): QueuedOrderRow[] {
+  const rows = db.getAllSync<{
+    clientOpId: string
+    status: string
+    clientCreatedAt: string
+    payload: string
+  }>("SELECT clientOpId, status, clientCreatedAt, payload FROM outbox_ops WHERE kind='order.create' ORDER BY clientCreatedAt DESC")
+  return rows.map((row) => {
+    let storeId = ""
+    let visitId: string | null = null
+    let lineCount = 0
+    try {
+      const payload = JSON.parse(row.payload) as { storeId?: string; visitId?: string | null; lines?: unknown[] }
+      storeId = payload.storeId ?? ""
+      visitId = payload.visitId ?? null
+      lineCount = Array.isArray(payload.lines) ? payload.lines.length : 0
+    } catch {
+      // повреждённый payload не должен ронять экран
+    }
+    return {
+      clientOpId: row.clientOpId,
+      status: (row.status as QueuedOrderRow["status"]) ?? "pending",
+      clientCreatedAt: row.clientCreatedAt,
+      storeId,
+      visitId,
+      lineCount,
+    }
+  })
+}
+
 export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: string }): void {
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",

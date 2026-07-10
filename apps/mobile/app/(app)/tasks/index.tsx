@@ -8,7 +8,6 @@ import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { t, type MessageKey } from "../../../src/i18n"
 import { tokenStore } from "../../../src/auth/token-store"
-import { mobileLogout } from "../../../src/api/mobile-client"
 
 const STATUS_COLORS: Record<string, string> = {
   NEW: "#2563eb",
@@ -49,12 +48,6 @@ export default function TasksScreen() {
     setRefreshing(false)
   }
 
-  async function logout() {
-    await mobileLogout() // best-effort отзыв refresh-сессии на сервере
-    await tokenStore.clearSession()
-    router.replace("/(auth)/login" as never)
-  }
-
   const openCount = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "EMPTY").length
 
   return (
@@ -66,14 +59,7 @@ export default function TasksScreen() {
             {t("todayWord")}: {openCount}
           </Text>
         </View>
-        <View style={styles.headerActions}>
-          <Pressable hitSlop={8} onPress={() => router.push("/(app)/routes" as never)}>
-            <Text style={styles.headerLink}>{t("routes")}</Text>
-          </Pressable>
-          <Pressable hitSlop={8} onPress={logout}>
-            <Text style={styles.headerLink}>{t("logout")}</Text>
-          </Pressable>
-        </View>
+
       </View>
       <SyncBar />
       {showHint ? (
@@ -144,8 +130,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: "800", color: "#1c1917" },
   subtitle: { fontSize: 13, color: "#78716c", marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: 16, paddingTop: 6 },
-  headerLink: { color: "#57534e", fontSize: 14, fontWeight: "600" },
   hint: {
     flexDirection: "row",
     alignItems: "center",
