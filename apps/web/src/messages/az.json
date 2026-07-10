@@ -76,7 +76,40 @@
     "unitCount": "{count} vahid",
     "emptyTitle": "Hələ sifariş yoxdur",
     "emptyHint": "Agent mobil tətbiqdə sifariş yaradıb sinxronlaşdırdıqdan sonra o burada görünəcək.",
-    "recentLimit": "Son 200 sifariş göstərilir."
+    "recentLimit": "Son 200 sifariş göstərilir.",
+    "health": {
+      "title": "Mobil icra sağlamlığı",
+      "subtitle": "Son {hours} saat üzrə payload göstərilmədən sync və sifariş siqnalları.",
+      "devices": "Cihazlar",
+      "actionable": "Diqqət tələb edən",
+      "p95": "Sync gecikməsi p95",
+      "conflicts": "Konfliktlər",
+      "rejectedOrders": "Rədd edilmiş sifarişlər",
+      "alertConflicts": "Sync konfliktlərinin sayı əvvəlki dövrlə müqayisədə artır.",
+      "alertOrders": "Sifariş emalında yeni rədd cavabları var.",
+      "operationsTitle": "Əməliyyat detalları",
+      "operationsHint": "Yalnız əməliyyat növü, qısa trace, agent, vaxt və təhlükəsiz səbəb kodu göstərilir.",
+      "noIssues": "Bu dövrdə konflikt və rədd edilmiş əməliyyat yoxdur.",
+      "trace": "Trace {value}",
+      "unknownReason": "Səbəb kodu yoxdur",
+      "milliseconds": "{value} ms",
+      "seconds": "{value} san",
+      "outcome": {
+        "conflict": "Konflikt",
+        "rejected": "Rədd edilib"
+      },
+      "kind": {
+        "taskStatus": "Tapşırıq statusu",
+        "photoSubmit": "Foto göndərişi",
+        "taskComment": "Tapşırıq şərhi",
+        "visitCheckin": "Check-in",
+        "visitCheckout": "Check-out",
+        "locationUpdate": "Lokasiya",
+        "orderCreate": "Sifariş yaratma",
+        "proofException": "Çəkiliş istisnası",
+        "other": "Digər əməliyyat"
+      }
+    }
   },
   "dashboard": {
     "title": "Demo hazırlıq paneli",

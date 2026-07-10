@@ -56,6 +56,10 @@ export class SyncManager {
     pendingOps: 0,
     pendingPhotos: 0,
     quarantinedPhotos: 0,
+    conflictOps: 0,
+    rejectedOps: 0,
+    oldestPendingAgeMs: null,
+    lastDurationMs: null,
     error: null,
   }
   private listeners = new Set<(s: SyncStatus) => void>()
@@ -81,12 +85,21 @@ export class SyncManager {
   }
 
   private async refreshCounters() {
-    const [ops, photos, quarantined] = await Promise.all([
-      this.deps.store.pendingOutbox(),
+    const [outbox, photos, quarantined] = await Promise.all([
+      this.deps.store.outboxDiagnostics(),
       this.deps.store.pendingPhotos(),
       this.deps.store.quarantinedPhotoCount(),
     ])
-    this.patch({ pendingOps: ops.length, pendingPhotos: photos.length, quarantinedPhotos: quarantined })
+    const oldestPendingAt = outbox.oldestPendingAt ? new Date(outbox.oldestPendingAt).getTime() : Number.NaN
+    const now = (this.deps.now?.() ?? new Date()).getTime()
+    this.patch({
+      pendingOps: outbox.pendingOps,
+      pendingPhotos: photos.length,
+      quarantinedPhotos: quarantined,
+      conflictOps: outbox.conflictOps,
+      rejectedOps: outbox.rejectedOps,
+      oldestPendingAgeMs: Number.isFinite(oldestPendingAt) ? Math.max(0, now - oldestPendingAt) : null,
+    })
   }
 
   private patch(p: Partial<SyncStatus>) {
@@ -98,9 +111,10 @@ export class SyncManager {
   async runSync(): Promise<SyncStatus> {
     if (this.running) return this.status
     this.running = true
+    const startedAt = Date.now()
     try {
       if (this.deps.isOnline && !(await this.deps.isOnline())) {
-        this.patch({ phase: "offline", error: null })
+        this.patch({ phase: "offline", error: null, lastDurationMs: Date.now() - startedAt })
         await this.refreshCounters()
         return this.status
       }
@@ -161,14 +175,14 @@ export class SyncManager {
       }
 
       const now = (this.deps.now?.() ?? new Date()).toISOString()
-      this.patch({ phase: "idle", lastSyncAt: now, error: null })
+      this.patch({ phase: "idle", lastSyncAt: now, error: null, lastDurationMs: Date.now() - startedAt })
       await this.refreshCounters()
       return this.status
     } catch (e) {
       if (e instanceof UpgradeRequiredError) {
-        this.patch({ phase: "upgradeRequired", error: null })
+        this.patch({ phase: "upgradeRequired", error: null, lastDurationMs: Date.now() - startedAt })
       } else {
-        this.patch({ phase: "error", error: e instanceof Error ? e.message : String(e) })
+        this.patch({ phase: "error", error: e instanceof Error ? e.message : String(e), lastDurationMs: Date.now() - startedAt })
       }
       await this.refreshCounters().catch(() => {})
       return this.status

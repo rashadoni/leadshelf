@@ -2,7 +2,19 @@
 
 :root {
   color-scheme: light;
-  --focus-ring: #4f46e5;
+  --ls-primary: #4f46e5;
+  --ls-primary-pressed: #4338ca;
+  --ls-primary-soft: #eef2ff;
+  --ls-success: #16a34a;
+  --ls-success-soft: #ecfdf3;
+  --ls-warning: #b45309;
+  --ls-warning-soft: #fffbeb;
+  --ls-danger: #dc2626;
+  --ls-danger-soft: #fef2f2;
+  --ls-surface: #ffffff;
+  --ls-canvas: #fafafa;
+  --ls-border: #e5e5e5;
+  --focus-ring: var(--ls-primary);
 }
 
 body {

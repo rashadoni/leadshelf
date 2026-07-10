@@ -128,7 +128,7 @@ export default async function TasksPage({
       <div className="mb-4 flex flex-wrap gap-1">
         <Link
           href={storeFilterId ? `/tasks?storeId=${encodeURIComponent(storeFilterId)}` : "/tasks"}
-          className={`rounded-full px-3 py-1 text-sm ${!statusFilter ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"}`}
+          className={`rounded-full px-3 py-1 text-sm ${!statusFilter ? "bg-indigo-600 text-white" : "bg-white text-neutral-600 border border-neutral-200"}`}
         >
           {t("all")}
         </Link>
@@ -136,7 +136,7 @@ export default async function TasksPage({
           <Link
             key={s}
             href={`/tasks?status=${s}${storeFilterId ? `&storeId=${encodeURIComponent(storeFilterId)}` : ""}`}
-            className={`rounded-full px-3 py-1 text-sm ${statusFilter === s ? "bg-neutral-900 text-white" : "border border-neutral-200 bg-white text-neutral-600"}`}
+            className={`rounded-full px-3 py-1 text-sm ${statusFilter === s ? "bg-indigo-600 text-white" : "border border-neutral-200 bg-white text-neutral-600"}`}
           >
             {t(`status.${s}`)}
           </Link>

@@ -8,6 +8,7 @@ import { mobileLogout } from "../../../src/api/mobile-client"
 import { tokenStore } from "../../../src/auth/token-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
+import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
 const LOCALES: Locale[] = ["az", "ru"]
@@ -36,6 +37,19 @@ export default function ProfileTab() {
 
   const initial = (userName ?? "?").trim().charAt(0).toUpperCase() || "?"
   const running = !["idle", "offline", "error", "upgradeRequired"].includes(status.phase)
+  const issueCount = status.conflictOps + status.rejectedOps + status.quarantinedPhotos
+  const duration = status.lastDurationMs == null
+    ? t("profileNever")
+    : `${Math.max(0, Math.round(status.lastDurationMs / 1000))} ${t("secondsShort")}`
+  const queueAge = status.oldestPendingAgeMs == null
+    ? "—"
+    : `${Math.max(1, Math.ceil(status.oldestPendingAgeMs / 60_000))} ${t("minutesShort")}`
+  const syncMetrics = [
+    [t("profileSyncLast"), status.lastSyncAt ? formatShortDateTime(status.lastSyncAt, locale) : t("profileNever")],
+    [t("profileSyncDuration"), duration],
+    [t("profileQueueAge"), queueAge],
+    [t("profileSyncIssues"), String(issueCount)],
+  ]
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -69,7 +83,7 @@ export default function ProfileTab() {
                 style={[styles.localeBtn, locale === l && styles.localeActive]}
               >
                 <Text style={[styles.localeText, locale === l && styles.localeTextActive]}>
-                  {l === "az" ? "Azərbaycanca" : "Русский"}
+                  {l === "az" ? t("languageAz") : t("languageRu")}
                 </Text>
               </Pressable>
             ))}
@@ -79,6 +93,16 @@ export default function ProfileTab() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("profileSync")}</Text>
           <SyncBar />
+          <View style={styles.metricsGrid}>
+            {syncMetrics.map(([label, value], index) => (
+              <View key={label} style={styles.metric}>
+                <Text style={styles.metricLabel}>{label}</Text>
+                <Text style={[styles.metricValue, index === 3 && issueCount > 0 && styles.metricWarning]}>
+                  {value}
+                </Text>
+              </View>
+            ))}
+          </View>
           <Pressable
             disabled={running || syncing}
             onPress={() => void onSyncNow()}
@@ -122,7 +146,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "white", fontSize: 22, fontWeight: "800" },
+  avatarText: { color: colors.headerText, fontSize: 22, fontWeight: "800" },
   accountBody: { flex: 1, minWidth: 0 },
   accountLabel: { fontSize: 11, fontWeight: "700", color: colors.faint, letterSpacing: 0.4, textTransform: "uppercase" },
   accountName: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 2 },
@@ -137,7 +161,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  localeActive: { backgroundColor: "#EEF2FF", borderColor: colors.primary },
+  localeActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   localeText: { fontSize: 13, fontWeight: "600", color: colors.muted },
   localeTextActive: { color: colors.primary, fontWeight: "800" },
   syncButton: {
@@ -148,9 +172,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 8 },
+  metric: {
+    width: "48%",
+    minHeight: 64,
+    borderRadius: radii.inner,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    padding: 10,
+  },
+  metricLabel: { fontSize: 11, color: colors.muted },
+  metricValue: { marginTop: 5, fontSize: 13, fontWeight: "800", color: colors.text },
+  metricWarning: { color: colors.warning },
   syncPressed: { backgroundColor: colors.primaryPressed },
-  syncDisabled: { backgroundColor: "#D4D4D8" },
-  syncText: { color: "white", fontSize: 13, fontWeight: "800" },
+  syncDisabled: { backgroundColor: colors.disabled },
+  syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
   logout: {
     marginHorizontal: 14,
     marginTop: 18,
@@ -159,8 +196,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: colors.dangerBorder,
   },
-  logoutPressed: { backgroundColor: "#FEF2F2" },
+  logoutPressed: { backgroundColor: colors.dangerBg },
   logoutText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
 })

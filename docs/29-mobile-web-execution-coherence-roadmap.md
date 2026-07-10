@@ -106,12 +106,20 @@ app smoke — нужен свежий EAS preview/dev-client APK.
 
 ### MW-04. Demo tenant hygiene
 
-Статус: **не начато**.
+Статус: **сделано 2026-07-10**.
 
 - Удалить `Codex smoke`/`UI E2E` сущности из клиентского demo tenant.
 - Развести seed demo и e2e fixtures.
 - Обновлять даты маршрутов и задач относительно даты seed.
 - Показывать `demo tenant готов` только при пройденном readiness-check.
+
+Реализация: demo seed удаляет только явно namespaced `Codex smoke`,
+`UI E2E` и `task-mob-e2e` artifacts, затем восстанавливает один
+канонический execution task с относительным сроком, proof, двумя pending
+reviews и согласованной историей статусов. Повторный seed подтверждён как
+идемпотентный. Seed печатает готовность только после tenant-scoped
+readiness-check; web shell независимо повторяет проверку и скрывает зелёный
+badge при устаревших данных, отсутствующем proof или тестовом мусоре.
 
 ## P1 — рабочий цикл и скорость агента
 
@@ -232,25 +240,55 @@ accessible names, async failures — `role=alert`, proof/reference media —
 
 ### MW-12. Shared semantic vocabulary
 
+Статус: **сделано 2026-07-10**.
+
 - Согласовать роли `primary`, `success`, `warning`, `danger`, `surface`,
   не связывая runtime-пакеты mobile и web.
 - Применить индиго к primary action/current selection в web; оставить
   нейтральные поверхности для высокой информационной плотности.
 - Зафиксировать button, field, status pill и empty-state patterns.
 
+Реализация: роли и паттерны зафиксированы в
+`docs/30-ui-semantic-vocabulary.md`; web получил semantic CSS variables,
+а primary actions/current selection в execution surfaces переведены с
+чёрного neutral на indigo. Mobile сохраняет существующий `theme.ts`,
+сопоставленный по смыслу без общего runtime dependency.
+
 ### MW-13. Execution observability
+
+Статус: **сделано 2026-07-10**.
 
 - Метрики sync latency, queue depth, conflict/rejected orders.
 - Офисная видимость застрявших операций без раскрытия чувствительного
   payload.
 - Алерт на рост sync conflict и failed order processing.
 
+Реализация: mobile `SyncStatus` теперь считает точную глубину outbox,
+возраст старейшей pending-операции, conflicts/rejected, quarantine и
+длительность последнего цикла; SyncBar и профиль показывают эти сигналы
+из локальной SQLite без сетевой зависимости. Сервер сохраняет безопасное
+время постановки операции из уже существующего `clientCreatedAt`, поэтому
+office orders показывает p50/p95 latency, конфликтные/отклонённые операции
+и рост ошибок за 24 часа против предыдущего периода. В UI выходят только
+kind, короткий trace, агент, устройство, время и нормализованный reason
+code — payload не читается и не отображается.
+
 ### MW-14. Автоматизированный regression layer
+
+Статус: **реализовано 2026-07-10; Android run закрывается вместе с MW-03**.
 
 - Web responsive screenshots: 390, 768, 1440 px.
 - Android E2E smoke для основного execution flow.
 - Контрактные проверки старый app ↔ новый server остаются аддитивными.
 - Demo readiness-check перед презентацией.
+
+Реализация: Playwright CI после реального demo seed снимает tasks,
+Field Force и orders при 390/768/1440 px, валит build при горизонтальном
+overflow и сохраняет PNG/report artifacts. CI переведён на Node 22.13 и
+отдельно запускает frozen mobile protocol compatibility. Добавлен Maestro
+flow `login → route → check-in → offline order → checkout`, использующий
+назначенный demo-маршрут M-001 и координаты DEMO-001; его фактический run
+на свежей preview APK входит в MW-03.
 
 ## Рекомендуемая последовательность поставки
 

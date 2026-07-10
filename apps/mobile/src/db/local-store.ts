@@ -396,6 +396,26 @@ export const localStore: LocalStore = {
       })
   },
 
+  async outboxDiagnostics() {
+    const row = db.getFirstSync<{
+      pendingOps: number | null
+      conflictOps: number | null
+      rejectedOps: number | null
+      oldestPendingAt: string | null
+    }>(`SELECT
+      SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pendingOps,
+      SUM(CASE WHEN status='conflict' THEN 1 ELSE 0 END) AS conflictOps,
+      SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS rejectedOps,
+      MIN(CASE WHEN status='pending' THEN clientCreatedAt ELSE NULL END) AS oldestPendingAt
+      FROM outbox_ops`)
+    return {
+      pendingOps: row?.pendingOps ?? 0,
+      conflictOps: row?.conflictOps ?? 0,
+      rejectedOps: row?.rejectedOps ?? 0,
+      oldestPendingAt: row?.oldestPendingAt ?? null,
+    }
+  },
+
   async markOutbox(clientOpId, status, detail) {
     const op = db.getFirstSync<{ kind: string; payload: string }>(
       "SELECT kind, payload FROM outbox_ops WHERE clientOpId=?",

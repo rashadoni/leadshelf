@@ -73,7 +73,7 @@ export function AgentCreateForm({
       <button
         type="button"
         onClick={submit}
-        className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+        className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
       >
         {t("addAgent")}
       </button>

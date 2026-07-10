@@ -254,7 +254,7 @@ export default async function ReviewsPage({
             href={`/reviews?status=${status}`}
             className={`rounded-full px-3 py-1 text-sm ${
               statusFilter === status
-                ? "bg-neutral-900 text-white"
+                ? "bg-indigo-600 text-white"
                 : "border border-neutral-200 bg-white text-neutral-600"
             }`}
           >

@@ -503,7 +503,7 @@ export function FieldForceWorkspace() {
               <button
                 key={key}
                 className={`rounded-lg border p-2 text-left transition-colors ${
-                  active ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50"
+                  active ? "border-indigo-600 bg-indigo-600 text-white" : "border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50"
                 }`}
                 onClick={() => setActiveView(key)}
               >
@@ -613,7 +613,7 @@ function ToolbarSearch({
     <label className="relative min-w-[220px] flex-1">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
       <input
-        className="h-10 w-full rounded-md border border-neutral-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-neutral-900"
+        className="h-10 w-full rounded-md border border-neutral-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-indigo-600"
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -789,7 +789,7 @@ function RoutesView({
             CSV
           </button>
           <button
-            className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700"
+            className="inline-flex h-10 items-center gap-1 rounded-md bg-indigo-600 px-3 text-sm font-medium text-white hover:bg-indigo-700"
             onClick={openCreate}
           >
             <Plus className="h-4 w-4" />
@@ -825,7 +825,7 @@ function RoutesView({
               <button
                 key={route.id}
                 className={`rounded-lg border p-3 text-left transition-colors ${
-                  active ? "border-neutral-900 bg-neutral-50" : "border-neutral-200 bg-white hover:bg-neutral-50"
+                  active ? "border-indigo-600 bg-indigo-50" : "border-neutral-200 bg-white hover:bg-neutral-50"
                 }`}
                 onClick={() => onSelectRoute(route.id)}
               >
@@ -845,7 +845,7 @@ function RoutesView({
                   </span>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-100">
-                  <div className="h-full rounded-full bg-neutral-900" style={{ width: `${completion}%` }} />
+                  <div className="h-full rounded-full bg-indigo-600" style={{ width: `${completion}%` }} />
                 </div>
                 <div className="mt-2 flex justify-between text-xs text-neutral-500">
                   <span>{tWork("routes.pointsCount", { visited: route.visitedPoints, total: route.totalPoints })}</span>
@@ -895,7 +895,7 @@ function RoutesView({
             <label className="block">
               <span className="text-sm font-medium">{tWork("routes.name")}</span>
               <input
-                className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-indigo-600"
                 value={routeForm.name}
                 onChange={(event) => setRouteForm((current) => ({ ...current, name: event.target.value }))}
                 placeholder={tWork("routes.namePlaceholder")}
@@ -921,7 +921,7 @@ function RoutesView({
               <label className="block">
                 <span className="text-sm font-medium">{tWork("date")}</span>
                 <input
-                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-indigo-600"
                   type="date"
                   value={routeForm.date}
                   onChange={(event) => setRouteForm((current) => ({ ...current, date: event.target.value }))}
@@ -1011,7 +1011,7 @@ function RoutesView({
               </button>
               <button
                 type="submit"
-                className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-1 rounded-md bg-indigo-600 px-3 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={saving}
               >
                 <Save className="h-4 w-4" />
@@ -1197,7 +1197,7 @@ function AgentsView({
           CSV
         </button>
         <button
-          className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-1 rounded-md bg-indigo-600 px-3 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={openCreate}
           disabled={userCandidates.length === 0}
         >
@@ -1309,7 +1309,7 @@ function AgentsView({
             <label className="block">
               <span className="text-sm font-medium">{tWork("phone")}</span>
               <input
-                className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-indigo-600"
                 value={agentForm.phone}
                 onChange={(event) => setAgentForm((current) => ({ ...current, phone: event.target.value }))}
                 placeholder="+994..."
@@ -1326,7 +1326,7 @@ function AgentsView({
               </button>
               <button
                 type="submit"
-                className="inline-flex h-10 items-center gap-1 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-1 rounded-md bg-indigo-600 px-3 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={saving}
               >
                 <Save className="h-4 w-4" />
@@ -1444,7 +1444,7 @@ function ReportsView({ report, routes, agents }: { report: ReportShape; routes: 
                   <div className="text-right text-sm font-semibold">{percent(route.visitedPoints, route.totalPoints)}%</div>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
-                  <div className="h-full rounded-full bg-neutral-900" style={{ width: `${percent(route.visitedPoints, route.totalPoints)}%` }} />
+                  <div className="h-full rounded-full bg-indigo-600" style={{ width: `${percent(route.visitedPoints, route.totalPoints)}%` }} />
                 </div>
               </div>
             ))}
@@ -1547,7 +1547,7 @@ function SettingsView({
           />
         </div>
         <button
-          className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={onSave}
           disabled={saving}
         >

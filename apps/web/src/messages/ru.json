@@ -76,7 +76,40 @@
     "unitCount": "{count} ед.",
     "emptyTitle": "Заказов пока нет",
     "emptyHint": "После того как агент создаст заказ в мобильном приложении и синхронизируется, заказ появится здесь.",
-    "recentLimit": "Показаны последние 200 заказов."
+    "recentLimit": "Показаны последние 200 заказов.",
+    "health": {
+      "title": "Состояние мобильного исполнения",
+      "subtitle": "Сигналы sync и заказов за последние {hours} ч. без показа payload.",
+      "devices": "Устройства",
+      "actionable": "Требует внимания",
+      "p95": "Задержка sync p95",
+      "conflicts": "Конфликты",
+      "rejectedOrders": "Отклонённые заказы",
+      "alertConflicts": "Число sync-конфликтов выросло относительно предыдущего периода.",
+      "alertOrders": "Появились новые отказы обработки заказов.",
+      "operationsTitle": "Детали операций",
+      "operationsHint": "Показываются только тип операции, короткий trace, агент, время и безопасный код причины.",
+      "noIssues": "За период нет конфликтов и отклонённых операций.",
+      "trace": "Trace {value}",
+      "unknownReason": "Код причины отсутствует",
+      "milliseconds": "{value} мс",
+      "seconds": "{value} с",
+      "outcome": {
+        "conflict": "Конфликт",
+        "rejected": "Отклонено"
+      },
+      "kind": {
+        "taskStatus": "Статус задачи",
+        "photoSubmit": "Отправка фото",
+        "taskComment": "Комментарий задачи",
+        "visitCheckin": "Check-in",
+        "visitCheckout": "Check-out",
+        "locationUpdate": "Геолокация",
+        "orderCreate": "Создание заказа",
+        "proofException": "Исключение съёмки",
+        "other": "Другая операция"
+      }
+    }
   },
   "dashboard": {
     "title": "Панель готовности демо",

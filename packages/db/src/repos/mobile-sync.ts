@@ -953,6 +953,11 @@ export async function pushOperations(
       result = { status: "rejected", detail: "unknown_kind" }
     }
 
+    const processedAt = new Date()
+    const clientCreatedAt = op.clientCreatedAt ? new Date(op.clientCreatedAt) : processedAt
+    const queuedAt = Number.isFinite(clientCreatedAt.getTime()) && clientCreatedAt <= new Date(processedAt.getTime() + 5 * 60 * 1000)
+      ? clientCreatedAt
+      : processedAt
     await prisma.outboxOperation.create({
       data: {
         deviceId,
@@ -961,7 +966,8 @@ export async function pushOperations(
         payload: op.payload as object,
         status: result.status === "rejected" ? "FAILED" : "APPLIED",
         result: result as object,
-        processedAt: new Date(),
+        createdAt: queuedAt,
+        processedAt,
       },
     })
     results.push({ clientOpId: op.clientOpId, ...result })

@@ -152,6 +152,7 @@ const MARS_ROUTE_AGENTS = [
 ] as const
 
 const MARS_ROUTE_SCENARIOS = [
+  { name: "Mars Nizami pharmacy execution", agentCode: "M-001", storeCodes: ["DEMO-001"], status: "PLANNED", offsetDays: 0, completedStops: 0 },
   { name: "Mars Baku morning execution", agentCode: "M-003", storeCodes: ["BRV-NSM", "BRV-YSM", "BIZ-XTI", "ARZ-SBL", "NPT-BNG", "PIR-XTI"], status: "IN_PROGRESS", offsetDays: 0, completedStops: 2 },
   { name: "Mars Baku HoReCa audit", agentCode: "M-004", storeCodes: ["REST-KFC1", "REST-MCD1", "REST-RST1", "AVM-GZ", "REST-CHX"], status: "PLANNED", offsetDays: 0, completedStops: 0 },
   { name: "Mars Ganja coverage", agentCode: "M-005", storeCodes: ["BRV-GNJ1", "ARZ-GNJ1", "MGZ-GNJ1", "MGZ-GNJ2"], status: "PLANNED", offsetDays: 0, completedStops: 0 },
@@ -159,11 +160,90 @@ const MARS_ROUTE_SCENARIOS = [
   { name: "Mars Sumqayit completed route", agentCode: "M-002", storeCodes: ["BIZ-SMQ1", "NPT-SMQ1", "MGZ-SMQ1", "MGZ-SMQ2"], status: "COMPLETED", offsetDays: -1, completedStops: 4 },
 ] as const
 
+// Browser/API smoke fixtures must use these namespaces and are removed before
+// the customer-facing demo baseline is rebuilt. They are never part of seed data.
+const E2E_ROUTE_PREFIXES = ["Codex smoke", "UI E2E"] as const
+const E2E_TASK_ID_PREFIXES = ["task-mob-e2e"] as const
+const E2E_TASK_TITLE_MARKERS = ["мобильный тест", "UI E2E"] as const
+
 function startOfToday(offsetDays = 0) {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() + offsetDays)
   return d
+}
+
+async function deleteDemoTasks(organizationId: string, taskIds: string[]) {
+  if (taskIds.length === 0) return
+  const photos = await prisma.photoSubmission.findMany({
+    where: { organizationId, taskId: { in: taskIds } },
+    select: { id: true },
+  })
+  const photoIds = photos.map((photo) => photo.id)
+  await prisma.humanReview.deleteMany({
+    where: {
+      organizationId,
+      OR: [
+        { taskId: { in: taskIds } },
+        ...(photoIds.length ? [{ photoSubmissionId: { in: photoIds } }] : []),
+      ],
+    },
+  })
+  if (photoIds.length) {
+    await prisma.goldenReference.updateMany({
+      where: { organizationId, photoSubmissionId: { in: photoIds } },
+      data: { photoSubmissionId: null },
+    })
+    await prisma.photoSubmission.deleteMany({ where: { organizationId, id: { in: photoIds } } })
+  }
+  await prisma.task.deleteMany({ where: { organizationId, id: { in: taskIds } } })
+}
+
+async function cleanupE2eArtifacts(organizationId: string) {
+  const routes = await prisma.route.findMany({
+    where: {
+      organizationId,
+      OR: E2E_ROUTE_PREFIXES.map((prefix) => ({ name: { startsWith: prefix } })),
+    },
+    select: { id: true },
+  })
+  const routeIds = routes.map((route) => route.id)
+  if (routeIds.length) {
+    const stops = await prisma.routeStop.findMany({
+      where: { routeId: { in: routeIds } },
+      select: { id: true },
+    })
+    const stopIds = stops.map((stop) => stop.id)
+    const visits = stopIds.length
+      ? await prisma.visit.findMany({
+          where: { organizationId, routeStopId: { in: stopIds } },
+          select: { id: true },
+        })
+      : []
+    const visitIds = visits.map((visit) => visit.id)
+    if (visitIds.length) {
+      await prisma.photoSubmission.updateMany({
+        where: { organizationId, visitId: { in: visitIds } },
+        data: { visitId: null },
+      })
+      await prisma.order.deleteMany({ where: { organizationId, visitId: { in: visitIds } } })
+      await prisma.visit.deleteMany({ where: { organizationId, id: { in: visitIds } } })
+    }
+    await prisma.route.deleteMany({ where: { organizationId, id: { in: routeIds } } })
+  }
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      organizationId,
+      OR: [
+        ...E2E_TASK_ID_PREFIXES.map((prefix) => ({ id: { startsWith: prefix } })),
+        ...E2E_TASK_TITLE_MARKERS.map((marker) => ({ title: { contains: marker } })),
+      ],
+    },
+    select: { id: true },
+  })
+  await deleteDemoTasks(organizationId, tasks.map((task) => task.id))
+  return { routes: routeIds.length, tasks: tasks.length }
 }
 
 async function ensureRegion(organizationId: string) {
@@ -659,15 +739,21 @@ async function ensureAssignmentTaskAndProof(input: {
       },
     }))
 
-  const task =
-    (await prisma.task.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        planogramVersionId: input.planogramVersionId,
-        title: "Выполнить выкладку OTC-зоны",
-      },
-    })) ??
+  const existingDemoPhoto = await prisma.photoSubmission.findFirst({
+    where: { organizationId: input.organizationId, clientPhotoId: "demo-proof-001" },
+    select: { taskId: true },
+  })
+  const taskCandidates = await prisma.task.findMany({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      title: "Выполнить выкладку OTC-зоны",
+    },
+    orderBy: { createdAt: "asc" },
+  })
+  let task =
+    taskCandidates.find((candidate) => candidate.id === existingDemoPhoto?.taskId) ??
+    taskCandidates[0] ??
     (await prisma.task.create({
       data: {
         organizationId: input.organizationId,
@@ -681,86 +767,105 @@ async function ensureAssignmentTaskAndProof(input: {
         dueAt: startOfToday(2),
       },
     }))
-  await prisma.task.update({
+  await deleteDemoTasks(
+    input.organizationId,
+    taskCandidates.filter((candidate) => candidate.id !== task.id).map((candidate) => candidate.id),
+  )
+  task = await prisma.task.update({
     where: { id: task.id },
     data: {
+      storeId: input.storeId,
+      planogramVersionId: input.planogramVersionId,
       assignmentId: assignment.id,
       assigneeId: input.mobileUserId,
       status: "PHOTO_SUBMITTED",
       dueAt: startOfToday(2),
+      completedAt: null,
     },
   })
-  if (!(await prisma.taskStatusHistory.findFirst({ where: { taskId: task.id, toStatus: "PHOTO_SUBMITTED" } }))) {
-    await prisma.taskStatusHistory.createMany({
-      data: [
-        { taskId: task.id, fromStatus: null, toStatus: "NEW" },
-        { taskId: task.id, fromStatus: "NEW", toStatus: "IN_PROGRESS", byUserId: input.mobileUserId },
-        {
-          taskId: task.id,
-          fromStatus: "IN_PROGRESS",
-          toStatus: "PHOTO_SUBMITTED",
-          byUserId: input.mobileUserId,
-        },
-      ],
-    })
-  }
+  const historyDay = startOfToday(-1)
+  await prisma.taskStatusHistory.deleteMany({ where: { taskId: task.id } })
+  await prisma.taskStatusHistory.createMany({
+    data: [
+      { taskId: task.id, fromStatus: null, toStatus: "NEW", createdAt: new Date(historyDay.getTime() + 8 * 60 * 60 * 1000) },
+      { taskId: task.id, fromStatus: "NEW", toStatus: "IN_PROGRESS", byUserId: input.mobileUserId, createdAt: new Date(historyDay.getTime() + 9 * 60 * 60 * 1000) },
+      {
+        taskId: task.id,
+        fromStatus: "IN_PROGRESS",
+        toStatus: "PHOTO_SUBMITTED",
+        byUserId: input.mobileUserId,
+        createdAt: new Date(historyDay.getTime() + 10 * 60 * 60 * 1000),
+      },
+    ],
+  })
 
   const photoKey = `photos/${input.organizationId}/${task.id}/demo-proof-001.svg`
-  const photo =
-    (await prisma.photoSubmission.findFirst({
-      where: { organizationId: input.organizationId, clientPhotoId: "demo-proof-001" },
-    })) ??
-    (await prisma.photoSubmission.create({
-      data: {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        taskId: task.id,
-        userId: input.mobileUserId,
-        url: photoKey,
-        thumbnailUrl: photoKey,
-        clientPhotoId: "demo-proof-001",
-        takenAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        qualityScore: 0.74,
-        exif: {
-          qualityCheck: {
-            status: "REVIEW",
-            score: 0.74,
-            dimensions: { width: 1280, height: 960 },
-            issues: ["demo_photo_review"],
-            checkedAt: new Date().toISOString(),
-          },
-        },
+  const photoData = {
+    storeId: input.storeId,
+    taskId: task.id,
+    userId: input.mobileUserId,
+    url: photoKey,
+    thumbnailUrl: photoKey,
+    takenAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    qualityScore: 0.74,
+    analysisStatus: "COMPLETED" as const,
+    exif: {
+      qualityCheck: {
+        status: "REVIEW",
+        score: 0.74,
+        dimensions: { width: 1280, height: 960 },
+        issues: ["demo_photo_review"],
+        checkedAt: new Date().toISOString(),
       },
-    }))
+    },
+  }
+  const existingPhoto = await prisma.photoSubmission.findFirst({
+    where: { organizationId: input.organizationId, clientPhotoId: "demo-proof-001" },
+  })
+  const photo = existingPhoto
+    ? await prisma.photoSubmission.update({ where: { id: existingPhoto.id }, data: photoData })
+    : await prisma.photoSubmission.create({
+        data: {
+          organizationId: input.organizationId,
+          clientPhotoId: "demo-proof-001",
+          ...photoData,
+        },
+      })
 
-  const review =
-    (await prisma.humanReview.findFirst({
+  const existingReview = await prisma.humanReview.findFirst({
       where: {
         organizationId: input.organizationId,
         photoSubmissionId: photo.id,
         reason: "PHOTO_QUALITY",
       },
-    })) ??
-    (await prisma.humanReview.create({
+    })
+  const qualityReviewData = {
+    status: "PENDING" as const,
+    taskId: task.id,
+    photoSubmissionId: photo.id,
+    planogramVersionId: input.planogramVersionId,
+    score: 0.74,
+    findings: {
+      qualityCheck: {
+        status: "REVIEW",
+        score: 0.74,
+        issues: ["demo_photo_review"],
+        checkedAt: new Date().toISOString(),
+      },
+    },
+    note: "Демо: фото отправлено из мобильного сценария и ожидает проверки офиса.",
+    reviewedById: null,
+    reviewedAt: null,
+  }
+  const review = existingReview
+    ? await prisma.humanReview.update({ where: { id: existingReview.id }, data: qualityReviewData })
+    : await prisma.humanReview.create({
       data: {
         organizationId: input.organizationId,
         reason: "PHOTO_QUALITY",
-        status: "PENDING",
-        taskId: task.id,
-        photoSubmissionId: photo.id,
-        planogramVersionId: input.planogramVersionId,
-        score: 0.74,
-        findings: {
-          qualityCheck: {
-            status: "REVIEW",
-            score: 0.74,
-            issues: ["demo_photo_review"],
-            checkedAt: new Date().toISOString(),
-          },
-        },
-        note: "Демо: фото отправлено из мобильного сценария и ожидает проверки офиса.",
+        ...qualityReviewData,
       },
-    }))
+    })
 
   const goldenReference =
     (await prisma.goldenReference.findFirst({
@@ -899,16 +1004,19 @@ async function ensureAssignmentTaskAndProof(input: {
     },
     select: { id: true, status: true },
   })
-  if (existingVisionReview?.status === "PENDING") {
+  if (existingVisionReview) {
     await prisma.humanReview.update({
       where: { id: existingVisionReview.id },
       data: {
+        status: "PENDING",
         taskId: task.id,
         planogramVersionId: input.planogramVersionId,
         goldenReferenceId: goldenReference.id,
         score: compliance.score,
         findings: visionFindings,
         note: "Демо: vision compliance создан на stub-провайдере и требует ручной проверки.",
+        reviewedById: null,
+        reviewedAt: null,
       },
     })
   } else if (!existingVisionReview) {
@@ -1040,8 +1148,13 @@ async function ensureFieldForceScenario(input: {
   organizationId: string
   formatId: string
   mobilePasswordHash: string
+  primaryStoreId: string
 }) {
   const storesByCode = await ensureMarsRouteStores(input.organizationId, input.formatId)
+  const primaryStore = await prisma.store.findFirst({
+    where: { id: input.primaryStoreId, organizationId: input.organizationId },
+  })
+  if (primaryStore) storesByCode.set("DEMO-001", primaryStore)
   const { team, agentsByCode } = await ensureMarsRouteAgents(input.organizationId, input.mobilePasswordHash)
 
   await prisma.route.updateMany({
@@ -1308,10 +1421,11 @@ async function main() {
   })
 
   const passwordHash = await hash(DEMO_PASSWORD, ARGON_OPTS)
+  const cleanup = await cleanupE2eArtifacts(org.id)
   for (const [email, name, role] of USERS) {
     await prisma.user.upsert({
       where: { organizationId_email: { organizationId: org.id, email } },
-      update: { name, role },
+      update: { name, role, passwordHash },
       create: { organizationId: org.id, email, name, role, passwordHash },
     })
   }
@@ -1363,35 +1477,72 @@ async function main() {
     planogramVersionId: planogramVersion.id,
     mobileUserId: mobileUser.id,
   })
-  const fieldForce = await ensureFieldForceScenario({
+  await ensureFieldForceScenario({
     organizationId: org.id,
     formatId: format.id,
     mobilePasswordHash,
+    primaryStoreId: store.id,
   })
-  const proofVisit = fieldForce.visits.find((visit) => visit.status === "COMPLETED") ?? fieldForce.visits[0]
-  if (proofVisit) await prisma.photoSubmission.update({ where: { id: proof.photo.id }, data: { visitId: proofVisit.id } })
+  const proofVisit = await prisma.visit.findFirst({
+    where: { organizationId: org.id, storeId: store.id, status: "COMPLETED" },
+    orderBy: { checkOutAt: "desc" },
+    select: { id: true },
+  })
+  await prisma.photoSubmission.update({
+    where: { id: proof.photo.id },
+    data: { visitId: proofVisit?.id ?? null },
+  })
   await ensureAnalyticsSnapshots({
     organizationId: org.id,
     storeId: store.id,
     products,
   })
 
-  // Smoke-check через tenant client: если скоуп сломан, seed падает здесь.
-  await Promise.all([
-    db.store.count(),
-    db.product.count(),
+  // Readiness-check через tenant client: зелёный статус печатается только
+  // после проверки целостности customer-facing demo baseline.
+  const [stores, productsCount, floorPlans, planograms, tasks, reviews, agents, routes, visits, sales, stocks, prices, e2eRoutes, e2eTasks] = await Promise.all([
+    db.store.count({ where: { code: "DEMO-001", isActive: true } }),
+    db.product.count({ where: { isActive: true } }),
     db.floorPlan.count(),
     db.planogram.count(),
-    db.task.count(),
-    db.humanReview.count(),
+    db.task.count({ where: { title: "Выполнить выкладку OTC-зоны", status: "PHOTO_SUBMITTED" } }),
+    db.humanReview.count({ where: { status: "PENDING" } }),
     db.fieldAgent.count(),
-    db.route.count(),
+    db.route.count({ where: { isActive: true } }),
     db.visit.count(),
     db.salesSnapshot.count(),
     db.stockSnapshot.count(),
     db.priceSnapshot.count(),
+    db.route.count({ where: { OR: E2E_ROUTE_PREFIXES.map((prefix) => ({ name: { startsWith: prefix } })) } }),
+    db.task.count({
+      where: {
+        OR: [
+          ...E2E_TASK_ID_PREFIXES.map((prefix) => ({ id: { startsWith: prefix } })),
+          ...E2E_TASK_TITLE_MARKERS.map((marker) => ({ title: { contains: marker } })),
+        ],
+      },
+    }),
   ])
+  const readiness = {
+    stores,
+    products: productsCount,
+    floorPlans,
+    planograms,
+    tasks,
+    reviews,
+    agents,
+    routes,
+    visits,
+    sales,
+    stocks,
+    prices,
+    e2eRoutes,
+    e2eTasks,
+  }
+  const ready = stores === 1 && productsCount >= 6 && floorPlans > 0 && planograms > 0 && tasks === 1 && reviews >= 2 && agents >= 5 && routes >= 5 && visits > 0 && sales > 0 && stocks > 0 && prices > 0 && e2eRoutes === 0 && e2eTasks === 0
+  if (!ready) throw new Error(`Demo readiness-check failed: ${JSON.stringify(readiness)}`)
 
+  console.log(`Удалены e2e artifacts: routes=${cleanup.routes}, tasks=${cleanup.tasks}`)
   console.log(`Demo tenant готов: org=${org.slug} (${org.id})`)
   console.log(`Логины (пароль у всех: ${DEMO_PASSWORD}):`)
   for (const [email, , role] of USERS) console.log(`  ${email}  [${role}]`)

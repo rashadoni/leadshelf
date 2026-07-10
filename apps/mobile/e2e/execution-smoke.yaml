@@ -1,0 +1,47 @@
+appId: com.leadshelf.mobile
+name: Android offline execution smoke
+tags:
+  - smoke
+  - android
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- setLocation:
+    latitude: 40.3777
+    longitude: 49.8920
+- tapOn: "Şirkət kodu"
+- inputText: "demo"
+- tapOn: "Əməkdaş kodu"
+- inputText: "M-001"
+- tapOn: "PIN"
+- inputText: "1234"
+- tapOn: "Daxil ol"
+- extendedWaitUntil:
+    visible: "Marşrut"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "Check-in"
+    direction: DOWN
+- tapOn: "Check-in"
+- tapOn: "Vizit"
+- extendedWaitUntil:
+    visible: "Sifariş yarat"
+    timeout: 15000
+- tapOn: "Sifariş yarat"
+- extendedWaitUntil:
+    visible: "Əlavə et"
+    timeout: 15000
+- tapOn:
+    text: "Əlavə et"
+    index: 0
+- tapOn: "Sifarişi təsdiqlə"
+- assertVisible: "Sifarişlər"
+- tapOn: "Vizit"
+- extendedWaitUntil:
+    visible: "Bitir"
+    timeout: 30000
+- tapOn: "Bitir"
+- assertVisible: "Aktiv vizit yoxdur"
+- takeScreenshot: execution-smoke-complete

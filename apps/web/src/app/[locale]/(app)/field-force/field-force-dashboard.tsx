@@ -226,7 +226,7 @@ export function FieldForceDashboard() {
           <button
             type="button"
             aria-pressed={showGeofence}
-            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showGeofence ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
+            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showGeofence ? "border-indigo-600 bg-indigo-600 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
             onClick={() => setShowGeofence(!showGeofence)}
           >
             <Circle className="mr-1 h-3.5 w-3.5" /> {t("geofence")}
@@ -234,7 +234,7 @@ export function FieldForceDashboard() {
           <button
             type="button"
             aria-pressed={showHeatmap}
-            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showHeatmap ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
+            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showHeatmap ? "border-indigo-600 bg-indigo-600 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
             onClick={() => setShowHeatmap(!showHeatmap)}
           >
             <Flame className="mr-1 h-3.5 w-3.5" /> {t("heatmap")}
@@ -246,19 +246,19 @@ export function FieldForceDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <button className={`rounded-md px-3 py-1.5 text-sm ${activeFilter === "all" ? "bg-neutral-900 text-white" : "border border-neutral-300 bg-white"}`} onClick={() => setActiveFilter("all")}>
+        <button className={`rounded-md px-3 py-1.5 text-sm ${activeFilter === "all" ? "bg-indigo-600 text-white" : "border border-neutral-300 bg-white"}`} onClick={() => setActiveFilter("all")}>
           {t("all", { count: statusCounts.total })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "checked_in" ? "bg-neutral-900 text-white" : "border border-green-200 bg-white text-green-700"}`} onClick={() => setActiveFilter("checked_in")}>
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "checked_in" ? "bg-indigo-600 text-white" : "border border-green-200 bg-white text-green-700"}`} onClick={() => setActiveFilter("checked_in")}>
           <MapPin className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.checkedIn"), count: statusCounts.checkedIn })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "on_road" ? "bg-neutral-900 text-white" : "border border-blue-200 bg-white text-blue-700"}`} onClick={() => setActiveFilter("on_road")}>
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "on_road" ? "bg-indigo-600 text-white" : "border border-blue-200 bg-white text-blue-700"}`} onClick={() => setActiveFilter("on_road")}>
           <Navigation className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.onRoad"), count: statusCounts.onRoad })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "late" ? "bg-neutral-900 text-white" : "border border-red-200 bg-white text-red-700"}`} onClick={() => setActiveFilter("late")}>
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "late" ? "bg-indigo-600 text-white" : "border border-red-200 bg-white text-red-700"}`} onClick={() => setActiveFilter("late")}>
           <AlertTriangle className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.late"), count: statusCounts.late })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "offline" ? "bg-neutral-900 text-white" : "border border-neutral-300 bg-white text-neutral-600"}`} onClick={() => setActiveFilter("offline")}>
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "offline" ? "bg-indigo-600 text-white" : "border border-neutral-300 bg-white text-neutral-600"}`} onClick={() => setActiveFilter("offline")}>
           <WifiOff className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.offline"), count: statusCounts.offline })}
         </button>
       </div>

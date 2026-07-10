@@ -75,6 +75,7 @@ export interface LocalStore {
   getCursors(): Promise<SyncCursors>
   setCursors(c: SyncCursors): Promise<void>
   pendingOutbox(limit?: number): Promise<OutboxRow[]>
+  outboxDiagnostics(): Promise<OutboxDiagnostics>
   markOutbox(clientOpId: string, status: OutboxRow["status"], detail?: unknown): Promise<void>
   bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
   pendingPhotos(): Promise<PhotoQueueRow[]>
@@ -82,6 +83,13 @@ export interface LocalStore {
   bumpPhotoAttempts(clientPhotoIds: string[]): Promise<void>
   quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
   quarantinedPhotoCount(): Promise<number>
+}
+
+export interface OutboxDiagnostics {
+  pendingOps: number
+  conflictOps: number
+  rejectedOps: number
+  oldestPendingAt: string | null
 }
 
 export type SyncPhase =
@@ -100,5 +108,9 @@ export interface SyncStatus {
   pendingOps: number
   pendingPhotos: number
   quarantinedPhotos: number
+  conflictOps: number
+  rejectedOps: number
+  oldestPendingAgeMs: number | null
+  lastDurationMs: number | null
   error: string | null
 }

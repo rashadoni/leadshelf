@@ -44,6 +44,15 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
       calls.push("pendingOutbox")
       return state.outbox.filter((o) => o.status === "pending")
     },
+    async outboxDiagnostics() {
+      const pending = state.outbox.filter((o) => o.status === "pending")
+      return {
+        pendingOps: pending.length,
+        conflictOps: state.outbox.filter((o) => o.status === "conflict").length,
+        rejectedOps: state.outbox.filter((o) => o.status === "rejected").length,
+        oldestPendingAt: pending.map((o) => o.clientCreatedAt).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
+      }
+    },
     async markOutbox(id, status) {
       calls.push(`markOutbox:${id}:${status}`)
       const op = state.outbox.find((o) => o.clientOpId === id)
@@ -292,15 +301,36 @@ describe("SyncManager", () => {
       clientOpId: "op-offline-0001",
       kind: "task.status",
       payload: { taskId: "t1", expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      clientCreatedAt: "2026-07-10T09:55:00.000Z",
       status: "pending",
       attempts: 0,
+    }, {
+      clientOpId: "op-offline-conflict",
+      kind: "task.status",
+      payload: { taskId: "t1", expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      status: "conflict",
+      attempts: 1,
+    }, {
+      clientOpId: "op-offline-rejected",
+      kind: "task.status",
+      payload: { taskId: "t1", expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      status: "rejected",
+      attempts: 1,
     })
     const api = makeApi()
     const pullSpy = vi.spyOn(api, "pull")
-    const m = new SyncManager({ api, store, isOnline: async () => false })
+    const m = new SyncManager({
+      api,
+      store,
+      now: () => new Date("2026-07-10T10:00:00.000Z"),
+      isOnline: async () => false,
+    })
     const s = await m.runSync()
     expect(s.phase).toBe("offline")
     expect(s.pendingOps).toBe(1)
+    expect(s.conflictOps).toBe(1)
+    expect(s.rejectedOps).toBe(1)
+    expect(s.oldestPendingAgeMs).toBe(5 * 60 * 1000)
     expect(pullSpy).not.toHaveBeenCalled()
   })
 
