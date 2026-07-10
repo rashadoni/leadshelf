@@ -18,7 +18,7 @@ import {
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import type { RouteRow, TaskRow, VisitRow } from "../../../src/sync/ports"
 import { useSync } from "../../../src/sync/sync-context"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatLongDate, minutesBetween } from "../../../src/i18n/date-format"
 import { tokenStore } from "../../../src/auth/token-store"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -242,7 +242,7 @@ export default function RouteTab() {
                                   {task.title}
                                 </Text>
                                 <Text style={styles.stopTaskMeta}>
-                                  {t("agentTask")} · {task.status}
+                                  {t("agentTask")} · {t(`status_${task.status}` as MessageKey)}
                                 </Text>
                               </View>
                               <Text style={styles.openTask}>{t("openTask")}</Text>

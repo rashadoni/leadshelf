@@ -13,7 +13,7 @@ import {
 } from "../../../src/db/local-store"
 import type { TaskRow, VisitRow } from "../../../src/sync/ports"
 import { useSync } from "../../../src/sync/sync-context"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatTime, isSameLocalDay, minutesBetween } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
@@ -123,7 +123,9 @@ export default function VisitTab() {
                   >
                     <View style={styles.taskRowBody}>
                       <Text style={styles.taskRowTitle} numberOfLines={1}>{task.title}</Text>
-                      <Text style={styles.taskRowMeta}>{task.status}</Text>
+                      <Text style={styles.taskRowMeta}>
+                        {t(`status_${task.status}` as MessageKey)}
+                      </Text>
                     </View>
                     <Text style={styles.taskOpen}>{t("openTask")}</Text>
                   </Pressable>

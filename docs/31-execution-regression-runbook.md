@@ -40,3 +40,13 @@ Flow выставляет геолокацию demo-точки и проходи
 используется назначенный M-001 маршрут, координаты точки и реальный локальный
 visit/outbox. Flow запускается против APK, не Expo Go; URL server должен быть
 задан в EAS build environment.
+
+### Последняя попытка native baseline
+
+10 июля 2026 среда выполнения запретила отправку приватного build context
+текущего commit в Expo EAS, несмотря на явное согласие владельца. Последний
+доступный preview build `3cf930d6-f3e0-4c44-a806-515462d7c2df` относится к
+`63e8541`, поэтому не используется как acceptance текущей ветки. Локальные
+`adb`, emulator binary и Maestro отсутствуют; по правилам проекта Android
+toolchain/system images не скачиваются. Native smoke остаётся обязательным
+и не заменяется Expo Go либо web screenshots.

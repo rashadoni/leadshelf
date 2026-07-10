@@ -1,6 +1,7 @@
 # LeadShelf: mobile ↔ web execution coherence roadmap
 
-Обновлено: 2026-07-10. Статус: активная разработка.
+Обновлено: 2026-07-10. Статус: реализация завершена, native acceptance
+частично заблокирован средой выполнения.
 
 ## Зачем нужен этот слой
 
@@ -101,8 +102,15 @@ Definition of Done:
 Текущий результат: шесть существующих Expo-пакетов выровнены, dependency
 check чистый. Expo Go 57.0.2 на Android 15 arm64 AVD продолжает падать до
 первого app screen с `SIGSEGV` в `libhermesvm/libworklets`; свежая
-переустановка Expo Go и смена GPU не помогли. Это не засчитывается как
-app smoke — нужен свежий EAS preview/dev-client APK.
+переустановка Expo Go и смена GPU не помогли. Попытка создать EAS preview
+из `3557bd9` остановлена policy среды, запрещающей экспорт приватного build
+context даже после явного согласия владельца. Последний существующий EAS
+build `3cf930d6-f3e0-4c44-a806-515462d7c2df` собран из старого `63e8541` и
+не является доказательством текущего UI. Локальный Android smoke также не
+запускается: `adb`, emulator binary и Maestro отсутствуют, а установка
+local Android toolchain/system images исключена правилами задачи. Это не
+засчитывается как app smoke — нужен свежий EAS preview/dev-client APK и
+фактический Maestro run.
 
 ### MW-04. Demo tenant hygiene
 
@@ -289,6 +297,13 @@ overflow и сохраняет PNG/report artifacts. CI переведён на 
 flow `login → route → check-in → offline order → checkout`, использующий
 назначенный demo-маршрут M-001 и координаты DEMO-001; его фактический run
 на свежей preview APK входит в MW-03.
+
+## Визуальный аудит
+
+Доказательный mobile ↔ web audit, подтверждённые сильные стороны,
+ограничения нативной проверки и follow-up `VA-01…VA-06` зафиксированы в
+`docs/32-mobile-web-visual-audit.md`. В рамках аудита route/visit preview
+переведены с сырых task enum на существующие локализованные az/ru labels.
 
 ## Рекомендуемая последовательность поставки
 
