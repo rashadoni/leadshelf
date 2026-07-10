@@ -1,11 +1,25 @@
 // Нижняя навигация приложения агента: Маршрут / Визит / Панель / Заказы / Профиль.
-import { Tabs } from "expo-router"
+import { useCallback, useEffect, useState } from "react"
+import { Tabs, useFocusEffect } from "expo-router"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { countOpenTasks } from "../../../src/db/local-store"
 import { colors } from "../../../src/theme"
 import { t, useLocale } from "../../../src/i18n"
+import { useSync } from "../../../src/sync/sync-context"
 
 export default function TabsLayout() {
   useLocale() // ре-рендер подписей вкладок при смене языка в профиле
+  const { status } = useSync()
+  const [openTaskCount, setOpenTaskCount] = useState(0)
+  const reloadBadge = useCallback(() => setOpenTaskCount(countOpenTasks()), [])
+  useFocusEffect(reloadBadge)
+
+  useEffect(() => {
+    if (status.phase === "idle") reloadBadge()
+  }, [reloadBadge, status.lastSyncAt, status.phase])
+
+  const routeBadge = openTaskCount > 99 ? "99+" : openTaskCount || undefined
+
   return (
     <Tabs
       screenOptions={{
@@ -20,6 +34,12 @@ export default function TabsLayout() {
           paddingBottom: 8,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarBadgeStyle: {
+          backgroundColor: colors.danger,
+          color: colors.headerText,
+          fontSize: 10,
+          fontWeight: "800",
+        },
       }}
     >
       <Tabs.Screen
@@ -27,6 +47,7 @@ export default function TabsLayout() {
         options={{
           title: t("tabRoute"),
           tabBarIcon: ({ color }) => <TabIcon name="route" color={color} />,
+          tabBarBadge: routeBadge,
         }}
       />
       <Tabs.Screen

@@ -55,7 +55,23 @@ export default function OrdersTab() {
         renderItem={({ item }) => {
           const store = getStore(item.storeId)
           const createdAt = item.clientCreatedAt ? item.clientCreatedAt.slice(0, 16).replace("T", " ") : ""
-          const pending = item.status === "pending"
+          const statusKey = item.status === "pending"
+            ? "orderQueued"
+            : item.status === "rejected"
+              ? "orderRejected"
+              : item.status === "conflict"
+                ? "orderConflict"
+                : "orderSynced"
+          const statusStyle = item.status === "pending"
+            ? styles.statusPending
+            : item.status === "rejected" || item.status === "conflict"
+              ? styles.statusFailed
+              : styles.statusDone
+          const statusTextStyle = item.status === "pending"
+            ? styles.statusTextPending
+            : item.status === "rejected" || item.status === "conflict"
+              ? styles.statusTextFailed
+              : styles.statusTextDone
           return (
             <View style={styles.card}>
               <View style={styles.cardBody}>
@@ -63,12 +79,12 @@ export default function OrdersTab() {
                   {store?.name ?? item.storeId}
                 </Text>
                 <Text style={styles.meta}>
-                  {item.lineCount} SKU · {createdAt}
+                  {item.lineCount} {t("orderProductKinds")} · {createdAt}
                 </Text>
               </View>
-              <View style={[styles.statusPill, pending ? styles.statusPending : styles.statusDone]}>
-                <Text style={[styles.statusText, pending ? styles.statusTextPending : styles.statusTextDone]}>
-                  {pending ? t("orderQueued") : t("orderSynced")}
+              <View style={[styles.statusPill, statusStyle]}>
+                <Text style={[styles.statusText, statusTextStyle]}>
+                  {t(statusKey)}
                 </Text>
               </View>
             </View>
@@ -90,7 +106,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#F1F0FB",
+    backgroundColor: colors.primarySoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
@@ -112,9 +128,11 @@ const styles = StyleSheet.create({
   storeName: { fontSize: 15, fontWeight: "700", color: colors.text },
   meta: { fontSize: 12, color: colors.muted, marginTop: 2 },
   statusPill: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  statusPending: { backgroundColor: "#FEF3C7" },
+  statusPending: { backgroundColor: colors.warningBg },
   statusDone: { backgroundColor: colors.successBg },
+  statusFailed: { backgroundColor: colors.dangerBg },
   statusText: { fontSize: 11, fontWeight: "700" },
   statusTextPending: { color: colors.warning },
   statusTextDone: { color: colors.successDark },
+  statusTextFailed: { color: colors.dangerPressed },
 })

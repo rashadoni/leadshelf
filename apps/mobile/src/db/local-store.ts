@@ -509,6 +509,14 @@ export function listTasks(): TaskRow[] {
     .map(mapTaskRow)
 }
 
+/** Совпадает с определением «открытых» на локальном dashboard. */
+export function countOpenTasks(): number {
+  const row = db.getFirstSync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM tasks WHERE status NOT IN ('COMPLETED', 'EMPTY')",
+  )
+  return row?.count ?? 0
+}
+
 export function getTask(id: string): TaskRow | null {
   const row = db.getFirstSync<TaskDbRow>("SELECT * FROM tasks WHERE id=?", [id])
   return row ? mapTaskRow(row) : null
@@ -732,6 +740,53 @@ function unknownRecord(value: unknown): Record<string, unknown> | null {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
+}
+
+export interface LocalCatalogProductRow {
+  id: string
+  sku: string
+  name: string
+  unit: string | null
+  brandName: string | null
+  barcode: string | null
+}
+
+/**
+ * Каталог, который уже есть на устройстве внутри immutable planogram bundles.
+ * Отдельную sync-коллекцию намеренно не добавляем: форма заказа остаётся в
+ * рамках замороженного mobile-протокола и работает без сети.
+ */
+export function listLocalCatalogProducts(): LocalCatalogProductRow[] {
+  const rows = db.getAllSync<{ json: string }>("SELECT json FROM planogram_bundles")
+  const products = new Map<string, LocalCatalogProductRow>()
+
+  for (const row of rows) {
+    try {
+      const bundle = unknownRecord(JSON.parse(row.json) as unknown)
+      const placements = Array.isArray(bundle?.placements) ? bundle.placements : []
+      for (const rawPlacement of placements) {
+        const product = unknownRecord(unknownRecord(rawPlacement)?.product)
+        const id = stringValue(product?.id)
+        const sku = stringValue(product?.sku)
+        const name = stringValue(product?.name)
+        if (!id || !sku || !name || products.has(id)) continue
+        products.set(id, {
+          id,
+          sku,
+          name,
+          unit: stringValue(product?.unit),
+          brandName: stringValue(product?.brandName),
+          barcode: stringValue(product?.barcode),
+        })
+      }
+    } catch {
+      // Повреждённый/старый bundle не должен ломать офлайн-форму заказа.
+    }
+  }
+
+  return [...products.values()].sort(
+    (a, b) => a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku),
+  )
 }
 
 function applyOutboxResultSideEffects(
@@ -1034,16 +1089,17 @@ export function listQueuedOrders(): QueuedOrderRow[] {
 }
 
 export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: string }): void {
+  const payload = orderCreateRequestSchema.parse({
+    storeId: input.storeId,
+    visitId: input.visitId ?? null,
+    lines: input.lines,
+  })
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [
       input.clientOpId,
       "order.create",
-      JSON.stringify({
-        storeId: input.storeId,
-        visitId: input.visitId ?? null,
-        lines: input.lines,
-      }),
+      JSON.stringify(payload),
       new Date().toISOString(),
     ],
   )

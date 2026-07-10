@@ -1,7 +1,7 @@
 // Главная вкладка «Маршрут»: приветствие, маршрут на сегодня, активный визит.
 // Дизайн — по образцу владельца (индиго-хедер, карточки, зелёная карточка визита).
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, Vibration, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import * as Crypto from "expo-crypto"
 import { router, useFocusEffect } from "expo-router"
@@ -30,13 +30,31 @@ function isLocalVisit(visit: VisitRow | undefined): boolean {
 function EmptyPin() {
   return (
     <Svg width={72} height={72} viewBox="0 0 72 72" fill="none">
-      <Circle cx={36} cy={36} r={34} fill="#F1F0FB" />
+      <Circle cx={36} cy={36} r={34} fill={colors.primarySoft} />
       <Path
         d="M36 22c-5 0-9 4-9 9 0 6.4 9 17 9 17s9-10.6 9-17c0-5-4-9-9-9Z"
-        fill="#EF4444"
+        fill={colors.danger}
       />
-      <Circle cx={36} cy={31} r={3.4} fill="#FFF" />
+      <Circle cx={36} cy={31} r={3.4} fill={colors.headerText} />
     </Svg>
+  )
+}
+
+function RouteCardSkeleton() {
+  return (
+    <View style={[styles.card, styles.skeletonCard]}>
+      <View style={[styles.skeletonLine, styles.skeletonTitle]} />
+      {[0, 1, 2].map((row) => (
+        <View key={row} style={styles.skeletonRow}>
+          <View style={styles.skeletonDot} />
+          <View style={styles.skeletonBody}>
+            <View style={[styles.skeletonLine, styles.skeletonStore]} />
+            <View style={[styles.skeletonLine, styles.skeletonMeta]} />
+          </View>
+          <View style={styles.skeletonButton} />
+        </View>
+      ))}
+    </View>
   )
 }
 
@@ -113,6 +131,7 @@ export default function RouteTab() {
       latitude: deviceLocation.latitude,
       longitude: deviceLocation.longitude,
     })
+    Vibration.vibrate(40)
     reload()
     void sync()
   }
@@ -122,11 +141,18 @@ export default function RouteTab() {
       clientOpId: `op-${Crypto.randomUUID()}`,
       visitId: visit.id,
     })
+    Vibration.vibrate(60)
     reload()
     void sync()
   }
 
   const activeVisitIsLocal = isLocalVisit(activeVisit)
+  const firstSyncLoading =
+    status.lastSyncAt === null &&
+    status.phase !== "offline" &&
+    status.phase !== "error" &&
+    status.phase !== "upgradeRequired"
+  const showRouteSkeleton = routes.length === 0 && (refreshing || firstSyncLoading)
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -143,7 +169,12 @@ export default function RouteTab() {
 
         <SyncBar />
 
-        {routes.length === 0 ? (
+        {showRouteSkeleton ? (
+          <View style={styles.skeletonList}>
+            <RouteCardSkeleton />
+            <RouteCardSkeleton />
+          </View>
+        ) : routes.length === 0 ? (
           <View style={[styles.card, styles.emptyCard]}>
             <EmptyPin />
             <Text style={styles.emptyTitle}>{t("noRouteToday")}</Text>
@@ -307,6 +338,24 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   emptyCard: { alignItems: "center", paddingVertical: 44, gap: 6 },
+  skeletonList: { paddingTop: 2 },
+  skeletonCard: { gap: 8 },
+  skeletonLine: { height: 10, borderRadius: radii.pill, backgroundColor: colors.skeleton },
+  skeletonTitle: { width: "48%", height: 14, backgroundColor: colors.skeletonStrong },
+  skeletonRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 10,
+  },
+  skeletonDot: { width: 10, height: 10, borderRadius: radii.pill, backgroundColor: colors.skeletonStrong },
+  skeletonBody: { flex: 1, gap: 7 },
+  skeletonStore: { width: "66%" },
+  skeletonMeta: { width: "82%", height: 8 },
+  skeletonButton: { width: 54, height: 28, borderRadius: radii.inner, backgroundColor: colors.skeletonStrong },
   emptyTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginTop: 14 },
   emptyHint: { fontSize: 13, color: colors.faint, textAlign: "center", paddingHorizontal: 24 },
   routeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
@@ -344,8 +393,8 @@ const styles = StyleSheet.create({
   moreTasks: { fontSize: 11, color: colors.muted, fontWeight: "600" },
   button: { borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 8 },
   checkoutButton: { backgroundColor: colors.success },
-  buttonDisabled: { backgroundColor: "#D4D4D8" },
-  buttonText: { color: "white", fontSize: 12, fontWeight: "700" },
+  buttonDisabled: { backgroundColor: colors.disabled },
+  buttonText: { color: colors.headerText, fontSize: 12, fontWeight: "700" },
   activeVisitCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -371,5 +420,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   finishButtonPressed: { backgroundColor: colors.dangerPressed },
-  finishButtonText: { color: "white", fontSize: 13, fontWeight: "800" },
+  finishButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
 })
