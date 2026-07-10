@@ -119,7 +119,7 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#f5f5f4" },
+  root: { flex: 1, backgroundColor: "#F4F4F6" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -130,11 +130,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#f5f5f4" },
+  root: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#F4F4F6" },
   card: { backgroundColor: "white", borderRadius: 20, padding: 24, gap: 14, elevation: 2 },
   localeRow: { flexDirection: "row", gap: 6, justifyContent: "flex-end" },
   localeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  localeActive: { backgroundColor: "#171717" },
+  localeActive: { backgroundColor: "#6366F1" },
   localeText: { color: "#737373", fontSize: 13, fontWeight: "600" },
   localeTextActive: { color: "white", fontSize: 13, fontWeight: "600" },
   title: { fontSize: 28, fontWeight: "800", color: "#1c1917" },
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   error: { color: "#dc2626", fontSize: 14, fontWeight: "600" },
   button: {
-    backgroundColor: "#171717",
+    backgroundColor: "#6366F1",
     borderRadius: 14,
     minHeight: 56,
     alignItems: "center",
@@ -160,6 +160,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonDisabled: { opacity: 0.4 },
-  buttonPressed: { backgroundColor: "#292524" },
+  buttonPressed: { backgroundColor: "#4F46E5" },
   buttonText: { color: "white", fontWeight: "800", fontSize: 18 },
 })
