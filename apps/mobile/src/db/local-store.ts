@@ -28,6 +28,11 @@ import type {
 } from "../sync/ports"
 import type { MobilePhotoUploadResponse } from "@leadshelf/api-contracts/mobile/v1"
 import { OPEN_TASK_STATUSES } from "../tasks/status"
+import {
+  parseQueuedOrderDetailCode,
+  parseQueuedOrderPayload,
+  type QueuedOrderLine,
+} from "../orders/queued-order"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -1058,6 +1063,9 @@ export interface QueuedOrderRow {
   storeId: string
   visitId: string | null
   lineCount: number
+  unitCount: number
+  lines: QueuedOrderLine[]
+  detailCode: string | null
 }
 
 /** Заказы из локальной очереди (order.create) для вкладки «Заказы». */
@@ -1067,26 +1075,20 @@ export function listQueuedOrders(): QueuedOrderRow[] {
     status: string
     clientCreatedAt: string
     payload: string
-  }>("SELECT clientOpId, status, clientCreatedAt, payload FROM outbox_ops WHERE kind='order.create' ORDER BY clientCreatedAt DESC")
+    detail: string | null
+  }>("SELECT clientOpId, status, clientCreatedAt, payload, detail FROM outbox_ops WHERE kind='order.create' ORDER BY clientCreatedAt DESC")
   return rows.map((row) => {
-    let storeId = ""
-    let visitId: string | null = null
-    let lineCount = 0
-    try {
-      const payload = JSON.parse(row.payload) as { storeId?: string; visitId?: string | null; lines?: unknown[] }
-      storeId = payload.storeId ?? ""
-      visitId = payload.visitId ?? null
-      lineCount = Array.isArray(payload.lines) ? payload.lines.length : 0
-    } catch {
-      // повреждённый payload не должен ронять экран
-    }
+    const payload = parseQueuedOrderPayload(row.payload)
     return {
       clientOpId: row.clientOpId,
       status: (row.status as QueuedOrderRow["status"]) ?? "pending",
       clientCreatedAt: row.clientCreatedAt,
-      storeId,
-      visitId,
-      lineCount,
+      storeId: payload.storeId,
+      visitId: payload.visitId,
+      lineCount: payload.lines.length,
+      unitCount: payload.unitCount,
+      lines: payload.lines,
+      detailCode: parseQueuedOrderDetailCode(row.detail),
     }
   })
 }

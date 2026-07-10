@@ -26,3 +26,27 @@ export function minutesBetween(fromIso: string, to: Date): number {
   if (!Number.isFinite(from)) return 0
   return Math.max(0, Math.floor((to.getTime() - from) / 60000))
 }
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0")
+}
+
+/** Локальное время без зависимости от системной ICU-локали. */
+export function formatTime(iso: string): string {
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return ""
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+/** Короткая дата и время для истории операций. */
+export function formatShortDateTime(iso: string, locale: Locale): string {
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return ""
+  return `${date.getDate()} ${MONTHS_GENITIVE[locale][date.getMonth()]}, ${formatTime(iso)}`
+}
+
+export function isSameLocalDay(left: Date, right: Date): boolean {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate()
+}
