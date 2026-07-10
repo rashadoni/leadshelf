@@ -29,12 +29,16 @@ export default async function TasksPage({
   const statusFilter = STATUSES.includes(params.status as never)
     ? (params.status as (typeof STATUSES)[number])
     : undefined
+  const storeFilterId = params.storeId?.trim() || undefined
 
   const db = tenantDb(session.org)
   await expireOverdueTasks(workerDb, session.org)
-  const [tasks, assignableUsers, sla] = await Promise.all([
+  const [tasks, assignableUsers, sla, filterStore] = await Promise.all([
     db.task.findMany({
-      where: statusFilter ? { status: statusFilter } : {},
+      where: {
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(storeFilterId ? { storeId: storeFilterId } : {}),
+      },
       include: {
         store: { select: { id: true, name: true, code: true } },
         assignee: { select: { id: true, name: true } },
@@ -83,11 +87,23 @@ export default async function TasksPage({
       orderBy: { name: "asc" },
     }),
     getTaskSlaSummary(workerDb, session.org),
+    storeFilterId
+      ? db.store.findFirst({ where: { id: storeFilterId }, select: { id: true, name: true } })
+      : Promise.resolve(null),
   ])
 
   return (
     <div>
       <h1 className="mb-4 text-2xl font-semibold">{tNav("tasks")}</h1>
+
+      {filterStore ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+          <span>{t("filteredStore", { store: filterStore.name })}</span>
+          <Link href="/tasks" className="font-medium text-indigo-700 hover:underline">
+            {t("clearStoreFilter")}
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {[
@@ -106,7 +122,7 @@ export default async function TasksPage({
 
       <div className="mb-4 flex flex-wrap gap-1">
         <Link
-          href="/tasks"
+          href={storeFilterId ? `/tasks?storeId=${encodeURIComponent(storeFilterId)}` : "/tasks"}
           className={`rounded-full px-3 py-1 text-sm ${!statusFilter ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"}`}
         >
           {t("all")}
@@ -114,7 +130,7 @@ export default async function TasksPage({
         {STATUSES.map((s) => (
           <Link
             key={s}
-            href={`/tasks?status=${s}`}
+            href={`/tasks?status=${s}${storeFilterId ? `&storeId=${encodeURIComponent(storeFilterId)}` : ""}`}
             className={`rounded-full px-3 py-1 text-sm ${statusFilter === s ? "bg-neutral-900 text-white" : "border border-neutral-200 bg-white text-neutral-600"}`}
           >
             {t(`status.${s}`)}
@@ -202,7 +218,16 @@ export default async function TasksPage({
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <TaskStatusActions taskId={task.id} status={task.status} />
+                      {task.status === "PHOTO_SUBMITTED" ? (
+                        <Link
+                          href={`/tasks/${task.id}`}
+                          className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                        >
+                          {t("reviewTask")}
+                        </Link>
+                      ) : (
+                        <TaskStatusActions taskId={task.id} status={task.status} />
+                      )}
                     </td>
                   </tr>
                   <tr className="border-b border-neutral-100 last:border-0 bg-neutral-50/60">

@@ -117,10 +117,19 @@ app smoke — нужен свежий EAS preview/dev-client APK.
 
 ### MW-05. Связи route → visit → task → order
 
+Статус: **сделано 2026-07-10**.
+
 - Добавить взаимные ссылки в web Field Force, task detail и orders.
 - Показывать источник заказа и состояние связанного визита.
 - Обозначать offline-created order, который ещё не получил server visitId,
   без потери client operation trace.
+
+Реализация: точки выбранного маршрута показывают связанный визит,
+число открытых задач и заказов и ведут в tenant-scoped фильтры. Task
+detail показывает связанный визит/маршрут и заказы точки; orders ведёт
+обратно в маршрут и задачи. Для mobile/offline заказа выводится короткий
+`clientOpId` trace даже при отсутствии server visit. Deep-link маршрута
+на узком экране поднимает детали выше длинного списка.
 
 ### MW-06. Мобильный order composer
 
@@ -157,11 +166,19 @@ app smoke — нужен свежий EAS preview/dev-client APK.
 
 ### MW-08. Задача на проверку как одно действие
 
+Статус: **сделано 2026-07-10**.
+
 - На web task detail сделать proof главным содержимым состояния
   `PHOTO_SUBMITTED`.
 - Устранить противоречие `PHOTO_SUBMITTED` + `0 pending review` +
   «Без review».
 - Дать один явный next action: принять, отклонить или запросить пересъёмку.
+
+Реализация: `PHOTO_SUBMITTED` получает центральную decision-панель.
+Последний одобренный review атомарно завершает задачу и пишет status
+history, если других pending/rejected review нет. Запрос пересъёмки
+одновременно отклоняет выбранный pending review. Таблица задач больше не
+позволяет принять proof в обход detail; она ведёт в единый экран решения.
 
 ## P1 — responsive, i18n и accessibility
 

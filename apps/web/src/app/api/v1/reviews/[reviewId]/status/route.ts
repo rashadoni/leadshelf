@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
+import { decideHumanReview, ReviewRepoError } from "@leadshelf/db"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 
@@ -26,22 +27,18 @@ export async function PATCH(
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const review = await workerDb.humanReview.findFirst({
-    where: { id: reviewId, organizationId: session.org },
-    select: { id: true },
-  })
-  if (!review) return NextResponse.json({ error: "review_not_found" }, { status: 404 })
-
-  const updated = await workerDb.humanReview.update({
-    where: { id: review.id },
-    data: {
+  try {
+    const updated = await decideHumanReview(workerDb, session.org, {
+      reviewId,
       status: parsed.data.status,
       note: parsed.data.note,
       reviewedById: session.sub,
-      reviewedAt: new Date(),
-    },
-    select: { id: true, status: true },
-  })
-
-  return NextResponse.json(updated)
+    })
+    return NextResponse.json(updated)
+  } catch (error) {
+    if (error instanceof ReviewRepoError) {
+      return NextResponse.json({ error: error.code }, { status: 404 })
+    }
+    throw error
+  }
 }

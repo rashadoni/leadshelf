@@ -56,6 +56,17 @@
     "sourceVisit": "Vizitdən",
     "sourceDirect": "Birbaşa sifariş",
     "offlineOrigin": "Mobil offline",
+    "clientTrace": "Mobil əməliyyat: {value}",
+    "viewTasks": "Nöqtənin tapşırıqları",
+    "openRoute": "Marşrutu aç",
+    "filterContext": "İcra filtri: {value}",
+    "clearFilter": "Bütün sifarişlər",
+    "visitStatus": {
+      "PLANNED": "vizit planlanıb",
+      "IN_PROGRESS": "vizit davam edir",
+      "COMPLETED": "vizit tamamlanıb",
+      "SKIPPED": "vizit buraxılıb"
+    },
     "unknownAgent": "Agent göstərilməyib",
     "lineCount": "{count} məhsul mövqeyi",
     "unitCount": "{count} vahid",
@@ -592,6 +603,9 @@
   },
   "tasks": {
     "all": "Hamısı",
+    "filteredStore": "Nöqtənin tapşırıqları: {store}",
+    "clearStoreFilter": "Bütün tapşırıqlar",
+    "reviewTask": "Yoxla",
     "empty": "Tapşırıq yoxdur. Planoqramı nöqtələrə dərc edin.",
     "table": {
       "title": "Tapşırıq",
@@ -636,6 +650,25 @@
       "videoProof": "İcra videosu",
       "noReview": "Review yoxdur",
       "equipmentMismatch": "Avadanlıq uyğun gəlmir",
+      "nextAction": "Növbəti qərar",
+      "reviewPendingHint": "Foto insan yoxlamasını gözləyir. Bir qərar seçin — qəbul, rədd və ya yenidən çəkiliş.",
+      "automaticReviewHint": "Avtomatik yoxlama əlavə problem yaratmayıb. Tapşırığı qəbul edin və ya yenidən çəkiliş istəyin.",
+      "automaticReviewAcceptHint": "Avtomatik yoxlama əlavə problem yaratmayıb. Tapşırığı qəbul edərək işi tamamlayın.",
+      "automaticReview": "Avtomatik yoxlamadan keçib",
+      "decisionSaving": "Saxlanılır...",
+      "decisionFailed": "Qərarı saxlamaq mümkün olmadı. Yenidən cəhd edin.",
+      "proofAlt": "{task} tapşırığının icra sübutu",
+      "viewStoreTasks": "Nöqtənin bütün tapşırıqları",
+      "viewStoreOrders": "Nöqtənin sifarişləri",
+      "executionContext": "Vizit və marşrut",
+      "openRoute": "Marşrutu aç",
+      "relatedOrders": "Sifarişlər: {count}",
+      "visitStatus": {
+        "PLANNED": "Vizit planlanıb",
+        "IN_PROGRESS": "Vizit davam edir",
+        "COMPLETED": "Vizit tamamlanıb",
+        "SKIPPED": "Vizit buraxılıb"
+      },
       "requestRetake": "Yenidən çəkiliş istə",
       "retakeRequested": "Yenidən çəkiliş istənilib",
       "retakeRequests": "Yenidən çəkiliş sorğuları",
@@ -937,6 +970,16 @@
     }
   },
   "fieldForce": {
+    "execution": {
+      "tasks": "Tapşırıqlar: {count}",
+      "orders": "Sifarişlər: {count}",
+      "visitStatus": {
+        "PLANNED": "Vizit planlanıb",
+        "IN_PROGRESS": "Vizit davam edir",
+        "COMPLETED": "Vizit tamamlanıb",
+        "SKIPPED": "Vizit buraxılıb"
+      }
+    },
     "subtitle": "Komandalar, agentlər, marşrutlar, vizitlər və canlı lokasiya.",
     "addAgent": "Agent əlavə et",
     "noUserCandidates": "Sahə komandası üçün aktiv istifadəçi yoxdur.",

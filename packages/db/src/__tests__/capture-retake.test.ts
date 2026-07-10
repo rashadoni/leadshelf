@@ -56,6 +56,38 @@ describe("capture retake repo", () => {
     ).rejects.toBeInstanceOf(CaptureRepoError)
   })
 
+  test("rejects the pending review when retake is the chosen decision", async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: "retake-1", stepId: "front", requestedAt: new Date() })
+    const reviewUpdate = vi.fn().mockResolvedValue({ count: 1 })
+    const prisma = {
+      task: { findFirst: vi.fn().mockResolvedValue({ id: "task-1" }), update: vi.fn() },
+      captureRetakeRequest: { upsert },
+      humanReview: { updateMany: reviewUpdate },
+      $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    } as unknown as PrismaClient
+
+    await requestCaptureRetake(prisma, "org-a", {
+      taskId: "task-1",
+      stepId: "front",
+      requestedById: "user-1",
+      reviewId: "review-1",
+    })
+
+    expect(reviewUpdate).toHaveBeenCalledWith({
+      where: {
+        id: "review-1",
+        organizationId: "org-a",
+        taskId: "task-1",
+        status: "PENDING",
+      },
+      data: {
+        status: "REJECTED",
+        reviewedById: "user-1",
+        reviewedAt: expect.any(Date),
+      },
+    })
+  })
+
   test("resolves open retakes for the step and re-delivers the task when something closed", async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 })
     const taskUpdate = vi.fn().mockResolvedValue({ id: "task-1" })

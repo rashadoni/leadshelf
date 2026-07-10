@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation"
 import { AssigneeSelect } from "../assignee-select"
 import { TaskStatusActions } from "../task-status-actions"
 import { CaptureRetakeButton } from "./capture-retake-button"
+import { ProofDecisionActions } from "./proof-decision-actions"
 import { PlanogramThumbnail } from "../../planograms/planogram-thumbnail"
 import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
 
@@ -42,10 +43,12 @@ function ProofMedia({
   url,
   mediaType,
   className,
+  alt,
 }: {
   url: string
   mediaType?: "PHOTO" | "VIDEO" | null
   className: string
+  alt: string
 }) {
   const src = `/api/media/${url}`
   if (mediaType === "VIDEO") {
@@ -55,7 +58,7 @@ function ProofMedia({
       </video>
     )
   }
-  return <img src={src} alt="" className={className} />
+  return <img src={src} alt={alt} className={className} />
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
@@ -204,7 +207,24 @@ export default async function TaskDetailPage({
 
   if (!task) notFound()
 
+  const relatedVisit = await db.visit.findFirst({
+    where: {
+      storeId: task.storeId,
+      ...(task.assigneeId ? { agent: { userId: task.assigneeId } } : {}),
+    },
+    orderBy: [{ checkInAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      status: true,
+      checkInAt: true,
+      checkOutAt: true,
+      routeStop: { select: { route: { select: { id: true, name: true } } } },
+      _count: { select: { orders: true } },
+    },
+  })
+
   const pendingReviews = task.humanReviews.filter((review) => review.status === "PENDING").length
+  const primaryPendingReview = task.humanReviews.find((review) => review.status === "PENDING") ?? null
   const latestPhoto = task.photoSubmissions[0]
   const openRetakeStepIds = new Set(task.captureRetakeRequests.map((request) => request.stepId))
 
@@ -227,9 +247,33 @@ export default async function TaskDetailPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AssigneeSelect taskId={task.id} current={task.assigneeId} users={assignableUsers} />
-          <TaskStatusActions taskId={task.id} status={task.status} />
+          {task.status === "PHOTO_SUBMITTED" ? null : <TaskStatusActions taskId={task.id} status={task.status} />}
         </div>
       </div>
+
+      {task.status === "PHOTO_SUBMITTED" ? (
+        <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <h2 className="text-sm font-semibold text-indigo-950">{t("detail.nextAction")}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-indigo-900/75">
+                {primaryPendingReview
+                  ? t("detail.reviewPendingHint")
+                  : latestPhoto?.captureStepId
+                    ? t("detail.automaticReviewHint")
+                    : t("detail.automaticReviewAcceptHint")}
+              </p>
+            </div>
+            <ProofDecisionActions
+              taskId={task.id}
+              reviewId={primaryPendingReview?.id ?? null}
+              stepId={latestPhoto?.captureStepId ?? null}
+              stepKind={latestPhoto?.captureStepKind ?? null}
+              retakeRequested={Boolean(latestPhoto?.captureStepId && openRetakeStepIds.has(latestPhoto.captureStepId))}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Metric label={t("detail.metrics.due")} value={formatDate(task.dueAt)} />
@@ -253,6 +297,7 @@ export default async function TaskDetailPage({
                         url={photo.url}
                         mediaType={photo.mediaType}
                         className="h-48 w-full bg-neutral-100 object-cover"
+                        alt={t("detail.proofAlt", { task: task.title })}
                       />
                     ) : (
                       <a href={`/api/media/${photo.url}`} target="_blank" rel="noreferrer">
@@ -260,6 +305,7 @@ export default async function TaskDetailPage({
                           url={photo.url}
                           mediaType={photo.mediaType}
                           className="h-48 w-full bg-neutral-100 object-cover"
+                          alt={t("detail.proofAlt", { task: task.title })}
                         />
                       </a>
                     )}
@@ -280,7 +326,9 @@ export default async function TaskDetailPage({
                         ) : null}
                         {photo.humanReviews.length === 0 ? (
                           <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
-                            {t("detail.noReview")}
+                            {task.status === "PHOTO_SUBMITTED" && photo.id === latestPhoto?.id
+                              ? t("detail.automaticReview")
+                              : t("detail.noReview")}
                           </span>
                         ) : (
                           photo.humanReviews.map((review) => (
@@ -293,7 +341,7 @@ export default async function TaskDetailPage({
                           ))
                         )}
                       </div>
-                      {photo.captureStepId ? (
+                      {photo.captureStepId && !(task.status === "PHOTO_SUBMITTED" && photo.id === latestPhoto?.id) ? (
                         <div className="flex items-center justify-end">
                           <CaptureRetakeButton
                             taskId={task.id}
@@ -394,8 +442,45 @@ export default async function TaskDetailPage({
               <div className="text-xs text-neutral-500">
                 {[task.store.format?.name, task.store.region?.name].filter(Boolean).join(" · ") || "—"}
               </div>
+              <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-3 text-xs font-medium">
+                <Link
+                  href={`/tasks?storeId=${encodeURIComponent(task.store.id)}`}
+                  className="text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  {t("detail.viewStoreTasks")}
+                </Link>
+                <Link
+                  href={`/orders?storeId=${encodeURIComponent(task.store.id)}${relatedVisit ? `&visitId=${encodeURIComponent(relatedVisit.id)}` : ""}`}
+                  className="text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  {t("detail.viewStoreOrders")}
+                </Link>
+              </div>
             </div>
           </Panel>
+
+          {relatedVisit ? (
+            <Panel title={t("detail.executionContext")}>
+              <div className="space-y-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusClass(relatedVisit.status)}`}>
+                    {t(`detail.visitStatus.${relatedVisit.status}` as never)}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    {t("detail.relatedOrders", { count: relatedVisit._count.orders })}
+                  </span>
+                </div>
+                {relatedVisit.routeStop?.route ? (
+                  <Link
+                    href={`/field-force?view=routes&routeId=${encodeURIComponent(relatedVisit.routeStop.route.id)}`}
+                    className="block font-medium text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                  >
+                    {t("detail.openRoute")} · {relatedVisit.routeStop.route.name}
+                  </Link>
+                ) : null}
+              </div>
+            </Panel>
+          ) : null}
 
           <Panel title={t("table.planogram")}>
             {task.planogramVersion ? (
@@ -426,7 +511,13 @@ export default async function TaskDetailPage({
 
           <Panel title={t("detail.reviews")}>
             {task.humanReviews.length === 0 ? (
-              <div className="text-sm text-neutral-500">{t("detail.noReview")}</div>
+              <div className="text-sm text-neutral-500">
+                {task.status === "PHOTO_SUBMITTED"
+                  ? latestPhoto?.captureStepId
+                    ? t("detail.automaticReviewHint")
+                    : t("detail.automaticReviewAcceptHint")
+                  : t("detail.noReview")}
+              </div>
             ) : (
               <div className="space-y-2 text-sm">
                 {task.humanReviews.map((review) => (

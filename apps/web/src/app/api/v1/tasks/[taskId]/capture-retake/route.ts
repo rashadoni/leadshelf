@@ -13,6 +13,7 @@ const schema = z.object({
   stepId: z.string().min(1).max(64),
   stepKind: z.string().max(64).nullable().optional(),
   note: z.string().trim().max(500).optional(),
+  reviewId: z.string().min(1).nullable().optional(),
 })
 
 export async function POST(
@@ -35,6 +36,7 @@ export async function POST(
       stepKind: parsed.data.stepKind ?? null,
       note: parsed.data.note ?? null,
       requestedById: session.sub,
+      reviewId: parsed.data.reviewId ?? null,
     })
     return NextResponse.json({ ok: true, retakeId: request.id })
   } catch (error) {

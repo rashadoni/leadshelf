@@ -87,6 +87,31 @@ describe("field-force route helpers", () => {
     expect(shaped.points[0]?.visitedAt).toBe(checkInAt)
   })
 
+  it("exposes the visit trace and execution counts for route links", () => {
+    const shaped = shapeFieldForceRoute(route({
+      stops: [{
+        id: "stop-a",
+        storeId: "store-a",
+        sortOrder: 1,
+        plannedAt: new Date("2026-07-06T09:00:00.000Z"),
+        visits: [{
+          id: "visit-a",
+          status: "IN_PROGRESS",
+          checkInAt: new Date("2026-07-06T09:05:00.000Z"),
+          _count: { orders: 2 },
+        }],
+        store: { ...storeA, _count: { tasks: 3 } },
+      }],
+    }))
+
+    expect(shaped.points[0]).toMatchObject({
+      visitId: "visit-a",
+      visitStatus: "IN_PROGRESS",
+      openTaskCount: 3,
+      orderCount: 2,
+    })
+  })
+
   it("marks completed only when every point has a completed visit", () => {
     const firstOut = new Date("2026-07-06T09:10:00.000Z")
     const secondOut = new Date("2026-07-06T09:20:00.000Z")

@@ -46,16 +46,27 @@ function orderReference(id: string, invoiceNumber: string | null): string {
   return invoiceNumber ?? `#${id.slice(-8).toUpperCase()}`
 }
 
-export default async function OrdersPage() {
-  const [t, locale, session] = await Promise.all([
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const [t, locale, session, params] = await Promise.all([
     getTranslations("orders"),
     getLocale(),
     getSession(),
+    searchParams,
   ])
   if (!session) return null
 
+  const storeFilterId = params.storeId?.trim() || undefined
+  const visitFilterId = params.visitId?.trim() || undefined
   const db = tenantDb(session.org)
-  const orders = await db.order.findMany({
+  const [orders, filterStore, filterVisit] = await Promise.all([db.order.findMany({
+    where: {
+      ...(storeFilterId ? { storeId: storeFilterId } : {}),
+      ...(visitFilterId ? { visitId: visitFilterId } : {}),
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
@@ -65,6 +76,7 @@ export default async function OrdersPage() {
       totalAmount: true,
       invoiceNumber: true,
       clientDeviceId: true,
+      clientOpId: true,
       createdAt: true,
       store: { select: { id: true, name: true, code: true } },
       agent: {
@@ -75,7 +87,8 @@ export default async function OrdersPage() {
       visit: {
         select: {
           id: true,
-          routeStop: { select: { route: { select: { name: true } } } },
+          status: true,
+          routeStop: { select: { route: { select: { id: true, name: true } } } },
         },
       },
       lines: {
@@ -86,7 +99,17 @@ export default async function OrdersPage() {
         },
       },
     },
-  })
+  }),
+  storeFilterId
+    ? db.store.findFirst({ where: { id: storeFilterId }, select: { id: true, name: true } })
+    : Promise.resolve(null),
+  visitFilterId
+    ? db.visit.findFirst({
+        where: { id: visitFilterId },
+        select: { id: true, status: true, routeStop: { select: { route: { select: { id: true, name: true } } } } },
+      })
+    : Promise.resolve(null),
+  ])
 
   const activeCount = orders.filter((order) => ACTIVE_ORDER_STATUSES.has(order.status)).length
   const offlineCount = orders.filter((order) => Boolean(order.clientDeviceId)).length
@@ -104,6 +127,24 @@ export default async function OrdersPage() {
         <h1 className="text-2xl font-semibold text-neutral-950">{t("title")}</h1>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">{t("subtitle")}</p>
       </header>
+
+      {filterStore || filterVisit ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+          <div>
+            {t("filterContext", {
+              value: [filterStore?.name, filterVisit ? t(`visitStatus.${filterVisit.status}` as never) : null]
+                .filter(Boolean)
+                .join(" · "),
+            })}
+          </div>
+          <Link
+            href="/orders"
+            className="font-medium text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+          >
+            {t("clearFilter")}
+          </Link>
+        </div>
+      ) : null}
 
       <section
         aria-label={t("title")}
@@ -138,6 +179,7 @@ export default async function OrdersPage() {
                 const quantity = order.lines.reduce((sum, line) => sum + Number(line.quantity), 0)
                 const agent = order.agent?.user
                 const routeName = order.visit?.routeStop?.route.name
+                const routeId = order.visit?.routeStop?.route.id
                 return (
                   <article key={order.id} className="space-y-3 px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
@@ -146,6 +188,11 @@ export default async function OrdersPage() {
                           {orderReference(order.id, order.invoiceNumber)}
                         </div>
                         <div className="mt-0.5 text-xs text-neutral-500">{formatDate(order.createdAt, locale)}</div>
+                        {order.clientOpId ? (
+                          <div className="mt-1 text-[11px] font-medium text-indigo-700">
+                            {t("clientTrace", { value: order.clientOpId.slice(-10).toUpperCase() })}
+                          </div>
+                        ) : null}
                       </div>
                       <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${statusClass(order.status)}`}>
                         {t(`status.${order.status}` as never)}
@@ -163,13 +210,33 @@ export default async function OrdersPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600">
-                      <span className="rounded-full bg-neutral-100 px-2 py-1">
-                        {order.visit ? t("sourceVisit") : t("sourceDirect")}
-                      </span>
+                      {routeId ? (
+                        <Link
+                          href={`/field-force?view=routes&routeId=${encodeURIComponent(routeId)}`}
+                          className="rounded-full bg-neutral-100 px-2 py-1 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                        >
+                          {t("sourceVisit")} · {t(`visitStatus.${order.visit!.status}` as never)}
+                        </Link>
+                      ) : (
+                        <span className="rounded-full bg-neutral-100 px-2 py-1">
+                          {order.visit ? t("sourceVisit") : t("sourceDirect")}
+                        </span>
+                      )}
                       {order.clientDeviceId ? (
                         <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">{t("offlineOrigin")}</span>
                       ) : null}
                       {routeName ? <span className="truncate">{routeName}</span> : null}
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 text-xs font-medium">
+                      <Link href={`/tasks?storeId=${encodeURIComponent(order.store.id)}`} className="text-indigo-700 hover:underline">
+                        {t("viewTasks")}
+                      </Link>
+                      {routeId ? (
+                        <Link href={`/field-force?view=routes&routeId=${encodeURIComponent(routeId)}`} className="text-indigo-700 hover:underline">
+                          {t("openRoute")}
+                        </Link>
+                      ) : null}
                     </div>
 
                     <div className="flex items-end justify-between gap-4 border-t border-neutral-100 pt-3">
@@ -208,12 +275,18 @@ export default async function OrdersPage() {
                     const quantity = order.lines.reduce((sum, line) => sum + Number(line.quantity), 0)
                     const agent = order.agent?.user
                     const routeName = order.visit?.routeStop?.route.name
+                    const routeId = order.visit?.routeStop?.route.id
                     return (
                       <tr key={order.id} className="align-top hover:bg-neutral-50/70">
                         <td className="px-4 py-3 font-medium text-neutral-950">
                           {orderReference(order.id, order.invoiceNumber)}
                           {order.clientDeviceId ? (
                             <div className="mt-1 text-[11px] font-medium text-indigo-700">{t("offlineOrigin")}</div>
+                          ) : null}
+                          {order.clientOpId ? (
+                            <div className="mt-0.5 text-[11px] text-neutral-500">
+                              {t("clientTrace", { value: order.clientOpId.slice(-10).toUpperCase() })}
+                            </div>
                           ) : null}
                         </td>
                         <td className="px-4 py-3">
@@ -227,8 +300,15 @@ export default async function OrdersPage() {
                           {agent?.employeeCode ? <div className="mt-0.5 text-xs text-neutral-500">{agent.employeeCode}</div> : null}
                         </td>
                         <td className="px-4 py-3 text-neutral-700">
-                          {order.visit ? t("sourceVisit") : t("sourceDirect")}
+                          {routeId ? (
+                            <Link href={`/field-force?view=routes&routeId=${encodeURIComponent(routeId)}`} className="hover:text-indigo-700 hover:underline">
+                              {t("sourceVisit")} · {t(`visitStatus.${order.visit!.status}` as never)}
+                            </Link>
+                          ) : order.visit ? t("sourceVisit") : t("sourceDirect")}
                           {routeName ? <div className="mt-0.5 max-w-36 truncate text-xs text-neutral-500">{routeName}</div> : null}
+                          <Link href={`/tasks?storeId=${encodeURIComponent(order.store.id)}`} className="mt-1 block text-xs text-indigo-700 hover:underline">
+                            {t("viewTasks")}
+                          </Link>
                         </td>
                         <td className="px-4 py-3 text-neutral-700">
                           <div>{t("lineCount", { count: order.lines.length })}</div>

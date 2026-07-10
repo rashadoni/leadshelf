@@ -51,6 +51,11 @@ export {
   type OpenCaptureRetake,
 } from "./repos/capture.ts"
 export {
+  decideHumanReview,
+  ReviewRepoError,
+  type HumanReviewDecision,
+} from "./repos/reviews.ts"
+export {
   AlertRepoError,
   emitProductEvent,
   buildOfficeMorningDigest,

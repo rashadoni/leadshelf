@@ -56,6 +56,17 @@
     "sourceVisit": "Из визита",
     "sourceDirect": "Прямой заказ",
     "offlineOrigin": "Мобильный offline",
+    "clientTrace": "Мобильная операция: {value}",
+    "viewTasks": "Задачи точки",
+    "openRoute": "Открыть маршрут",
+    "filterContext": "Фильтр исполнения: {value}",
+    "clearFilter": "Все заказы",
+    "visitStatus": {
+      "PLANNED": "визит запланирован",
+      "IN_PROGRESS": "визит идёт",
+      "COMPLETED": "визит завершён",
+      "SKIPPED": "визит пропущен"
+    },
     "unknownAgent": "Агент не указан",
     "lineCount": "{count, plural, one {# товарная позиция} few {# товарные позиции} many {# товарных позиций} other {# товарной позиции}}",
     "unitCount": "{count} ед.",
@@ -592,6 +603,9 @@
   },
   "tasks": {
     "all": "Все",
+    "filteredStore": "Задачи точки: {store}",
+    "clearStoreFilter": "Все задачи",
+    "reviewTask": "Проверить",
     "empty": "Задач нет. Опубликуйте планограмму на точки.",
     "table": {
       "title": "Задача",
@@ -636,6 +650,25 @@
       "videoProof": "Видео выполнения",
       "noReview": "Без review",
       "equipmentMismatch": "Оборудование не совпадает",
+      "nextAction": "Следующее решение",
+      "reviewPendingHint": "Фото ждёт проверки сотрудником. Выберите одно решение: принять, отклонить или запросить пересъёмку.",
+      "automaticReviewHint": "Автоматическая проверка не создала замечаний. Примите задачу или запросите пересъёмку.",
+      "automaticReviewAcceptHint": "Автоматическая проверка не создала замечаний. Примите задачу, чтобы завершить работу.",
+      "automaticReview": "Автоматическая проверка пройдена",
+      "decisionSaving": "Сохранение...",
+      "decisionFailed": "Не удалось сохранить решение. Попробуйте ещё раз.",
+      "proofAlt": "Подтверждение выполнения задачи «{task}»",
+      "viewStoreTasks": "Все задачи точки",
+      "viewStoreOrders": "Заказы точки",
+      "executionContext": "Визит и маршрут",
+      "openRoute": "Открыть маршрут",
+      "relatedOrders": "Заказов: {count}",
+      "visitStatus": {
+        "PLANNED": "Визит запланирован",
+        "IN_PROGRESS": "Визит идёт",
+        "COMPLETED": "Визит завершён",
+        "SKIPPED": "Визит пропущен"
+      },
       "requestRetake": "Запросить пересъемку",
       "retakeRequested": "Пересъемка запрошена",
       "retakeRequests": "Запросы пересъемки",
@@ -937,6 +970,16 @@
     }
   },
   "fieldForce": {
+    "execution": {
+      "tasks": "Задачи: {count}",
+      "orders": "Заказы: {count}",
+      "visitStatus": {
+        "PLANNED": "Визит запланирован",
+        "IN_PROGRESS": "Визит идёт",
+        "COMPLETED": "Визит завершён",
+        "SKIPPED": "Визит пропущен"
+      }
+    },
     "subtitle": "Команды, агенты, маршруты, визиты и live location.",
     "addAgent": "Добавить агента",
     "noUserCandidates": "Нет активных пользователей для добавления в полевую команду.",

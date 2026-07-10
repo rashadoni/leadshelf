@@ -23,6 +23,8 @@ import {
   X,
 } from "lucide-react"
 import { FieldForceDashboard } from "./field-force-dashboard"
+import { Link } from "@/i18n/navigation"
+import { useTranslations } from "next-intl"
 
 type ViewKey = "map" | "routes" | "agents" | "leaderboard" | "activity" | "reports" | "settings"
 
@@ -33,6 +35,10 @@ interface RoutePoint {
   status: "VISITED" | "SKIPPED" | "PENDING"
   plannedTime: string | null
   visitedAt: string | null
+  visitId: string | null
+  visitStatus: string | null
+  openTaskCount: number
+  orderCount: number
   customer: {
     id: string
     name: string
@@ -356,6 +362,13 @@ export function FieldForceWorkspace() {
     loadWorkspace()
   }, [loadWorkspace])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("view") === "routes") setActiveView("routes")
+    const routeId = params.get("routeId")
+    if (routeId) setSelectedRouteId(routeId)
+  }, [])
+
   const createRoute = useCallback(async (payload: RouteFormPayload) => {
     try {
       await apiRequest("/api/v1/field-force/routes", {
@@ -658,6 +671,7 @@ function RoutesView({
   onCancelRoute: (routeId: string) => Promise<void>
   onExport: () => void
 }) {
+  const tExecution = useTranslations("fieldForce.execution")
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -767,7 +781,7 @@ function RoutesView({
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
-      <div className="rounded-lg border border-neutral-200 bg-white p-3">
+      <div className="order-2 rounded-lg border border-neutral-200 bg-white p-3 xl:order-1">
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={routeSearch} placeholder="Найти маршрут, агента или торговую точку" onChange={onRouteSearch} />
           <select
@@ -857,7 +871,7 @@ function RoutesView({
         </div>
       </div>
 
-      <div className="rounded-lg border border-neutral-200 bg-white p-3">
+      <div className="order-1 rounded-lg border border-neutral-200 bg-white p-3 xl:order-2">
         {actionMessage ? (
           <div
             className={`mb-3 rounded-md border p-2 text-sm ${
@@ -1044,8 +1058,35 @@ function RoutesView({
                 <div key={point.id} className="flex gap-2 rounded-lg border border-neutral-100 bg-neutral-50 p-2">
                   <div className={`mt-1 h-2.5 w-2.5 rounded-full ${point.status === "VISITED" ? "bg-green-500" : point.status === "SKIPPED" ? "bg-neutral-400" : "bg-amber-400"}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{point.orderIndex + 1}. {point.customer.name}</div>
+                    <div className="truncate text-sm font-medium">
+                      {point.orderIndex + 1}.{" "}
+                      <Link
+                        href={`/stores/${point.customer.id}`}
+                        className="hover:text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                      >
+                        {point.customer.name}
+                      </Link>
+                    </div>
                     <div className="mt-0.5 truncate text-xs text-neutral-500">{point.customer.address ?? "Адрес не указан"}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                      {point.visitStatus ? (
+                        <span className="rounded-full bg-white px-2 py-1 text-neutral-600">
+                          {tExecution(`visitStatus.${point.visitStatus}` as never)}
+                        </span>
+                      ) : null}
+                      <Link
+                        href={`/tasks?storeId=${encodeURIComponent(point.customer.id)}`}
+                        className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                      >
+                        {tExecution("tasks", { count: point.openTaskCount })}
+                      </Link>
+                      <Link
+                        href={`/orders?storeId=${encodeURIComponent(point.customer.id)}${point.visitId ? `&visitId=${encodeURIComponent(point.visitId)}` : ""}`}
+                        className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                      >
+                        {tExecution("orders", { count: point.orderCount })}
+                      </Link>
+                    </div>
                   </div>
                   <div className="text-right text-xs text-neutral-500">
                     {point.visitedAt ? formatDate(point.visitedAt, { timeStyle: "short" }) : point.plannedTime ? formatDate(point.plannedTime, { timeStyle: "short" }) : "—"}
