@@ -19,6 +19,7 @@ export function TaskStatusActions({ taskId, status }: { taskId: string; status: 
   const tConfirm = useTranslations("tasks.confirm")
   const router = useRouter()
   const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const options = NEXT[status] ?? []
   if (options.length === 0) return null
 
@@ -27,27 +28,38 @@ export function TaskStatusActions({ taskId, status }: { taskId: string; status: 
       return
     }
     setPending(true)
-    const res = await fetch(`/api/v1/tasks/${taskId}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedStatus: status, toStatus }),
-    })
-    setPending(false)
-    if (res.ok || res.status === 409) router.refresh()
+    setError(null)
+    try {
+      const res = await fetch(`/api/v1/tasks/${taskId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedStatus: status, toStatus }),
+      })
+      if (!res.ok && res.status !== 409) throw new Error(String(res.status))
+      router.refresh()
+    } catch {
+      setError(t("actionFailed"))
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
-    <div className="flex gap-1">
-      {options.map((to) => (
-        <button
-          key={to}
-          onClick={() => transition(to)}
-          disabled={pending}
-          className="rounded border border-neutral-200 px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
-        >
-          {t(to as never)}
-        </button>
-      ))}
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-1">
+        {options.map((to) => (
+          <button
+            key={to}
+            type="button"
+            onClick={() => transition(to)}
+            disabled={pending}
+            className="min-h-9 rounded border border-neutral-200 px-2 text-xs text-neutral-600 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-50"
+          >
+            {t(to as never)}
+          </button>
+        ))}
+      </div>
+      {error ? <p role="alert" className="text-xs text-red-700">{error}</p> : null}
     </div>
   )
 }

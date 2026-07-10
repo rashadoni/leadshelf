@@ -105,7 +105,7 @@ export function ProofDecisionActions({
           )
         ) : null}
       </div>
-      {error ? <p aria-live="polite" className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
     </div>
   )
 }

@@ -36,12 +36,14 @@ export function ProofOverlay({
   boxes,
   statusLabels,
   emptyLabel,
+  imageAlt,
   showConfidence = true,
 }: {
   src: string
   boxes: ProofOverlayBox[]
   statusLabels: Partial<Record<ProofOverlayStatus, string>>
   emptyLabel: string
+  imageAlt: string
   showConfidence?: boolean
 }) {
   const [active, setActive] = useState<string | null>(null)
@@ -51,13 +53,14 @@ export function ProofOverlay({
   return (
     <div>
       <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-900">
-        <img src={src} alt="" className="block w-full object-contain" />
+        <img src={src} alt={imageAlt} className="block w-full object-contain" />
         {boxes.map((box) => {
           const isActive = active === box.id
           return (
             <button
               key={box.id}
               type="button"
+              aria-label={`${label(box.status)} · ${box.sku ?? emptyLabel}`}
               onClick={() => setActive(isActive ? null : box.id)}
               style={{
                 left: `${box.xPct}%`,
@@ -65,7 +68,7 @@ export function ProofOverlay({
                 width: `${box.widthPct}%`,
                 height: `${box.heightPct}%`,
               }}
-              className={`absolute rounded-sm border-2 transition ${BOX_STYLE[box.status]} ${
+              className={`absolute rounded-sm border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${BOX_STYLE[box.status]} ${
                 isActive ? "ring-2 ring-white" : "hover:brightness-125"
               }`}
             >

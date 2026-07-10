@@ -1,9 +1,10 @@
-import { getTranslations } from "next-intl/server"
+import { getLocale, getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { ReviewActions } from "./review-actions"
 import { ProofOverlay } from "./proof-overlay"
+import { formatLocaleDate, formatLocaleDateTime } from "@/i18n/format"
 
 const STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const
 
@@ -11,20 +12,22 @@ function ProofMedia({
   url,
   mediaType,
   className,
+  alt,
 }: {
   url: string
   mediaType?: "PHOTO" | "VIDEO" | null
   className: string
+  alt: string
 }) {
   const src = `/api/media/${url}`
   if (mediaType === "VIDEO") {
     return (
-      <video className={className} controls muted playsInline preload="metadata">
+      <video aria-label={alt} className={className} controls muted playsInline preload="metadata">
         <source src={src} />
       </video>
     )
   }
-  return <img src={src} alt="" className={className} />
+  return <img src={src} alt={alt} className={className} />
 }
 
 function qualityIssues(findings: unknown): string[] {
@@ -139,11 +142,12 @@ export default async function ReviewsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>
 }) {
-  const [t, tNav, session, params] = await Promise.all([
+  const [t, tNav, session, params, locale] = await Promise.all([
     getTranslations("reviews"),
     getTranslations("nav"),
     getSession(),
     searchParams,
+    getLocale(),
   ])
   if (!session) return null
 
@@ -271,6 +275,7 @@ export default async function ReviewsPage({
             const vision = visionDetails(review.findings)
             const store = photo?.store ?? review.task?.store ?? null
             const planogramVersion = review.task?.planogramVersion ?? review.planogramVersion
+            const reviewTitle = review.task?.title ?? planogramVersion?.planogram.name ?? t("untitled")
             return (
               <div key={review.id} className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-3 md:grid-cols-[190px_1fr_auto]">
                 <div className="space-y-2">
@@ -280,6 +285,7 @@ export default async function ReviewsPage({
                         url={photo.url}
                         mediaType={photo.mediaType}
                         className="h-28 w-full object-cover"
+                        alt={t("proofAlt", { title: reviewTitle })}
                       />
                     ) : (
                       <div className="flex h-28 items-center justify-center text-xs text-neutral-400">
@@ -305,6 +311,7 @@ export default async function ReviewsPage({
                         <ProofOverlay
                           src={`/api/media/${review.goldenReference.imageUrl}`}
                           showConfidence={false}
+                          imageAlt={t("goldenAlt", { title: reviewTitle })}
                           emptyLabel={t("overlay.unknownSku")}
                           statusLabels={{ expected: t("overlay.expected") }}
                           boxes={review.goldenReference.slots.map((slot) => ({
@@ -319,7 +326,11 @@ export default async function ReviewsPage({
                           }))}
                         />
                       ) : (
-                        <img src={`/api/media/${review.goldenReference.imageUrl}`} alt="" className="h-24 w-full object-cover" />
+                        <img
+                          src={`/api/media/${review.goldenReference.imageUrl}`}
+                          alt={t("goldenAlt", { title: reviewTitle })}
+                          className="h-24 w-full object-cover"
+                        />
                       )
                     ) : (
                       <div className="flex h-24 items-center justify-center text-xs text-neutral-400">
@@ -337,7 +348,7 @@ export default async function ReviewsPage({
                       {t(`reason.${review.reason}`)}
                     </span>
                     <span className="text-xs text-neutral-500">
-                      {new Date(review.createdAt).toLocaleString()}
+                      {formatLocaleDateTime(review.createdAt, locale)}
                     </span>
                     {review.score !== null && (
                       <span className="text-xs font-medium tabular-nums">
@@ -346,11 +357,11 @@ export default async function ReviewsPage({
                     )}
                   </div>
                   <div className="font-medium">
-                    {review.task?.title ?? planogramVersion?.planogram.name ?? t("untitled")}
+                    {reviewTitle}
                   </div>
                   <div className="mt-1 text-sm text-neutral-500">
                     {store ? `${store.name}${store.code ? ` (${store.code})` : ""}` : t("unknownStore")}
-                    {photo ? ` · ${photo.user.name} · ${photo.takenAt.toLocaleDateString()}` : ""}
+                    {photo ? ` · ${photo.user.name} · ${formatLocaleDate(photo.takenAt, locale)}` : ""}
                   </div>
                   {planogramVersion && (
                     <Link
@@ -375,6 +386,7 @@ export default async function ReviewsPage({
                         <div className="mb-3">
                           <ProofOverlay
                             src={`/api/media/${photo.url}`}
+                            imageAlt={t("proofAlt", { title: reviewTitle })}
                             boxes={vision.detections}
                             statusLabels={{
                               match: t("overlay.match"),
@@ -403,7 +415,11 @@ export default async function ReviewsPage({
                               rel="noreferrer"
                               className="overflow-hidden rounded border border-neutral-200 bg-white"
                             >
-                              <img src={`/api/media/${frame.key}`} alt="" className="h-20 w-full object-cover" />
+                              <img
+                                src={`/api/media/${frame.key}`}
+                                alt={t("frameAlt", { title: reviewTitle })}
+                                className="h-20 w-full object-cover"
+                              />
                               <div className="border-t border-neutral-100 px-1 py-0.5 text-[10px] text-neutral-500">
                                 {frame.timestampMs == null ? "frame" : `${(frame.timestampMs / 1000).toFixed(1)}s`}
                               </div>

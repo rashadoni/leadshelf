@@ -4,7 +4,11 @@
     "loading": "Yüklənir...",
     "workspace": "Rəf əməliyyat konturu",
     "demoTenant": "Demo tenant hazırdır",
-    "details": "Detallar"
+    "details": "Detallar",
+    "mainNavigation": "Əsas naviqasiya",
+    "moreNavigation": "Əlavə bölmələr",
+    "more": "Daha",
+    "fieldForceShort": "Sahə"
   },
   "auth": {
     "title": "Daxil ol",
@@ -629,7 +633,8 @@
       "PHOTO_SUBMITTED": "Foto alındı",
       "COMPLETED": "Qəbul et",
       "EXPIRED": "Vaxtı keçmiş",
-      "EMPTY": "Boş"
+      "EMPTY": "Boş",
+      "actionFailed": "Statusu yeniləmək mümkün olmadı. Yenidən cəhd edin."
     },
     "confirm": {
       "COMPLETED": "Tapşırığı tamamlanmış kimi qəbul edirsiniz?",
@@ -917,6 +922,9 @@
     "noPhoto": "Foto yoxdur",
     "photoProof": "İcra fotosu",
     "videoProof": "İcra videosu",
+    "proofAlt": "{title} üçün foto sübut",
+    "goldenAlt": "{title} üçün etalon düzülüş",
+    "frameAlt": "{title} videosundan seçilmiş kadr",
     "equipmentMismatch": "Avadanlıq baza ilə uyğun gəlmir",
     "goldenReference": "Etalon",
     "noReference": "Etalon yoxdur",
@@ -924,6 +932,8 @@
     "unknownStore": "Mağaza göstərilməyib",
     "approve": "Qəbul et",
     "reject": "Rədd et",
+    "saving": "Saxlanılır…",
+    "actionFailed": "Qərarı saxlamaq mümkün olmadı. Yenidən cəhd edin.",
     "dashboard": {
       "pending": "Yoxlamada",
       "approved": "Qəbul edilib",
@@ -970,6 +980,174 @@
     }
   },
   "fieldForce": {
+    "workspace": {
+      "title": "Marşrut modulu",
+      "subtitle": "Sahə komandası üçün xəritə, marşrutlar, agentlər və icra nəzarəti.",
+      "updated": "Yeniləndi {value}",
+      "refresh": "Yenilə",
+      "loadError": "Marşrut modulunu yükləmək mümkün olmadı. Sessiyanı və field-force API-ni yoxlayın.",
+      "allStatuses": "Bütün statuslar",
+      "agent": "Agent",
+      "team": "Komanda",
+      "status": "Status",
+      "visits": "Vizitlər",
+      "progress": "İrəliləyiş",
+      "user": "İstifadəçi",
+      "phone": "Telefon",
+      "date": "Tarix",
+      "unassigned": "Agentsiz",
+      "noTeam": "Komandasız",
+      "noEmail": "E-poçt yoxdur",
+      "noAddress": "Ünvan göstərilməyib",
+      "storeNotFound": "Nöqtə tapılmadı",
+      "edit": "Redaktə et",
+      "cancel": "Ləğv et",
+      "remove": "Sil",
+      "close": "Bağla",
+      "closeForm": "Formu bağla",
+      "save": "Saxla",
+      "saving": "Saxlanılır...",
+      "tabs": {
+        "map": { "label": "Xəritə", "description": "canlı hərəkət" },
+        "routes": { "label": "Marşrutlar", "description": "nöqtələr və icra" },
+        "agents": { "label": "Agentlər", "description": "komandalar və statuslar" },
+        "leaderboard": { "label": "Reytinq", "description": "icra sıralaması" },
+        "activity": { "label": "Aktivlik", "description": "vizit hadisələri" },
+        "reports": { "label": "Hesabatlar", "description": "günlük xülasə" },
+        "settings": { "label": "Ayarlar", "description": "icra siyasətləri" }
+      },
+      "routeStatus": {
+        "PLANNED": "Planlanıb",
+        "IN_PROGRESS": "İcradadır",
+        "COMPLETED": "Tamamlanıb",
+        "CANCELLED": "Ləğv edilib"
+      },
+      "fieldStatus": {
+        "CHECKED_IN": "Nöqtədə",
+        "ON_ROAD": "Yoldadır",
+        "LATE": "Gecikir",
+        "OFFLINE": "Offline"
+      },
+      "messages": {
+        "routeCreated": "Marşrut yaradıldı.",
+        "routeCreateFailed": "Marşrutu saxlamaq mümkün olmadı: {error}",
+        "routeUpdated": "Marşrut yeniləndi.",
+        "routeUpdateFailed": "Marşrutu yeniləmək mümkün olmadı: {error}",
+        "routeCancelled": "Marşrut ləğv edildi.",
+        "routeCancelFailed": "Marşrutu ləğv etmək mümkün olmadı: {error}",
+        "agentCreated": "Agent əlavə edildi.",
+        "agentCreateFailed": "Agenti saxlamaq mümkün olmadı: {error}",
+        "agentUpdated": "Agent yeniləndi.",
+        "agentUpdateFailed": "Agenti yeniləmək mümkün olmadı: {error}",
+        "settingsSaved": "Field-force ayarları serverdə saxlanıldı.",
+        "settingsFailed": "Ayarları saxlamaq mümkün olmadı: {error}"
+      },
+      "routes": {
+        "search": "Marşrut, agent və ya satış nöqtəsi axtar",
+        "new": "Yeni marşrut",
+        "editTitle": "Marşrutu redaktə et",
+        "loading": "Marşrutlar yüklənir...",
+        "emptyFilter": "Filtrə uyğun marşrut tapılmadı.",
+        "pointsCount": "{visited}/{total} nöqtə",
+        "confirmPastDate": "{date} tarixi keçib. Marşrut keçmiş tarixə saxlanılsın?",
+        "confirmCancel": "«{name}» marşrutu ləğv edilsin?",
+        "lockedHint": "Nöqtələr kilidlidir: marşrut üzrə vizit artıq var.",
+        "orderHint": "Nöqtələr burada göstərilən ardıcıllıqla saxlanılır.",
+        "name": "Ad",
+        "namePlaceholder": "Məsələn: Bakı-01 marşrutu",
+        "stops": "Marşrut nöqtələri",
+        "storeCount": "{count} nöqtə",
+        "noStops": "Hələ nöqtə yoxdur.",
+        "moveUp": "{store} nöqtəsini yuxarı daşı",
+        "moveDown": "{store} nöqtəsini aşağı daşı",
+        "addStore": "Satış nöqtəsi əlavə et",
+        "details": "Marşrut detalları",
+        "selectHint": "Soldan marşrut seçin.",
+        "validation": {
+          "name": "Marşrut adını göstərin.",
+          "store": "Ən azı bir satış nöqtəsi əlavə edin."
+        },
+        "metrics": { "points": "Nöqtələr", "completed": "Tamamlandı", "progress": "İrəliləyiş" }
+      },
+      "agents": {
+        "search": "Agent, komanda və ya kod axtar",
+        "add": "Agent əlavə et",
+        "editTitle": "Agenti redaktə et",
+        "loading": "Agentlər yüklənir...",
+        "emptyFilter": "Filtrə uyğun agent tapılmadı.",
+        "selectUser": "İstifadəçi seçin",
+        "management": "Agent idarəetməsi",
+        "userHint": "Agent aktiv LeadShelf istifadəçisinə bağlanır.",
+        "editHint": "Komanda və telefon istifadəçini yenidən yaratmadan dəyişdirilir.",
+        "noCandidates": "Bütün aktiv istifadəçilər artıq agent kimi təyin edilib.",
+        "validation": { "user": "İstifadəçi seçin." }
+      },
+      "leaderboard": {
+        "title": "İcra reytinqi",
+        "visits": "vizit: {count}",
+        "points": "bal: {count}",
+        "how": "Reytinq necə hesablanır",
+        "ruleVisit": "+20 bal — bu gün tamamlanan hər vizit üçün.",
+        "ruleCompletion": "+aktiv nöqtələrin icra faizi.",
+        "ruleOnline": "+10 bal — agent onlayndırsa.",
+        "ruleLate": "-20 bal — gecikmiş nöqtə varsa."
+      },
+      "activity": {
+        "title": "Aktivlik jurnalı",
+        "subtitle": "Son check-in, check-out və marşrut hadisələri.",
+        "empty": "Hələ hadisə yoxdur."
+      },
+      "reports": {
+        "routes": "Marşrutlar",
+        "completion": "Nöqtələrin icrası",
+        "onlineAgents": "Onlayn agentlər",
+        "late": "Gecikmələr",
+        "routeSummary": "Marşrut xülasəsi",
+        "agentSummary": "Agent xülasəsi"
+      },
+      "settings": {
+        "title": "Marşrut ayarları",
+        "subtitle": "GPS, geozona, offline statusu və məcburi mobil yoxlamalar üçün server siyasətləri.",
+        "gps": "GPS yenilənməsi, san",
+        "geofence": "Geozona radiusu, m",
+        "offlineAfter": "Offline həddi, dəq",
+        "requirePhoto": "Vizitin foto sübutunu tələb et",
+        "requireScan": "Mobil tətbiqdə rəf skanını tələb et",
+        "alertLate": "Gecikmiş vizitləri vurğula",
+        "save": "Ayarları saxla",
+        "connected": "Qoşulmuş imkanlar",
+        "connectedMap": "Agent və marşrut xəritəsi LeadShelf API ilə işləyir.",
+        "connectedApi": "Marşrutlar, agentlər, aktivlik, reytinq və hesabatlar ayrıca API-ləri oxuyur.",
+        "connectedOffline": "Agentin offline statusu serverdə saxlanan həddən asılıdır.",
+        "savedAt": "{value} tarixində saxlanıldı"
+      }
+    },
+    "live": {
+      "title": "Sahə komandası",
+      "subtitle": "Marşrutların, agentlərin və vizitlərin canlı xəritəsi.",
+      "updated": "Yeniləndi: {value}",
+      "geofence": "Geozona",
+      "heatmap": "İstilik xəritəsi",
+      "refresh": "Yenilə",
+      "all": "Hamısı ({count})",
+      "statusCount": "{status} ({count})",
+      "status": {
+        "checkedIn": "Nöqtədə",
+        "onRoad": "Yoldadır",
+        "late": "Gecikir",
+        "offline": "Offline"
+      },
+      "loadingMap": "Xəritə yüklənir...",
+      "statusTitle": "Status",
+      "feed": "Lent",
+      "hideFeed": "Hadisə lentini gizlət",
+      "showFeed": "Hadisə lentini göstər",
+      "waitingEvents": "Hadisələr gözlənilir...",
+      "agents": "Agentlər ({count})",
+      "noAgents": "Filtrə uyğun agent yoxdur",
+      "replay": "Replay: {agent}, nöqtələr: {count}",
+      "close": "Bağla"
+    },
     "execution": {
       "tasks": "Tapşırıqlar: {count}",
       "orders": "Sifarişlər: {count}",

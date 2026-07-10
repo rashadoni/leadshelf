@@ -14,8 +14,10 @@ export function LocaleSwitcher() {
       {routing.locales.map((l) => (
         <button
           key={l}
+          type="button"
+          aria-pressed={l === locale}
           onClick={() => router.replace(pathname, { locale: l })}
-          className={`rounded px-2 py-1 text-xs uppercase ${
+          className={`min-h-8 rounded px-2 text-xs uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
             l === locale ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100"
           }`}
         >

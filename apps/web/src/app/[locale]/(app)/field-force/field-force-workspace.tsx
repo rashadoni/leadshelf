@@ -24,7 +24,8 @@ import {
 } from "lucide-react"
 import { FieldForceDashboard } from "./field-force-dashboard"
 import { Link } from "@/i18n/navigation"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
+import { formatLocaleDate } from "@/i18n/format"
 
 type ViewKey = "map" | "routes" | "agents" | "leaderboard" | "activity" | "reports" | "settings"
 
@@ -165,29 +166,15 @@ interface ReportShape {
   lateAgents: number
 }
 
-const TABS: Array<{ key: ViewKey; label: string; description: string; Icon: typeof MapIcon }> = [
-  { key: "map", label: "Карта", description: "живое движение", Icon: MapIcon },
-  { key: "routes", label: "Маршруты", description: "точки и выполнение", Icon: Route },
-  { key: "agents", label: "Агенты", description: "команды и статусы", Icon: Users },
-  { key: "leaderboard", label: "Лидерборд", description: "рейтинг исполнения", Icon: Trophy },
-  { key: "activity", label: "Активность", description: "события визитов", Icon: Activity },
-  { key: "reports", label: "Отчеты", description: "дневная сводка", Icon: FileText },
-  { key: "settings", label: "Настройки", description: "политики execution", Icon: Settings },
+const TABS: Array<{ key: ViewKey; Icon: typeof MapIcon }> = [
+  { key: "map", Icon: MapIcon },
+  { key: "routes", Icon: Route },
+  { key: "agents", Icon: Users },
+  { key: "leaderboard", Icon: Trophy },
+  { key: "activity", Icon: Activity },
+  { key: "reports", Icon: FileText },
+  { key: "settings", Icon: Settings },
 ]
-
-const ROUTE_STATUS_LABELS: Record<RouteItem["status"], string> = {
-  PLANNED: "Запланирован",
-  IN_PROGRESS: "В работе",
-  COMPLETED: "Завершен",
-  CANCELLED: "Отменен",
-}
-
-const FIELD_STATUS_LABELS: Record<AgentItem["fieldStatus"], string> = {
-  CHECKED_IN: "На точке",
-  ON_ROAD: "В пути",
-  LATE: "Опаздывает",
-  OFFLINE: "Офлайн",
-}
 
 const DEFAULT_SETTINGS: SettingsState = {
   gpsRefreshSeconds: 15,
@@ -209,11 +196,6 @@ const EMPTY_REPORT: ReportShape = {
   completion: 0,
   onlineAgents: 0,
   lateAgents: 0,
-}
-
-function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions) {
-  if (!value) return "—"
-  return new Intl.DateTimeFormat("ru", options ?? { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
 }
 
 function toDateInput(value: string | Date | null | undefined) {
@@ -285,6 +267,8 @@ async function apiRequest(url: string, init: RequestInit) {
 }
 
 export function FieldForceWorkspace() {
+  const tWork = useTranslations("fieldForce.workspace")
+  const locale = useLocale()
   const [activeView, setActiveView] = useState<ViewKey>("map")
   const [routes, setRoutes] = useState<RouteItem[]>([])
   const [agents, setAgents] = useState<AgentItem[]>([])
@@ -352,7 +336,7 @@ export function FieldForceWorkspace() {
       setSelectedRouteId((current) => current ?? nextRoutes[0]?.id ?? null)
       setLastLoadedAt(new Date())
     } catch {
-      setError("Не удалось загрузить маршрутный модуль. Проверьте сессию и API field-force.")
+      setError(tWork("loadError"))
     } finally {
       setLoading(false)
     }
@@ -375,10 +359,10 @@ export function FieldForceWorkspace() {
         method: "POST",
         body: JSON.stringify(payload),
       })
-      setActionMessage({ type: "success", text: "Маршрут создан." })
+      setActionMessage({ type: "success", text: tWork("messages.routeCreated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: `Маршрут не сохранен: ${(err as Error).message}` })
+      setActionMessage({ type: "error", text: tWork("messages.routeCreateFailed", { error: (err as Error).message }) })
       throw err
     }
   }, [loadWorkspace])
@@ -389,10 +373,10 @@ export function FieldForceWorkspace() {
         method: "PATCH",
         body: JSON.stringify(payload),
       })
-      setActionMessage({ type: "success", text: "Маршрут обновлен." })
+      setActionMessage({ type: "success", text: tWork("messages.routeUpdated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: `Маршрут не обновлен: ${(err as Error).message}` })
+      setActionMessage({ type: "error", text: tWork("messages.routeUpdateFailed", { error: (err as Error).message }) })
       throw err
     }
   }, [loadWorkspace])
@@ -400,10 +384,10 @@ export function FieldForceWorkspace() {
   const cancelRoute = useCallback(async (routeId: string) => {
     try {
       await apiRequest(`/api/v1/field-force/routes/${routeId}`, { method: "DELETE" })
-      setActionMessage({ type: "success", text: "Маршрут отменен." })
+      setActionMessage({ type: "success", text: tWork("messages.routeCancelled") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: `Маршрут не отменен: ${(err as Error).message}` })
+      setActionMessage({ type: "error", text: tWork("messages.routeCancelFailed", { error: (err as Error).message }) })
       throw err
     }
   }, [loadWorkspace])
@@ -414,10 +398,10 @@ export function FieldForceWorkspace() {
         method: "POST",
         body: JSON.stringify(payload),
       })
-      setActionMessage({ type: "success", text: "Агент добавлен." })
+      setActionMessage({ type: "success", text: tWork("messages.agentCreated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: `Агент не сохранен: ${(err as Error).message}` })
+      setActionMessage({ type: "error", text: tWork("messages.agentCreateFailed", { error: (err as Error).message }) })
       throw err
     }
   }, [loadWorkspace])
@@ -428,10 +412,10 @@ export function FieldForceWorkspace() {
         method: "PATCH",
         body: JSON.stringify(payload),
       })
-      setActionMessage({ type: "success", text: "Агент обновлен." })
+      setActionMessage({ type: "success", text: tWork("messages.agentUpdated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: `Агент не обновлен: ${(err as Error).message}` })
+      setActionMessage({ type: "error", text: tWork("messages.agentUpdateFailed", { error: (err as Error).message }) })
       throw err
     }
   }, [loadWorkspace])
@@ -478,10 +462,10 @@ export function FieldForceWorkspace() {
       const nextSettings = body.data?.settings as (Partial<SettingsState> & { updatedAt?: string | null }) | undefined
       setSettings(toSettingsState(nextSettings))
       setSavedAt(nextSettings?.updatedAt ? new Date(nextSettings.updatedAt) : new Date())
-      setActionMessage({ type: "success", text: "Настройки field-force сохранены на сервере." })
+      setActionMessage({ type: "success", text: tWork("messages.settingsSaved") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: `Настройки не сохранены: ${(err as Error).message}` })
+      setActionMessage({ type: "error", text: tWork("messages.settingsFailed", { error: (err as Error).message }) })
     } finally {
       setSettingsSaving(false)
     }
@@ -492,14 +476,14 @@ export function FieldForceWorkspace() {
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Маршрутный модуль</h1>
+            <h1 className="text-2xl font-semibold">{tWork("title")}</h1>
             <p className="mt-1 text-sm text-neutral-500">
-              Карта, маршруты, агенты и контроль исполнения для полевой команды.
+              {tWork("subtitle")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {lastLoadedAt ? (
-              <span className="text-xs text-neutral-500">Обновлено {formatDate(lastLoadedAt.toISOString(), { timeStyle: "short" })}</span>
+              <span className="text-xs text-neutral-500">{tWork("updated", { value: formatLocaleDate(lastLoadedAt, locale, { timeStyle: "short" }) })}</span>
             ) : null}
             <button
               className="inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
@@ -507,13 +491,13 @@ export function FieldForceWorkspace() {
               disabled={loading}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              Обновить
+              {tWork("refresh")}
             </button>
           </div>
         </div>
 
-        <div className="mt-3 grid gap-2 md:grid-cols-4 xl:grid-cols-7">
-          {TABS.map(({ key, label, description, Icon }) => {
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+          {TABS.map(({ key, Icon }) => {
             const active = activeView === key
             return (
               <button
@@ -525,9 +509,9 @@ export function FieldForceWorkspace() {
               >
                 <div className="flex items-center gap-2">
                   <Icon className="h-4 w-4" />
-                  <span className="text-sm font-semibold">{label}</span>
+                  <span className="text-sm font-semibold">{tWork(`tabs.${key}.label`)}</span>
                 </div>
-                <div className={`mt-1 text-xs ${active ? "text-neutral-300" : "text-neutral-500"}`}>{description}</div>
+                <div className={`mt-1 hidden text-xs sm:block ${active ? "text-indigo-100" : "text-neutral-500"}`}>{tWork(`tabs.${key}.description`)}</div>
               </button>
             )
           })}
@@ -535,7 +519,7 @@ export function FieldForceWorkspace() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       ) : null}
 
       {activeView === "map" ? <FieldForceDashboard /> : null}
@@ -561,7 +545,7 @@ export function FieldForceWorkspace() {
               filteredRoutes.map((route) => ({
                 route: route.name,
                 agent: route.agent?.name ?? "",
-                status: ROUTE_STATUS_LABELS[route.status],
+                status: tWork(`routeStatus.${route.status}`),
                 points: route.totalPoints,
                 visited: route.visitedPoints,
                 completion: `${percent(route.visitedPoints, route.totalPoints)}%`,
@@ -590,7 +574,7 @@ export function FieldForceWorkspace() {
                 agent: agent.name,
                 email: agent.email ?? "",
                 team: agent.team?.name ?? "",
-                status: FIELD_STATUS_LABELS[agent.fieldStatus],
+                status: tWork(`fieldStatus.${agent.fieldStatus}`),
                 visitsToday: agent.visitsToday,
                 completedVisitsToday: agent.completedVisitsToday,
                 completion: `${agent.routeCompletion}%`,
@@ -672,6 +656,8 @@ function RoutesView({
   onExport: () => void
 }) {
   const tExecution = useTranslations("fieldForce.execution")
+  const tWork = useTranslations("fieldForce.workspace")
+  const locale = useLocale()
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -737,16 +723,16 @@ function RoutesView({
     event.preventDefault()
     const name = routeForm.name.trim()
     if (!name) {
-      setFormError("Укажите название маршрута.")
+      setFormError(tWork("routes.validation.name"))
       return
     }
     if (!routeLocked && routeForm.storeIds.length === 0) {
-      setFormError("Добавьте хотя бы одну торговую точку.")
+      setFormError(tWork("routes.validation.store"))
       return
     }
     const today = toDateInput(new Date())
     if (routeForm.date && routeForm.date < today) {
-      const confirmed = window.confirm(`Дата ${routeForm.date} уже прошла. Сохранить маршрут на прошедшую дату?`)
+      const confirmed = window.confirm(tWork("routes.confirmPastDate", { date: routeForm.date }))
       if (!confirmed) return
     }
 
@@ -774,7 +760,7 @@ function RoutesView({
 
   const cancelSelectedRoute = async () => {
     if (!selectedRoute) return
-    const confirmed = window.confirm(`Отменить маршрут "${selectedRoute.name}"?`)
+    const confirmed = window.confirm(tWork("routes.confirmCancel", { name: selectedRoute.name }))
     if (!confirmed) return
     await onCancelRoute(selectedRoute.id)
   }
@@ -783,17 +769,17 @@ function RoutesView({
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
       <div className="order-2 rounded-lg border border-neutral-200 bg-white p-3 xl:order-1">
         <div className="flex flex-wrap items-center gap-2">
-          <ToolbarSearch value={routeSearch} placeholder="Найти маршрут, агента или торговую точку" onChange={onRouteSearch} />
+          <ToolbarSearch value={routeSearch} placeholder={tWork("routes.search")} onChange={onRouteSearch} />
           <select
             className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm"
             value={routeStatus}
             onChange={(event) => onRouteStatus(event.target.value as "ALL" | RouteItem["status"])}
           >
-            <option value="ALL">Все статусы</option>
-            <option value="PLANNED">Запланирован</option>
-            <option value="IN_PROGRESS">В работе</option>
-            <option value="COMPLETED">Завершен</option>
-            <option value="CANCELLED">Отменен</option>
+            <option value="ALL">{tWork("allStatuses")}</option>
+            <option value="PLANNED">{tWork("routeStatus.PLANNED")}</option>
+            <option value="IN_PROGRESS">{tWork("routeStatus.IN_PROGRESS")}</option>
+            <option value="COMPLETED">{tWork("routeStatus.COMPLETED")}</option>
+            <option value="CANCELLED">{tWork("routeStatus.CANCELLED")}</option>
           </select>
           <button
             className="inline-flex h-10 items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-50"
@@ -807,7 +793,7 @@ function RoutesView({
             onClick={openCreate}
           >
             <Plus className="h-4 w-4" />
-            Новый маршрут
+            {tWork("routes.new")}
           </button>
           <button
             className="inline-flex h-10 items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -815,7 +801,7 @@ function RoutesView({
             disabled={!selectedRoute}
           >
             <Pencil className="h-4 w-4" />
-            Изменить
+            {tWork("edit")}
           </button>
           <button
             className="inline-flex h-10 items-center gap-1 rounded-md border border-red-200 bg-white px-3 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -823,14 +809,14 @@ function RoutesView({
             disabled={!selectedRoute || selectedRoute.status === "CANCELLED"}
           >
             <Ban className="h-4 w-4" />
-            Отменить
+            {tWork("cancel")}
           </button>
         </div>
 
         <div className="mt-3 grid gap-2">
-          {loading ? <div className="rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">Загрузка маршрутов...</div> : null}
+          {loading ? <div className="rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">{tWork("routes.loading")}</div> : null}
           {!loading && filteredRoutes.length === 0 ? (
-            <div className="rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">Маршруты под фильтр не найдены.</div>
+            <div className="rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">{tWork("routes.emptyFilter")}</div>
           ) : null}
           {filteredRoutes.map((route) => {
             const completion = percent(route.visitedPoints, route.totalPoints)
@@ -849,20 +835,20 @@ function RoutesView({
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
                       <span className="inline-flex items-center gap-1">
                         <CalendarDays className="h-3 w-3" />
-                        {formatDate(route.date, { dateStyle: "medium" })}
+                        {formatLocaleDate(route.date, locale, { dateStyle: "medium" })}
                       </span>
-                      <span>{route.agent?.name ?? "Без агента"}</span>
+                      <span>{route.agent?.name ?? tWork("unassigned")}</span>
                     </div>
                   </div>
                   <span className={`rounded-full border px-2 py-1 text-xs font-medium ${routeStatusClass(route.status)}`}>
-                    {ROUTE_STATUS_LABELS[route.status]}
+                    {tWork(`routeStatus.${route.status}`)}
                   </span>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-100">
                   <div className="h-full rounded-full bg-neutral-900" style={{ width: `${completion}%` }} />
                 </div>
                 <div className="mt-2 flex justify-between text-xs text-neutral-500">
-                  <span>{route.visitedPoints}/{route.totalPoints} точек</span>
+                  <span>{tWork("routes.pointsCount", { visited: route.visitedPoints, total: route.totalPoints })}</span>
                   <span>{completion}%</span>
                 </div>
               </button>
@@ -874,6 +860,7 @@ function RoutesView({
       <div className="order-1 rounded-lg border border-neutral-200 bg-white p-3 xl:order-2">
         {actionMessage ? (
           <div
+            role={actionMessage.type === "error" ? "alert" : "status"}
             className={`mb-3 rounded-md border p-2 text-sm ${
               actionMessage.type === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
@@ -888,42 +875,42 @@ function RoutesView({
           <form onSubmit={submitRoute} className="space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">{formMode === "edit" ? "Редактировать маршрут" : "Новый маршрут"}</h2>
+                <h2 className="text-lg font-semibold">{formMode === "edit" ? tWork("routes.editTitle") : tWork("routes.new")}</h2>
                 <p className="mt-1 text-xs text-neutral-500">
-                  {routeLocked ? "Точки заблокированы: по маршруту уже есть визиты." : "Точки сохраняются в том порядке, в котором они стоят здесь."}
+                  {routeLocked ? tWork("routes.lockedHint") : tWork("routes.orderHint")}
                 </p>
               </div>
               <button
                 type="button"
                 className="rounded-md border border-neutral-300 p-2 text-neutral-600 hover:bg-neutral-50"
                 onClick={() => setFormMode(null)}
-                aria-label="Закрыть форму"
+                aria-label={tWork("closeForm")}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {formError ? <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
+            {formError ? <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
 
             <label className="block">
-              <span className="text-sm font-medium">Название</span>
+              <span className="text-sm font-medium">{tWork("routes.name")}</span>
               <input
                 className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
                 value={routeForm.name}
                 onChange={(event) => setRouteForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Например: Маршрут Baku-01"
+                placeholder={tWork("routes.namePlaceholder")}
               />
             </label>
 
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-medium">Агент</span>
+                <span className="text-sm font-medium">{tWork("agent")}</span>
                 <select
                   className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
                   value={routeForm.agentId}
                   onChange={(event) => setRouteForm((current) => ({ ...current, agentId: event.target.value }))}
                 >
-                  <option value="">Без агента</option>
+                  <option value="">{tWork("unassigned")}</option>
                   {agents.map((agent) => (
                     <option key={agent.id} value={agent.id}>
                       {agent.name}
@@ -932,7 +919,7 @@ function RoutesView({
                 </select>
               </label>
               <label className="block">
-                <span className="text-sm font-medium">Дата</span>
+                <span className="text-sm font-medium">{tWork("date")}</span>
                 <input
                   className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
                   type="date"
@@ -944,12 +931,12 @@ function RoutesView({
 
             <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">Точки маршрута</h3>
-                <span className="text-xs text-neutral-500">{routeForm.storeIds.length} точек</span>
+                <h3 className="text-sm font-semibold">{tWork("routes.stops")}</h3>
+                <span className="text-xs text-neutral-500">{tWork("routes.storeCount", { count: routeForm.storeIds.length })}</span>
               </div>
               <div className="mt-2 space-y-2">
                 {routeForm.storeIds.length === 0 ? (
-                  <div className="rounded-md bg-white p-3 text-sm text-neutral-500">Пока нет точек.</div>
+                  <div className="rounded-md bg-white p-3 text-sm text-neutral-500">{tWork("routes.noStops")}</div>
                 ) : null}
                 {routeForm.storeIds.map((storeId, index) => {
                   const store = storeById.get(storeId)
@@ -959,8 +946,8 @@ function RoutesView({
                         {index + 1}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{store?.name ?? "Точка не найдена"}</div>
-                        <div className="truncate text-xs text-neutral-500">{store?.address ?? store?.code ?? "Без адреса"}</div>
+                        <div className="truncate font-medium">{store?.name ?? tWork("storeNotFound")}</div>
+                        <div className="truncate text-xs text-neutral-500">{store?.address ?? store?.code ?? tWork("noAddress")}</div>
                       </div>
                       {!routeLocked ? (
                         <div className="flex shrink-0 items-center gap-1">
@@ -969,6 +956,7 @@ function RoutesView({
                             className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40"
                             onClick={() => moveStore(storeId, -1)}
                             disabled={index === 0}
+                            aria-label={tWork("routes.moveUp", { store: store?.name ?? "" })}
                           >
                             ↑
                           </button>
@@ -977,6 +965,7 @@ function RoutesView({
                             className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40"
                             onClick={() => moveStore(storeId, 1)}
                             disabled={index === routeForm.storeIds.length - 1}
+                            aria-label={tWork("routes.moveDown", { store: store?.name ?? "" })}
                           >
                             ↓
                           </button>
@@ -985,7 +974,7 @@ function RoutesView({
                             className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
                             onClick={() => removeStore(storeId)}
                           >
-                            Убрать
+                            {tWork("remove")}
                           </button>
                         </div>
                       ) : null}
@@ -999,7 +988,7 @@ function RoutesView({
                   value=""
                   onChange={(event) => addStore(event.target.value)}
                 >
-                  <option value="">Добавить торговую точку</option>
+                  <option value="">{tWork("routes.addStore")}</option>
                   {stores
                     .filter((store) => !selectedStoreIds.has(store.id))
                     .map((store) => (
@@ -1018,7 +1007,7 @@ function RoutesView({
                 onClick={() => setFormMode(null)}
               >
                 <X className="h-4 w-4" />
-                Закрыть
+                {tWork("close")}
               </button>
               <button
                 type="submit"
@@ -1026,32 +1015,32 @@ function RoutesView({
                 disabled={saving}
               >
                 <Save className="h-4 w-4" />
-                {saving ? "Сохранение..." : "Сохранить"}
+                {saving ? tWork("saving") : tWork("save")}
               </button>
             </div>
           </form>
         ) : selectedRoute ? (
           <div className="mt-3 space-y-3">
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold">Детали маршрута</h2>
+              <h2 className="text-lg font-semibold">{tWork("routes.details")}</h2>
               <button
                 className="inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs hover:bg-neutral-50"
                 onClick={openEdit}
               >
                 <Pencil className="h-3.5 w-3.5" />
-                Изменить
+                {tWork("edit")}
               </button>
             </div>
             <div>
               <div className="text-sm font-semibold">{selectedRoute.name}</div>
               <div className="mt-1 text-xs text-neutral-500">
-                {selectedRoute.agent?.name ?? "Без агента"} · {ROUTE_STATUS_LABELS[selectedRoute.status]}
+                {selectedRoute.agent?.name ?? tWork("unassigned")} · {tWork(`routeStatus.${selectedRoute.status}`)}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <MetricCard label="Точки" value={selectedRoute.totalPoints} />
-              <MetricCard label="Выполнено" value={selectedRoute.visitedPoints} />
-              <MetricCard label="Прогресс" value={`${percent(selectedRoute.visitedPoints, selectedRoute.totalPoints)}%`} />
+              <MetricCard label={tWork("routes.metrics.points")} value={selectedRoute.totalPoints} />
+              <MetricCard label={tWork("routes.metrics.completed")} value={selectedRoute.visitedPoints} />
+              <MetricCard label={tWork("routes.metrics.progress")} value={`${percent(selectedRoute.visitedPoints, selectedRoute.totalPoints)}%`} />
             </div>
             <div className="space-y-2">
               {selectedRoute.points.map((point) => (
@@ -1067,7 +1056,7 @@ function RoutesView({
                         {point.customer.name}
                       </Link>
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-neutral-500">{point.customer.address ?? "Адрес не указан"}</div>
+                    <div className="mt-0.5 truncate text-xs text-neutral-500">{point.customer.address ?? tWork("noAddress")}</div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                       {point.visitStatus ? (
                         <span className="rounded-full bg-white px-2 py-1 text-neutral-600">
@@ -1089,7 +1078,7 @@ function RoutesView({
                     </div>
                   </div>
                   <div className="text-right text-xs text-neutral-500">
-                    {point.visitedAt ? formatDate(point.visitedAt, { timeStyle: "short" }) : point.plannedTime ? formatDate(point.plannedTime, { timeStyle: "short" }) : "—"}
+                    {point.visitedAt ? formatLocaleDate(point.visitedAt, locale, { timeStyle: "short" }) : point.plannedTime ? formatLocaleDate(point.plannedTime, locale, { timeStyle: "short" }) : "—"}
                   </div>
                 </div>
               ))}
@@ -1097,8 +1086,8 @@ function RoutesView({
           </div>
         ) : (
           <div>
-            <h2 className="text-lg font-semibold">Детали маршрута</h2>
-            <div className="mt-6 rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">Выберите маршрут слева.</div>
+            <h2 className="text-lg font-semibold">{tWork("routes.details")}</h2>
+            <div className="mt-6 rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">{tWork("routes.selectHint")}</div>
           </div>
         )}
       </div>
@@ -1133,6 +1122,7 @@ function AgentsView({
   onUpdateAgent: (agentId: string, payload: AgentUpdatePayload) => Promise<void>
   onExport: () => void
 }) {
+  const tWork = useTranslations("fieldForce.workspace")
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
   const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null)
   const [saving, setSaving] = useState(false)
@@ -1156,7 +1146,7 @@ function AgentsView({
   const submitAgent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (formMode === "create" && !agentForm.userId) {
-      setFormError("Выберите пользователя.")
+      setFormError(tWork("agents.validation.user"))
       return
     }
     setSaving(true)
@@ -1187,17 +1177,17 @@ function AgentsView({
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <ToolbarSearch value={agentSearch} placeholder="Найти агента, команду или код" onChange={onAgentSearch} />
+        <ToolbarSearch value={agentSearch} placeholder={tWork("agents.search")} onChange={onAgentSearch} />
         <select
           className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm"
           value={agentStatus}
           onChange={(event) => onAgentStatus(event.target.value as "ALL" | AgentItem["fieldStatus"])}
         >
-          <option value="ALL">Все статусы</option>
-          <option value="CHECKED_IN">На точке</option>
-          <option value="ON_ROAD">В пути</option>
-          <option value="LATE">Опаздывает</option>
-          <option value="OFFLINE">Офлайн</option>
+          <option value="ALL">{tWork("allStatuses")}</option>
+          <option value="CHECKED_IN">{tWork("fieldStatus.CHECKED_IN")}</option>
+          <option value="ON_ROAD">{tWork("fieldStatus.ON_ROAD")}</option>
+          <option value="LATE">{tWork("fieldStatus.LATE")}</option>
+          <option value="OFFLINE">{tWork("fieldStatus.OFFLINE")}</option>
         </select>
         <button
           className="inline-flex h-10 items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-50"
@@ -1212,31 +1202,31 @@ function AgentsView({
           disabled={userCandidates.length === 0}
         >
           <Plus className="h-4 w-4" />
-          Добавить агента
+          {tWork("agents.add")}
         </button>
       </div>
 
-      <div className="mt-3 overflow-hidden rounded-lg border border-neutral-200">
-        <div className="grid grid-cols-[minmax(220px,1.2fr)_1fr_130px_120px_110px_96px] bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase text-neutral-500">
-          <div>Агент</div>
-          <div>Команда</div>
-          <div>Статус</div>
-          <div>Визиты</div>
-          <div>Прогресс</div>
+      <div className="mt-3 overflow-x-auto rounded-lg border border-neutral-200">
+        <div className="grid min-w-[900px] grid-cols-[minmax(220px,1.2fr)_1fr_130px_120px_110px_96px] bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase text-neutral-500">
+          <div>{tWork("agent")}</div>
+          <div>{tWork("team")}</div>
+          <div>{tWork("status")}</div>
+          <div>{tWork("visits")}</div>
+          <div>{tWork("progress")}</div>
           <div></div>
         </div>
-        {loading ? <div className="p-6 text-center text-sm text-neutral-500">Загрузка агентов...</div> : null}
-        {!loading && agents.length === 0 ? <div className="p-6 text-center text-sm text-neutral-500">Агенты под фильтр не найдены.</div> : null}
+        {loading ? <div className="p-6 text-center text-sm text-neutral-500">{tWork("agents.loading")}</div> : null}
+        {!loading && agents.length === 0 ? <div className="p-6 text-center text-sm text-neutral-500">{tWork("agents.emptyFilter")}</div> : null}
         {agents.map((agent) => (
-          <div key={agent.id} className="grid grid-cols-[minmax(220px,1.2fr)_1fr_130px_120px_110px_96px] items-center border-t border-neutral-100 px-3 py-2 text-sm">
+          <div key={agent.id} className="grid min-w-[900px] grid-cols-[minmax(220px,1.2fr)_1fr_130px_120px_110px_96px] items-center border-t border-neutral-100 px-3 py-2 text-sm">
             <div className="min-w-0">
               <div className="truncate font-medium">{agent.name}</div>
-              <div className="truncate text-xs text-neutral-500">{agent.email ?? agent.employeeCode ?? "Без email"}</div>
+              <div className="truncate text-xs text-neutral-500">{agent.email ?? agent.employeeCode ?? tWork("noEmail")}</div>
             </div>
-            <div className="truncate text-neutral-600">{agent.team?.name ?? "Без команды"}</div>
+            <div className="truncate text-neutral-600">{agent.team?.name ?? tWork("noTeam")}</div>
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${fieldStatusClass(agent.fieldStatus)}`} />
-              <span>{FIELD_STATUS_LABELS[agent.fieldStatus]}</span>
+              <span>{tWork(`fieldStatus.${agent.fieldStatus}`)}</span>
             </div>
             <div>{agent.completedVisitsToday}/{agent.visitsToday}</div>
             <div>{agent.routeCompletion}%</div>
@@ -1246,7 +1236,7 @@ function AgentsView({
                 onClick={() => openEdit(agent)}
               >
                 <Pencil className="h-3.5 w-3.5" />
-                Изменить
+                {tWork("edit")}
               </button>
             </div>
           </div>
@@ -1257,6 +1247,7 @@ function AgentsView({
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
         {actionMessage ? (
           <div
+            role={actionMessage.type === "error" ? "alert" : "status"}
             className={`mb-3 rounded-md border p-2 text-sm ${
               actionMessage.type === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
@@ -1270,28 +1261,28 @@ function AgentsView({
           <form onSubmit={submitAgent} className="space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">{formMode === "edit" ? "Редактировать агента" : "Добавить агента"}</h2>
+                <h2 className="text-lg font-semibold">{formMode === "edit" ? tWork("agents.editTitle") : tWork("agents.add")}</h2>
                 {editingAgent ? <p className="mt-1 text-xs text-neutral-500">{editingAgent.name}</p> : null}
               </div>
               <button
                 type="button"
                 className="rounded-md border border-neutral-300 p-2 text-neutral-600 hover:bg-neutral-50"
                 onClick={() => setFormMode(null)}
-                aria-label="Закрыть форму"
+                aria-label={tWork("closeForm")}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {formError ? <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
+            {formError ? <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
             {formMode === "create" ? (
               <label className="block">
-                <span className="text-sm font-medium">Пользователь</span>
+                <span className="text-sm font-medium">{tWork("user")}</span>
                 <select
                   className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
                   value={agentForm.userId}
                   onChange={(event) => setAgentForm((current) => ({ ...current, userId: event.target.value }))}
                 >
-                  <option value="">Выберите пользователя</option>
+                  <option value="">{tWork("agents.selectUser")}</option>
                   {userCandidates.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}{user.employeeCode ? ` (${user.employeeCode})` : ""}
@@ -1301,13 +1292,13 @@ function AgentsView({
               </label>
             ) : null}
             <label className="block">
-              <span className="text-sm font-medium">Команда</span>
+              <span className="text-sm font-medium">{tWork("team")}</span>
               <select
                 className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
                 value={agentForm.teamId}
                 onChange={(event) => setAgentForm((current) => ({ ...current, teamId: event.target.value }))}
               >
-                <option value="">Без команды</option>
+                <option value="">{tWork("noTeam")}</option>
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
@@ -1316,7 +1307,7 @@ function AgentsView({
               </select>
             </label>
             <label className="block">
-              <span className="text-sm font-medium">Телефон</span>
+              <span className="text-sm font-medium">{tWork("phone")}</span>
               <input
                 className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
                 value={agentForm.phone}
@@ -1331,7 +1322,7 @@ function AgentsView({
                 onClick={() => setFormMode(null)}
               >
                 <X className="h-4 w-4" />
-                Закрыть
+                {tWork("close")}
               </button>
               <button
                 type="submit"
@@ -1339,18 +1330,18 @@ function AgentsView({
                 disabled={saving}
               >
                 <Save className="h-4 w-4" />
-                {saving ? "Сохранение..." : "Сохранить"}
+                {saving ? tWork("saving") : tWork("save")}
               </button>
             </div>
           </form>
         ) : (
           <div>
-            <h2 className="text-lg font-semibold">Управление агентами</h2>
+            <h2 className="text-lg font-semibold">{tWork("agents.management")}</h2>
             <div className="mt-3 space-y-2 text-sm text-neutral-600">
-              <div className="rounded-md bg-neutral-50 p-2">Агент привязывается к активному пользователю LeadShelf.</div>
-              <div className="rounded-md bg-neutral-50 p-2">Команда и телефон редактируются без пересоздания пользователя.</div>
+              <div className="rounded-md bg-neutral-50 p-2">{tWork("agents.userHint")}</div>
+              <div className="rounded-md bg-neutral-50 p-2">{tWork("agents.editHint")}</div>
               {userCandidates.length === 0 ? (
-                <div className="rounded-md bg-amber-50 p-2 text-amber-700">Все активные пользователи уже назначены агентами.</div>
+                <div className="rounded-md bg-amber-50 p-2 text-amber-700">{tWork("agents.noCandidates")}</div>
               ) : null}
             </div>
           </div>
@@ -1361,39 +1352,36 @@ function AgentsView({
 }
 
 function LeaderboardView({ agents }: { agents: LeaderboardItem[] }) {
+  const tWork = useTranslations("fieldForce.workspace")
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
-        <h2 className="text-lg font-semibold">Лидерборд исполнения</h2>
+        <h2 className="text-lg font-semibold">{tWork("leaderboard.title")}</h2>
         <div className="mt-3 space-y-2">
           {agents.map((agent, index) => (
-            <div key={agent.id} className="grid grid-cols-[48px_minmax(0,1fr)_120px_120px] items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+            <div key={agent.id} className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3">
               <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${index < 3 ? "bg-neutral-900 text-white" : "bg-white text-neutral-700"}`}>
                 {index + 1}
               </div>
               <div className="min-w-0">
                 <div className="truncate font-semibold">{agent.name}</div>
-                <div className="truncate text-xs text-neutral-500">{agent.team?.name ?? "Без команды"} · {FIELD_STATUS_LABELS[agent.fieldStatus]}</div>
-              </div>
-              <div className="text-sm">
-                <div className="font-semibold">{agent.completedVisitsToday}</div>
-                <div className="text-xs text-neutral-500">визитов</div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-semibold">{agent.score}</div>
-                <div className="text-xs text-neutral-500">баллов</div>
+                <div className="truncate text-xs text-neutral-500">{agent.team?.name ?? tWork("noTeam")} · {tWork(`fieldStatus.${agent.fieldStatus}`)}</div>
+                <div className="mt-1 flex flex-wrap gap-3 text-xs text-neutral-600">
+                  <span>{tWork("leaderboard.visits", { count: agent.completedVisitsToday })}</span>
+                  <span className="font-semibold">{tWork("leaderboard.points", { count: agent.score })}</span>
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
-        <h3 className="font-semibold">Как считается рейтинг</h3>
+        <h3 className="font-semibold">{tWork("leaderboard.how")}</h3>
         <div className="mt-3 space-y-2 text-sm text-neutral-600">
-          <div className="rounded-md bg-neutral-50 p-2">+20 баллов за завершенный визит сегодня.</div>
-          <div className="rounded-md bg-neutral-50 p-2">+процент выполнения активных точек.</div>
-          <div className="rounded-md bg-neutral-50 p-2">+10 баллов, если агент онлайн.</div>
-          <div className="rounded-md bg-neutral-50 p-2">-20 баллов, если есть просроченная точка.</div>
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("leaderboard.ruleVisit")}</div>
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("leaderboard.ruleCompletion")}</div>
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("leaderboard.ruleOnline")}</div>
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("leaderboard.ruleLate")}</div>
         </div>
       </div>
     </section>
@@ -1401,12 +1389,14 @@ function LeaderboardView({ agents }: { agents: LeaderboardItem[] }) {
 }
 
 function ActivityView({ events }: { events: LiveEvent[] }) {
+  const tWork = useTranslations("fieldForce.workspace")
+  const locale = useLocale()
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Журнал активности</h2>
-          <p className="mt-1 text-sm text-neutral-500">Последние check-in, check-out и события маршрутов.</p>
+          <h2 className="text-lg font-semibold">{tWork("activity.title")}</h2>
+          <p className="mt-1 text-sm text-neutral-500">{tWork("activity.subtitle")}</p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-xs text-red-600">
           <Radio className="h-3 w-3 animate-pulse" />
@@ -1414,15 +1404,15 @@ function ActivityView({ events }: { events: LiveEvent[] }) {
         </span>
       </div>
       <div className="mt-4 space-y-2">
-        {events.length === 0 ? <div className="rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">Событий пока нет.</div> : null}
+        {events.length === 0 ? <div className="rounded-lg bg-neutral-50 p-6 text-center text-sm text-neutral-500">{tWork("activity.empty")}</div> : null}
         {events.map((event) => (
-          <div key={event.id} className="grid grid-cols-[120px_minmax(0,1fr)_180px] items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-sm">
-            <div className="text-xs text-neutral-500">{formatDate(event.time, { timeStyle: "short" })}</div>
+          <div key={event.id} className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-sm sm:grid-cols-[120px_minmax(0,1fr)_180px]">
+            <div className="text-xs text-neutral-500">{formatLocaleDate(event.time, locale, { timeStyle: "short" })}</div>
             <div className="min-w-0">
               <div className="truncate font-medium">{event.agent}</div>
               <div className="truncate text-xs text-neutral-500">{event.customer}</div>
             </div>
-            <div className="text-right text-xs font-medium text-neutral-600">{event.type}</div>
+            <div className="col-span-2 text-left text-xs font-medium text-neutral-600 sm:col-span-1 sm:text-right">{event.type}</div>
           </div>
         ))}
       </div>
@@ -1431,24 +1421,25 @@ function ActivityView({ events }: { events: LiveEvent[] }) {
 }
 
 function ReportsView({ report, routes, agents }: { report: ReportShape; routes: RouteItem[]; agents: AgentItem[] }) {
+  const tWork = useTranslations("fieldForce.workspace")
   return (
     <section className="space-y-4">
       <div className="grid gap-3 md:grid-cols-4">
-        <MetricCard label="Маршруты" value={report.totalRoutes} icon={<Route className="h-4 w-4" />} />
-        <MetricCard label="Выполнение точек" value={`${report.completion}%`} icon={<CheckCircle2 className="h-4 w-4" />} />
-        <MetricCard label="Агенты онлайн" value={`${report.onlineAgents}/${agents.length}`} icon={<Users className="h-4 w-4" />} />
-        <MetricCard label="Опоздания" value={report.lateAgents} icon={<SlidersHorizontal className="h-4 w-4" />} />
+        <MetricCard label={tWork("reports.routes")} value={report.totalRoutes} icon={<Route className="h-4 w-4" />} />
+        <MetricCard label={tWork("reports.completion")} value={`${report.completion}%`} icon={<CheckCircle2 className="h-4 w-4" />} />
+        <MetricCard label={tWork("reports.onlineAgents")} value={`${report.onlineAgents}/${agents.length}`} icon={<Users className="h-4 w-4" />} />
+        <MetricCard label={tWork("reports.late")} value={report.lateAgents} icon={<SlidersHorizontal className="h-4 w-4" />} />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-lg border border-neutral-200 bg-white p-3">
-          <h2 className="text-lg font-semibold">Сводка по маршрутам</h2>
+          <h2 className="text-lg font-semibold">{tWork("reports.routeSummary")}</h2>
           <div className="mt-3 grid gap-2">
             {routes.map((route) => (
               <div key={route.id} className="rounded-lg border border-neutral-100 bg-neutral-50 p-3">
                 <div className="flex justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate font-medium">{route.name}</div>
-                    <div className="truncate text-xs text-neutral-500">{route.agent?.name ?? "Без агента"}</div>
+                    <div className="truncate text-xs text-neutral-500">{route.agent?.name ?? tWork("unassigned")}</div>
                   </div>
                   <div className="text-right text-sm font-semibold">{percent(route.visitedPoints, route.totalPoints)}%</div>
                 </div>
@@ -1460,13 +1451,13 @@ function ReportsView({ report, routes, agents }: { report: ReportShape; routes: 
           </div>
         </div>
         <div className="rounded-lg border border-neutral-200 bg-white p-3">
-          <h2 className="text-lg font-semibold">Сводка по агентам</h2>
+          <h2 className="text-lg font-semibold">{tWork("reports.agentSummary")}</h2>
           <div className="mt-3 grid gap-2">
             {agents.map((agent) => (
               <div key={agent.id} className="grid grid-cols-[minmax(0,1fr)_90px_90px] items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-sm">
                 <div className="min-w-0">
                   <div className="truncate font-medium">{agent.name}</div>
-                  <div className="truncate text-xs text-neutral-500">{agent.team?.name ?? "Без команды"}</div>
+                  <div className="truncate text-xs text-neutral-500">{agent.team?.name ?? tWork("noTeam")}</div>
                 </div>
                 <div>{agent.completedVisitsToday}/{agent.visitsToday}</div>
                 <div className="text-right font-semibold">{agent.routeCompletion}%</div>
@@ -1494,15 +1485,18 @@ function SettingsView({
   onChange: (settings: SettingsState) => void
   onSave: () => Promise<void>
 }) {
+  const tWork = useTranslations("fieldForce.workspace")
+  const locale = useLocale()
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
-        <h2 className="text-lg font-semibold">Настройки маршрутов</h2>
+        <h2 className="text-lg font-semibold">{tWork("settings.title")}</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Серверные политики для GPS, геозон, offline-статуса и обязательных мобильных проверок.
+          {tWork("settings.subtitle")}
         </p>
         {actionMessage ? (
           <div
+            role={actionMessage.type === "error" ? "alert" : "status"}
             className={`mt-3 rounded-md border p-2 text-sm ${
               actionMessage.type === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
@@ -1514,21 +1508,21 @@ function SettingsView({
         ) : null}
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <NumberSetting
-            label="GPS refresh, сек"
+            label={tWork("settings.gps")}
             value={settings.gpsRefreshSeconds}
             min={5}
             max={120}
             onChange={(value) => onChange({ ...settings, gpsRefreshSeconds: value })}
           />
           <NumberSetting
-            label="Радиус геозоны, м"
+            label={tWork("settings.geofence")}
             value={settings.geofenceRadiusM}
             min={30}
             max={1000}
             onChange={(value) => onChange({ ...settings, geofenceRadiusM: value })}
           />
           <NumberSetting
-            label="Офлайн после, мин"
+            label={tWork("settings.offlineAfter")}
             value={settings.offlineAfterMinutes}
             min={5}
             max={240}
@@ -1537,17 +1531,17 @@ function SettingsView({
         </div>
         <div className="mt-4 grid gap-2">
           <ToggleSetting
-            label="Требовать фото-подтверждение визита"
+            label={tWork("settings.requirePhoto")}
             checked={settings.requirePhotoProof}
             onChange={(checked) => onChange({ ...settings, requirePhotoProof: checked })}
           />
           <ToggleSetting
-            label="Требовать сканирование полки в мобильном приложении"
+            label={tWork("settings.requireScan")}
             checked={settings.requireShelfScan}
             onChange={(checked) => onChange({ ...settings, requireShelfScan: checked })}
           />
           <ToggleSetting
-            label="Подсвечивать просроченные визиты"
+            label={tWork("settings.alertLate")}
             checked={settings.alertLateVisits}
             onChange={(checked) => onChange({ ...settings, alertLateVisits: checked })}
           />
@@ -1557,16 +1551,16 @@ function SettingsView({
           onClick={onSave}
           disabled={saving}
         >
-          {saving ? "Сохранение..." : "Сохранить настройки"}
+          {saving ? tWork("saving") : tWork("settings.save")}
         </button>
       </div>
       <div className="rounded-lg border border-neutral-200 bg-white p-3">
-        <h3 className="font-semibold">Что уже подключено</h3>
+        <h3 className="font-semibold">{tWork("settings.connected")}</h3>
         <div className="mt-3 space-y-2 text-sm text-neutral-600">
-          <div className="rounded-md bg-neutral-50 p-2">Карта агентов и маршрутов работает через LeadShelf API.</div>
-          <div className="rounded-md bg-neutral-50 p-2">Маршруты, агенты, активность, рейтинг и отчеты читают dedicated API.</div>
-          <div className="rounded-md bg-neutral-50 p-2">Offline-статус агентов зависит от сохраненного server-side порога.</div>
-          {savedAt ? <div className="rounded-md bg-green-50 p-2 text-green-700">Сохранено {formatDate(savedAt.toISOString(), { timeStyle: "short" })}</div> : null}
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("settings.connectedMap")}</div>
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("settings.connectedApi")}</div>
+          <div className="rounded-md bg-neutral-50 p-2">{tWork("settings.connectedOffline")}</div>
+          {savedAt ? <div className="rounded-md bg-green-50 p-2 text-green-700">{tWork("settings.savedAt", { value: formatLocaleDate(savedAt, locale, { timeStyle: "short" }) })}</div> : null}
         </div>
       </div>
     </section>

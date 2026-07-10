@@ -4,7 +4,11 @@
     "loading": "Загрузка...",
     "workspace": "Операционный контур полки",
     "demoTenant": "Demo tenant готов",
-    "details": "Детали"
+    "details": "Детали",
+    "mainNavigation": "Основная навигация",
+    "moreNavigation": "Дополнительные разделы",
+    "more": "Ещё",
+    "fieldForceShort": "Поле"
   },
   "auth": {
     "title": "Вход",
@@ -629,7 +633,8 @@
       "PHOTO_SUBMITTED": "Фото получено",
       "COMPLETED": "Принять",
       "EXPIRED": "Просрочить",
-      "EMPTY": "Пустая"
+      "EMPTY": "Пустая",
+      "actionFailed": "Не удалось обновить статус. Попробуйте ещё раз."
     },
     "confirm": {
       "COMPLETED": "Принять задачу как выполненную?",
@@ -917,6 +922,9 @@
     "noPhoto": "Фото нет",
     "photoProof": "Фото выполнения",
     "videoProof": "Видео выполнения",
+    "proofAlt": "Фото-подтверждение для «{title}»",
+    "goldenAlt": "Эталонная выкладка для «{title}»",
+    "frameAlt": "Выбранный кадр видео для «{title}»",
     "equipmentMismatch": "Оборудование не совпадает с базой",
     "goldenReference": "Эталон",
     "noReference": "Эталон не задан",
@@ -924,6 +932,8 @@
     "unknownStore": "Точка не указана",
     "approve": "Принять",
     "reject": "Отклонить",
+    "saving": "Сохраняем…",
+    "actionFailed": "Не удалось сохранить решение. Попробуйте ещё раз.",
     "dashboard": {
       "pending": "На проверке",
       "approved": "Принято",
@@ -970,6 +980,174 @@
     }
   },
   "fieldForce": {
+    "workspace": {
+      "title": "Маршрутный модуль",
+      "subtitle": "Карта, маршруты, агенты и контроль исполнения для полевой команды.",
+      "updated": "Обновлено {value}",
+      "refresh": "Обновить",
+      "loadError": "Не удалось загрузить маршрутный модуль. Проверьте сессию и API field-force.",
+      "allStatuses": "Все статусы",
+      "agent": "Агент",
+      "team": "Команда",
+      "status": "Статус",
+      "visits": "Визиты",
+      "progress": "Прогресс",
+      "user": "Пользователь",
+      "phone": "Телефон",
+      "date": "Дата",
+      "unassigned": "Без агента",
+      "noTeam": "Без команды",
+      "noEmail": "Без e-mail",
+      "noAddress": "Адрес не указан",
+      "storeNotFound": "Точка не найдена",
+      "edit": "Изменить",
+      "cancel": "Отменить",
+      "remove": "Убрать",
+      "close": "Закрыть",
+      "closeForm": "Закрыть форму",
+      "save": "Сохранить",
+      "saving": "Сохранение...",
+      "tabs": {
+        "map": { "label": "Карта", "description": "живое движение" },
+        "routes": { "label": "Маршруты", "description": "точки и выполнение" },
+        "agents": { "label": "Агенты", "description": "команды и статусы" },
+        "leaderboard": { "label": "Лидерборд", "description": "рейтинг исполнения" },
+        "activity": { "label": "Активность", "description": "события визитов" },
+        "reports": { "label": "Отчёты", "description": "дневная сводка" },
+        "settings": { "label": "Настройки", "description": "политики исполнения" }
+      },
+      "routeStatus": {
+        "PLANNED": "Запланирован",
+        "IN_PROGRESS": "В работе",
+        "COMPLETED": "Завершён",
+        "CANCELLED": "Отменён"
+      },
+      "fieldStatus": {
+        "CHECKED_IN": "На точке",
+        "ON_ROAD": "В пути",
+        "LATE": "Опаздывает",
+        "OFFLINE": "Офлайн"
+      },
+      "messages": {
+        "routeCreated": "Маршрут создан.",
+        "routeCreateFailed": "Маршрут не сохранён: {error}",
+        "routeUpdated": "Маршрут обновлён.",
+        "routeUpdateFailed": "Маршрут не обновлён: {error}",
+        "routeCancelled": "Маршрут отменён.",
+        "routeCancelFailed": "Маршрут не отменён: {error}",
+        "agentCreated": "Агент добавлен.",
+        "agentCreateFailed": "Агент не сохранён: {error}",
+        "agentUpdated": "Агент обновлён.",
+        "agentUpdateFailed": "Агент не обновлён: {error}",
+        "settingsSaved": "Настройки field-force сохранены на сервере.",
+        "settingsFailed": "Настройки не сохранены: {error}"
+      },
+      "routes": {
+        "search": "Найти маршрут, агента или торговую точку",
+        "new": "Новый маршрут",
+        "editTitle": "Редактировать маршрут",
+        "loading": "Загрузка маршрутов...",
+        "emptyFilter": "Маршруты под фильтр не найдены.",
+        "pointsCount": "{visited}/{total} точек",
+        "confirmPastDate": "Дата {date} уже прошла. Сохранить маршрут на прошедшую дату?",
+        "confirmCancel": "Отменить маршрут «{name}»?",
+        "lockedHint": "Точки заблокированы: по маршруту уже есть визиты.",
+        "orderHint": "Точки сохраняются в том порядке, в котором они стоят здесь.",
+        "name": "Название",
+        "namePlaceholder": "Например: Маршрут Baku-01",
+        "stops": "Точки маршрута",
+        "storeCount": "{count} точек",
+        "noStops": "Пока нет точек.",
+        "moveUp": "Поднять точку {store}",
+        "moveDown": "Опустить точку {store}",
+        "addStore": "Добавить торговую точку",
+        "details": "Детали маршрута",
+        "selectHint": "Выберите маршрут слева.",
+        "validation": {
+          "name": "Укажите название маршрута.",
+          "store": "Добавьте хотя бы одну торговую точку."
+        },
+        "metrics": { "points": "Точки", "completed": "Выполнено", "progress": "Прогресс" }
+      },
+      "agents": {
+        "search": "Найти агента, команду или код",
+        "add": "Добавить агента",
+        "editTitle": "Редактировать агента",
+        "loading": "Загрузка агентов...",
+        "emptyFilter": "Агенты под фильтр не найдены.",
+        "selectUser": "Выберите пользователя",
+        "management": "Управление агентами",
+        "userHint": "Агент привязывается к активному пользователю LeadShelf.",
+        "editHint": "Команда и телефон редактируются без пересоздания пользователя.",
+        "noCandidates": "Все активные пользователи уже назначены агентами.",
+        "validation": { "user": "Выберите пользователя." }
+      },
+      "leaderboard": {
+        "title": "Лидерборд исполнения",
+        "visits": "визитов: {count}",
+        "points": "баллов: {count}",
+        "how": "Как считается рейтинг",
+        "ruleVisit": "+20 баллов за завершённый визит сегодня.",
+        "ruleCompletion": "+процент выполнения активных точек.",
+        "ruleOnline": "+10 баллов, если агент онлайн.",
+        "ruleLate": "-20 баллов, если есть просроченная точка."
+      },
+      "activity": {
+        "title": "Журнал активности",
+        "subtitle": "Последние check-in, check-out и события маршрутов.",
+        "empty": "Событий пока нет."
+      },
+      "reports": {
+        "routes": "Маршруты",
+        "completion": "Выполнение точек",
+        "onlineAgents": "Агенты онлайн",
+        "late": "Опоздания",
+        "routeSummary": "Сводка по маршрутам",
+        "agentSummary": "Сводка по агентам"
+      },
+      "settings": {
+        "title": "Настройки маршрутов",
+        "subtitle": "Серверные политики для GPS, геозон, offline-статуса и обязательных мобильных проверок.",
+        "gps": "GPS refresh, сек",
+        "geofence": "Радиус геозоны, м",
+        "offlineAfter": "Офлайн после, мин",
+        "requirePhoto": "Требовать фото-подтверждение визита",
+        "requireScan": "Требовать сканирование полки в мобильном приложении",
+        "alertLate": "Подсвечивать просроченные визиты",
+        "save": "Сохранить настройки",
+        "connected": "Что уже подключено",
+        "connectedMap": "Карта агентов и маршрутов работает через LeadShelf API.",
+        "connectedApi": "Маршруты, агенты, активность, рейтинг и отчёты читают dedicated API.",
+        "connectedOffline": "Offline-статус агентов зависит от сохранённого server-side порога.",
+        "savedAt": "Сохранено {value}"
+      }
+    },
+    "live": {
+      "title": "Полевая команда",
+      "subtitle": "Живая карта маршрутов, агентов и визитов.",
+      "updated": "Обновлено: {value}",
+      "geofence": "Геозона",
+      "heatmap": "Тепловая карта",
+      "refresh": "Обновить",
+      "all": "Все ({count})",
+      "statusCount": "{status} ({count})",
+      "status": {
+        "checkedIn": "На точке",
+        "onRoad": "В пути",
+        "late": "Опаздывает",
+        "offline": "Офлайн"
+      },
+      "loadingMap": "Загрузка карты...",
+      "statusTitle": "Статус",
+      "feed": "Лента",
+      "hideFeed": "Скрыть ленту событий",
+      "showFeed": "Показать ленту событий",
+      "waitingEvents": "Ждём события...",
+      "agents": "Агенты ({count})",
+      "noAgents": "Нет агентов под фильтр",
+      "replay": "Replay: {agent}, точек: {count}",
+      "close": "Закрыть"
+    },
     "execution": {
       "tasks": "Задачи: {count}",
       "orders": "Заказы: {count}",

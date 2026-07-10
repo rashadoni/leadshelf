@@ -18,16 +18,24 @@ export function CaptureRetakeButton({
   const t = useTranslations("tasks")
   const router = useRouter()
   const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function requestRetake() {
     setPending(true)
-    const res = await fetch(`/api/v1/tasks/${taskId}/capture-retake`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stepId, stepKind }),
-    })
-    setPending(false)
-    if (res.ok) router.refresh()
+    setError(null)
+    try {
+      const res = await fetch(`/api/v1/tasks/${taskId}/capture-retake`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepId, stepKind }),
+      })
+      if (!res.ok && res.status !== 409) throw new Error(String(res.status))
+      router.refresh()
+    } catch {
+      setError(t("detail.decisionFailed"))
+    } finally {
+      setPending(false)
+    }
   }
 
   if (requested) {
@@ -39,13 +47,16 @@ export function CaptureRetakeButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={requestRetake}
-      disabled={pending}
-      className="rounded border border-neutral-300 px-1.5 py-0.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-    >
-      {t("detail.requestRetake")}
-    </button>
+    <span className="inline-flex flex-col items-start gap-1">
+      <button
+        type="button"
+        onClick={requestRetake}
+        disabled={pending}
+        className="min-h-9 rounded border border-neutral-300 px-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-50"
+      >
+        {pending ? t("detail.decisionSaving") : t("detail.requestRetake")}
+      </button>
+      {error ? <span role="alert" className="text-xs text-red-700">{error}</span> : null}
+    </span>
   )
 }

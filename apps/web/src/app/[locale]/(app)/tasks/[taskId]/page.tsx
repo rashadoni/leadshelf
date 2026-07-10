@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
-import { getTranslations } from "next-intl/server"
+import { getLocale, getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
@@ -10,14 +10,7 @@ import { CaptureRetakeButton } from "./capture-retake-button"
 import { ProofDecisionActions } from "./proof-decision-actions"
 import { PlanogramThumbnail } from "../../planograms/planogram-thumbnail"
 import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
-
-function formatDate(value: Date | null | undefined): string {
-  return value ? value.toLocaleDateString() : "—"
-}
-
-function formatDateTime(value: Date | null | undefined): string {
-  return value ? value.toLocaleString() : "—"
-}
+import { formatLocaleDate, formatLocaleDateTime } from "@/i18n/format"
 
 function score(value: number | null | undefined): string {
   return value == null ? "—" : `${Math.round(value * 100)}%`
@@ -53,7 +46,7 @@ function ProofMedia({
   const src = `/api/media/${url}`
   if (mediaType === "VIDEO") {
     return (
-      <video className={className} controls muted playsInline preload="metadata">
+      <video aria-label={alt} className={className} controls muted playsInline preload="metadata">
         <source src={src} />
       </video>
     )
@@ -92,13 +85,14 @@ export default async function TaskDetailPage({
 }: {
   params: Promise<{ taskId: string }>
 }) {
-  const [{ taskId }, t, tStores, tReviews, tPlanograms, session] = await Promise.all([
+  const [{ taskId }, t, tStores, tReviews, tPlanograms, session, locale] = await Promise.all([
     params,
     getTranslations("tasks"),
     getTranslations("stores"),
     getTranslations("reviews"),
     getTranslations("planograms"),
     getSession(),
+    getLocale(),
   ])
   if (!session) return null
 
@@ -276,11 +270,11 @@ export default async function TaskDetailPage({
       ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <Metric label={t("detail.metrics.due")} value={formatDate(task.dueAt)} />
+        <Metric label={t("detail.metrics.due")} value={formatLocaleDate(task.dueAt, locale)} />
         <Metric label={t("detail.metrics.assignee")} value={task.assignee?.name ?? t("unassigned")} />
         <Metric label={t("detail.metrics.photos")} value={task.photoSubmissions.length} />
         <Metric label={t("detail.metrics.pendingReviews")} value={pendingReviews} />
-        <Metric label={t("detail.metrics.latestPhoto")} value={latestPhoto ? formatDate(latestPhoto.takenAt) : "—"} />
+        <Metric label={t("detail.metrics.latestPhoto")} value={latestPhoto ? formatLocaleDate(latestPhoto.takenAt, locale) : "—"} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -311,7 +305,7 @@ export default async function TaskDetailPage({
                     )}
                     <div className="space-y-2 p-3 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{formatDateTime(photo.takenAt)}</span>
+                        <span className="font-medium">{formatLocaleDateTime(photo.takenAt, locale)}</span>
                         <span className="text-neutral-500">{score(photo.qualityScore)}</span>
                       </div>
                       <div className="text-xs text-neutral-500">
@@ -365,7 +359,7 @@ export default async function TaskDetailPage({
                   <div key={request.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium text-neutral-800">{request.stepId}</span>
-                      <span className="text-xs text-neutral-500">{formatDateTime(request.requestedAt)}</span>
+                      <span className="text-xs text-neutral-500">{formatLocaleDateTime(request.requestedAt, locale)}</span>
                     </div>
                     {request.note ? <div className="mt-1 text-neutral-600">{request.note}</div> : null}
                   </div>
@@ -383,7 +377,7 @@ export default async function TaskDetailPage({
                       <span className="font-medium text-amber-900">
                         {exception.stepId} · {t(`detail.captureExceptionReason.${exception.reason}` as never)}
                       </span>
-                      <span className="text-xs text-amber-700">{formatDateTime(exception.createdAt)}</span>
+                      <span className="text-xs text-amber-700">{formatLocaleDateTime(exception.createdAt, locale)}</span>
                     </div>
                     {exception.note ? <div className="mt-1 text-amber-800">{exception.note}</div> : null}
                     <div className="mt-1 text-xs text-amber-700">{exception.user.name}</div>
@@ -400,7 +394,7 @@ export default async function TaskDetailPage({
               <div className="divide-y divide-neutral-100">
                 {task.statusHistory.map((item) => (
                   <div key={`${item.toStatus}-${item.createdAt.toISOString()}`} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                    <span className="text-neutral-500">{formatDateTime(item.createdAt)}</span>
+                    <span className="text-neutral-500">{formatLocaleDateTime(item.createdAt, locale)}</span>
                     <span>
                       {item.fromStatus ? t(`status.${item.fromStatus}` as never) : "—"} →{" "}
                       <span className="font-medium">{t(`status.${item.toStatus}` as never)}</span>
@@ -420,7 +414,7 @@ export default async function TaskDetailPage({
                   <div key={`${comment.user.name}-${comment.createdAt.toISOString()}`} className="rounded-lg bg-neutral-50 p-3">
                     <div className="text-sm text-neutral-800">{comment.body}</div>
                     <div className="mt-1 text-xs text-neutral-500">
-                      {comment.user.name} · {formatDateTime(comment.createdAt)}
+                      {comment.user.name} · {formatLocaleDateTime(comment.createdAt, locale)}
                     </div>
                   </div>
                 ))}
@@ -501,7 +495,7 @@ export default async function TaskDetailPage({
                   <Metric label={t("detail.metrics.equipment")} value={task.planogramVersion._count.equipment} />
                 </div>
                 <div className="text-xs text-neutral-500">
-                  {tPlanograms(`state.${task.planogramVersion.state}` as never)} · {formatDate(task.planogramVersion.publishedAt)}
+                  {tPlanograms(`state.${task.planogramVersion.state}` as never)} · {formatLocaleDate(task.planogramVersion.publishedAt, locale)}
                 </div>
               </div>
             ) : (
@@ -531,7 +525,7 @@ export default async function TaskDetailPage({
                     </div>
                     {review.note ? <div className="mt-1 text-xs text-neutral-600">{review.note}</div> : null}
                     <div className="mt-1 text-xs text-neutral-400">
-                      {formatDateTime(review.reviewedAt ?? review.updatedAt)}
+                      {formatLocaleDateTime(review.reviewedAt ?? review.updatedAt, locale)}
                     </div>
                   </div>
                 ))}
