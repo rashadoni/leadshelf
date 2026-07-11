@@ -1,6 +1,6 @@
 # LeadShelf: единый контур сравнения выкладки
 
-Статус: код фаз 0–8 реализован; authenticated mobile smoke и real-photo eval остаются открытыми gates, Phase 9 отложена. Обновлено: 2026-07-11.
+Статус: код фаз 0–8 реализован; authenticated web/mobile smoke закрыт, real-photo eval остаётся открытым gate, Phase 9 отложена. Обновлено: 2026-07-11.
 
 ## Цель
 
@@ -153,8 +153,9 @@ Gate: повторный worker run не изменяет утверждённы
 - [x] Не блокировать task/visit completion ожиданием AI.
 - [x] Сохранить видимый SyncBar и тёмные camera/photo surfaces.
 - [x] Добавить все ключи в AZ и RU; parity и mobile tests 67/67.
-- [ ] Fresh APK install и cold launch на `test_device` пройдены; authenticated offline capture -> sync -> result smoke не выполнен, потому что system approval отклонил использование demo credentials. Обход не применялся.
+- [x] На чистом Android 35 AVD `leadshelf_smoke` установлен локальный debug APK и пройден authenticated `login -> pull/ack sync -> comparison result`; после отключения сети маршрут и тот же result повторно открыты из локального хранилища, SyncBar показывал offline state. Новая offline-фотосъёмка в этом прогоне не выполнялась и не заявляется как проверенная вручную.
 - [x] Локальный release APK собран после принудительного JS rebundle с `10.0.2.2:3100`: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`, SHA-256 `bca9ec3eb000b01f1955add7344ced6358a145874802bb77de3ca3d572649bc9`.
+- [x] Для локального authenticated smoke собран штатный `assembleDebug` без изменения production manifest: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `2703af85096c4bb8eca605f4dfbfac3728e71341167de7a43d1511f91ca0bebe`; API передан Metro через `EXPO_PUBLIC_API_URL=http://10.0.2.2:3100`.
 
 Gate: офлайн-съёмка остаётся рабочей, результат появляется после sync.
 
@@ -211,9 +212,10 @@ threshold calibration и выбор production provider/model не считаю�
 - [x] Core 100/100, DB 67/67, worker 20/20, vision 16/16, web 52/52, mobile 67/67.
 - [x] Отдельный mobile `tsc --noEmit` и AZ/RU parity.
 - [x] Browser smoke viewer на 390/768/1280 выполнен до final schema migration; selection, action-first result и отсутствие horizontal overflow проверены.
-- [ ] Post-migration browser login отклонён system approval; обход не применялся.
+- [x] Post-migration browser login в demo tenant пройден; dashboard открылся после авторизации.
 - [x] Release APK build, install и cold launch.
-- [ ] Authenticated Android workflow остаётся частично проверенным по той же причине credential approval; login screen проверен визуально.
+- [x] Authenticated Android smoke пройден на чистом Android 35 AVD: login 200, sync pull/ack 200, task comparison с `Sxem / Foto / Nəticə`, затем offline reopen сохранённого result и схемы при видимом SyncBar.
+- [ ] Новая offline capture -> reconnect -> upload не повторялась вручную в этом прогоне; код пути покрыт mobile/outbox тестами, но это остаётся отдельным расширенным device smoke, а не условием authenticated result gate.
 - [x] `.artifacts/` не читался, не изменялся и не добавлялся в staging.
 
 ## Definition of done
