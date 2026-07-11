@@ -72,15 +72,17 @@ function colorFor(text: string): string {
 
 export function PlanogramSvg({
   bundle,
+  equipmentIndex = 0,
   selectedPlacementId,
   onPlacementPress,
 }: {
   bundle: Bundle
+  equipmentIndex?: number
   selectedPlacementId?: string | null
   onPlacementPress?: (placementId: string) => void
 }) {
   const { width: screenW } = useWindowDimensions()
-  const eq = bundle.equipment[0]
+  const eq = bundle.equipment[equipmentIndex]
   if (!eq) return null
 
   const W = screenW - 24

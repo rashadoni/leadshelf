@@ -54,8 +54,7 @@ export default function PlanogramsTab() {
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
-            disabled={!item.taskId}
-            onPress={() => router.push(`/(app)/tasks/${item.taskId}` as never)}
+            onPress={() => router.push(`/(app)/planograms/${item.versionId}` as never)}
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           >
             <View style={styles.cardHeader}>

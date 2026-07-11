@@ -77,8 +77,12 @@ export default function ShelvesTab() {
           return (
             <Pressable
               accessibilityRole="button"
-              disabled={!item.taskId}
-              onPress={() => router.push(`/(app)/tasks/${item.taskId}` as never)}
+              onPress={() =>
+                router.push({
+                  pathname: "/(app)/planograms/[versionId]",
+                  params: { versionId: item.versionId, equipmentId: item.id },
+                } as never)
+              }
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
               <View style={styles.icon}>
