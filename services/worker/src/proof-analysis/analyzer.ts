@@ -11,6 +11,22 @@ import type { ExtractedProofFrame } from "./frame-extractor"
 const LOCAL_STUB_PROVIDER = "leadshelf-stub"
 const LOCAL_STUB_MODEL_VERSION = "stub-selected-frames-v1"
 
+export interface ProofAnalysisIdentity {
+  provider: string
+  modelVersion: string
+}
+
+export function configuredProofAnalysisIdentity(): ProofAnalysisIdentity {
+  const provider = process.env.LEADSHELF_PROOF_AI_PROVIDER ?? process.env.VISION_PROVIDER ?? "stub"
+  if (provider === "openai") {
+    return { provider: "openai", modelVersion: process.env.OPENAI_VISION_MODEL ?? "gpt-4o-mini" }
+  }
+  if (provider === "gemini") {
+    return { provider: "gemini", modelVersion: process.env.GEMINI_VISION_MODEL ?? "gemini-2.5-flash" }
+  }
+  return { provider: LOCAL_STUB_PROVIDER, modelVersion: LOCAL_STUB_MODEL_VERSION }
+}
+
 export interface ProofAiFinding {
   type:
     | "sku_missing"
@@ -33,6 +49,11 @@ export interface ProofFrameAnalysisResult {
   response: VisionScanResponse
   aiFindings: ProofAiFinding[]
   rawSummary: string | null
+  telemetry?: {
+    inputTokens: number | null
+    outputTokens: number | null
+    costMicros: number | null
+  }
 }
 
 function localSelectedFrameScan(request: VisionScanRequest, frames: ExtractedProofFrame[]): ProofFrameAnalysisResult {
@@ -93,6 +114,7 @@ function localSelectedFrameScan(request: VisionScanRequest, frames: ExtractedPro
       },
     ],
     rawSummary: "Selected frames extracted; OpenAI analysis not enabled.",
+    telemetry: { inputTokens: null, outputTokens: null, costMicros: 0 },
   }
 }
 
@@ -183,6 +205,22 @@ interface OpenAIProofAnalysisBody {
   warnings: string[]
 }
 
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function asTokenUsage(value: unknown, inputKey: string, outputKey: string) {
+  const root = recordValue(value)
+  const nested = recordValue(root.usage)
+  const source = inputKey in root || outputKey in root ? root : nested
+  const input = source[inputKey]
+  const output = source[outputKey]
+  return {
+    inputTokens: typeof input === "number" && Number.isFinite(input) ? Math.max(0, Math.floor(input)) : null,
+    outputTokens: typeof output === "number" && Number.isFinite(output) ? Math.max(0, Math.floor(output)) : null,
+  }
+}
+
 function extractOutputText(body: unknown): string | null {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
   if (typeof record.output_text === "string") return record.output_text
@@ -235,6 +273,7 @@ function finalizeFrameAnalysis(
   parsed: OpenAIProofAnalysisBody,
   provider: string,
   model: string,
+  telemetry?: ProofFrameAnalysisResult["telemetry"],
 ): ProofFrameAnalysisResult {
   const slotById = new Map(request.slots.map((slot) => [slot.id, slot]))
   const detections: VisionDetection[] = parsed.detections.map((detection) => {
@@ -283,6 +322,7 @@ function finalizeFrameAnalysis(
     }),
     aiFindings: parsed.findings,
     rawSummary: parsed.summary,
+    telemetry,
   }
 }
 
@@ -353,7 +393,7 @@ async function scanWithOpenAI(request: VisionScanRequest, frames: ExtractedProof
             { type: "input_text", text: framePrompt(request, frames) },
             ...frames.map((frame) => ({
               type: "input_image",
-              image_url: `data:image/jpeg;base64,${frame.buffer.toString("base64")}`,
+              image_url: `data:${frame.contentType};base64,${frame.buffer.toString("base64")}`,
               detail: "high",
             })),
           ],
@@ -374,8 +414,10 @@ async function scanWithOpenAI(request: VisionScanRequest, frames: ExtractedProof
     throw new Error(`openai_responses_failed:${response.status}:${message.slice(0, 500)}`)
   }
 
-  const parsed = parseOpenAIAnalysis(await response.json())
-  return finalizeFrameAnalysis(request, parsed, "openai", model)
+  const body = await response.json()
+  const usage = asTokenUsage(body, "input_tokens", "output_tokens")
+  const parsed = parseOpenAIAnalysis(body)
+  return finalizeFrameAnalysis(request, parsed, "openai", model, { ...usage, costMicros: null })
 }
 
 async function scanWithGemini(request: VisionScanRequest, frames: ExtractedProofFrame[]): Promise<ProofFrameAnalysisResult> {
@@ -397,7 +439,7 @@ async function scanWithGemini(request: VisionScanRequest, frames: ExtractedProof
           parts: [
             { text: `${framePrompt(request, frames)}\n${GEMINI_JSON_INSTRUCTION}` },
             ...frames.map((frame) => ({
-              inline_data: { mime_type: "image/jpeg", data: frame.buffer.toString("base64") },
+              inline_data: { mime_type: frame.contentType, data: frame.buffer.toString("base64") },
             })),
           ],
         },
@@ -414,8 +456,10 @@ async function scanWithGemini(request: VisionScanRequest, frames: ExtractedProof
     throw new Error(`gemini_generatecontent_failed:${response.status}:${message.slice(0, 500)}`)
   }
 
-  const parsed = parseAnalysisText(extractGeminiText(await response.json()), "gemini_response")
-  return finalizeFrameAnalysis(request, parsed, "gemini", model)
+  const body = await response.json()
+  const usage = asTokenUsage(recordValue(body).usageMetadata, "promptTokenCount", "candidatesTokenCount")
+  const parsed = parseAnalysisText(extractGeminiText(body), "gemini_response")
+  return finalizeFrameAnalysis(request, parsed, "gemini", model, { ...usage, costMicros: null })
 }
 
 export async function analyzeSelectedProofFrames(

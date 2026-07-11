@@ -9,7 +9,7 @@ const execFileAsync = promisify(execFile)
 export interface ExtractedProofFrame {
   timestampMs: number
   buffer: Buffer
-  contentType: "image/jpeg"
+  contentType: string
 }
 
 export interface ProofFrameExtractor {

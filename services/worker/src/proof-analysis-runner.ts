@@ -1,6 +1,6 @@
 import "dotenv/config"
 import { createSystemClient } from "@leadshelf/db"
-import { processNextProofVideoAnalysisJob } from "./proof-analysis/processor"
+import { processNextProofAnalysisJob } from "./proof-analysis/processor"
 import { initErrorReporting } from "./observability"
 
 initErrorReporting("proof-analysis")
@@ -13,7 +13,7 @@ const limitPerTick = Math.max(1, Number(process.env.LEADSHELF_PROOF_ANALYSIS_LIM
 async function tick(): Promise<number> {
   let processed = 0
   for (let i = 0; i < limitPerTick; i++) {
-    const result = await processNextProofVideoAnalysisJob(prisma)
+    const result = await processNextProofAnalysisJob(prisma)
     if (result.status === "empty") break
     processed += 1
     if (result.status === "completed") {

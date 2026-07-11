@@ -9,6 +9,9 @@ const slug = `test-proof-analysis-${Date.now()}`
 
 let orgId: string
 let photoSubmissionId: string
+let userId: string
+let storeId: string
+let taskId: string
 
 class FakeStorage implements ProofAnalysisStorage {
   uploaded: Array<{ key: string; contentType: string; size: number }> = []
@@ -38,7 +41,9 @@ beforeAll(async () => {
   const user = await prisma.user.create({
     data: { organizationId: orgId, name: "Agent", employeeCode: `${slug}-agent`, role: "FIELD_AGENT" },
   })
+  userId = user.id
   const store = await prisma.store.create({ data: { organizationId: orgId, name: "Store", code: `${slug}-S1` } })
+  storeId = store.id
   const planogram = await prisma.planogram.create({ data: { organizationId: orgId, name: "Planogram" } })
   const version = await prisma.planogramVersion.create({
     data: { planogramId: planogram.id, versionNumber: 1, state: "PUBLISHED", publishedAt: new Date() },
@@ -52,6 +57,7 @@ beforeAll(async () => {
       title: "Video proof task",
     },
   })
+  taskId = task.id
   const photo = await prisma.photoSubmission.create({
     data: {
       organizationId: orgId,
@@ -91,6 +97,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await prisma.shelfAnalysisRun.deleteMany({ where: { organizationId: orgId } })
   await prisma.humanReview.deleteMany({ where: { organizationId: orgId } })
   await prisma.goldenReferenceSlot.deleteMany({ where: { goldenReference: { organizationId: orgId } } })
   await prisma.goldenReference.deleteMany({ where: { organizationId: orgId } })
@@ -108,8 +115,10 @@ describe("proof video analysis worker", () => {
   test("claims video proof, stores selected frames and updates vision review", async () => {
     const storage = new FakeStorage()
     const result = await processNextProofVideoAnalysisJob(prisma, {
+      organizationId: orgId,
       storage,
       extractor: new FakeExtractor(),
+      analysisIdentity: { provider: "fake-ai", modelVersion: "fake-model-v1" },
       now: () => new Date("2026-07-06T20:30:00.000Z"),
       analyze: async (request: VisionScanRequest, frames: ExtractedProofFrame[]) => ({
         response: {
@@ -177,5 +186,159 @@ describe("proof video analysis worker", () => {
         ],
       },
     })
+    const run = await prisma.shelfAnalysisRun.findFirstOrThrow({
+      where: { organizationId: orgId, photoSubmissionId, isCanonical: true },
+    })
+    expect(run).toMatchObject({
+      provider: "fake-ai",
+      modelVersion: "fake-model-v1",
+      humanReviewId: review.id,
+      status: "UNAVAILABLE",
+      comparisonVersion: 1,
+    })
+    expect(run.result).toMatchObject({ status: "UNAVAILABLE", structuralScore: null })
+  })
+
+  test("processes a photo through the same persisted worker without frame extraction", async () => {
+    const photo = await prisma.photoSubmission.create({
+      data: {
+        organizationId: orgId,
+        storeId,
+        taskId,
+        userId,
+        url: `photos/${orgId}/${taskId}/proof.jpg`,
+        mediaType: "PHOTO",
+        mimeType: "image/jpeg",
+        clientPhotoId: `${slug}-photo-proof`,
+        takenAt: new Date(),
+        analysisStatus: "PENDING",
+      },
+    })
+    const storage = new FakeStorage()
+    const extractor = { extract: async () => { throw new Error("photo_must_not_use_ffmpeg") } }
+    const result = await processNextProofVideoAnalysisJob(prisma, {
+      organizationId: orgId,
+      storage,
+      extractor,
+      analysisIdentity: { provider: "fake-ai", modelVersion: "fake-photo-v1" },
+      analyze: async (request, frames) => {
+        expect(request.photoSubmissionId).toBe(photo.id)
+        expect(frames).toHaveLength(1)
+        expect(frames[0]).toMatchObject({ timestampMs: 0, contentType: "video/mp4" })
+        return {
+          response: {
+            protocolVersion: VISION_PROTOCOL_VERSION,
+            provider: "fake-ai",
+            modelVersion: "fake-photo-v1",
+            status: "needs_human_review",
+            detections: [],
+            embedding: null,
+            compliance: { score: 0, status: "FAIL", totalSlots: 1, matchedSlots: 0, missingSlots: 1, wrongProducts: 0, extraDetections: 0 },
+            findings: { missing: [], wrong: [], extra: [] },
+            warnings: ["manual_review"],
+          },
+          aiFindings: [],
+          rawSummary: null,
+        }
+      },
+    })
+    expect(result).toMatchObject({ status: "completed", photoSubmissionId: photo.id })
+    expect(await prisma.shelfAnalysisRun.findFirstOrThrow({ where: { photoSubmissionId: photo.id } })).toMatchObject({
+      provider: "fake-ai",
+      modelVersion: "fake-photo-v1",
+      isCanonical: true,
+    })
+  })
+
+  test("claims one pending proof exactly once under concurrent workers", async () => {
+    const photo = await prisma.photoSubmission.create({
+      data: {
+        organizationId: orgId,
+        storeId,
+        taskId,
+        userId,
+        url: `photos/${orgId}/${taskId}/race.jpg`,
+        mediaType: "PHOTO",
+        mimeType: "image/jpeg",
+        clientPhotoId: `${slug}-worker-race`,
+        takenAt: new Date(),
+        analysisStatus: "PENDING",
+      },
+    })
+    let analyzeCalls = 0
+    const deps = {
+      organizationId: orgId,
+      storage: new FakeStorage(),
+      analysisIdentity: { provider: "race-ai", modelVersion: "race-v1" },
+      analyze: async () => {
+        analyzeCalls += 1
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        return {
+          response: {
+            protocolVersion: VISION_PROTOCOL_VERSION,
+            provider: "race-ai",
+            modelVersion: "race-v1",
+            status: "needs_human_review" as const,
+            detections: [],
+            embedding: null,
+            compliance: { score: 0, status: "FAIL" as const, totalSlots: 1, matchedSlots: 0, missingSlots: 1, wrongProducts: 0, extraDetections: 0 },
+            findings: { missing: [], wrong: [], extra: [] },
+            warnings: [],
+          },
+          aiFindings: [],
+          rawSummary: null,
+        }
+      },
+    }
+    const results = await Promise.all([
+      processNextProofVideoAnalysisJob(prisma, deps),
+      processNextProofVideoAnalysisJob(prisma, deps),
+    ])
+    expect(results.map((result) => result.status).sort()).toEqual(["completed", "empty"])
+    expect(analyzeCalls).toBe(1)
+    expect(await prisma.shelfAnalysisRun.count({ where: { photoSubmissionId: photo.id } })).toBe(1)
+  })
+
+  test("recovers a stale processing claim as the next attempt", async () => {
+    const photo = await prisma.photoSubmission.create({
+      data: {
+        organizationId: orgId,
+        storeId,
+        taskId,
+        userId,
+        url: `photos/${orgId}/${taskId}/stale.jpg`,
+        mediaType: "PHOTO",
+        mimeType: "image/jpeg",
+        clientPhotoId: `${slug}-worker-stale`,
+        takenAt: new Date(),
+        analysisStatus: "PROCESSING",
+        analysisAttempts: 1,
+        analysisStartedAt: new Date("2026-07-11T07:00:00.000Z"),
+      },
+    })
+    const result = await processNextProofVideoAnalysisJob(prisma, {
+      organizationId: orgId,
+      storage: new FakeStorage(),
+      now: () => new Date("2026-07-11T09:00:00.000Z"),
+      analysisIdentity: { provider: "stale-ai", modelVersion: "stale-v1" },
+      analyze: async () => ({
+        response: {
+          protocolVersion: VISION_PROTOCOL_VERSION,
+          provider: "stale-ai",
+          modelVersion: "stale-v1",
+          status: "needs_human_review",
+          detections: [],
+          embedding: null,
+          compliance: { score: 0, status: "FAIL", totalSlots: 1, matchedSlots: 0, missingSlots: 1, wrongProducts: 0, extraDetections: 0 },
+          findings: { missing: [], wrong: [], extra: [] },
+          warnings: [],
+        },
+        aiFindings: [],
+        rawSummary: null,
+      }),
+    })
+    expect(result).toMatchObject({ status: "completed", photoSubmissionId: photo.id })
+    expect(await prisma.photoSubmission.findUniqueOrThrow({ where: { id: photo.id } })).toMatchObject({ analysisAttempts: 2 })
+    expect(await prisma.shelfAnalysisRun.findFirstOrThrow({ where: { photoSubmissionId: photo.id } })).toMatchObject({ attempt: 2 })
   })
 })
