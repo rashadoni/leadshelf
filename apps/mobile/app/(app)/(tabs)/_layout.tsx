@@ -63,10 +63,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="shelves"
-        options={{
-          title: t("tabShelves"),
-          tabBarIcon: ({ color }) => <TabIcon name="shelves" color={color} />,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="planograms"

@@ -121,9 +121,31 @@ export default function PlanogramViewerScreen() {
                 )
               })}
             </ScrollView>
-          ) : (
-            <Text style={styles.equipmentTitle}>{equipment.name ?? t("equipment")}</Text>
-          )}
+          ) : null}
+
+          <View style={styles.equipmentBar}>
+            <View style={styles.equipmentBarText}>
+              <Text style={styles.equipmentLabel}>{t("equipment")}</Text>
+              <Text style={styles.equipmentTitle} numberOfLines={1}>
+                {equipment.name ?? t("equipment")}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                router.push({
+                  pathname: "/(app)/shelves/[versionId]/[equipmentId]",
+                  params: {
+                    versionId,
+                    equipmentId: equipment.planogramEquipmentId ?? `${versionId}-${equipmentIndex}`,
+                  },
+                } as never)
+              }
+              style={({ pressed }) => [styles.structureButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.structureButtonText}>{t("openEquipmentStructure")}</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.planogramCard}>
             <PlanogramSvg
@@ -200,7 +222,23 @@ const styles = StyleSheet.create({
   equipmentTabActive: { backgroundColor: colors.primary },
   equipmentTabText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   equipmentTabTextActive: { color: colors.headerText },
-  equipmentTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginBottom: 10 },
+  equipmentBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  equipmentBarText: { flex: 1, minWidth: 0 },
+  equipmentLabel: { color: colors.faint, fontSize: 10, fontWeight: "700" },
+  equipmentTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginTop: 2 },
+  structureButton: {
+    minHeight: 38,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderRadius: radii.inner,
+    backgroundColor: colors.primarySoft,
+  },
+  structureButtonText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   planogramCard: {
     overflow: "hidden",
     paddingVertical: 8,
