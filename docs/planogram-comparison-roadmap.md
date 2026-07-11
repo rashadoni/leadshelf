@@ -71,19 +71,22 @@ Gate: документация не предлагает второй домен
 
 ## Фаза 1 — ShelfComparisonResult и domain engine
 
-- [ ] Определить versioned `ShelfComparisonResult` и входные типы.
-- [ ] Нормализовать expected placements, reference slots и detections.
-- [ ] Валидировать bbox; отсутствие координат хранить как `null`.
-- [ ] Суммировать detections одного SKU по facings.
-- [ ] Не схлопывать один SKU с разных полок в один spatial block.
-- [ ] Рассчитать outcomes: matched/missing/wrong_product/wrong_position/facing_mismatch/extra.
-- [ ] Рассчитать lenient и strict compliance.
-- [ ] Рассчитать OOS, share of shelf и brand share.
-- [ ] Сгенерировать restock/add_facings/remove_facings/move/manual_review actions.
-- [ ] Разделить structural score и visual confidence.
-- [ ] Обеспечить детерминированную сортировку и результат.
-- [ ] Покрыть unit-тестами полный match, partial match, duplicates, unknown SKU,
+- [x] Определить versioned `ShelfComparisonResult` и входные типы.
+- [x] Нормализовать expected placements, reference slots и detections.
+- [x] Валидировать bbox; отсутствие координат хранить как `null`.
+- [x] Суммировать detections одного SKU по facings.
+- [x] Не схлопывать один SKU с разных полок в один spatial block.
+- [x] Рассчитать outcomes: matched/missing/wrong_product/wrong_position/facing_mismatch/extra.
+- [x] Рассчитать lenient и strict compliance.
+- [x] Рассчитать OOS, share of shelf и brand share.
+- [x] Сгенерировать restock/add_facings/remove_facings/move/manual_review actions.
+- [x] Разделить structural score и visual confidence.
+- [x] Обеспечить детерминированную сортировку и результат.
+- [x] Покрыть unit-тестами полный match, partial match, duplicates, unknown SKU,
       low confidence, invalid bbox, empty planogram и AI unavailable.
+
+Проверка checkpoint: `packages/core` 100/100, полный monorepo test passed,
+полный monorepo typecheck passed.
 
 Gate: чистый `packages/core` API не зависит от Prisma/UI/provider и все тесты зелёные.
 
