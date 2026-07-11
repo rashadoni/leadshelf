@@ -1,4 +1,4 @@
-// Основная shelf-навигация: маршрут, задачи, оборудование, планограммы и «Ещё».
+// Основная shelf-навигация: маршрут, задачи, оборудование, планограммы и профиль.
 import { useCallback, useEffect, useState } from "react"
 import { Tabs, useFocusEffect } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -76,15 +76,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="more"
+        name="profile"
         options={{
-          title: t("tabMore"),
-          tabBarIcon: ({ color }) => <TabIcon name="more" color={color} />,
+          title: t("tabProfile"),
+          tabBarIcon: ({ color }) => <TabIcon name="profile" color={color} />,
         }}
       />
       <Tabs.Screen name="visit" options={{ href: null }} />
       <Tabs.Screen name="orders" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="dashboard" options={{ href: null }} />
     </Tabs>
   )

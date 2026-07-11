@@ -3,6 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "rea
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect } from "expo-router"
 import { SyncBar } from "../../../src/components/SyncBar"
+import { SectionHint } from "../../../src/components/SectionHint"
 import { listLocalPlanogramLibrary } from "../../../src/db/local-store"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
@@ -38,6 +39,7 @@ export default function PlanogramsTab() {
         <Text style={styles.title}>{t("tabPlanograms")}</Text>
       </View>
       <SyncBar />
+      <SectionHint section="planograms" icon="planograms" titleKey="planogramsHintTitle" bodyKey="planogramsHintBody" />
       <FlatList
         data={items}
         keyExtractor={(item) => item.versionId}

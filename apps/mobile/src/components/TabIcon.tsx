@@ -9,7 +9,6 @@ export type TabIconName =
   | "tasks"
   | "shelves"
   | "planograms"
-  | "more"
   | "dashboard"
   | "orders"
   | "profile"
@@ -55,14 +54,6 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Rect x={3.5} y={4} width={17} height={16} rx={2} stroke={color} strokeWidth={1.7} />
           <Path d="M4 10h16M4 16h16M9 4v6M14.5 10v6M8 16v4" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      )
-    case "more":
-      return (
-        <Svg {...common} fill={color}>
-          <Circle cx={5.5} cy={12} r={1.6} />
-          <Circle cx={12} cy={12} r={1.6} />
-          <Circle cx={18.5} cy={12} r={1.6} />
         </Svg>
       )
     case "dashboard":

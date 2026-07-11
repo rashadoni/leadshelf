@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router } from "expo-router"
 import { SyncBar } from "../../../src/components/SyncBar"
+import { SectionHint } from "../../../src/components/SectionHint"
 import { mobileLogout } from "../../../src/api/mobile-client"
 import { tokenStore } from "../../../src/auth/token-store"
 import { useSync } from "../../../src/sync/sync-context"
@@ -57,6 +58,7 @@ export default function ProfileTab() {
         <View style={styles.header}>
           <Text style={styles.title}>{t("tabProfile")}</Text>
         </View>
+        <SectionHint section="profile" icon="profile" titleKey="profileHintTitle" bodyKey="profileHintBody" />
 
         <View style={[styles.card, styles.accountCard]}>
           <View style={styles.avatar}>

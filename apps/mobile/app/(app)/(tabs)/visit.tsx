@@ -94,6 +94,13 @@ export default function VisitTab() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>{t("tabVisit")}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/(tabs)/orders" as never)}
+            style={({ pressed }) => [styles.ordersLink, pressed && styles.ordersLinkPressed]}
+          >
+            <Text style={styles.ordersLinkText}>{t("tabOrders")}</Text>
+          </Pressable>
         </View>
         <SyncBar />
 
@@ -209,8 +216,19 @@ export default function VisitTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 24 },
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+  header: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
   title: { fontSize: 24, fontWeight: "800", color: colors.text },
+  ordersLink: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
+  ordersLinkPressed: { opacity: 0.65 },
+  ordersLinkText: { color: colors.primary, fontSize: 13, fontWeight: "800" },
   card: {
     backgroundColor: colors.card,
     marginHorizontal: 14,

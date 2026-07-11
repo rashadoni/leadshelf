@@ -7,6 +7,7 @@ import * as Crypto from "expo-crypto"
 import { router, useFocusEffect } from "expo-router"
 import Svg, { Circle, Path } from "react-native-svg"
 import { SyncBar } from "../../../src/components/SyncBar"
+import { SectionHint } from "../../../src/components/SectionHint"
 import {
   enqueueVisitCheckIn,
   enqueueVisitCheckOut,
@@ -168,6 +169,7 @@ export default function RouteTab() {
         </View>
 
         <SyncBar />
+        <SectionHint section="route" icon="route" titleKey="routeHintTitle" bodyKey="routeHintBody" />
 
         {showRouteSkeleton ? (
           <View style={styles.skeletonList}>

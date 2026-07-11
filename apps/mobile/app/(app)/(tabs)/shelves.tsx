@@ -3,6 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "rea
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect } from "expo-router"
 import { SyncBar } from "../../../src/components/SyncBar"
+import { SectionHint } from "../../../src/components/SectionHint"
 import { listLocalPlanogramLibrary } from "../../../src/db/local-store"
 import { t, useLocale } from "../../../src/i18n"
 import type { LocalEquipmentSummary } from "../../../src/planogram/local-library"
@@ -44,6 +45,7 @@ export default function ShelvesTab() {
         <Text style={styles.title}>{t("tabShelves")}</Text>
       </View>
       <SyncBar />
+      <SectionHint section="shelves" icon="shelves" titleKey="shelvesHintTitle" bodyKey="shelvesHintBody" />
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}

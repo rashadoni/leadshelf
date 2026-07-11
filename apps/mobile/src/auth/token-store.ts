@@ -9,8 +9,17 @@ const KEYS = {
   userName: "ls.userName",
   locale: "ls.locale",
   lastEmployeeCode: "ls.lastEmployeeCode",
-  onboardedTasks: "ls.onboardedTasks",
 } as const
+
+const ONBOARDING_KEYS = {
+  route: "ls.onboardedRoute",
+  tasks: "ls.onboardedTasks",
+  shelves: "ls.onboardedShelves",
+  planograms: "ls.onboardedPlanograms",
+  profile: "ls.onboardedProfile",
+} as const
+
+export type OnboardingSection = keyof typeof ONBOARDING_KEYS
 
 async function get(key: string): Promise<string | null> {
   return SecureStore.getItemAsync(key)
@@ -32,9 +41,9 @@ export const tokenStore = {
   // не чистится при выходе) — docs/28 «запомнить меня».
   getLastEmployeeCode: () => get(KEYS.lastEmployeeCode),
   setLastEmployeeCode: (v: string) => set(KEYS.lastEmployeeCode, v),
-  // Показали ли онбординг-подсказку на списке задач (один раз).
-  getOnboardedTasks: () => get(KEYS.onboardedTasks),
-  setOnboardedTasks: () => set(KEYS.onboardedTasks, "1"),
+  // Контекстные подсказки показываются один раз на каждом основном разделе.
+  getOnboarded: (section: OnboardingSection) => get(ONBOARDING_KEYS[section]),
+  setOnboarded: (section: OnboardingSection) => set(ONBOARDING_KEYS[section], "1"),
   async setTokens(access: string, refresh: string) {
     await set(KEYS.access, access)
     await set(KEYS.refresh, refresh)
