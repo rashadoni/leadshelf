@@ -1,25 +1,52 @@
-# LeadShelf — перенос анализа планограмм из LeadDrive: полный анализ и задачи
+# LeadShelf — референсный анализ планограмм и полочной аналитики
 
-> **Статус:** спецификация для реализации в проекте **LeadShelf** (2026-07-11).
-> **Исполнитель реализации:** Codex (со своим ИИ-стеком — детекция/распознавание подставляются за интерфейсом провайдера, см. Эпик 4).
-> **Основание:** полный аудит модуля в leaddrive-v2 (161 файл: 8 моделей Prisma, ~30 API-роутов, 4 страницы + 4 крупных компонента, 31 файл `src/lib/shelf-analysis`, ~77 тестов, 8 help-разделов, ~161 i18n-ключ ×3 локали).
-> В конце — план **удаления** модуля из LeadDrive (раздел 5).
+> **Статус:** reference-only аудит идей и эксплуатационных уроков (2026-07-11).
+> **Не является:** источником кода, схемы БД, API или готового плана переноса.
+> **Источник истины для реализации:** `docs/planogram-comparison-roadmap.md` и текущая архитектура LeadShelf.
+> **Основание:** самостоятельный аудит прежнего shelf-модуля. LeadShelf реализует выбранные идеи заново.
 
 ---
 
-## 1. Что переносим (в двух словах)
+## 1. Что строим в LeadShelf
 
-Модуль «Планограммы + Аналитика полок»: супервайзер задаёт эталонную выкладку
+Нативный контур «Планограммы + Аналитика полок»: супервайзер задаёт эталонную выкладку
 (планограмма + «золотое» фото полки с **обводкой каждого товара** — bounding box),
 полевой агент фотографирует реальную полку, ИИ находит товары на фото (тоже с
 обводкой), сравнивает с эталоном и считает метрики: compliance, OOS,
 share of shelf, perfect-store score и т.д. Плюс: ручная разметка фото человеком,
 чек-листы соответствия, аналитика/лидерборд, дообучение собственной модели на
-накопленной разметке, OCR ценников.
+накопленной разметке, OCR ценников. Код, модели данных и API из другого продукта не копируются.
+
+LeadShelf показывает один результат двумя связанными способами:
+
+1. **Схема** — опубликованная планограмма против фактической выкладки.
+2. **Фото** — golden reference против фотографии мерчендайзера с bbox-оверлеем.
+
+Оба режима используют один `ShelfComparisonResult`; `PlanogramPlacement` остаётся
+каноническим источником ожидаемой выкладки.
 
 ---
 
-## 2. Полный анализ текущей реализации (источник истины для переноса)
+## 2. Референсный аудит прежней реализации
+
+Сведения ниже описывают исходные идеи и известные граничные случаи. Если они
+противоречат текущим моделям или протоколам LeadShelf, приоритет всегда у LeadShelf.
+
+### 2.0 Сверка с текущим LeadShelf
+
+| Область | Текущее состояние LeadShelf | Решение |
+|---|---|---|
+| Catalog / Store / User / Visit | Реализовано | Использовать, не создавать аналоги |
+| Versioned Planogram / Placement | Реализовано | `PlanogramPlacement` = expected truth |
+| Tasks / PhotoSubmission / offline outbox | Реализовано | Сохранить основной field flow |
+| GoldenReference / GoldenReferenceSlot | Реализовано | Расширить сравнение и UX |
+| Vision provider protocol | Реализовано | Расширять provider-neutral контракт |
+| HumanReview | Реализовано | Добавить manual correction и manual-wins |
+| Единый comparison engine | Нет | Создать в `packages/core` |
+| История запусков анализа | Нет | Создать `ShelfAnalysisRun`, не второй Photo |
+| Web «Схема / Фото» | Нет | Создать связанные представления одного результата |
+| Mobile inline base64 scan | Нет | Отклонено: использовать SQLite/outbox/sync |
+| OCR / model training / anti-fraud | Не MVP | Только после стабильного review-контура |
 
 ### 2.1 Ключевые понятия
 
@@ -34,22 +61,22 @@ share of shelf, perfect-store score и т.д. Плюс: ручная разме�
 | **Тренировочный прогон** | Экспорт разметки → обучение детектора → деплой версии модели per-org | `MtmModelTrainingRun` |
 | **Цена с полки** | Прочитанный с ценника прайс (OCR), привязанный к SKU | `MtmPhotoPrice` |
 
-### 2.2 Конвенция координат (КРИТИЧНО — единая по всей системе)
+### 2.2 Конвенция координат LeadShelf
 
 ```
-bbox = [x, y, w, h]
-— нормализованные 0..1 (доли ширины/высоты изображения)
+bbox = { xPct, yPct, widthPct, heightPct }
+— значения 0..100
 — origin: верхний левый угол
 ```
-Одна и та же конвенция у: детекций ИИ (`DetectedSku.bbox`), слотов golden
-(`MtmPlanogramSlot.bbox`), ручных аннотаций (`MtmShelfAnnotation.bbox`), ценников
-(`MtmPhotoPrice.bbox`). Синтетический `[0,0,0,0]` — маркер «нет пространственных
-данных» (roll-up golden-вердиктов); пространственные метрики обязаны его
-отвергать (guard `assertRealBbox`, бросает на нулевой площади).
+Одна и та же конвенция обязательна для vision detections, golden slots и ручных
+аннотаций. Ширина и высота должны быть положительными, а bbox не может выходить
+за границы изображения. Отсутствие пространственных данных представляется `null`,
+а не синтетическим нулевым bbox.
 
-### 2.3 Модель данных (минимум для LeadShelf)
+### 2.3 Референсная модель данных прежней системы
 
-Прямой аналог (имена можно свои, состав полей — этот):
+Этот список нельзя реализовывать как прямой аналог: он сохранён только для анализа
+инвариантов и поздних возможностей. Канонические сущности перечислены в 2.0.
 
 - **Planogram**: `id, orgId, name, description?, storeCategory?(A/B/C/D), brand?, referenceImageUrl?, expectedSkus Json [{skuId, expectedFacings, position}], strictCompliance bool, isActive`
 - **PlanogramSlot**: `id, orgId, planogramId, slotIndex (unique в паре с planogramId), skuId? (слабая ссылка, БЕЗ FK — допускаются слоты без каталога), label, bbox Json, facings Int? (1..99), embedding Float[], refCropUrl?, createdById?`
@@ -66,14 +93,14 @@ bbox = [x, y, w, h]
 - Partial-unique `(orgId, clientScanId) WHERE clientScanId IS NOT NULL` — повторный POST того же скана с телефона сходится в ту же строку.
 - `expectedSkus` перед любым расчётом прогоняется через дедуп по skuId с суммированием facings (один SKU в нескольких ячейках сетки не должен раздувать метрики).
 
-### 2.4 Четыре пути анализа (все пишут в одну таблицу ShelfAnalysis)
+### 2.4 Референсные пути анализа
 
 1. **Очередь (upload → worker)**: фото категории `shelf` → джоб → Tier-0 проверка качества фото (эвристики sharp: размер <1KB, аспект вне 1/3..3, яркость <25/>230, variance<100 → blurry; reject → REJECTED + антифрод-аудит) → Tier-1 детектор → условно Tier-2 VLM-ревью → метрики → персист.
 2. **Мобильный inline-скан + cron-backstop** (основной у Mars): телефон шлёт base64 → сервер сначала **персистит** фото + строку PROCESSING (persist-first), потом до 2 попыток синхронного ИИ; не вышло → строка паркуется в `AWAITING_BACKSTOP` c экспоненциальным `nextRetryAt` (30·2^(n−1) сек, cap 1ч), телефон получает `202 {status:"processing"}` и поллит; cron-дренер атомарно клеймит батч (`UPDATE … FOR UPDATE SKIP LOCKED RETURNING`, lockedAt-токен, stale-reclaim 15 мин) и добивает до 6 суммарных попыток → FAILED.
 3. **Ручная разметка**: человек рисует боксы в аннотаторе → сервер агрегирует боксы в `detectedSkus` (`provider:"manual"`, confidence 1, facings = число боксов на SKU) → те же метрики.
 4. **Golden-скан**: сравнение полевого фото со слотами золотого фото → per-slot вердикты `compliant | missing | wrong` → roll-up в `{detected, expected}` → те же метрики (bbox синтетический).
 
-### 2.5 ИИ-контракты (то, что Codex заменит своим ИИ)
+### 2.5 ИИ-контракты как идеи для LeadShelf Vision Provider
 
 Интерфейс провайдера (сохранить как seam — тогда ИИ взаимозаменяем):
 
@@ -105,7 +132,7 @@ interface ShelfAnalysisProvider {
 - **Матчинг label→skuId** (`matchSkuId`): проход 1 — точный substring по code/name; проход 2 — пересечение слов с исключением стоп-слов и размерных токенов (`0.33l`, `330ml`, `can`…) — чтобы конкурентная банка не линковалась на свой SKU через «0.33l»; проход 3 — по бренду как last resort.
 - **OCR ценников**: Claude `claude-sonnet-4-6`, temp 0 → `{"prices":[{label, price, currency, bbox, confidence, isPromo}]}`; привязка к товару — ближайший центр bbox в радиусе 0.2; regex цены `(\d+(?:[.,]\d{1,2})?)\s*AZN`; два числа на ценнике → меньшее = промо.
 
-### 2.6 Метрики — формулы (переносить 1:1, это чистые функции без БД)
+### 2.6 Метрики — формулы для независимой реализации и проверки
 
 | Метрика | Формула |
 |---|---|
@@ -122,7 +149,7 @@ interface ShelfAnalysisProvider {
 | **Eye-level** | centerY бокса: <0.33 top, <0.67 eye-level, ≥0.67 bottom |
 | **Share of display** | по зонам (main_shelf/cooler/endcap): сумма площадей bbox, % от общей |
 
-### 2.7 API-поверхность (минимальный набор для LeadShelf)
+### 2.7 Референсная API-поверхность (не копировать)
 
 **Планограммы**: `GET/POST /planograms` (список: фильтры all/category/limit/offset; создание: name, expectedSkus min 1, валидация принадлежности SKU организации), `GET/PUT /planograms/{id}` (org-scoped updateMany, 404 при чужом), деактивация вместо DELETE.
 **Golden**: `GET/PUT/DELETE /planograms/{id}/golden-reference` (PUT: слоты max 200, транзакция deleteMany+createMany, после — пересчёт эмбеддингов, ответ `{slotCount, embeddedCount}`; DELETE: слоты + referenceImageUrl=null), `POST …/golden-reference/upload` (multipart, png/jpg/webp ≤10MB, SVG запрещён, rate-limit 30/мин), `POST …/golden-reference/auto-detect` (rate-limit 15/мин, НИЧЕГО не пишет в БД — только черновики слотов).
@@ -135,7 +162,7 @@ interface ShelfAnalysisProvider {
 
 Сквозные правила: любой список/чтение — **org-scoped** (`findFirst({id, organizationId})`, чужой id → 404, не 403); мутации — `updateMany` с organizationId в where (TOCTOU-guard); мутации golden — только роли admin/manager; лимиты списков 50/200.
 
-### 2.8 UI-поверхность
+### 2.8 Референсная UI-поверхность
 
 1. **Список планограмм** — стат-карты, табы active/all/inactive, поиск, карточки (категория, бренд, число SKU).
 2. **Создание/редактор планограммы** — форма + **ShelfBuilder**: визуальная сетка полок (до 8 полок × 8 колонок), клик по ячейке → выбор SKU + facings (1–20), кодировка `position=(shelf+1)*100+(col+1)`; экспорт/импорт `expectedSkus`.
@@ -151,15 +178,17 @@ interface ShelfAnalysisProvider {
 
 - Файлы на диске: `uploads/photos/…` и `uploads/golden/<orgId>/golden-<8hex>.<ext>` (org-scoped путь — отдача файла только владельцу; для LeadShelf разумнее сразу S3-совместимое хранилище).
 - Чтение картинки для ИИ — с диска в base64 (приватные URL внешнему API недоступны).
-- Env текущего стека: `ANTHROPIC_API_KEY`, `ROBOFLOW_API_KEY/PROJECT_ID/VERSION`, `MTM_DETECTOR_URL/TOKEN`, `GOLDEN_EMBEDDER`+`VOYAGE_API_KEY`, `MTM_PRICE_OCR_ENABLED`, `MTM_SHELF_BACKSTOP_ENABLED`+`MTM_SHELF_BACKSTOP_BATCH`, `CRON_SECRET`, `GOOGLE_VISION_API_KEY` (дормант). Для LeadShelf — свои аналоги под ИИ Codex + те же флаги (backstop, price-ocr, detector).
+- Переменные прежнего стека перечислены только для аудита. LeadShelf использует собственный provider-neutral конфиг и не зависит от конкретного AI-вендора.
 
 ---
 
-## 3. Задачи для LeadShelf (эпики → задачи)
+## 3. Референсный backlog идей
 
-Порядок = рекомендованный порядок реализации. MVP = Э0–Э6; v1 = Э7–Э8; v2 = Э9–Э11.
+Этот backlog не является исполнимой дорожной картой. Актуальный порядок и статусы
+ведутся в `docs/planogram-comparison-roadmap.md`. Эпики 0–2 преимущественно уже
+реализованы; эпики 3–8 требуют адаптации; эпики 9–11 отложены.
 
-### Эпик 0 — Фундамент
+### Эпик 0 — Фундамент [уже есть / не пересоздавать]
 - [ ] 0.1 Скелет проекта (web + API), аутентификация, роли (admin / manager / agent), мультитенантность если нужна (org-scoping во ВСЕХ запросах — см. 2.7).
 - [ ] 0.2 Хранилище изображений (S3/MinIO или диск): загрузка multipart и base64, лимит 10MB, allowlist png/jpg/webp (+heic→jpeg для полевых фото), magic-number валидация, генерация thumbnail для списков, приватная отдача с проверкой владельца.
 - [ ] 0.3 Rate-limiting (фото 30/мин, golden-upload 30/мин, auto-detect 15/мин), cron-эндпоинт с секретом.
@@ -168,19 +197,19 @@ interface ShelfAnalysisProvider {
 - [ ] 0.6 Аудит-лог ключевых действий: загрузка фото, сохранение/удаление golden, сохранение ручной разметки, вердикты, tampering-события (в LeadDrive это отдельная таблица audit-логов — форензика и разбор споров).
 - [ ] 0.7 Демо-сид для разработки/QA: 3–5 SKU, планограмма без категории (применяется ко всем), тестовый магазин без координат (гео-чек пропускается), агент — аналог `scripts/seeds/mars-planogram-test.mjs`.
 
-### Эпик 1 — Каталог SKU
+### Эпик 1 — Каталог SKU [уже есть / расширять точечно]
 - [ ] 1.1 CRUD SKU: `code` (unique per org), `name`, `brand?`, `basePrice`, `isActive`; поиск `?search=&limit=20` (нужен редакторам обводки); импорт CSV — опционально.
 - [ ] 1.2 Категории (иерархия) — опционально для MVP.
 - [ ] 1.3 Хелпер `skuDraftFromLabel(label)` → `{name, code (UPPER, не-алфанум→'-', ≤64), brand (первый токен)}` — для быстрого создания SKU из ИИ-лейбла.
 - [ ] 1.4 Фаззи-матчер `matchSkuId(label, skus)` по алгоритму из 2.5 (обязательно с исключением размерных токенов — иначе конкуренты линкуются на свои SKU через «0.33l»).
 
-### Эпик 2 — Планограммы
+### Эпик 2 — Планограммы [уже есть / не заменять JSON-моделью]
 - [ ] 2.1 Модель + CRUD (см. 2.3, 2.7): expectedSkus min 1, валидация принадлежности SKU, деактивация вместо удаления, `strictCompliance` флаг.
 - [ ] 2.2 **ShelfBuilder** — сетка полок: до 8×8, add/remove/move полки, ячейка = SKU + facings 1–20, `position=(shelf+1)*100+(col+1)`, двусторонняя конвертация grid ↔ expectedSkus.
 - [ ] 2.3 Резолвер активной планограммы для скана: по категории магазина, точное совпадение > глобальная (`customerCategory=null`), свежая > старой; на выходе дедуплицированные expectedSkus + strict-флаг.
 - [ ] 2.4 Страница списка + страница редактирования (2.8.1–2.8.2).
 
-### Эпик 3 — Редактор обводки товаров (bounding boxes) ⭐ главный UI-компонент
+### Эпик 3 — Редактор обводки товаров [расширить существующий golden editor]
 
 Два родственных компонента с одинаковой канвас-механикой, но разными моделями данных:
 **(A) GoldenReferenceEditor** — слоты эталона (бокс = ПОЗИЦИЯ, skuId опционален);
@@ -222,7 +251,7 @@ interface ShelfAnalysisProvider {
 - [ ] 3.4.2 Для golden-скана — визуализация вердиктов по слотам: compliant (зелёный) / missing (красный, пустой слот) / wrong (оранжевый — другой товар на месте).
 - [ ] 3.4.3 Тот же оверлей на **мобильном/полевом экране результата** (агент видит, что именно ИИ нашёл и где) + список найденного с counts, share-of-shelf карточка, OOS-лист, compliance — прямо после скана.
 
-### Эпик 4 — ИИ-анализ (свой ИИ Codex за интерфейсом провайдера)
+### Эпик 4 — ИИ-анализ [расширить LeadShelf Vision Provider]
 - [ ] 4.1 Реализовать `ShelfAnalysisProvider` (контракт из 2.5) поверх выбранного ИИ. Требования к детекции: label + честный confidence + facings (число фронтов) + tight bbox; не выдумывать товары; отражения/цены не считать товарами. Выход строго JSON.
 - [ ] 4.2 Пайплайн скана: (опц.) проверка качества фото → детекция → `matchSkuId` → резолв планограммы → метрики → персист с manual-wins guard'ом. Опционально двухуровневая схема (быстрый детектор + VLM-ревью низкоуверенных, маршрутизация из 2.5).
 - [ ] 4.3 **Golden-скан**: минимум — VLM-сравнение двух изображений (промпт-контракт из 2.5: per-slot outcome + present, temperature 0, parse-fail → 502 без персиста); желательно — детерминированный эмбеддинг-путь (кроп слота → эмбеддинг → cosine ≥ 0.85) с эскалацией сомнительных в VLM. Эмбеддинги пересчитываются при сохранении слотов и обнуляются при замене фото.
@@ -231,13 +260,13 @@ interface ShelfAnalysisProvider {
 - [ ] 4.6 Roll-up golden-вердиктов в метрики: identity слота = `skuId ?? "slot:{index}"`; multi-facing слоты одного SKU агрегируются (не двойной счёт); `wrong`-слоты идут в бакет конкурента в share-of-shelf, но не в compliance; bbox синтетический `[0,0,0,0]` → только facings-метрики (guard!).
 - [ ] 4.7 **Гранулярность автодетекта для golden** (грабли из прод-опыта): один бокс = один **блок** (label × полка — непрерывный ряд одинаковых фронтов), c `facings = N` и `confidence = min` по блоку. НЕ глобальная агрегация по label (SKU на двух полках схлопнется в один бокс — ломается расстановка по полкам) и НЕ по-фейсинговая (3 фронта Pepsi → 3 соседних слота вместо одного с facings=3). Если детектор отдаёт по-фейсинговые боксы — группировать: тот же label + та же полоса по y + смежность по x. Для полевого скана глобальная агрегация по label остаётся корректной (метрики всё равно суммируют по skuId).
 
-### Эпик 5 — Метрики (чистые функции, порт 1:1 из 2.6)
+### Эпик 5 — Метрики [создать заново как чистые функции]
 - [ ] 5.1 shareOfShelf (наибольший остаток!), brandShare, OOS, compliance lenient/strict, perfectStore + грейды, shelfActions.
 - [ ] 5.2 osaTrend, chronicOos (порог 0.5), eyeLevel (0.33/0.67), shareOfDisplay (по площадям bbox, с guard'ом синтетики).
 - [ ] 5.3 Обязательные инварианты: дубликаты SKU в детекциях суммируются по facings ВЕЗДЕ (исторический прод-баг: два бокса одного товара перетирали друг друга → ложные 100%); expected дедуплицируется до расчёта; пустая планограмма → compliance = null (не 0).
 - [ ] 5.4 Юнит-тесты на все формулы (в LeadDrive это ~20 тестовых файлов — брать кейсы оттуда: largest-remainder 33/33/34, strict-mode, renormalization весов perfect-store и т.д.).
 
-### Эпик 6 — Полевой скан (API для мобильного/веб-клиента)
+### Эпик 6 — Полевой скан [адаптировать под существующий outbox/sync]
 - [ ] 6.1 `POST /scan` (base64 + planogramId? + clientScanId + gps?): **persist-first** (файл + Photo + Analysis PROCESSING), потом ИИ ≤2 попыток; успех → 200 c полным результатом; неуспех по транзиентной ошибке → парковка AWAITING_BACKSTOP + `202 {status:"processing"}`.
 - [ ] 6.2 Идемпотентность по `clientScanId` (partial-unique; повторный POST → тот же результат/202, тем же форматом что и поллинг).
 - [ ] 6.3 Поллинг `GET /scan/{id}`: 202 пока PROCESSING/AWAITING_BACKSTOP, 200 на терминале.
@@ -249,35 +278,35 @@ interface ShelfAnalysisProvider {
 - [ ] 6.9 CORS на мобильных эндпоинтах (+OPTIONS preflight), если клиент — PWA/WebView с другого origin'а.
 - [ ] 6.10 **Полевой клиент UI** (мобильный экран/PWA): выбор магазина → список его планограмм → камера/выбор фото → отправка скана → экран ожидания (поллинг по 202) → экран результата с обводкой (3.4.3) и списком actions → отправка вердикта COMPLIANT/NON_COMPLIANT. Опционально push/уведомление «анализ готов: N товаров, M отсутствует», если анализ ушёл в backstop.
 
-### Эпик 7 — Аналитика и страницы
+### Эпик 7 — Аналитика и страницы [создать после канонического analysis run]
 - [ ] 7.1 Список сканов + деталь скана (2.8.4–2.8.5, включая оверлей боксов из 3.4).
 - [ ] 7.2 Summary: средний compliance, compliance by agent, топ хронически отсутствующих SKU (cap выборки ~5000 строк, кэш 60с).
 - [ ] 7.3 Perfect-Store leaderboard по магазинам (дедуп «последний скан на магазин», grade-бейджи, счётчик неатрибуцированных).
 - [ ] 7.4 Страница чеков планограмм со ссылками на ИИ-сканы.
 - [ ] 7.5 Фотогалерея с ревью (approve/reject, batch) — если нужен ревью-контур.
 
-### Эпик 8 — Чеки/вердикты + фото-ревью (закрытие контура «человек проверяет ИИ»)
+### Эпик 8 — Чеки/вердикты + фото-ревью [расширить HumanReview]
 - [ ] 8.1 Human-review путь обязателен (точность ИИ 80–95%, не 100): ручная разметка (3.3) + человеческий вердикт (6.7) — это и есть fallback.
 - [ ] 8.2 Статусная модель фото PENDING/APPROVED/REJECTED + причины reject.
 
-### Эпик 9 — Обучение собственной модели (v2, опционально)
+### Эпик 9 — Обучение собственной модели [позже, опционально]
 - [ ] 9.1 Экспорт разметки (MANUAL+CONFIRMED) в **COCO**: нормализованный bbox → пиксельный (нужны реальные размеры изображений), категория = SKU, уникализация имён категорий, валидация до экспорта.
 - [ ] 9.2 Стейт-машина прогона DRAFT→UPLOADING→UPLOADED→TRAINING→READY→DEPLOYED (+FAILED), CAS-переходы, reaper зависших (30 мин).
 - [ ] 9.3 Активная модель per-org (`activeModel` в настройках) — DEPLOYED версия начинает применяться без редеплоя; поле держать провайдер-нейтральным (`modelRef`), не привязываться к вендору.
 - [ ] 9.4 Петля данных: AUTO-детекции → человек подтверждает (CONFIRMED) → следующий датасет. Рекомендация из прод-опыта: для старта — детектор одного класса «product» (локализация) + VLM для называния; per-SKU классы — когда накопится 100–300 изображений на SKU.
 - [ ] 9.5 Если self-hosted детектор: контракт `POST /detect {image_base64|image_url, model?} → {detections:[{label,bbox,confidence}], model_version}`, таймаут 20с, деградация с алертом (не молча).
 
-### Эпик 10 — OCR ценников (v2, опционально; фиче-флаг, дефолт OFF)
+### Эпик 10 — OCR ценников [позже, feature flag OFF]
 - [ ] 10.1 Чтение ценников по промпт-контракту из 2.5 (или свой OCR), привязка к товару по ближайшему bbox-центру (радиус 0.2), промо-детекция (перечёркнутая/два числа → меньшее = промо).
 - [ ] 10.2 Персист wipe-then-write per photo (идемпотентно), price-compliance по формуле 2.6 (tolerance 0.5%), сверка промо-цены с активными акциями, если есть промо-модуль.
 
-### Эпик 11 — Антифрод фото (v2, опционально)
+### Эпик 11 — Антифрод фото [позже, только мягкие сигналы]
 - [ ] 11.1 Проверка качества (не-полка/размытость/темнота) → REJECT с причиной + возможность override.
 - [ ] 11.2 EXIF-форензика (GPS против координат магазина ≤100м, watermark-теги, clock drift), burst-детекция (>5 фото/30с), tampering → форс на ручное ревью (false-positive-safe: отсутствие EXIF — не фрод).
 
 ---
 
-## 4. Что НЕ переносить (осознанно)
+## 4. Что не копировать
 
 - LeadDrive-специфика: RLS-обёртки, tenant-capability биллинг (`planogram-shelf-execution`), AI-советник и его сигналы, help-центр/видео, i18n-механика LeadDrive.
 - Второй скорер `src/lib/consumer-goods/planogram-scorer.ts` — это отдельный TPM-модуль (RetailExecutionAudit), к этому модулю отношения не имеет.
@@ -285,26 +314,7 @@ interface ShelfAnalysisProvider {
 
 ---
 
-## 5. Задачи по удалению модуля из LeadDrive (после запуска LeadShelf)
-
-⚠️ Модуль live на проде (mars-тенант). Порядок: сначала LeadShelf работает, потом вырезание. Шаг 5.7 (дроп таблиц с данными) — **разрушительный, только по явному решению владельца** и после бэкапа/выгрузки данных Mars.
-
-- [ ] 5.1 **Выключить capability** `planogram-shelf-execution` у тенантов (soft-disable уже поддержан) + флаги `MTM_SHELF_BACKSTOP_ENABLED=0`, `MTM_PRICE_OCR_ENABLED=0`; снять cron-тики `mtm-shelf-backstop` и `mtm-training-reaper` из планировщика.
-- [ ] 5.2 **UI**: удалить страницы `/mtm/{planograms,planogram-checks,shelf-analytics,photos,model-training}` + компоненты `golden-reference-editor`, `shelf-annotator`, `shelf-builder`, `perfect-store-leaderboard`; убрать 4 пункта из `nav-items.ts` (`mtmPhotos`, `mtmShelfAnalytics`, `mtmPlanograms`, `mtmPlanogramChecks`). `/mtm/leaderboard` (геймификация) и `/mtm/alerts` — НЕ трогать.
-- [ ] 5.3 **API**: удалить `api/v1/mtm/{planograms,planogram-checks,shelf-analytics,model-training,photos}` + mobile-аналоги (`mobile/shelf-analytics/*`, `mobile/planogram-checks`, `mobile/customers/[id]/planograms`, `mobile/planograms/[id]/golden-reference/upload`) + `api/cron/{mtm-shelf-backstop,mtm-training-reaper}`.
-- [ ] 5.4 **Библиотеки**: `src/lib/shelf-analysis/**` целиком; `src/lib/mtm/{shelf-backstop,shelf-backstop-processor,shelf-scan-response,shelf-leaderboard,golden-photo,photo-category,photo-quality,photo-watermark,inline-scan-*,price-ocr,sku-draft-from-label,model-training-access}`; очередь `shelf-analysis` из `queue/queues.ts` + `queue/worker.ts` + `queue/jobs/shelf-analysis.ts`. (Фото-подсистему `photos`/watermark оставить, если фото используются вне анализа полок — решить при вырезании.)
-- [ ] 5.5 **AI-советник** (правка, не удаление): из `signals.ts` убрать `buildPhotoSignals/buildPlanogramCheckSignals/buildShelfExecutionSignals` + `flagShelfIssueAction`; из `execution.ts`/`autonomy.ts`/`action-preview.ts` — action-типы `flag_shelf_issue`/`shelf_issue`/`planogram_issue`; из `service.ts` — маршрутизацию shelf/planogram и entityType-маппинги; из `capabilities.ts` — запись `mtm`; из виджетов `advisor-record-widget`/`advisor-center-widgets` — ветки `mtm_shelf_analysis`/`mtm_planogram_check`/`mtm_photo`.
-- [ ] 5.6 **Конфиг/справочники**: `tenant-capabilities.ts` (+access, +demos) — capability и хелпер; `entity-fields.ts` — сущности `mtm_planogram_check`, `mtm_shelf_analysis`; i18n — namespaces `mtmPlanogramsPage`(53), `mtmShelfAnalyticsPage`(39), `mtmPhotosPage`(30), `mtmPlanogramChecksPage`(29), `mtmShelf`(10), nav/navDesc по 4 ключа, `fieldPermissions` 10 ключей — ×3 локали, затем `node scripts/check-translations.js`; help-контент 8 слагов + `registry.ts` + `video-assets.ts`; сид `scripts/seeds/mars-planogram-test.mjs`.
-- [ ] 5.7 **БД (разрушительно, отдельное решение владельца)**: выгрузка/бэкап данных Mars → миграция drop: `mtm_planogram_slots`, `mtm_planogram_checks`, `mtm_shelf_annotations`, `mtm_model_training_runs`, `mtm_shelf_analyses`, `mtm_photo_prices`, `mtm_planograms` (+ enum'ы, + relation `annotations` из `MtmSku`, + relation `analysis`/`prices`/`annotations` из `MtmPhoto`); `mtm_photos` — оставить (общая для MTM); `mtm_skus`/`mtm_sku_categories` — **НЕ трогать** (каталог общий с заказами/промо/стоками). Обновить RLS-скрипты: `scripts/rls/*-batch-6.sql` (mtm_planogram_slots) удалить, из batch-3 убрать дропнутые таблицы; прогнать `python3 scripts/rls/find-context-gaps.py` (0 gaps).
-- [ ] 5.8 **Тесты**: удалить ~77 файлов модуля (список зафиксирован в аудите; `api-mtm-photos` и `lib-mtm-photo-watermark-*` — только если удаляется и фото-подсистема). Плюс **правки в общих тестах и моках** (не удалять): `src/__tests__/mocks/mtm-prisma.ts` (вычистить shelf-модели), `tenant-capabilities.test.ts`, `tenant-capability-access.test.ts`, `api-admin-tenant-capabilities.test.ts`, `entity-fields.test.ts`, `lib-module-catalog.test.ts`, `help-video-assets.test.ts`, `lib-ai-advisor-*`, `lib-middleware.test.ts`. `npm test` сверить с базлайном, `npx tsc --noEmit`, `npm run build`.
-- [ ] 5.9 **Скрипты и сиды advisor'а**: `scripts/seeds/advisor-demo.mjs` (сеет shelf-сигналы), `scripts/check-advisor-qa-readiness.mjs`, `scripts/advisor-enterprise-smoke.mjs`, `scripts/audit-tenant-capabilities.mjs` — убрать planogram/shelf-ветки; финальная проверка `grep -ri 'planogram|shelf' src/ scripts/` на осиротевшие ссылки.
-- [ ] 5.10 **Uploads-proxy**: в `src/app/api/v1/uploads/[...path]/route.ts` убрать ветку раздачи `mtm-golden/<orgId>/…` (org-scoped guard F-41); lookup по `mtm_photos` остаётся, пока живы фото.
-- [ ] 5.11 **Env/доки**: убрать `ROBOFLOW_*`, `MTM_DETECTOR_*`, `GOLDEN_EMBEDDER`, `VOYAGE_API_KEY`, `MTM_SHELF_BACKSTOP_*`, `MTM_PRICE_OCR_ENABLED`, `GOOGLE_VISION_API_KEY` с прода; заархивировать `docs/mtm-shelf-*`, `docs/mtm-image-recognition-spec.md`, `docs/mtm-golden-reference-layout.md`, `docs/mtm-fmcg-gap-analysis.md`; вычистить упоминания из `CLAUDE.md`, roadmap, `mars-overseas-tasks.json`, help-video доков.
-- [ ] 5.12 Прод-чистка: удалить каталоги `public/uploads/mtm-golden/` (после бэкапа), PM2/cron-конфиги backstop. Помнить про PWA-кэш: после деплоя пользователи могут видеть старое меню из service worker'а — это не баг деплоя (лечится жёстким обновлением).
-
----
-
-## 6. Ключевые уроки прод-эксплуатации (чтобы LeadShelf не наступил на те же грабли)
+## 5. Ключевые уроки прод-эксплуатации
 
 1. **VLM плохо локализует** (боксы приблизительные, особенно на плотных/бликующих полках) — читает label'ы отлично. Идеал: детектор локализует, VLM/классификатор называет. Три итерации промптов упёрлись в потолок — дальше только обученный детектор.
 2. **Недетерминизм = недоверие**: одна и та же полка давала 75%→50% между прогонами, пока не появились temperature 0 и детерминированный эмбеддинг-путь golden. Для «одно фото → всегда один скор» нужен неслучайный путь.
