@@ -1,4 +1,4 @@
-// Нижняя навигация приложения агента: Маршрут / Визит / Панель / Заказы / Профиль.
+// Основная shelf-навигация: маршрут, задачи, оборудование, планограммы и «Ещё».
 import { useCallback, useEffect, useState } from "react"
 import { Tabs, useFocusEffect } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -21,7 +21,7 @@ export default function TabsLayout() {
     if (status.phase === "idle") reloadBadge()
   }, [reloadBadge, status.lastSyncAt, status.phase])
 
-  const routeBadge = openTaskCount > 99 ? "99+" : openTaskCount || undefined
+  const taskBadge = openTaskCount > 99 ? "99+" : openTaskCount || undefined
   const tabBarMetrics = getBottomTabBarMetrics(insets.bottom)
 
   return (
@@ -51,37 +51,41 @@ export default function TabsLayout() {
         options={{
           title: t("tabRoute"),
           tabBarIcon: ({ color }) => <TabIcon name="route" color={color} />,
-          tabBarBadge: routeBadge,
         }}
       />
       <Tabs.Screen
-        name="visit"
+        name="tasks"
         options={{
-          title: t("tabVisit"),
-          tabBarIcon: ({ color }) => <TabIcon name="visit" color={color} />,
+          title: t("tabTasks"),
+          tabBarIcon: ({ color }) => <TabIcon name="tasks" color={color} />,
+          tabBarBadge: taskBadge,
         }}
       />
       <Tabs.Screen
-        name="dashboard"
+        name="shelves"
         options={{
-          title: t("tabDashboard"),
-          tabBarIcon: ({ color }) => <TabIcon name="dashboard" color={color} />,
+          title: t("tabShelves"),
+          tabBarIcon: ({ color }) => <TabIcon name="shelves" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="orders"
+        name="planograms"
         options={{
-          title: t("tabOrders"),
-          tabBarIcon: ({ color }) => <TabIcon name="orders" color={color} />,
+          title: t("tabPlanograms"),
+          tabBarIcon: ({ color }) => <TabIcon name="planograms" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="more"
         options={{
-          title: t("tabProfile"),
-          tabBarIcon: ({ color }) => <TabIcon name="profile" color={color} />,
+          title: t("tabMore"),
+          tabBarIcon: ({ color }) => <TabIcon name="more" color={color} />,
         }}
       />
+      <Tabs.Screen name="visit" options={{ href: null }} />
+      <Tabs.Screen name="orders" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="dashboard" options={{ href: null }} />
     </Tabs>
   )
 }

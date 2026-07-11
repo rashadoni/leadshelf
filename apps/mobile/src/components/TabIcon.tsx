@@ -3,7 +3,16 @@
 import type { ColorValue } from "react-native"
 import Svg, { Circle, Path, Rect } from "react-native-svg"
 
-export type TabIconName = "route" | "visit" | "dashboard" | "orders" | "profile"
+export type TabIconName =
+  | "route"
+  | "visit"
+  | "tasks"
+  | "shelves"
+  | "planograms"
+  | "more"
+  | "dashboard"
+  | "orders"
+  | "profile"
 
 export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: ColorValue; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24" }
@@ -26,6 +35,34 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Circle cx={12} cy={12} r={8.6} stroke={color} strokeWidth={1.9} />
           <Path d="m8.4 12.2 2.4 2.4 4.8-4.9" stroke={color} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "tasks":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={5} y={4} width={14} height={16} rx={2} stroke={color} strokeWidth={1.8} />
+          <Path d="M9 8h6M9 12h6M9 16h4" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
+        </Svg>
+      )
+    case "shelves":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M5 3.5v17M19 3.5v17M5 8h14M5 13h14M5 18h14" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+        </Svg>
+      )
+    case "planograms":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={3.5} y={4} width={17} height={16} rx={2} stroke={color} strokeWidth={1.7} />
+          <Path d="M4 10h16M4 16h16M9 4v6M14.5 10v6M8 16v4" stroke={color} strokeWidth={1.5} />
+        </Svg>
+      )
+    case "more":
+      return (
+        <Svg {...common} fill={color}>
+          <Circle cx={5.5} cy={12} r={1.6} />
+          <Circle cx={12} cy={12} r={1.6} />
+          <Circle cx={18.5} cy={12} r={1.6} />
         </Svg>
       )
     case "dashboard":

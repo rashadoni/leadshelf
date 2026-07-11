@@ -282,7 +282,11 @@ export default function RouteTab() {
 
         {activeVisit && activeVisitStore ? (
           <View style={styles.activeVisitCard}>
-            <View style={styles.activeVisitBody}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(app)/(tabs)/visit" as never)}
+              style={({ pressed }) => [styles.activeVisitBody, pressed && styles.activeVisitBodyPressed]}
+            >
               <View style={styles.activeVisitLabelRow}>
                 <View style={styles.activeDot} />
                 <Text style={styles.activeVisitLabel}>{t("nowAt")}</Text>
@@ -295,7 +299,8 @@ export default function RouteTab() {
                   ? `${minutesBetween(activeVisit.checkInAt, now)} ${t("minutesElapsed")}`
                   : t("visitInProgress")}
               </Text>
-            </View>
+              <Text style={styles.openVisit}>{t("openVisit")}</Text>
+            </Pressable>
             <Pressable
               disabled={activeVisitIsLocal}
               onPress={() => checkOut(activeVisit)}
@@ -408,11 +413,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
   },
   activeVisitBody: { flex: 1, minWidth: 0 },
+  activeVisitBodyPressed: { opacity: 0.7 },
   activeVisitLabelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
   activeVisitLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.6, color: colors.successDark },
   activeVisitStore: { fontSize: 17, fontWeight: "800", color: colors.text, marginTop: 3 },
   activeVisitMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  openVisit: { fontSize: 12, color: colors.successDark, fontWeight: "800", marginTop: 6 },
   finishButton: {
     backgroundColor: colors.danger,
     borderRadius: radii.pill,

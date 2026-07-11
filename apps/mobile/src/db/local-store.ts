@@ -33,6 +33,11 @@ import {
   parseQueuedOrderPayload,
   type QueuedOrderLine,
 } from "../orders/queued-order"
+import {
+  parseLocalPlanogramLibrary,
+  type LocalPlanogramBundleRow,
+  type LocalPlanogramLibrary,
+} from "../planogram/local-library"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -560,6 +565,17 @@ export function getBundle(versionId: string): Record<string, unknown> | null {
     [versionId],
   )
   return row ? (JSON.parse(row.json) as Record<string, unknown>) : null
+}
+
+/** Планограммы и оборудование только из назначенных задач, уже сохранённых в SQLite. */
+export function listLocalPlanogramLibrary(): LocalPlanogramLibrary {
+  const rows = db.getAllSync<LocalPlanogramBundleRow>(
+    `SELECT pb.versionId, pb.json, MIN(t.id) AS taskId
+     FROM planogram_bundles pb
+     INNER JOIN tasks t ON t.planogramVersionId=pb.versionId
+     GROUP BY pb.versionId, pb.json`,
+  )
+  return parseLocalPlanogramLibrary(rows)
 }
 
 export type TaskPhotoProofRow = {
