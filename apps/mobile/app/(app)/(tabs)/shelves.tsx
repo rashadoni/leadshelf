@@ -54,6 +54,7 @@ export default function ShelvesTab() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("tabShelves")}</Text>
+        <Text style={styles.subtitle}>{t("shelvesSectionSubtitle")}</Text>
       </View>
       <SyncBar />
       <SectionHint section="shelves" icon="shelves" titleKey="shelvesHintTitle" bodyKey="shelvesHintBody" />
@@ -79,7 +80,7 @@ export default function ShelvesTab() {
               accessibilityRole="button"
               onPress={() =>
                 router.push({
-                  pathname: "/(app)/planograms/[versionId]",
+                  pathname: "/(app)/shelves/[versionId]/[equipmentId]",
                   params: { versionId: item.versionId, equipmentId: item.id },
                 } as never)
               }
@@ -107,6 +108,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   title: { fontSize: 24, fontWeight: "800", color: colors.text },
+  subtitle: { marginTop: 3, color: colors.muted, fontSize: 12, fontWeight: "600" },
   list: { paddingVertical: 4, paddingBottom: 24 },
   emptyWrap: { flexGrow: 1, justifyContent: "center" },
   empty: { alignItems: "center", paddingHorizontal: 36, gap: 8 },

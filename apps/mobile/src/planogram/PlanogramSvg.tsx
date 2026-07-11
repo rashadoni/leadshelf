@@ -73,11 +73,13 @@ function colorFor(text: string): string {
 export function PlanogramSvg({
   bundle,
   equipmentIndex = 0,
+  showProducts = true,
   selectedPlacementId,
   onPlacementPress,
 }: {
   bundle: Bundle
   equipmentIndex?: number
+  showProducts?: boolean
   selectedPlacementId?: string | null
   onPlacementPress?: (placementId: string) => void
 }) {
@@ -104,7 +106,7 @@ export function PlanogramSvg({
             fill="#78716c"
           />
         ))}
-        {bundle.placements.map((p) => {
+        {showProducts ? bundle.placements.map((p) => {
           const shelf = p.shelfId ? shelfById.get(p.shelfId) : null
           if (!shelf) return null
           const effective = placementEffectiveSizeMm(p)
@@ -145,7 +147,7 @@ export function PlanogramSvg({
               )}
             </G>
           )
-        })}
+        }) : null}
       </Svg>
     </View>
   )

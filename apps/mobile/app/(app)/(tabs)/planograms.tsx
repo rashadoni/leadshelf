@@ -37,6 +37,7 @@ export default function PlanogramsTab() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("tabPlanograms")}</Text>
+        <Text style={styles.subtitle}>{t("planogramsSectionSubtitle")}</Text>
       </View>
       <SyncBar />
       <SectionHint section="planograms" icon="planograms" titleKey="planogramsHintTitle" bodyKey="planogramsHintBody" />
@@ -83,6 +84,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   title: { fontSize: 24, fontWeight: "800", color: colors.text },
+  subtitle: { marginTop: 3, color: colors.muted, fontSize: 12, fontWeight: "600" },
   list: { paddingHorizontal: 14, paddingVertical: 8, paddingBottom: 24, gap: 10 },
   emptyWrap: { flexGrow: 1, justifyContent: "center" },
   empty: { alignItems: "center", paddingHorizontal: 36, gap: 8 },
