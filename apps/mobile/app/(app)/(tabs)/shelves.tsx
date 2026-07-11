@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react"
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router, useFocusEffect } from "expo-router"
 import { SyncBar } from "../../../src/components/SyncBar"
@@ -18,12 +18,23 @@ function dimensions(item: LocalEquipmentSummary): string | null {
 }
 
 export default function ShelvesTab() {
-  useLocale()
+  const locale = useLocale()
   const { status, sync } = useSync()
   const [items, setItems] = useState<LocalEquipmentSummary[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const reload = useCallback(() => setItems(listLocalPlanogramLibrary().equipment), [])
   useFocusEffect(reload)
+
+  const sections = useMemo(() => {
+    const grouped = new Map<string, LocalEquipmentSummary[]>()
+    for (const item of items) {
+      const title = item.planogramName ?? t("planogram")
+      grouped.set(title, [...(grouped.get(title) ?? []), item])
+    }
+    return [...grouped.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, locale))
+      .map(([title, data]) => ({ title, data }))
+  }, [items, locale])
 
   useEffect(() => {
     if (status.phase === "idle") reload()
@@ -46,9 +57,10 @@ export default function ShelvesTab() {
       </View>
       <SyncBar />
       <SectionHint section="shelves" icon="shelves" titleKey="shelvesHintTitle" bodyKey="shelvesHintBody" />
-      <FlatList
-        data={items}
-        keyExtractor={(item) => item.id}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => `${item.versionId}:${item.id}`}
+        stickySectionHeadersEnabled={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={items.length === 0 ? styles.emptyWrap : styles.list}
         ListEmptyComponent={
@@ -57,6 +69,9 @@ export default function ShelvesTab() {
             <Text style={styles.emptyHint}>{t("shelvesEmptyHint")}</Text>
           </View>
         }
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionTitle} numberOfLines={2}>{section.title}</Text>
+        )}
         renderItem={({ item }) => {
           const size = dimensions(item)
           return (
@@ -64,15 +79,18 @@ export default function ShelvesTab() {
               accessibilityRole="button"
               disabled={!item.taskId}
               onPress={() => router.push(`/(app)/tasks/${item.taskId}` as never)}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
-              <Text style={styles.cardTitle}>{item.name ?? t("equipment")}</Text>
-              <Text style={styles.planogramName}>{item.planogramName ?? t("planogram")}</Text>
-              <View style={styles.metaRow}>
-                <Text style={styles.meta}>{item.shelfCount} {t("shelfCountLabel")}</Text>
-                {size ? <Text style={styles.meta}>{size}</Text> : null}
+              <View style={styles.icon}>
+                <Text style={styles.iconText}>{item.shelfCount}</Text>
               </View>
-              <Text style={styles.open}>{t("openPlanogram")}</Text>
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle} numberOfLines={1}>{item.name ?? t("equipment")}</Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {item.shelfCount} {t("shelfCountLabel")}{size ? ` · ${size}` : ""}
+                </Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
             </Pressable>
           )
         }}
@@ -85,16 +103,44 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   title: { fontSize: 24, fontWeight: "800", color: colors.text },
-  list: { paddingHorizontal: 14, paddingVertical: 8, paddingBottom: 24, gap: 10 },
+  list: { paddingVertical: 4, paddingBottom: 24 },
   emptyWrap: { flexGrow: 1, justifyContent: "center" },
   empty: { alignItems: "center", paddingHorizontal: 36, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: "800", color: colors.text, textAlign: "center" },
   emptyHint: { fontSize: 14, color: colors.muted, textAlign: "center" },
-  card: { backgroundColor: colors.card, borderRadius: radii.card, padding: 16, ...cardShadow },
-  cardPressed: { opacity: 0.76 },
-  cardTitle: { fontSize: 17, fontWeight: "800", color: colors.text },
-  planogramName: { marginTop: 4, color: colors.muted, fontSize: 13 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 },
-  meta: { color: colors.faint, fontSize: 12, fontWeight: "600" },
-  open: { marginTop: 12, color: colors.primary, fontSize: 13, fontWeight: "800" },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "800",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 7,
+  },
+  row: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: colors.card,
+    borderRadius: radii.card,
+    ...cardShadow,
+  },
+  rowPressed: { opacity: 0.72 },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.inner,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primarySoft,
+  },
+  iconText: { color: colors.primary, fontSize: 14, fontWeight: "800" },
+  rowBody: { flex: 1, minWidth: 0 },
+  rowTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  meta: { color: colors.muted, fontSize: 11, fontWeight: "600", marginTop: 4 },
+  chevron: { color: colors.faint, fontSize: 25, fontWeight: "600" },
 })
