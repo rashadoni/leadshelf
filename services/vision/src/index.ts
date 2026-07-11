@@ -8,3 +8,15 @@ export {
   STUB_PROVIDER,
 } from "./provider"
 export type { OpenAiVisionProviderConfig, VisionFetch, VisionProvider } from "./provider"
+export {
+  evaluateVisionDetections,
+  runTwoStageShelfRecognition,
+  visionEvalManifestSchema,
+} from "./evaluation"
+export type {
+  EvalDetection,
+  ShelfLocalizer,
+  ShelfSkuRecognizer,
+  VisionEvalManifest,
+  VisionEvalMetrics,
+} from "./evaluation"
