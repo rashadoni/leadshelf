@@ -41,6 +41,16 @@ export async function decideHumanReview(
       },
       select: { id: true, status: true },
     })
+    await tx.auditLog.create({
+      data: {
+        organizationId,
+        userId: input.reviewedById,
+        action: "shelf_analysis.review_decision",
+        entityType: "HumanReview",
+        entityId: review.id,
+        payload: { status: input.status, taskId: review.taskId, note: input.note ?? null },
+      },
+    })
 
     let taskCompleted = false
     if (input.status === "APPROVED" && review.taskId) {

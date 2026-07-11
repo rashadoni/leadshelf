@@ -82,6 +82,16 @@ export async function requestCaptureRetake(
           reviewedAt: now,
         },
       }),
+      prisma.auditLog.create({
+        data: {
+          organizationId,
+          userId: input.requestedById,
+          action: "shelf_analysis.retake_requested",
+          entityType: "HumanReview",
+          entityId: input.reviewId,
+          payload: { taskId: input.taskId, stepId: input.stepId, stepKind: input.stepKind ?? null, note },
+        },
+      }),
     ])
     return request
   }

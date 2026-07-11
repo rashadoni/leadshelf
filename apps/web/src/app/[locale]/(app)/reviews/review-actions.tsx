@@ -4,10 +4,20 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 
-export function ReviewActions({ reviewId }: { reviewId: string }) {
+export function ReviewActions({
+  reviewId,
+  taskId,
+  captureStepId,
+  captureStepKind,
+}: {
+  reviewId: string
+  taskId: string | null
+  captureStepId: string | null
+  captureStepKind: string | null
+}) {
   const router = useRouter()
   const t = useTranslations("reviews")
-  const [pending, setPending] = useState<"APPROVED" | "REJECTED" | null>(null)
+  const [pending, setPending] = useState<"APPROVED" | "REJECTED" | "RETAKE" | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function setStatus(status: "APPROVED" | "REJECTED") {
@@ -28,6 +38,25 @@ export function ReviewActions({ reviewId }: { reviewId: string }) {
     }
   }
 
+  async function requestRetake() {
+    if (!taskId || !captureStepId) return
+    setPending("RETAKE")
+    setError(null)
+    try {
+      const res = await fetch(`/api/v1/tasks/${taskId}/capture-retake`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepId: captureStepId, stepKind: captureStepKind, reviewId }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      router.refresh()
+    } catch {
+      setError(t("actionFailed"))
+    } finally {
+      setPending(null)
+    }
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -39,6 +68,16 @@ export function ReviewActions({ reviewId }: { reviewId: string }) {
         >
           {pending === "APPROVED" ? t("saving") : t("approve")}
         </button>
+        {taskId && captureStepId ? (
+          <button
+            type="button"
+            disabled={pending !== null}
+            onClick={requestRetake}
+            className="min-h-10 rounded-md border border-amber-300 px-3 text-xs font-medium text-amber-800 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+          >
+            {pending === "RETAKE" ? t("saving") : t("requestRetake")}
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={pending !== null}

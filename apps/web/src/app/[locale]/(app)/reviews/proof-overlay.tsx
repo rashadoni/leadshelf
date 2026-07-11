@@ -6,6 +6,7 @@ export type ProofOverlayStatus = "match" | "issue" | "uncertain" | "expected"
 
 export interface ProofOverlayBox {
   id: string
+  selectionKey?: string | null
   xPct: number
   yPct: number
   widthPct: number
@@ -38,6 +39,8 @@ export function ProofOverlay({
   emptyLabel,
   imageAlt,
   showConfidence = true,
+  activeSelectionKey,
+  onSelectionChange,
 }: {
   src: string
   boxes: ProofOverlayBox[]
@@ -45,8 +48,16 @@ export function ProofOverlay({
   emptyLabel: string
   imageAlt: string
   showConfidence?: boolean
+  activeSelectionKey?: string | null
+  onSelectionChange?: (selectionKey: string | null) => void
 }) {
-  const [active, setActive] = useState<string | null>(null)
+  const [internalActive, setInternalActive] = useState<string | null>(null)
+  const controlled = activeSelectionKey !== undefined
+  const active = controlled ? activeSelectionKey : internalActive
+  const setActive = (selectionKey: string | null) => {
+    if (!controlled) setInternalActive(selectionKey)
+    onSelectionChange?.(selectionKey)
+  }
   const label = (status: ProofOverlayStatus) => statusLabels[status] ?? status
   const legendStatuses = Array.from(new Set(boxes.map((b) => b.status)))
 
@@ -55,13 +66,15 @@ export function ProofOverlay({
       <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-900">
         <img src={src} alt={imageAlt} className="block w-full object-contain" />
         {boxes.map((box) => {
-          const isActive = active === box.id
+          const selectionKey = box.selectionKey ?? box.id
+          const isActive = active === selectionKey
           return (
             <button
               key={box.id}
               type="button"
               aria-label={`${label(box.status)} · ${box.sku ?? emptyLabel}`}
-              onClick={() => setActive(isActive ? null : box.id)}
+              aria-pressed={isActive}
+              onClick={() => setActive(isActive ? null : selectionKey)}
               style={{
                 left: `${box.xPct}%`,
                 top: `${box.yPct}%`,
@@ -89,7 +102,7 @@ export function ProofOverlay({
       </div>
       {active ? (
         (() => {
-          const box = boxes.find((b) => b.id === active)
+          const box = boxes.find((b) => (b.selectionKey ?? b.id) === active)
           if (!box) return null
           return (
             <div className="mt-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs">

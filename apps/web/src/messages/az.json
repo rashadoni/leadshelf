@@ -739,6 +739,27 @@
   "analytics": {
     "subtitle": "Analitikanın ilk qatı: aktiv planoqramlarda hansı məhsulun nə qədər yer tutduğunu göstərir.",
     "exportExcel": "Excel ixracı",
+    "shelfExecution": {
+      "title": "Rəfin faktiki icrası",
+      "hint": "Kanonik yoxlama nəticələri: uyğunluq, OOS, feysinq və tələb olunan hərəkətlər.",
+      "store": "Mağaza",
+      "agent": "Merçendayzer",
+      "planogram": "Planoqram",
+      "status": "Status",
+      "from": "Başlanğıc",
+      "to": "Son",
+      "all": "Hamısı",
+      "apply": "Tətbiq et",
+      "samples": "Yoxlama",
+      "compliance": "Orta uyğunluq",
+      "unavailable": "Nəticəsiz",
+      "oos": "OOS SKU",
+      "facingsGap": "Feysinq çatışmazlığı",
+      "actions": "Hərəkət",
+      "rejectedReviews": "Ofisdə rədd edilib",
+      "retakes": "Yenidən çəkiliş",
+      "statuses": { "PASS": "Uyğundur", "REVIEW": "Yoxlama lazımdır", "FAIL": "Uyğun deyil", "UNAVAILABLE": "Mövcud deyil" }
+    },
     "kpi": {
       "storesWithPlanograms": "Planoqramlı mağaza",
       "activePlanograms": "Aktiv planoqram",
@@ -965,6 +986,7 @@
     "unknownStore": "Mağaza göstərilməyib",
     "approve": "Qəbul et",
     "reject": "Rədd et",
+    "requestRetake": "Yenidən çəkiliş istə",
     "saving": "Saxlanılır…",
     "actionFailed": "Qərarı saxlamaq mümkün olmadı. Yenidən cəhd edin.",
     "dashboard": {
@@ -997,6 +1019,74 @@
     "reason": {
       "PHOTO_QUALITY": "Foto keyfiyyəti",
       "VISION_COMPLIANCE": "Vision compliance"
+    },
+    "comparison": {
+      "tabs": {
+        "scheme": "Sxem",
+        "photo": "Foto",
+        "result": "Nəticə"
+      },
+      "photoModes": {
+        "golden": "Etalon",
+        "actual": "Fakt",
+        "overlay": "Konturlar"
+      },
+      "status": {
+        "PASS": "Uyğundur",
+        "REVIEW": "Yoxlama lazımdır",
+        "FAIL": "Uyğun deyil",
+        "UNAVAILABLE": "Nəticə yoxdur"
+      },
+      "outcomes": {
+        "matched": "Yer və miqdar uyğundur",
+        "missing": "Məhsul yoxdur",
+        "wrong_product": "Yanlış məhsul",
+        "wrong_position": "Yanlış rəfdədir",
+        "facing_mismatch": "Feysinq sayı fərqlidir",
+        "unavailable": "Analiz mövcud deyil"
+      },
+      "actions": {
+        "restock": "Məhsulu rəfə qoyun",
+        "add_facings": "Feysinq əlavə edin",
+        "remove_facings": "Artıq feysinqi çıxarın",
+        "move": "Məhsulu düzgün yerə keçirin",
+        "manual_review": "Əl ilə yoxlayın"
+      },
+      "filters": { "all": "Hamısı", "issues": "Pozuntular", "uncertain": "Qeyri-müəyyən" },
+      "schemeHint": "Planoqramdakı gözlənilən yerləri faktiki nəticə ilə rəf-rəf müqayisə edin.",
+      "photoHint": "Etalon fotonu, faktiki çəkilişi və AI konturlarını eyni seçilmiş məhsul üzrə yoxlayın.",
+      "resultHint": "Faizdən əvvəl yerinə yetirilməli konkret hərəkətlər göstərilir.",
+      "shelf": "Rəf",
+      "expected": "Plan",
+      "actual": "Fakt",
+      "structuralScore": "Sxem uyğunluğu",
+      "visualConfidence": "Vizual əminlik",
+      "missingProducts": "Çatışmayan SKU",
+      "extraProducts": "Artıq tapıntılar",
+      "noPhoto": "Faktiki foto yoxdur.",
+      "noGolden": "Etalon foto yoxdur.",
+      "noActions": "Düzəliş tələb edən hərəkət yoxdur.",
+      "noFilteredPlacements": "Bu filtr üçün mövqe yoxdur.",
+      "technicalDetails": "Texniki analiz detalları",
+      "manual": {
+        "title": "Tanınmanı əl ilə düzəldin",
+        "hint": "SKU-nu, planoqram yerini, feysinq sayını və kontur koordinatlarını dəqiqləşdirin. Saxlanmış əl nəticəsi sonrakı AI analizlərindən üstün qalır.",
+        "add": "Kontur əlavə et",
+        "remove": "Sil",
+        "save": "Əl nəticəsini saxla",
+        "saving": "Saxlanılır...",
+        "saved": "Əl nəticəsi saxlanıldı",
+        "failed": "Əl nəticəsini saxlamaq mümkün olmadı",
+        "sku": "SKU",
+        "placement": "Planoqram yeri",
+        "facings": "Feysinq",
+        "x": "X, %",
+        "y": "Y, %",
+        "width": "En, %",
+        "height": "Hündürlük, %",
+        "unassigned": "Seçilməyib",
+        "overlayLabel": "əl işarələməsi"
+      }
     },
     "vision": {
       "title": "Vision compliance",

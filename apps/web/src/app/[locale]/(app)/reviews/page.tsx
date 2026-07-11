@@ -4,7 +4,10 @@ import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { ReviewActions } from "./review-actions"
 import { ProofOverlay } from "./proof-overlay"
+import { ShelfComparisonViewer, type ShelfComparisonLabels } from "./shelf-comparison-viewer"
+import { ManualShelfEditor } from "./manual-shelf-editor"
 import { formatLocaleDate, formatLocaleDateTime } from "@/i18n/format"
+import { buildReviewShelfComparison } from "@/server/reviews/shelf-comparison"
 
 const STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const
 
@@ -156,7 +159,7 @@ export default async function ReviewsPage({
     : "PENDING"
 
   const db = tenantDb(session.org)
-  const [reviews, summary] = await Promise.all([
+  const [reviews, summary, products] = await Promise.all([
     db.humanReview.findMany({
       where: { status: statusFilter },
       include: {
@@ -166,7 +169,24 @@ export default async function ReviewsPage({
             status: true,
             store: { select: { name: true, code: true } },
             planogramVersion: {
-              select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+              select: {
+                id: true,
+                planogram: { select: { id: true, name: true } },
+                versionNumber: true,
+                placements: {
+                  orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+                  select: {
+                    id: true,
+                    shelfId: true,
+                    facingsX: true,
+                    facingsY: true,
+                    sortOrder: true,
+                    product: {
+                      select: { id: true, sku: true, name: true, brand: { select: { name: true } } },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -178,13 +198,38 @@ export default async function ReviewsPage({
             analysisStatus: true,
             qualityScore: true,
             captureFlags: true,
+            captureStepId: true,
+            captureStepKind: true,
             takenAt: true,
             store: { select: { name: true, code: true } },
             user: { select: { name: true } },
+            shelfAnalysisRuns: {
+              where: { isCanonical: true },
+              orderBy: [{ finishedAt: "desc" }, { createdAt: "desc" }],
+              take: 1,
+              select: { result: true },
+            },
           },
         },
         planogramVersion: {
-          select: { id: true, planogram: { select: { id: true, name: true } }, versionNumber: true },
+          select: {
+            id: true,
+            planogram: { select: { id: true, name: true } },
+            versionNumber: true,
+            placements: {
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+              select: {
+                id: true,
+                shelfId: true,
+                facingsX: true,
+                facingsY: true,
+                sortOrder: true,
+                product: {
+                  select: { id: true, sku: true, name: true, brand: { select: { name: true } } },
+                },
+              },
+            },
+          },
         },
         goldenReference: {
           select: {
@@ -194,6 +239,7 @@ export default async function ReviewsPage({
               orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
               select: {
                 id: true,
+                placementId: true,
                 xPct: true,
                 yPct: true,
                 widthPct: true,
@@ -222,6 +268,11 @@ export default async function ReviewsPage({
       visionCompliance,
       avgScore: score._avg.score,
     })),
+    db.product.findMany({
+      orderBy: [{ sku: "asc" }, { id: "asc" }],
+      take: 500,
+      select: { id: true, sku: true, name: true },
+    }),
   ])
 
   return (
@@ -276,9 +327,78 @@ export default async function ReviewsPage({
             const store = photo?.store ?? review.task?.store ?? null
             const planogramVersion = review.task?.planogramVersion ?? review.planogramVersion
             const reviewTitle = review.task?.title ?? planogramVersion?.planogram.name ?? t("untitled")
+            const comparison = buildReviewShelfComparison({
+              canonicalResult: photo?.shelfAnalysisRuns[0]?.result ?? null,
+              findings: review.findings,
+              analysisStatus: photo?.analysisStatus ?? null,
+              placements: planogramVersion?.placements ?? [],
+              referenceSlots: review.goldenReference?.slots ?? [],
+            })
+            const comparisonLabels: ShelfComparisonLabels = {
+              tabs: {
+                scheme: t("comparison.tabs.scheme"),
+                photo: t("comparison.tabs.photo"),
+                result: t("comparison.tabs.result"),
+              },
+              photoModes: {
+                golden: t("comparison.photoModes.golden"),
+                actual: t("comparison.photoModes.actual"),
+                overlay: t("comparison.photoModes.overlay"),
+              },
+              status: {
+                PASS: t("comparison.status.PASS"),
+                REVIEW: t("comparison.status.REVIEW"),
+                FAIL: t("comparison.status.FAIL"),
+                UNAVAILABLE: t("comparison.status.UNAVAILABLE"),
+              },
+              outcomes: {
+                matched: t("comparison.outcomes.matched"),
+                missing: t("comparison.outcomes.missing"),
+                wrong_product: t("comparison.outcomes.wrong_product"),
+                wrong_position: t("comparison.outcomes.wrong_position"),
+                facing_mismatch: t("comparison.outcomes.facing_mismatch"),
+                unavailable: t("comparison.outcomes.unavailable"),
+              },
+              actions: {
+                restock: t("comparison.actions.restock"),
+                add_facings: t("comparison.actions.add_facings"),
+                remove_facings: t("comparison.actions.remove_facings"),
+                move: t("comparison.actions.move"),
+                manual_review: t("comparison.actions.manual_review"),
+              },
+              filters: {
+                all: t("comparison.filters.all"),
+                issues: t("comparison.filters.issues"),
+                uncertain: t("comparison.filters.uncertain"),
+              },
+              schemeHint: t("comparison.schemeHint"),
+              photoHint: t("comparison.photoHint"),
+              resultHint: t("comparison.resultHint"),
+              shelf: t("comparison.shelf"),
+              expected: t("comparison.expected"),
+              actual: t("comparison.actual"),
+              structuralScore: t("comparison.structuralScore"),
+              visualConfidence: t("comparison.visualConfidence"),
+              missingProducts: t("comparison.missingProducts"),
+              extraProducts: t("comparison.extraProducts"),
+              noPhoto: t("comparison.noPhoto"),
+              noGolden: t("comparison.noGolden"),
+              noActions: t("comparison.noActions"),
+              unknownSku: t("overlay.unknownSku"),
+              noFilteredPlacements: t("comparison.noFilteredPlacements"),
+              overlay: {
+                match: t("overlay.match"),
+                issue: t("overlay.issue"),
+                uncertain: t("overlay.uncertain"),
+                expected: t("overlay.expected"),
+              },
+            }
             return (
-              <div key={review.id} className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-3 md:grid-cols-[190px_1fr_auto]">
-                <div className="space-y-2">
+              <div
+                key={review.id}
+                className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-3 md:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-[190px_minmax(0,1fr)_auto]"
+              >
+                <div className="space-y-2 md:row-span-2 xl:row-span-1">
                   <div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
                     {photo ? (
                       <ProofMedia
@@ -380,8 +500,75 @@ export default async function ReviewsPage({
                       ))}
                     </div>
                   )}
+                  {comparison ? (
+                    <>
+                      <ShelfComparisonViewer
+                        comparison={comparison}
+                        photoSrc={photo && photo.mediaType === "PHOTO" ? `/api/media/${photo.url}` : null}
+                        goldenSrc={review.goldenReference ? `/api/media/${review.goldenReference.imageUrl}` : null}
+                        expectedBoxes={(review.goldenReference?.slots ?? []).map((slot) => ({
+                          id: slot.id,
+                          selectionKey: slot.placementId,
+                          xPct: slot.xPct,
+                          yPct: slot.yPct,
+                          widthPct: slot.widthPct,
+                          heightPct: slot.heightPct,
+                          sku: slot.product?.sku ?? null,
+                          confidence: 1,
+                          status: "expected" as const,
+                        }))}
+                        imageAlt={{
+                          photo: t("proofAlt", { title: reviewTitle }),
+                          golden: t("goldenAlt", { title: reviewTitle }),
+                        }}
+                        labels={comparisonLabels}
+                      />
+                      <ManualShelfEditor
+                        reviewId={review.id}
+                        photoSrc={photo && photo.mediaType === "PHOTO" ? `/api/media/${photo.url}` : null}
+                        imageAlt={t("proofAlt", { title: reviewTitle })}
+                        products={products}
+                        placements={(planogramVersion?.placements ?? []).map((placement) => ({
+                          id: placement.id,
+                          sku: placement.product.sku,
+                        }))}
+                        initialAnnotations={comparison.detections
+                          .filter((detection) => detection.bbox != null)
+                          .map((detection) => ({
+                            id: detection.detectionId,
+                            placementId: detection.placementId,
+                            productId: detection.productId ?? products.find((product) => product.sku === detection.productSku)?.id ?? null,
+                            facings: detection.facings,
+                            bbox: detection.bbox!,
+                          }))}
+                        labels={{
+                          title: t("comparison.manual.title"),
+                          hint: t("comparison.manual.hint"),
+                          add: t("comparison.manual.add"),
+                          remove: t("comparison.manual.remove"),
+                          save: t("comparison.manual.save"),
+                          saving: t("comparison.manual.saving"),
+                          saved: t("comparison.manual.saved"),
+                          failed: t("comparison.manual.failed"),
+                          sku: t("comparison.manual.sku"),
+                          placement: t("comparison.manual.placement"),
+                          facings: t("comparison.manual.facings"),
+                          x: t("comparison.manual.x"),
+                          y: t("comparison.manual.y"),
+                          width: t("comparison.manual.width"),
+                          height: t("comparison.manual.height"),
+                          unassigned: t("comparison.manual.unassigned"),
+                          overlayLabel: t("comparison.manual.overlayLabel"),
+                        }}
+                      />
+                    </>
+                  ) : null}
                   {vision && (
-                    <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <details className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <summary className="cursor-pointer text-sm font-medium text-neutral-800">
+                        {t("comparison.technicalDetails")}
+                      </summary>
+                      <div className="mt-3">
                       {photo && photo.mediaType !== "VIDEO" && vision.detections.length > 0 ? (
                         <div className="mb-3">
                           <ProofOverlay
@@ -484,12 +671,18 @@ export default async function ReviewsPage({
                           {t("vision.warnings")}: {vision.warnings.join(", ")}
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </details>
                   )}
                 </div>
-                <div className="flex items-start justify-end">
+                <div className="flex items-start justify-end md:col-start-2 xl:col-auto">
                   {review.status === "PENDING" ? (
-                    <ReviewActions reviewId={review.id} />
+                    <ReviewActions
+                      reviewId={review.id}
+                      taskId={review.taskId}
+                      captureStepId={photo?.captureStepId ?? null}
+                      captureStepKind={photo?.captureStepKind ?? null}
+                    />
                   ) : (
                     <span className="rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-600">
                       {t(`status.${review.status}`)}

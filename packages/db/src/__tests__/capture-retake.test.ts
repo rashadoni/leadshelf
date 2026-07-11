@@ -63,6 +63,7 @@ describe("capture retake repo", () => {
       task: { findFirst: vi.fn().mockResolvedValue({ id: "task-1" }), update: vi.fn() },
       captureRetakeRequest: { upsert },
       humanReview: { updateMany: reviewUpdate },
+      auditLog: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) },
       $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
     } as unknown as PrismaClient
 

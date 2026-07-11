@@ -17,6 +17,7 @@ function prismaMock({
     },
     task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     taskStatusHistory: { create: vi.fn().mockResolvedValue({ id: "history-1" }) },
+    auditLog: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) },
   }
   const prisma = {
     $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
