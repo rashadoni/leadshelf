@@ -18,7 +18,9 @@ export function SyncBar() {
       : status.phase === "upgradeRequired"
         ? t("upgradeTitle")
       : status.phase === "error"
-        ? t("syncError")
+        ? queued > 0
+          ? t("syncWriteError")
+          : t("syncReadError")
         : status.phase === "idle"
           ? status.conflictOps + status.rejectedOps > 0
             ? t("syncNeedsAttention")
