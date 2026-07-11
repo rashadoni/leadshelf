@@ -54,6 +54,7 @@ import {
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
+import { ShelfComparisonCard } from "../../../src/components/ShelfComparisonCard"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import type { TaskRow } from "../../../src/sync/ports"
@@ -169,6 +170,7 @@ export default function TaskDetailScreen() {
     exceptionStepIds,
     retakeStepIds,
   )
+  const comparisonProof = photoProofs.find((proof) => proof.comparisonResult != null) ?? null
   const equipmentSilhouette = useMemo(
     () =>
       buildEquipmentSilhouette(
@@ -753,6 +755,12 @@ export default function TaskDetailScreen() {
             </View>
           )}
         </View>
+        {comparisonProof?.comparisonResult ? (
+          <ShelfComparisonCard
+            result={comparisonProof.comparisonResult}
+            photoUri={comparisonProof.mediaType === "photo" ? comparisonProof.fileUri : null}
+          />
+        ) : null}
         <View style={styles.guidedProofCard}>
           <View style={styles.proofSummaryHeader}>
             <View style={{ flex: 1 }}>

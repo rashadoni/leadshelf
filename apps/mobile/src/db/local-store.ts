@@ -26,7 +26,7 @@ import type {
   TaskRow,
   VisitRow,
 } from "../sync/ports"
-import type { MobilePhotoUploadResponse } from "@leadshelf/api-contracts/mobile/v1"
+import type { MobilePhotoUploadResponse, MobileShelfComparisonResult } from "@leadshelf/api-contracts/mobile/v1"
 import { OPEN_TASK_STATUSES } from "../tasks/status"
 import {
   parseQueuedOrderDetailCode,
@@ -98,6 +98,7 @@ export function initDb(): void {
       visionStatus TEXT,
       visionReason TEXT,
       visionScore REAL,
+      comparisonResult TEXT,
       updatedAt TEXT
     );
   `)
@@ -149,6 +150,7 @@ export function initDb(): void {
   ensureServerPhotoColumn("mediaType", "ALTER TABLE server_photo_submissions ADD COLUMN mediaType TEXT DEFAULT 'photo'")
   ensureServerPhotoColumn("durationMs", "ALTER TABLE server_photo_submissions ADD COLUMN durationMs INTEGER")
   ensureServerPhotoColumn("captureStepJson", "ALTER TABLE server_photo_submissions ADD COLUMN captureStepJson TEXT")
+  ensureServerPhotoColumn("comparisonResult", "ALTER TABLE server_photo_submissions ADD COLUMN comparisonResult TEXT")
 }
 
 export const localStore: LocalStore = {
@@ -233,8 +235,8 @@ export const localStore: LocalStore = {
              id, clientPhotoId, taskId, storeId, objectKey, mediaType, durationMs, captureStepJson,
              takenAt, qualityScore,
              reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
-             visionReviewId, visionStatus, visionReason, visionScore, updatedAt
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             visionReviewId, visionStatus, visionReason, visionScore, comparisonResult, updatedAt
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET
              clientPhotoId=excluded.clientPhotoId,
              taskId=excluded.taskId,
@@ -255,6 +257,7 @@ export const localStore: LocalStore = {
              visionStatus=excluded.visionStatus,
              visionReason=excluded.visionReason,
              visionScore=excluded.visionScore,
+             comparisonResult=excluded.comparisonResult,
              updatedAt=excluded.updatedAt`,
           [
             photo.id,
@@ -277,6 +280,7 @@ export const localStore: LocalStore = {
             photo.vision?.status ?? null,
             photo.vision?.note ?? null,
             photo.vision?.score ?? null,
+            photo.comparison ? JSON.stringify(photo.comparison) : null,
             photo.updatedAt,
           ],
         )
@@ -602,6 +606,7 @@ export type TaskPhotoProofRow = {
   reviewScore: number | null
   reviewNote: string | null
   reviewedAt: string | null
+  comparisonResult: MobileShelfComparisonResult | null
   outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
   outboxDetail: unknown | null
 }
@@ -652,6 +657,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     reviewScore: null,
     reviewNote: null,
     reviewedAt: null,
+    comparisonResult: null,
     outboxDetail: row.outboxDetail ? JSON.parse(row.outboxDetail) : null,
   }))
   const localClientIds = new Set(localProofs.map((row) => row.clientPhotoId))
@@ -674,11 +680,12 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     visionReviewId: string | null
     visionStatus: string | null
     visionReason: string | null
+    comparisonResult: string | null
   }>(
     `SELECT id, clientPhotoId, taskId, objectKey, mediaType, durationMs, captureStepJson,
       takenAt, qualityScore,
       reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
-      visionReviewId, visionStatus, visionReason
+      visionReviewId, visionStatus, visionReason, comparisonResult
      FROM server_photo_submissions
      WHERE taskId=?
      ORDER BY takenAt DESC`,
@@ -707,6 +714,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
       reviewScore: server.reviewScore,
       reviewNote: server.reviewNote,
       reviewedAt: server.reviewedAt,
+      comparisonResult: parseJsonOrNull<MobileShelfComparisonResult>(server.comparisonResult),
     }
   })
   const serverProofs = serverRows
@@ -736,6 +744,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
         reviewScore: row.reviewScore,
         reviewNote: row.reviewNote,
         reviewedAt: row.reviewedAt,
+        comparisonResult: parseJsonOrNull<MobileShelfComparisonResult>(row.comparisonResult),
         outboxStatus: null,
         outboxDetail: null,
       }),

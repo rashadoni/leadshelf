@@ -272,6 +272,33 @@ export const DICT = {
     activeVisitChanged: "Aktiv vizit dəyişib. Sifarişi yenidən açın",
     selectedOrderSummary: "Sifarişin yekunu",
     orderProductLimit: "Bir sifarişdə maksimum 200 məhsul seçmək olar",
+    comparisonTitle: "Rəf yoxlamasının nəticəsi",
+    comparisonStatus_PASS: "Uyğundur",
+    comparisonStatus_REVIEW: "Yoxlama lazımdır",
+    comparisonStatus_FAIL: "Uyğun deyil",
+    comparisonStatus_UNAVAILABLE: "Analiz mövcud deyil",
+    comparisonTab_scheme: "Sxem",
+    comparisonTab_photo: "Foto",
+    comparisonTab_result: "Nəticə",
+    comparisonSchemeHint: "Planoqram yerlərini faktiki rəf ilə müqayisə edin.",
+    comparisonPhotoUnavailable: "Bu cihazda foto önbaxışı yoxdur. Nəticə və hərəkətlər oflayn saxlanılıb.",
+    comparisonActionsHint: "Əvvəl yerinə yetiriləcək hərəkətlər, sonra göstəricilər göstərilir.",
+    comparisonPlanFact: "Plan: {expected} · Fakt: {actual}",
+    comparisonOutcome_matched: "Yer və miqdar uyğundur",
+    comparisonOutcome_missing: "Məhsul yoxdur",
+    comparisonOutcome_wrong_product: "Yanlış məhsul",
+    comparisonOutcome_wrong_position: "Yanlış rəfdədir",
+    comparisonOutcome_facing_mismatch: "Feysinq sayı fərqlidir",
+    comparisonOutcome_unavailable: "Analiz mövcud deyil",
+    comparisonAction_restock: "Məhsulu rəfə qoyun",
+    comparisonAction_add_facings: "Feysinq əlavə edin",
+    comparisonAction_remove_facings: "Artıq feysinqi çıxarın",
+    comparisonAction_move: "Məhsulu düzgün yerə keçirin",
+    comparisonAction_manual_review: "Əl ilə yoxlayın",
+    comparisonUnknownSku: "Naməlum SKU",
+    comparisonNoActions: "Düzəliş tələb olunmur",
+    comparisonStructuralScore: "Sxem uyğunluğu",
+    comparisonVisualConfidence: "Vizual əminlik",
     profileLanguage: "Dil",
     languageAz: "Azərbaycanca",
     languageRu: "Rusca",
@@ -556,6 +583,33 @@ export const DICT = {
     activeVisitChanged: "Активный визит изменился. Откройте заказ заново",
     selectedOrderSummary: "Итого по заказу",
     orderProductLimit: "В одном заказе можно выбрать не более 200 товаров",
+    comparisonTitle: "Результат проверки полки",
+    comparisonStatus_PASS: "Соответствует",
+    comparisonStatus_REVIEW: "Нужна проверка",
+    comparisonStatus_FAIL: "Не соответствует",
+    comparisonStatus_UNAVAILABLE: "Анализ недоступен",
+    comparisonTab_scheme: "Схема",
+    comparisonTab_photo: "Фото",
+    comparisonTab_result: "Результат",
+    comparisonSchemeHint: "Сравните места планограммы с фактической полкой.",
+    comparisonPhotoUnavailable: "Предпросмотр фото недоступен на этом устройстве. Результат и действия сохранены офлайн.",
+    comparisonActionsHint: "Сначала показаны действия, затем показатели.",
+    comparisonPlanFact: "План: {expected} · Факт: {actual}",
+    comparisonOutcome_matched: "Место и количество совпали",
+    comparisonOutcome_missing: "Товар отсутствует",
+    comparisonOutcome_wrong_product: "Стоит другой товар",
+    comparisonOutcome_wrong_position: "Товар не на своей полке",
+    comparisonOutcome_facing_mismatch: "Не совпало число фейсингов",
+    comparisonOutcome_unavailable: "Анализ недоступен",
+    comparisonAction_restock: "Выложить товар",
+    comparisonAction_add_facings: "Добавить фейсинги",
+    comparisonAction_remove_facings: "Убрать лишние фейсинги",
+    comparisonAction_move: "Переместить товар",
+    comparisonAction_manual_review: "Проверить вручную",
+    comparisonUnknownSku: "Неизвестный SKU",
+    comparisonNoActions: "Исправления не требуются",
+    comparisonStructuralScore: "Соответствие схеме",
+    comparisonVisualConfidence: "Уверенность распознавания",
     profileLanguage: "Язык",
     languageAz: "Азербайджанский",
     languageRu: "Русский",
@@ -586,8 +640,14 @@ export function getLocale(): Locale {
   return current
 }
 
-export function t(key: MessageKey): string {
-  return DICT[current][key] ?? key
+export function t(key: MessageKey, values?: Record<string, string | number>): string {
+  const message = DICT[current][key] ?? key
+  if (!values) return message
+  let rendered: string = message
+  for (const [name, value] of Object.entries(values)) {
+    rendered = rendered.replaceAll(`{${name}}`, String(value))
+  }
+  return rendered
 }
 
 export function useLocale(): Locale {

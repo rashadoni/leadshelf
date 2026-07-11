@@ -286,12 +286,22 @@ export async function pullChanges(
                 updatedAt: true,
               },
             },
+            shelfAnalysisRuns: {
+              where: { isCanonical: true },
+              orderBy: [{ finishedAt: "desc" }, { createdAt: "desc" }],
+              take: 1,
+              select: { result: true, updatedAt: true },
+            },
           },
         })
       : []
   const photoSubmissions = photoCandidates
     .map((photo) => {
-      const updatedAt = latestDate(photo.createdAt, ...photo.humanReviews.map((review) => review.updatedAt))
+      const updatedAt = latestDate(
+        photo.createdAt,
+        ...photo.humanReviews.map((review) => review.updatedAt),
+        ...photo.shelfAnalysisRuns.map((run) => run.updatedAt),
+      )
       return { photo, updatedAt }
     })
     .filter(({ photo, updatedAt }) => isAfterCursor(photoCursor, updatedAt, photo.id))
@@ -509,6 +519,7 @@ export async function pullChanges(
         qualityScore: photo.qualityScore,
         review: qualityReview ? mapMobileReview(qualityReview) : null,
         vision: visionReview ? mapMobileReview(visionReview) : null,
+        comparison: photo.shelfAnalysisRuns[0]?.result ?? null,
         updatedAt: updatedAt.toISOString(),
       }
     }),
