@@ -1,6 +1,6 @@
 # LeadShelf: единый контур сравнения выкладки
 
-Статус: active implementation roadmap. Обновлено: 2026-07-11.
+Статус: код фаз 0–8 реализован; authenticated mobile smoke и real-photo eval остаются открытыми gates, Phase 9 отложена. Обновлено: 2026-07-11.
 
 ## Цель
 
@@ -92,92 +92,97 @@ Gate: чистый `packages/core` API не зависит от Prisma/UI/provid
 
 ## Фаза 2 — Web viewer «Схема / Фото / Результат»
 
-- [ ] Создать adapter текущего `HumanReview.findings.vision`.
-- [ ] Создать server view model с planogram, golden, field photo и comparison.
-- [ ] Реализовать схему с outcome-цветами и expected/actual/delta.
-- [ ] Реализовать фото-режимы Golden/Actual/Overlay.
-- [ ] Связать selection между placement и bbox.
-- [ ] Добавить фильтры All/Issues/Uncertain.
-- [ ] Добавить action list и понятные pending/error/empty states.
-- [ ] Добавить AZ/RU web i18n и accessibility labels.
-- [ ] Покрыть parsing/view-model тестами.
-- [ ] Выполнить browser smoke на desktop и узкой ширине.
+- [x] Создать adapter текущего `HumanReview.findings.vision`.
+- [x] Создать server view model с planogram, golden, field photo и comparison.
+- [x] Реализовать схему с outcome-цветами и expected/actual/delta.
+- [x] Реализовать фото-режимы Golden/Actual/Overlay.
+- [x] Связать selection между placement и bbox.
+- [x] Добавить фильтры All/Issues/Uncertain.
+- [x] Добавить action list и понятные pending/error/empty states.
+- [x] Добавить AZ/RU web i18n и accessibility labels.
+- [x] Покрыть parsing/view-model тестами.
+- [x] Выполнить browser smoke на 390/768/1280 px; tablet grid исправлен после визуального осмотра.
 
 Gate: один comparison читается и как схема, и как визуальное доказательство.
 
 ## Фаза 3 — Канонические analysis runs
 
-- [ ] Добавить аддитивную модель `ShelfAnalysisRun` и enum статусов.
-- [ ] Связать run с org, PhotoSubmission, PlanogramVersion и GoldenReference.
-- [ ] Хранить provider/model/protocol/inputHash/result/score/confidence/error/timestamps.
-- [ ] Поддержать несколько run одного фото и явный current result.
-- [ ] Добавить idempotent repository API и tenant isolation.
-- [ ] Связать HumanReview с конкретным run без удаления старых данных.
-- [ ] Сохранить backward-compatible чтение legacy `HumanReview.findings.vision`.
-- [ ] Добавить migration, Prisma validation и DB tests.
+- [x] Добавить аддитивную модель `ShelfAnalysisRun` и enum статусов.
+- [x] Связать run с org, PhotoSubmission, PlanogramVersion и GoldenReference.
+- [x] Хранить provider/model/comparisonVersion/inputHash/result/error/timestamps/token/cost telemetry.
+- [x] Поддержать несколько run одного фото и явный canonical result.
+- [x] Добавить idempotent repository API и tenant isolation guard.
+- [x] Связать HumanReview с конкретным run без удаления старых данных.
+- [x] Сохранить backward-compatible чтение legacy `HumanReview.findings.vision`.
+- [x] Обе аддитивные миграции применены к локальному Postgres; DB repository/race suite — 67/67.
 
 Gate: HumanReview больше не единственное хранилище AI-результата, история не теряется.
 
 ## Фаза 4 — Worker reliability
 
-- [ ] Persist analysis run до обращения к provider.
-- [ ] Реализовать атомарный claim/CAS и защиту от двойного worker-а.
-- [ ] Реализовать retry/backoff, max attempts и stale recovery.
-- [ ] Разделить transient/permanent errors.
-- [ ] Не сохранять parse failure как compliance result.
-- [ ] Зафиксировать provider/model/cost/latency.
-- [ ] Унифицировать photo/video output.
-- [ ] Доказать idempotency и гонки тестами.
+- [x] Persist analysis run до обращения к provider.
+- [x] Реализовать атомарный claim/CAS и защиту от двойного worker-а.
+- [x] Реализовать retry/backoff, max attempts и stale recovery.
+- [x] Разделить permanent missing-provider configuration и retryable worker failures.
+- [x] Не сохранять parse failure как structural FAIL/0%; canonical result становится `UNAVAILABLE`.
+- [x] Зафиксировать provider/model/token/cost/latency telemetry (`null`, если provider не отдал значение).
+- [x] Унифицировать photo/video output и убрать inline photo inference из upload request.
+- [x] Idempotency, exact-once claim, stale recovery и manual race доказаны: worker 20/20, DB 67/67.
 
 Gate: таймаут, crash или повторный job не теряют фото и не портят результат.
 
 ## Фаза 5 — Manual review и correction
 
-- [ ] Редактировать/добавлять/удалять bbox.
-- [ ] Выбирать SKU из локального каталога и менять facings.
-- [ ] Пересчитывать comparison после ручной корректировки.
-- [ ] Сохранять provenance, reviewer и timestamps.
-- [ ] Реализовать approve/reject/request-retake.
-- [ ] Зафиксировать manual-wins транзакционно.
-- [ ] Добавить audit trail и regression tests.
+- [x] Редактировать/добавлять/удалять bbox с live overlay.
+- [x] Выбирать SKU из tenant catalog и менять facings.
+- [x] Пересчитывать comparison после ручной корректировки.
+- [x] Сохранять provenance, reviewer и timestamps.
+- [x] Реализовать approve/reject/request-retake.
+- [x] Зафиксировать manual-wins транзакционно через lock родительского proof.
+- [x] Audit trail и manual-wins regression/race tests выполнены на мигрированной локальной БД.
 
 Gate: повторный worker run не изменяет утверждённый manual result.
 
 ## Фаза 6 — Offline mobile result
 
-- [ ] Аддитивно расширить mobile v1 payload optional comparison summary.
-- [ ] Обновить server sync mapping и SQLite migration.
-- [ ] Сохранять summary/actions/detections локально.
-- [ ] Показать states queued/uploaded/analyzing/review/approved/retake/unavailable.
-- [ ] Добавить action-first результат и режимы Схема/Фото.
-- [ ] Не блокировать task/visit completion ожиданием AI.
-- [ ] Сохранить видимый SyncBar и тёмные camera/photo surfaces.
-- [ ] Добавить все ключи в AZ и RU, обновить parity tests.
-- [ ] Выполнить offline capture -> sync -> result emulator smoke.
-- [ ] Собрать APK локально и записать SHA-256.
+- [x] Аддитивно расширить mobile v1 payload optional comparison summary без смены protocol version.
+- [x] Обновить server sync mapping и SQLite migration.
+- [x] Сохранять summary/actions/detections локально.
+- [x] Показать states queued/uploaded/analyzing/review/approved/retake/unavailable.
+- [x] Добавить action-first результат и режимы Схема/Фото/Результат.
+- [x] Не блокировать task/visit completion ожиданием AI.
+- [x] Сохранить видимый SyncBar и тёмные camera/photo surfaces.
+- [x] Добавить все ключи в AZ и RU; parity и mobile tests 67/67.
+- [ ] Fresh APK install и cold launch на `test_device` пройдены; authenticated offline capture -> sync -> result smoke не выполнен, потому что system approval отклонил использование demo credentials. Обход не применялся.
+- [x] Локальный release APK собран после принудительного JS rebundle с `10.0.2.2:3100`: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`, SHA-256 `bca9ec3eb000b01f1955add7344ced6358a145874802bb77de3ca3d572649bc9`.
 
 Gate: офлайн-съёмка остаётся рабочей, результат появляется после sync.
 
 ## Фаза 7 — Analytics
 
-- [ ] Строить compliance/OOS/facings/share/actions из current confirmed runs.
-- [ ] Добавить store/agent/planogram/time filters.
-- [ ] Добавить snapshots/aggregation и нужные indexes.
-- [ ] Добавить human-review и retake quality metrics.
-- [ ] Проверить tenant isolation и performance.
+- [x] Строить compliance/OOS/facings/share/actions из canonical runs.
+- [x] Добавить store/agent/planogram/status/time filters.
+- [x] Добавить snapshots/aggregation и нужные indexes.
+- [x] Добавить human-review и retake quality metrics.
+- [x] Проверить tenant isolation и 10k aggregation performance на мигрированной локальной БД.
 
 Gate: аналитика не читает произвольный legacy JSON как источник истины.
 
 ## Фаза 8 — AI evaluation и улучшение
 
-- [ ] Создать репрезентативный eval manifest без приватных фото в git.
-- [ ] Отделить detector/localization от SKU recognition.
-- [ ] Добавить deterministic golden comparison path.
-- [ ] Калибровать thresholds только на LeadShelf eval data.
-- [ ] Сравнивать providers по accuracy/stability/cost/latency.
-- [ ] Не заявлять подтверждённую accuracy без реальных размеченных фото.
+- [x] Создать versioned eval manifest schema без приватных фото в git.
+- [x] Зафиксировать отдельные `ShelfLocalizer` и `ShelfSkuRecognizer` интерфейсы и two-stage pipeline.
+- [x] Добавить deterministic golden comparison path через общий engine.
+- [ ] Калибровать thresholds только на реальном LeadShelf eval data (датасет пока отсутствует).
+- [x] Добавить воспроизводимые localization/SKU/calibration metrics и provider/model/cost/latency telemetry.
+- [x] Не заявлять подтверждённую accuracy без реальных размеченных фото.
 
 Gate: provider выбирается по воспроизводимому eval, а не по названию модели.
+
+Реальный размеченный LeadShelf photo dataset отсутствует. Поэтому accuracy,
+threshold calibration и выбор production provider/model не считаются
+подтверждёнными; это единственный продуктовый input, который нельзя честно
+сгенерировать кодом.
 
 ## Фаза 9 — Поздние возможности
 
@@ -197,6 +202,19 @@ Gate: provider выбирается по воспроизводимому eval, 
 - browser smoke после web UI
 - mobile `tsc`, tests, i18n parity и emulator smoke после mobile UI
 - `git diff`, `git status`, secret/unrelated-file audit перед commit
+
+## Финальная локальная матрица 2026-07-11
+
+- [x] `pnpm typecheck` — все 8 затронутых workspace packages.
+- [x] `pnpm lint`.
+- [x] Prisma validate и generate; обе аддитивные миграции deployed локально.
+- [x] Core 100/100, DB 67/67, worker 20/20, vision 16/16, web 52/52, mobile 67/67.
+- [x] Отдельный mobile `tsc --noEmit` и AZ/RU parity.
+- [x] Browser smoke viewer на 390/768/1280 выполнен до final schema migration; selection, action-first result и отсутствие horizontal overflow проверены.
+- [ ] Post-migration browser login отклонён system approval; обход не применялся.
+- [x] Release APK build, install и cold launch.
+- [ ] Authenticated Android workflow остаётся частично проверенным по той же причине credential approval; login screen проверен визуально.
+- [x] `.artifacts/` не читался, не изменялся и не добавлялся в staging.
 
 ## Definition of done
 
