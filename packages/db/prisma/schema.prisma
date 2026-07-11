@@ -77,6 +77,8 @@ model Organization {
   auditLogs              AuditLog[]
   goldenReferences       GoldenReference[]
   humanReviews           HumanReview[]
+  shelfAnalysisRuns      ShelfAnalysisRun[]
+  shelfMetricSnapshots   ShelfMetricSnapshot[]
   fieldAgents            FieldAgent[]
   fieldForceSetting      FieldForceSetting?
   captureTemplates       CaptureTemplate[]
@@ -108,6 +110,7 @@ model User {
   assignedTasks         Task[]                 @relation("TaskAssignee")
   captureStepExceptions CaptureStepException[]
   captureRetakeRequests CaptureRetakeRequest[]
+  shelfMetricSnapshots  ShelfMetricSnapshot[]
 
   @@unique([organizationId, email])
   @@unique([organizationId, employeeCode])
@@ -243,6 +246,7 @@ model Store {
   priceSnapshots       PriceSnapshot[]
   stockSnapshots       StockSnapshot[]
   salesSnapshots       SalesSnapshot[]
+  shelfMetricSnapshots ShelfMetricSnapshot[]
 
   @@unique([organizationId, code])
   @@index([organizationId, formatId])
@@ -910,6 +914,8 @@ model PlanogramVersion {
   tasks            Task[]
   goldenReferences GoldenReference[]
   humanReviews     HumanReview[]
+  shelfAnalysisRuns ShelfAnalysisRun[]
+  shelfMetricSnapshots ShelfMetricSnapshot[]
 
   @@unique([planogramId, versionNumber])
   @@index([planogramId, state])
@@ -1067,6 +1073,8 @@ model Task {
   comments              TaskComment[]
   photoSubmissions      PhotoSubmission[]
   humanReviews          HumanReview[]
+  shelfAnalysisRuns     ShelfAnalysisRun[]
+  shelfMetricSnapshots  ShelfMetricSnapshot[]
   captureStepExceptions CaptureStepException[]
   captureRetakeRequests CaptureRetakeRequest[]
 
@@ -1148,6 +1156,7 @@ model PhotoSubmission {
 
   goldenReferences GoldenReference[]
   humanReviews     HumanReview[]
+  shelfAnalysisRuns ShelfAnalysisRun[]
 
   @@unique([organizationId, clientPhotoId])
   @@index([organizationId, storeId, takenAt])
@@ -1258,6 +1267,20 @@ enum HumanReviewStatus {
   REJECTED
 }
 
+enum ShelfAnalysisRunStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  REVIEW
+  UNAVAILABLE
+  FAILED
+}
+
+enum ShelfAnalysisRunSource {
+  AUTO
+  MANUAL
+}
+
 model GoldenReference {
   id                 String                @id @default(cuid())
   organizationId     String
@@ -1274,6 +1297,7 @@ model GoldenReference {
 
   slots        GoldenReferenceSlot[]
   humanReviews HumanReview[]
+  shelfAnalysisRuns ShelfAnalysisRun[]
 
   @@index([organizationId, planogramVersionId, status])
   @@index([photoSubmissionId])
@@ -1302,11 +1326,95 @@ model HumanReview {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  shelfAnalysisRuns ShelfAnalysisRun[]
+
   @@index([organizationId, status, createdAt])
   @@index([taskId])
   @@index([photoSubmissionId])
   @@index([planogramVersionId])
   @@map("human_reviews")
+}
+
+// Каноническая история анализа полки. HumanReview.findings остается
+// backward-compatible read fallback, но новые worker/manual результаты
+// persist-first записываются сюда до обновления review-проекции.
+model ShelfAnalysisRun {
+  id                 String                 @id @default(cuid())
+  organizationId     String
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  photoSubmissionId  String
+  photoSubmission    PhotoSubmission        @relation(fields: [photoSubmissionId], references: [id], onDelete: Cascade)
+  taskId             String?
+  task               Task?                  @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  planogramVersionId String?
+  planogramVersion   PlanogramVersion?      @relation(fields: [planogramVersionId], references: [id], onDelete: SetNull)
+  goldenReferenceId  String?
+  goldenReference    GoldenReference?       @relation(fields: [goldenReferenceId], references: [id], onDelete: SetNull)
+  humanReviewId      String?
+  humanReview        HumanReview?           @relation(fields: [humanReviewId], references: [id], onDelete: SetNull)
+  source             ShelfAnalysisRunSource @default(AUTO)
+  status             ShelfAnalysisRunStatus @default(PENDING)
+  idempotencyKey     String
+  inputHash          String
+  provider           String
+  modelVersion       String
+  comparisonVersion  Int
+  attempt            Int                    @default(1)
+  input              Json
+  result             Json?
+  warnings           Json?
+  error              String?
+  latencyMs          Int?
+  inputTokens        Int?
+  outputTokens       Int?
+  costMicros         Int?
+  isCanonical        Boolean                @default(false)
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  metricSnapshot ShelfMetricSnapshot?
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, photoSubmissionId, isCanonical, createdAt])
+  @@index([organizationId, planogramVersionId, status, createdAt])
+  @@index([organizationId, inputHash, provider, modelVersion])
+  @@map("shelf_analysis_runs")
+}
+
+model ShelfMetricSnapshot {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  analysisRunId      String            @unique
+  analysisRun        ShelfAnalysisRun  @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  storeId            String
+  store              Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  agentId            String
+  agent              User              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  taskId             String?
+  task               Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  planogramVersionId String?
+  planogramVersion   PlanogramVersion? @relation(fields: [planogramVersionId], references: [id], onDelete: SetNull)
+  capturedAt         DateTime
+  status             String
+  structuralScore    Float?
+  visualConfidence   Float?
+  oosCount           Int               @default(0)
+  expectedFacings    Int               @default(0)
+  actualFacings      Int?
+  actionCount        Int               @default(0)
+  share              Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([organizationId, capturedAt])
+  @@index([organizationId, storeId, capturedAt])
+  @@index([organizationId, agentId, capturedAt])
+  @@index([organizationId, planogramVersionId, capturedAt])
+  @@index([organizationId, status, capturedAt])
+  @@map("shelf_metric_snapshots")
 }
 
 model GoldenReferenceSlot {

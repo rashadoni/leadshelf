@@ -35,6 +35,8 @@ export const TENANT_MODELS = new Set([
   "PhotoSubmission",
   "GoldenReference",
   "HumanReview",
+  "ShelfAnalysisRun",
+  "ShelfMetricSnapshot",
   "Team",
   "FieldAgent",
   "FieldForceSetting",

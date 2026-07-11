@@ -61,6 +61,24 @@ export {
   type HumanReviewDecision,
 } from "./repos/reviews.ts"
 export {
+  startShelfAnalysisRun,
+  finishShelfAnalysisRun,
+  readLatestShelfAnalysis,
+  saveManualShelfAnalysis,
+  ShelfAnalysisRepoError,
+  type StartShelfAnalysisRunInput,
+  type FinishShelfAnalysisRunInput,
+  type LatestShelfAnalysis,
+  type ManualShelfAnnotationInput,
+} from "./repos/shelf-analysis.ts"
+export {
+  persistShelfMetricSnapshot,
+  buildShelfAnalytics,
+  getShelfAnalytics,
+  type ShelfAnalyticsRow,
+  type ShelfAnalyticsSummary,
+} from "./repos/shelf-analytics.ts"
+export {
   AlertRepoError,
   emitProductEvent,
   buildOfficeMorningDigest,

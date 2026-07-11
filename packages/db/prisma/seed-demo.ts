@@ -3,8 +3,8 @@
 import "dotenv/config"
 import { hash } from "@node-rs/argon2"
 import { Prisma } from "@prisma/client"
-import { calculateShelfCompliance } from "@leadshelf/core"
-import { createSystemClient, createTenantClient } from "../src/index.ts"
+import { calculateShelfCompliance, compareShelf } from "@leadshelf/core"
+import { createSystemClient, createTenantClient, persistShelfMetricSnapshot } from "../src/index.ts"
 
 const ARGON_OPTS = { memoryCost: 19456, timeCost: 2, parallelism: 1 }
 const DEMO_PASSWORD = "demo1234"
@@ -1004,8 +1004,8 @@ async function ensureAssignmentTaskAndProof(input: {
     },
     select: { id: true, status: true },
   })
-  if (existingVisionReview) {
-    await prisma.humanReview.update({
+  const visionReview = existingVisionReview
+    ? await prisma.humanReview.update({
       where: { id: existingVisionReview.id },
       data: {
         status: "PENDING",
@@ -1019,8 +1019,7 @@ async function ensureAssignmentTaskAndProof(input: {
         reviewedAt: null,
       },
     })
-  } else if (!existingVisionReview) {
-    await prisma.humanReview.create({
+    : await prisma.humanReview.create({
       data: {
         organizationId: input.organizationId,
         reason: "VISION_COMPLIANCE",
@@ -1034,7 +1033,75 @@ async function ensureAssignmentTaskAndProof(input: {
         note: "Демо: vision compliance создан на stub-провайдере и требует ручной проверки.",
       },
     })
-  }
+
+  const comparison = compareShelf({
+    expected: slotPlacements.map((placement) => ({
+      placementId: placement.id,
+      shelfId: placement.shelfId,
+      productId: placement.productId,
+      productSku: placement.product.sku,
+      productName: placement.product.name,
+      brand: null,
+      expectedFacings: Math.max(1, placement.facingsX) * Math.max(1, placement.facingsY),
+      sortOrder: placement.sortOrder,
+    })),
+    referenceSlots: referenceSlots
+      .filter((slot): slot is typeof slot & { placementId: string } => slot.placementId != null)
+      .map((slot) => ({ slotId: slot.id, placementId: slot.placementId })),
+    detections: referenceSlots.map((slot) => ({
+      detectionId: slot.id,
+      slotId: slot.id,
+      placementId: slot.placementId,
+      productId: slot.productId,
+      productSku: slot.product?.sku ?? null,
+      label: slot.label,
+      confidence: 0.35,
+      bbox: { xPct: slot.xPct, yPct: slot.yPct, widthPct: slot.widthPct, heightPct: slot.heightPct },
+      source: "ai" as const,
+    })),
+  })
+  const idempotencyKey = "demo-proof-001:stub-reference-slots-v1"
+  await prisma.shelfAnalysisRun.updateMany({
+    where: { organizationId: input.organizationId, photoSubmissionId: photo.id, isCanonical: true },
+    data: { isCanonical: false },
+  })
+  const run = await prisma.shelfAnalysisRun.upsert({
+    where: { organizationId_idempotencyKey: { organizationId: input.organizationId, idempotencyKey } },
+    create: {
+      organizationId: input.organizationId,
+      photoSubmissionId: photo.id,
+      taskId: task.id,
+      planogramVersionId: input.planogramVersionId,
+      goldenReferenceId: goldenReference.id,
+      humanReviewId: visionReview.id,
+      source: "AUTO",
+      status: comparison.status === "REVIEW" ? "REVIEW" : "COMPLETED",
+      idempotencyKey,
+      inputHash: "demo-proof-001-stub-v1",
+      provider: "leadshelf-stub",
+      modelVersion: "stub-reference-slots-v1",
+      comparisonVersion: comparison.version,
+      input: { photoSubmissionId: photo.id, goldenReferenceId: goldenReference.id },
+      result: comparison as unknown as Prisma.InputJsonValue,
+      warnings: comparison.warnings,
+      isCanonical: true,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      latencyMs: 0,
+      costMicros: 0,
+    },
+    update: {
+      humanReviewId: visionReview.id,
+      result: comparison as unknown as Prisma.InputJsonValue,
+      warnings: comparison.warnings,
+      status: comparison.status === "REVIEW" ? "REVIEW" : "COMPLETED",
+      isCanonical: true,
+      finishedAt: new Date(),
+      latencyMs: 0,
+      costMicros: 0,
+    },
+  })
+  await persistShelfMetricSnapshot(prisma, input.organizationId, run.id)
 
   return { assignment, task, photo, review, goldenReference }
 }
