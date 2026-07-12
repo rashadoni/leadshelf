@@ -190,6 +190,13 @@ golden, missing SKU, wrong position, perspective, extra facing и rotated label.
 privacy-разрешения. Поэтому результаты первого run не являются accuracy,
 threshold calibration и выбор production provider/model ещё не подтверждены.
 
+После запрета повторной внешней передачи выполнен полностью локальный Apple
+Vision OCR baseline: текст найден в 41/42 human-annotated product boxes
+(97,6%), в clear condition — 41/41, в rotated-label condition — 0/1. Отчёт
+остаётся приватным. Это `oracle-box-text-evidence`, а не object localization и
+не SKU accuracy; результат подтверждает только ценность OCR как uncertainty
+signal для повёрнутой/нечитаемой этикетки.
+
 ## Фаза 9 — Поздние возможности
 
 - [ ] OCR и price compliance под feature flag OFF.

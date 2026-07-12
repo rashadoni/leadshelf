@@ -29,3 +29,11 @@ export {
   type VisionEvalSampleReport,
   type VisionEvalThresholdReport,
 } from "./eval-runner"
+export {
+  appleVisionOcrRowsSchema,
+  evaluateAppleVisionOcr,
+  type AppleVisionOcrEvalReport,
+  type AppleVisionOcrEvidenceMetrics,
+  type AppleVisionOcrRow,
+  type EvaluateAppleVisionOcrInput,
+} from "./apple-vision-ocr-eval"

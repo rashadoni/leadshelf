@@ -85,3 +85,29 @@ JSON object wrapped in Markdown/prose because Gemini may ignore
 `responseMimeType`. Bounding boxes returned in unit-interval coordinates are
 normalized to 0..100 percentages and emit `bbox_unit_interval_normalized` for
 auditability.
+
+### Local Apple Vision OCR baseline (macOS only)
+
+When external photo upload is unavailable, the repository includes a local
+Apple Vision OCR probe. It never calls a network service:
+
+```bash
+CLANG_MODULE_CACHE_PATH=/tmp/leadshelf-clang-cache clang \
+  -fobjc-arc -framework Foundation -framework AppKit -framework Vision \
+  tools/apple-vision-ocr.m -o /tmp/leadshelf-apple-vision-ocr
+
+/tmp/leadshelf-apple-vision-ocr /private/path/sample.png \
+  > /private/path/ocr/sample.json
+
+node --import tsx src/apple-vision-ocr-eval-cli.ts \
+  --manifest /private/path/dataset/manifest.json \
+  --ocr-dir /private/path/ocr \
+  --output /private/path/reports/apple-vision-ocr.json
+```
+
+The resulting mode is intentionally named `oracle-box-text-evidence` and sets
+`oracleLocalization: true`: OCR text centers are checked inside human-annotated
+product boxes. It measures whether readable text exists, not object detection
+or SKU-classification accuracy. The Objective-C binary may need to run outside
+a restricted sandbox so macOS can access the on-device Vision model; this does
+not authorize or perform network transfer.
