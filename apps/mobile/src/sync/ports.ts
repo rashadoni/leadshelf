@@ -79,8 +79,9 @@ export interface LocalStore {
   markOutbox(clientOpId: string, status: OutboxRow["status"], detail?: unknown): Promise<void>
   bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
   pendingPhotos(): Promise<PhotoQueueRow[]>
+  unuploadedPhotoIds(): Promise<string[]>
   markPhotoUploaded(clientPhotoId: string, result: MobilePhotoUploadResponse): Promise<void>
-  bumpPhotoAttempts(clientPhotoIds: string[]): Promise<void>
+  bumpPhotoAttempts(clientPhotoIds: string[], reason?: string): Promise<void>
   quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
   quarantinedPhotoCount(): Promise<number>
 }

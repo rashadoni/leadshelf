@@ -3,6 +3,7 @@
 // после commit-а applyPull — гарантия sync-протокола.
 
 import * as SQLite from "expo-sqlite"
+import * as Crypto from "expo-crypto"
 import {
   mobilePhotoSubmitPayloadSchema,
   mobileLocationUpdatePayloadSchema,
@@ -40,6 +41,25 @@ import {
 } from "../planogram/local-library"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
+
+function resetRecoverablePhotoSubmit(clientPhotoId: string): void {
+  const rows = db.getAllSync<{ clientOpId: string }>(
+    `SELECT clientOpId FROM outbox_ops
+     WHERE kind='photo.submit'
+       AND status='rejected'
+       AND detail='"photo_not_uploaded_yet"'
+       AND json_extract(payload, '$.clientPhotoId')=?`,
+    [clientPhotoId],
+  )
+  for (const row of rows) {
+    // Сервер уже запомнил прежний clientOpId как rejected. Новый id нужен,
+    // чтобы после успешной загрузки повтор был отдельной идемпотентной попыткой.
+    db.runSync(
+      "UPDATE outbox_ops SET clientOpId=?, status='pending', attempts=0, detail=NULL WHERE clientOpId=?",
+      [`op-${Crypto.randomUUID()}`, row.clientOpId],
+    )
+  }
+}
 
 export function initDb(): void {
   db.execSync(`
@@ -151,6 +171,19 @@ export function initDb(): void {
   ensureServerPhotoColumn("durationMs", "ALTER TABLE server_photo_submissions ADD COLUMN durationMs INTEGER")
   ensureServerPhotoColumn("captureStepJson", "ALTER TABLE server_photo_submissions ADD COLUMN captureStepJson TEXT")
   ensureServerPhotoColumn("comparisonResult", "ALTER TABLE server_photo_submissions ADD COLUMN comparisonResult TEXT")
+  const uploadedWithStuckSubmit = db.getAllSync<{ clientPhotoId: string }>(
+    `SELECT DISTINCT p.clientPhotoId
+     FROM photo_queue p
+     JOIN outbox_ops o
+       ON o.kind='photo.submit'
+      AND json_extract(o.payload, '$.clientPhotoId')=p.clientPhotoId
+     WHERE p.uploaded=1
+       AND o.status='rejected'
+       AND o.detail='"photo_not_uploaded_yet"'`,
+  )
+  db.withTransactionSync(() => {
+    for (const photo of uploadedWithStuckSubmit) resetRecoverablePhotoSubmit(photo.clientPhotoId)
+  })
 }
 
 export const localStore: LocalStore = {
@@ -321,7 +354,13 @@ export const localStore: LocalStore = {
         clientCreatedAt: string | null
         status: string
         attempts: number
-      }>("SELECT * FROM outbox_ops WHERE status='pending' ORDER BY clientCreatedAt LIMIT ?", [limit])
+      }>(
+        `SELECT * FROM outbox_ops
+         WHERE status='pending'
+            OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"')
+         ORDER BY clientCreatedAt LIMIT ?`,
+        [limit],
+      )
       .map((r): OutboxRow => {
         const rawPayload = JSON.parse(r.payload) as unknown
         if (r.kind === "task.status") {
@@ -412,10 +451,10 @@ export const localStore: LocalStore = {
       rejectedOps: number | null
       oldestPendingAt: string | null
     }>(`SELECT
-      SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pendingOps,
+      SUM(CASE WHEN status='pending' OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"') THEN 1 ELSE 0 END) AS pendingOps,
       SUM(CASE WHEN status='conflict' THEN 1 ELSE 0 END) AS conflictOps,
-      SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS rejectedOps,
-      MIN(CASE WHEN status='pending' THEN clientCreatedAt ELSE NULL END) AS oldestPendingAt
+      SUM(CASE WHEN status='rejected' AND (kind!='photo.submit' OR COALESCE(detail,'')!='"photo_not_uploaded_yet"') THEN 1 ELSE 0 END) AS rejectedOps,
+      MIN(CASE WHEN status='pending' OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"') THEN clientCreatedAt ELSE NULL END) AS oldestPendingAt
       FROM outbox_ops`)
     return {
       pendingOps: row?.pendingOps ?? 0,
@@ -470,29 +509,41 @@ export const localStore: LocalStore = {
     )
   },
 
-  async markPhotoUploaded(clientPhotoId, result) {
-    db.runSync(
-      `UPDATE photo_queue SET uploaded=1, uploadedAt=?, serverPhotoId=?, objectKey=?,
-        qualityScore=?, qualityCheck=?, visionReviewId=?, visionStatus=?, visionReason=?
-       WHERE clientPhotoId=?`,
-      [
-        new Date().toISOString(),
-        result.photoId,
-        result.key,
-        result.qualityScore ?? null,
-        result.qualityCheck == null ? null : JSON.stringify(result.qualityCheck),
-        result.visionReviewId ?? null,
-        result.visionStatus ?? null,
-        result.visionReason ?? null,
-        clientPhotoId,
-      ],
-    )
+  async unuploadedPhotoIds() {
+    return db
+      .getAllSync<{ clientPhotoId: string }>("SELECT clientPhotoId FROM photo_queue WHERE uploaded=0")
+      .map((row) => row.clientPhotoId)
   },
 
-  async bumpPhotoAttempts(clientPhotoIds) {
+  async markPhotoUploaded(clientPhotoId, result) {
+    db.withTransactionSync(() => {
+      db.runSync(
+        `UPDATE photo_queue SET uploaded=1, uploadedAt=?, serverPhotoId=?, objectKey=?,
+          qualityScore=?, qualityCheck=?, visionReviewId=?, visionStatus=?, visionReason=?, lastError=NULL
+         WHERE clientPhotoId=?`,
+        [
+          new Date().toISOString(),
+          result.photoId,
+          result.key,
+          result.qualityScore ?? null,
+          result.qualityCheck == null ? null : JSON.stringify(result.qualityCheck),
+          result.visionReviewId ?? null,
+          result.visionStatus ?? null,
+          result.visionReason ?? null,
+          clientPhotoId,
+        ],
+      )
+      resetRecoverablePhotoSubmit(clientPhotoId)
+    })
+  },
+
+  async bumpPhotoAttempts(clientPhotoIds, reason) {
     db.withTransactionSync(() => {
       for (const id of clientPhotoIds) {
-        db.runSync("UPDATE photo_queue SET attempts = COALESCE(attempts,0) + 1 WHERE clientPhotoId=?", [id])
+        db.runSync(
+          "UPDATE photo_queue SET attempts = COALESCE(attempts,0) + 1, lastError=? WHERE clientPhotoId=?",
+          [reason?.slice(0, 500) ?? null, id],
+        )
       }
     })
   },

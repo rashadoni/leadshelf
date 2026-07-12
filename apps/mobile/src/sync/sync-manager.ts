@@ -147,7 +147,10 @@ export class SyncManager {
               e instanceof Error ? e.message : String(e),
             )
           } else {
-            await this.deps.store.bumpPhotoAttempts([photo.clientPhotoId])
+            await this.deps.store.bumpPhotoAttempts(
+              [photo.clientPhotoId],
+              e instanceof Error ? e.message : String(e),
+            )
           }
           // не прерываем цикл — остальные фото и push должны пройти
         }
@@ -157,7 +160,12 @@ export class SyncManager {
       this.patch({ phase: "pushing" })
       const pending = await this.deps.store.pendingOutbox(MAX_PUSH_BATCH)
       if (pending.length > 0) {
-        const sendable = pending.filter((op) => op.attempts < MAX_ATTEMPTS)
+        const unuploadedPhotoIds = new Set(await this.deps.store.unuploadedPhotoIds())
+        const sendable = pending.filter(
+          (op) =>
+            op.attempts < MAX_ATTEMPTS &&
+            (op.kind !== "photo.submit" || !unuploadedPhotoIds.has(op.payload.clientPhotoId)),
+        )
         if (sendable.length > 0) {
           await this.deps.store.bumpOutboxAttempts(sendable.map((o) => o.clientOpId))
           const ops = sendable.map(toPushOperation)

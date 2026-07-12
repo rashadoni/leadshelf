@@ -119,7 +119,13 @@ export default function RouteTab() {
     if (!route.agentId) return
     const store = getStore(storeId)
     if (store?.latitude == null || store.longitude == null) return
-    const deviceLocation = await getCurrentDeviceLocation().catch(() => null)
+    let deviceLocation
+    try {
+      deviceLocation = await getCurrentDeviceLocation()
+    } catch {
+      Alert.alert(t("locationUnavailable"))
+      return
+    }
     if (!deviceLocation) {
       Alert.alert(t("locationPermissionDenied"))
       return
