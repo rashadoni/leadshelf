@@ -589,6 +589,13 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
     status = "UNAVAILABLE"
   } else if (warnings.some((warning) => warning.startsWith("low_confidence:") || warning.startsWith("invalid_bbox:"))) {
     status = "REVIEW"
+  } else if (
+    placementResults.some((placement) => placement.outcome === "missing") &&
+    structuralScore >= passScore
+  ) {
+    // Keep the numeric compliance score independent from the workflow status:
+    // an actionable missing SKU must not be presented as a clean pass.
+    status = "REVIEW"
   } else if (structuralScore >= passScore) {
     status = "PASS"
   } else if (structuralScore >= reviewScore) {

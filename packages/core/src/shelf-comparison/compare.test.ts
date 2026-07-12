@@ -108,6 +108,38 @@ describe("shelf comparison", () => {
     expect(result.status).toBe("FAIL")
   })
 
+  it("requires review when a missing SKU still leaves the score above the pass threshold", () => {
+    const expected = Array.from({ length: 7 }, (_, index) =>
+      placement({
+        placementId: `placement-${index + 1}`,
+        productId: `product-${index + 1}`,
+        productSku: `SKU-${index + 1}`,
+        productName: `Product ${index + 1}`,
+        expectedFacings: 1,
+        sortOrder: index + 1,
+      }),
+    )
+    const detections = expected.slice(0, 6).map((expectedPlacement, index) =>
+      detection({
+        detectionId: `detection-${index + 1}`,
+        placementId: expectedPlacement.placementId,
+        productId: expectedPlacement.productId,
+        productSku: expectedPlacement.productSku,
+        label: expectedPlacement.productName,
+        facings: 1,
+      }),
+    )
+
+    const result = compareShelf({ expected, detections })
+
+    expect(result.structuralScore).toBe(86)
+    expect(result.status).toBe("REVIEW")
+    expect(result.placements.at(-1)).toMatchObject({ outcome: "missing", productSku: "SKU-7" })
+    expect(result.actions).toContainEqual(
+      expect.objectContaining({ type: "restock", productSku: "SKU-7", amount: 1 }),
+    )
+  })
+
   it("does not collapse the same SKU across shelves and reports wrong position", () => {
     const result = compareShelf({
       expected: [
