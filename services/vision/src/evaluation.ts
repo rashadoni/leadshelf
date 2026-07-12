@@ -21,6 +21,14 @@ const evalScenarioSchema = z.enum([
 
 const recognitionConditionSchema = z.enum(["clear", "rotated_label", "partial_occlusion", "occluded"])
 
+export const visionEvalAnnotationSchema = z.object({
+  id: z.string().min(1),
+  productSku: z.string().min(1),
+  bbox: bboxSchema,
+  facings: z.number().int().min(1),
+  recognitionCondition: recognitionConditionSchema.default("clear"),
+})
+
 export const visionEvalManifestSchema = z.object({
   version: z.literal(1),
   datasetId: z.string().min(1),
@@ -32,16 +40,86 @@ export const visionEvalManifestSchema = z.object({
     goldenReferenceRef: z.string().min(1).nullable(),
     planogramVersionId: z.string().min(1),
     scenario: evalScenarioSchema.optional(),
-    annotations: z.array(z.object({
-      id: z.string().min(1),
-      productSku: z.string().min(1),
-      bbox: bboxSchema,
-      facings: z.number().int().min(1),
-      recognitionCondition: recognitionConditionSchema.default("clear"),
-    })),
+    // Только samples с sourceKind="real" учитываются в accuracy-claims гейте;
+    // synthetic допустим для wiring/regression, но не для заявлений о точности.
+    sourceKind: z.enum(["real", "synthetic"]).optional(),
+    notes: z.string().max(500).optional(),
+    annotations: z.array(visionEvalAnnotationSchema),
   })),
 })
 export type VisionEvalManifest = z.infer<typeof visionEvalManifestSchema>
+export type VisionEvalSplit = VisionEvalManifest["samples"][number]["split"]
+
+export interface VisionEvalManifestStats {
+  sampleCount: number
+  annotationCount: number
+  bySplit: Record<VisionEvalSplit, number>
+  bySourceKind: { real: number; synthetic: number; unspecified: number }
+  byScenario: Record<string, number>
+  byRecognitionCondition: Record<string, number>
+}
+
+/**
+ * Дисциплина датасета живёт рядом со схемой: схема проверяет форму, эти
+ * helpers — целостность (дубликаты, leakage фото между сплитами, наличие
+ * default golden-сэмпла, который требует runner).
+ */
+export function validateVisionEvalManifest(manifest: VisionEvalManifest): string[] {
+  const issues: string[] = []
+  const sampleIds = new Set<string>()
+  const splitByPhotoRef = new Map<string, VisionEvalSplit>()
+  for (const sample of manifest.samples) {
+    if (sampleIds.has(sample.id)) issues.push(`duplicate_sample_id:${sample.id}`)
+    sampleIds.add(sample.id)
+    const previousSplit = splitByPhotoRef.get(sample.photoRef)
+    if (previousSplit && previousSplit !== sample.split) {
+      issues.push(`photo_ref_split_leakage:${sample.photoRef}:${previousSplit}:${sample.split}`)
+    }
+    splitByPhotoRef.set(sample.photoRef, sample.split)
+    const annotationIds = new Set<string>()
+    for (const annotation of sample.annotations) {
+      if (annotationIds.has(annotation.id)) {
+        issues.push(`duplicate_annotation_id:${sample.id}:${annotation.id}`)
+      }
+      annotationIds.add(annotation.id)
+    }
+  }
+  if (!manifest.samples.some((sample) => sample.goldenReferenceRef == null)) {
+    issues.push("missing_default_golden_reference_sample")
+  }
+  for (const sample of manifest.samples) {
+    if (
+      sample.goldenReferenceRef != null &&
+      !manifest.samples.some((candidate) => candidate.photoRef === sample.goldenReferenceRef)
+    ) {
+      issues.push(`golden_reference_not_found:${sample.id}:${sample.goldenReferenceRef}`)
+    }
+  }
+  return issues
+}
+
+export function visionEvalManifestStats(manifest: VisionEvalManifest): VisionEvalManifestStats {
+  const stats: VisionEvalManifestStats = {
+    sampleCount: manifest.samples.length,
+    annotationCount: 0,
+    bySplit: { calibration: 0, validation: 0, test: 0 },
+    bySourceKind: { real: 0, synthetic: 0, unspecified: 0 },
+    byScenario: {},
+    byRecognitionCondition: {},
+  }
+  for (const sample of manifest.samples) {
+    stats.annotationCount += sample.annotations.length
+    stats.bySplit[sample.split] += 1
+    stats.bySourceKind[sample.sourceKind ?? "unspecified"] += 1
+    const scenario = sample.scenario ?? "unclassified"
+    stats.byScenario[scenario] = (stats.byScenario[scenario] ?? 0) + 1
+    for (const annotation of sample.annotations) {
+      stats.byRecognitionCondition[annotation.recognitionCondition] =
+        (stats.byRecognitionCondition[annotation.recognitionCondition] ?? 0) + 1
+    }
+  }
+  return stats
+}
 
 export interface EvalDetection {
   id: string

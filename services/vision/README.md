@@ -80,6 +80,16 @@ path exposes trustworthy usage/cost data. A calibration-only dataset can
 suggest a threshold, but it cannot validate accuracy or select production
 provider/model without a separate validation split.
 
+Split discipline: the CLI runs `calibration,validation` by default; the `test`
+split needs an explicit `--include-test` and is reserved for release
+comparisons. `--mode oracle_boxes` evaluates pure SKU classification on
+human-annotated boxes through the configured SKU recognizer (stub/OpenAI/
+Gemini — external ones stay behind `--allow-external`), separating it from
+object detection. Every report carries `accuracyClaims` — quoting accuracy
+from a report with `accuracyClaims.allowed: false` is not allowed. The private
+dataset grows through `src/dataset-cli.ts` (`check`/`stats`/`add-sample`), see
+`eval/README.md`.
+
 Provider output remains strictly schema-validated, but the parser tolerates a
 JSON object wrapped in Markdown/prose because Gemini may ignore
 `responseMimeType`. Bounding boxes returned in unit-interval coordinates are

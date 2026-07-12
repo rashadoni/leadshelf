@@ -197,6 +197,40 @@ Vision OCR baseline: текст найден в 41/42 human-annotated product bo
 не SKU accuracy; результат подтверждает только ценность OCR как uncertainty
 signal для повёрнутой/нечитаемой этикетки.
 
+### Расширение датасета и разделение localization/SKU (12 июля 2026)
+
+- [x] Аддитивные поля манифеста (`version: 1` сохранён): `sourceKind:
+      real|synthetic` и `notes` на сэмпле; старый пилотный манифест валиден
+      без изменений.
+- [x] `dataset-cli` (`check` / `stats` / `add-sample`): детерминированное
+      hash-назначение сплита (40/40/20 по умолчанию), запрет переназначения,
+      leakage-guard (одно фото не живёт в двух сплитах), покрытие по
+      split/source/scenario/condition.
+- [x] Дисциплина сплитов в eval-cli: `test` исполняется только с явным
+      `--include-test`; отчёт фиксирует `requestedSplits`/`testIncluded`;
+      threshold sweep жёстко ограничен calibration.
+- [x] `--mode oracle_boxes`: human-боксы -> `ShelfSkuRecognizer`, чистая
+      SKU-классификация отдельно от object detection (localization = 1.0 по
+      построению). Кандидаты только из golden-выкладки; ответ вне списка
+      принудительно `null` + warning (анти-галлюцинация).
+- [x] Recognizer-реализации: stub (wiring-only, отвечает «не уверен»),
+      Gemini и OpenAI (full-photo + numbered boxes, строгая схема,
+      privacy-gate `--allow-external` как у scan).
+- [x] `two_stage` (localizer -> recognizer) прошит в runner и покрыт
+      тестами со stub-стадиями; реального localization-провайдера ещё нет.
+- [x] Машинно-видимый гейт `accuracyClaims` в каждом отчёте: `allowed=false`,
+      пока validation/test не содержат >= 20 успешных real-сэмплов (порог —
+      константа `MIN_REAL_SAMPLES_FOR_ACCURACY_CLAIMS`, менять — решением
+      владельца) или активен stub.
+- [ ] Наполнить validation/test реальными размеченными фото через
+      `dataset-cli add-sample` (требует полевых съёмок владельца) и только
+      после этого выполнять внешние provider-runs с новым явным
+      privacy-разрешением.
+
+Код и тесты не содержат приватных фото; AI остаётся review-only. Никакие
+accuracy-числа не заявляются: пилот calibration-only, гейт в отчётах это
+блокирует автоматически.
+
 ## Фаза 9 — Поздние возможности
 
 - [ ] OCR и price compliance под feature flag OFF.
