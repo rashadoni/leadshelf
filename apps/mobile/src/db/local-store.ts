@@ -3,6 +3,7 @@
 // после commit-а applyPull — гарантия sync-протокола.
 
 import * as SQLite from "expo-sqlite"
+import * as Crypto from "expo-crypto"
 import {
   mobilePhotoSubmitPayloadSchema,
   mobileLocationUpdatePayloadSchema,
@@ -26,9 +27,39 @@ import type {
   TaskRow,
   VisitRow,
 } from "../sync/ports"
-import type { MobilePhotoUploadResponse } from "@leadshelf/api-contracts/mobile/v1"
+import type { MobilePhotoUploadResponse, MobileShelfComparisonResult } from "@leadshelf/api-contracts/mobile/v1"
+import { OPEN_TASK_STATUSES } from "../tasks/status"
+import {
+  parseQueuedOrderDetailCode,
+  parseQueuedOrderPayload,
+  type QueuedOrderLine,
+} from "../orders/queued-order"
+import {
+  parseLocalPlanogramLibrary,
+  type LocalPlanogramBundleRow,
+  type LocalPlanogramLibrary,
+} from "../planogram/local-library"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
+
+function resetRecoverablePhotoSubmit(clientPhotoId: string): void {
+  const rows = db.getAllSync<{ clientOpId: string }>(
+    `SELECT clientOpId FROM outbox_ops
+     WHERE kind='photo.submit'
+       AND status='rejected'
+       AND detail='"photo_not_uploaded_yet"'
+       AND json_extract(payload, '$.clientPhotoId')=?`,
+    [clientPhotoId],
+  )
+  for (const row of rows) {
+    // Сервер уже запомнил прежний clientOpId как rejected. Новый id нужен,
+    // чтобы после успешной загрузки повтор был отдельной идемпотентной попыткой.
+    db.runSync(
+      "UPDATE outbox_ops SET clientOpId=?, status='pending', attempts=0, detail=NULL WHERE clientOpId=?",
+      [`op-${Crypto.randomUUID()}`, row.clientOpId],
+    )
+  }
+}
 
 export function initDb(): void {
   db.execSync(`
@@ -87,6 +118,7 @@ export function initDb(): void {
       visionStatus TEXT,
       visionReason TEXT,
       visionScore REAL,
+      comparisonResult TEXT,
       updatedAt TEXT
     );
   `)
@@ -138,6 +170,20 @@ export function initDb(): void {
   ensureServerPhotoColumn("mediaType", "ALTER TABLE server_photo_submissions ADD COLUMN mediaType TEXT DEFAULT 'photo'")
   ensureServerPhotoColumn("durationMs", "ALTER TABLE server_photo_submissions ADD COLUMN durationMs INTEGER")
   ensureServerPhotoColumn("captureStepJson", "ALTER TABLE server_photo_submissions ADD COLUMN captureStepJson TEXT")
+  ensureServerPhotoColumn("comparisonResult", "ALTER TABLE server_photo_submissions ADD COLUMN comparisonResult TEXT")
+  const uploadedWithStuckSubmit = db.getAllSync<{ clientPhotoId: string }>(
+    `SELECT DISTINCT p.clientPhotoId
+     FROM photo_queue p
+     JOIN outbox_ops o
+       ON o.kind='photo.submit'
+      AND json_extract(o.payload, '$.clientPhotoId')=p.clientPhotoId
+     WHERE p.uploaded=1
+       AND o.status='rejected'
+       AND o.detail='"photo_not_uploaded_yet"'`,
+  )
+  db.withTransactionSync(() => {
+    for (const photo of uploadedWithStuckSubmit) resetRecoverablePhotoSubmit(photo.clientPhotoId)
+  })
 }
 
 export const localStore: LocalStore = {
@@ -222,8 +268,8 @@ export const localStore: LocalStore = {
              id, clientPhotoId, taskId, storeId, objectKey, mediaType, durationMs, captureStepJson,
              takenAt, qualityScore,
              reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
-             visionReviewId, visionStatus, visionReason, visionScore, updatedAt
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             visionReviewId, visionStatus, visionReason, visionScore, comparisonResult, updatedAt
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET
              clientPhotoId=excluded.clientPhotoId,
              taskId=excluded.taskId,
@@ -244,6 +290,7 @@ export const localStore: LocalStore = {
              visionStatus=excluded.visionStatus,
              visionReason=excluded.visionReason,
              visionScore=excluded.visionScore,
+             comparisonResult=excluded.comparisonResult,
              updatedAt=excluded.updatedAt`,
           [
             photo.id,
@@ -266,6 +313,7 @@ export const localStore: LocalStore = {
             photo.vision?.status ?? null,
             photo.vision?.note ?? null,
             photo.vision?.score ?? null,
+            photo.comparison ? JSON.stringify(photo.comparison) : null,
             photo.updatedAt,
           ],
         )
@@ -306,7 +354,13 @@ export const localStore: LocalStore = {
         clientCreatedAt: string | null
         status: string
         attempts: number
-      }>("SELECT * FROM outbox_ops WHERE status='pending' ORDER BY clientCreatedAt LIMIT ?", [limit])
+      }>(
+        `SELECT * FROM outbox_ops
+         WHERE status='pending'
+            OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"')
+         ORDER BY clientCreatedAt LIMIT ?`,
+        [limit],
+      )
       .map((r): OutboxRow => {
         const rawPayload = JSON.parse(r.payload) as unknown
         if (r.kind === "task.status") {
@@ -390,6 +444,26 @@ export const localStore: LocalStore = {
       })
   },
 
+  async outboxDiagnostics() {
+    const row = db.getFirstSync<{
+      pendingOps: number | null
+      conflictOps: number | null
+      rejectedOps: number | null
+      oldestPendingAt: string | null
+    }>(`SELECT
+      SUM(CASE WHEN status='pending' OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"') THEN 1 ELSE 0 END) AS pendingOps,
+      SUM(CASE WHEN status='conflict' THEN 1 ELSE 0 END) AS conflictOps,
+      SUM(CASE WHEN status='rejected' AND (kind!='photo.submit' OR COALESCE(detail,'')!='"photo_not_uploaded_yet"') THEN 1 ELSE 0 END) AS rejectedOps,
+      MIN(CASE WHEN status='pending' OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"') THEN clientCreatedAt ELSE NULL END) AS oldestPendingAt
+      FROM outbox_ops`)
+    return {
+      pendingOps: row?.pendingOps ?? 0,
+      conflictOps: row?.conflictOps ?? 0,
+      rejectedOps: row?.rejectedOps ?? 0,
+      oldestPendingAt: row?.oldestPendingAt ?? null,
+    }
+  },
+
   async markOutbox(clientOpId, status, detail) {
     const op = db.getFirstSync<{ kind: string; payload: string }>(
       "SELECT kind, payload FROM outbox_ops WHERE clientOpId=?",
@@ -435,29 +509,41 @@ export const localStore: LocalStore = {
     )
   },
 
-  async markPhotoUploaded(clientPhotoId, result) {
-    db.runSync(
-      `UPDATE photo_queue SET uploaded=1, uploadedAt=?, serverPhotoId=?, objectKey=?,
-        qualityScore=?, qualityCheck=?, visionReviewId=?, visionStatus=?, visionReason=?
-       WHERE clientPhotoId=?`,
-      [
-        new Date().toISOString(),
-        result.photoId,
-        result.key,
-        result.qualityScore ?? null,
-        result.qualityCheck == null ? null : JSON.stringify(result.qualityCheck),
-        result.visionReviewId ?? null,
-        result.visionStatus ?? null,
-        result.visionReason ?? null,
-        clientPhotoId,
-      ],
-    )
+  async unuploadedPhotoIds() {
+    return db
+      .getAllSync<{ clientPhotoId: string }>("SELECT clientPhotoId FROM photo_queue WHERE uploaded=0")
+      .map((row) => row.clientPhotoId)
   },
 
-  async bumpPhotoAttempts(clientPhotoIds) {
+  async markPhotoUploaded(clientPhotoId, result) {
+    db.withTransactionSync(() => {
+      db.runSync(
+        `UPDATE photo_queue SET uploaded=1, uploadedAt=?, serverPhotoId=?, objectKey=?,
+          qualityScore=?, qualityCheck=?, visionReviewId=?, visionStatus=?, visionReason=?, lastError=NULL
+         WHERE clientPhotoId=?`,
+        [
+          new Date().toISOString(),
+          result.photoId,
+          result.key,
+          result.qualityScore ?? null,
+          result.qualityCheck == null ? null : JSON.stringify(result.qualityCheck),
+          result.visionReviewId ?? null,
+          result.visionStatus ?? null,
+          result.visionReason ?? null,
+          clientPhotoId,
+        ],
+      )
+      resetRecoverablePhotoSubmit(clientPhotoId)
+    })
+  },
+
+  async bumpPhotoAttempts(clientPhotoIds, reason) {
     db.withTransactionSync(() => {
       for (const id of clientPhotoIds) {
-        db.runSync("UPDATE photo_queue SET attempts = COALESCE(attempts,0) + 1 WHERE clientPhotoId=?", [id])
+        db.runSync(
+          "UPDATE photo_queue SET attempts = COALESCE(attempts,0) + 1, lastError=? WHERE clientPhotoId=?",
+          [reason?.slice(0, 500) ?? null, id],
+        )
       }
     })
   },
@@ -509,6 +595,16 @@ export function listTasks(): TaskRow[] {
     .map(mapTaskRow)
 }
 
+/** Совпадает с определением «открытых» на локальном dashboard. */
+export function countOpenTasks(): number {
+  const placeholders = OPEN_TASK_STATUSES.map(() => "?").join(",")
+  const row = db.getFirstSync<{ count: number }>(
+    `SELECT COUNT(*) AS count FROM tasks WHERE status IN (${placeholders})`,
+    [...OPEN_TASK_STATUSES],
+  )
+  return row?.count ?? 0
+}
+
 export function getTask(id: string): TaskRow | null {
   const row = db.getFirstSync<TaskDbRow>("SELECT * FROM tasks WHERE id=?", [id])
   return row ? mapTaskRow(row) : null
@@ -524,6 +620,17 @@ export function getBundle(versionId: string): Record<string, unknown> | null {
     [versionId],
   )
   return row ? (JSON.parse(row.json) as Record<string, unknown>) : null
+}
+
+/** Планограммы и оборудование только из назначенных задач, уже сохранённых в SQLite. */
+export function listLocalPlanogramLibrary(): LocalPlanogramLibrary {
+  const rows = db.getAllSync<LocalPlanogramBundleRow>(
+    `SELECT pb.versionId, pb.json, MIN(t.id) AS taskId
+     FROM planogram_bundles pb
+     INNER JOIN tasks t ON t.planogramVersionId=pb.versionId
+     GROUP BY pb.versionId, pb.json`,
+  )
+  return parseLocalPlanogramLibrary(rows)
 }
 
 export type TaskPhotoProofRow = {
@@ -550,6 +657,7 @@ export type TaskPhotoProofRow = {
   reviewScore: number | null
   reviewNote: string | null
   reviewedAt: string | null
+  comparisonResult: MobileShelfComparisonResult | null
   outboxStatus: "pending" | "applied" | "conflict" | "rejected" | null
   outboxDetail: unknown | null
 }
@@ -600,6 +708,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     reviewScore: null,
     reviewNote: null,
     reviewedAt: null,
+    comparisonResult: null,
     outboxDetail: row.outboxDetail ? JSON.parse(row.outboxDetail) : null,
   }))
   const localClientIds = new Set(localProofs.map((row) => row.clientPhotoId))
@@ -622,11 +731,12 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
     visionReviewId: string | null
     visionStatus: string | null
     visionReason: string | null
+    comparisonResult: string | null
   }>(
     `SELECT id, clientPhotoId, taskId, objectKey, mediaType, durationMs, captureStepJson,
       takenAt, qualityScore,
       reviewId, reviewReason, reviewStatus, reviewScore, reviewNote, reviewedAt,
-      visionReviewId, visionStatus, visionReason
+      visionReviewId, visionStatus, visionReason, comparisonResult
      FROM server_photo_submissions
      WHERE taskId=?
      ORDER BY takenAt DESC`,
@@ -655,6 +765,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
       reviewScore: server.reviewScore,
       reviewNote: server.reviewNote,
       reviewedAt: server.reviewedAt,
+      comparisonResult: parseJsonOrNull<MobileShelfComparisonResult>(server.comparisonResult),
     }
   })
   const serverProofs = serverRows
@@ -684,6 +795,7 @@ export function listTaskPhotoProofs(taskId: string): TaskPhotoProofRow[] {
         reviewScore: row.reviewScore,
         reviewNote: row.reviewNote,
         reviewedAt: row.reviewedAt,
+        comparisonResult: parseJsonOrNull<MobileShelfComparisonResult>(row.comparisonResult),
         outboxStatus: null,
         outboxDetail: null,
       }),
@@ -732,6 +844,53 @@ function unknownRecord(value: unknown): Record<string, unknown> | null {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
+}
+
+export interface LocalCatalogProductRow {
+  id: string
+  sku: string
+  name: string
+  unit: string | null
+  brandName: string | null
+  barcode: string | null
+}
+
+/**
+ * Каталог, который уже есть на устройстве внутри immutable planogram bundles.
+ * Отдельную sync-коллекцию намеренно не добавляем: форма заказа остаётся в
+ * рамках замороженного mobile-протокола и работает без сети.
+ */
+export function listLocalCatalogProducts(): LocalCatalogProductRow[] {
+  const rows = db.getAllSync<{ json: string }>("SELECT json FROM planogram_bundles")
+  const products = new Map<string, LocalCatalogProductRow>()
+
+  for (const row of rows) {
+    try {
+      const bundle = unknownRecord(JSON.parse(row.json) as unknown)
+      const placements = Array.isArray(bundle?.placements) ? bundle.placements : []
+      for (const rawPlacement of placements) {
+        const product = unknownRecord(unknownRecord(rawPlacement)?.product)
+        const id = stringValue(product?.id)
+        const sku = stringValue(product?.sku)
+        const name = stringValue(product?.name)
+        if (!id || !sku || !name || products.has(id)) continue
+        products.set(id, {
+          id,
+          sku,
+          name,
+          unit: stringValue(product?.unit),
+          brandName: stringValue(product?.brandName),
+          barcode: stringValue(product?.barcode),
+        })
+      }
+    } catch {
+      // Повреждённый/старый bundle не должен ломать офлайн-форму заказа.
+    }
+  }
+
+  return [...products.values()].sort(
+    (a, b) => a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku),
+  )
 }
 
 function applyOutboxResultSideEffects(
@@ -993,17 +1152,55 @@ export function enqueueVisitCheckOut(input: { clientOpId: string; visitId: strin
   })
 }
 
+export interface QueuedOrderRow {
+  clientOpId: string
+  status: "pending" | "applied" | "conflict" | "rejected"
+  clientCreatedAt: string
+  storeId: string
+  visitId: string | null
+  lineCount: number
+  unitCount: number
+  lines: QueuedOrderLine[]
+  detailCode: string | null
+}
+
+/** Заказы из локальной очереди (order.create) для вкладки «Заказы». */
+export function listQueuedOrders(): QueuedOrderRow[] {
+  const rows = db.getAllSync<{
+    clientOpId: string
+    status: string
+    clientCreatedAt: string
+    payload: string
+    detail: string | null
+  }>("SELECT clientOpId, status, clientCreatedAt, payload, detail FROM outbox_ops WHERE kind='order.create' ORDER BY clientCreatedAt DESC")
+  return rows.map((row) => {
+    const payload = parseQueuedOrderPayload(row.payload)
+    return {
+      clientOpId: row.clientOpId,
+      status: (row.status as QueuedOrderRow["status"]) ?? "pending",
+      clientCreatedAt: row.clientCreatedAt,
+      storeId: payload.storeId,
+      visitId: payload.visitId,
+      lineCount: payload.lines.length,
+      unitCount: payload.unitCount,
+      lines: payload.lines,
+      detailCode: parseQueuedOrderDetailCode(row.detail),
+    }
+  })
+}
+
 export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: string }): void {
+  const payload = orderCreateRequestSchema.parse({
+    storeId: input.storeId,
+    visitId: input.visitId ?? null,
+    lines: input.lines,
+  })
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [
       input.clientOpId,
       "order.create",
-      JSON.stringify({
-        storeId: input.storeId,
-        visitId: input.visitId ?? null,
-        lines: input.lines,
-      }),
+      JSON.stringify(payload),
       new Date().toISOString(),
     ],
   )

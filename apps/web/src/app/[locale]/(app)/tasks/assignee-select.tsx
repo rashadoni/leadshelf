@@ -33,7 +33,8 @@ export function AssigneeSelect({
       value={current ?? ""}
       onChange={(e) => assign(e.target.value)}
       disabled={pending}
-      className="rounded border border-neutral-200 px-1.5 py-0.5 text-xs text-neutral-600 disabled:opacity-50"
+      aria-label={t("table.assignee")}
+      className="min-h-9 max-w-full rounded-md border border-neutral-200 bg-white px-2 text-xs text-neutral-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
     >
       <option value="">{t("unassigned")}</option>
       {users.map((u) => (

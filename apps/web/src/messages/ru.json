@@ -4,7 +4,11 @@
     "loading": "Загрузка...",
     "workspace": "Операционный контур полки",
     "demoTenant": "Demo tenant готов",
-    "details": "Детали"
+    "details": "Детали",
+    "mainNavigation": "Основная навигация",
+    "moreNavigation": "Дополнительные разделы",
+    "more": "Ещё",
+    "fieldForceShort": "Поле"
   },
   "auth": {
     "title": "Вход",
@@ -24,7 +28,88 @@
     "tasks": "Задачи",
     "reviews": "Проверка фото",
     "fieldForce": "Полевая команда",
+    "orders": "Заказы",
     "analytics": "Аналитика"
+  },
+  "orders": {
+    "title": "Заказы",
+    "subtitle": "Синхронизированные заказы из поля: торговая точка, агент, визит и коммерческий результат в одном месте.",
+    "summary": {
+      "total": "Всего заказов",
+      "active": "В работе",
+      "offline": "С мобильного",
+      "value": "Общая сумма"
+    },
+    "table": {
+      "order": "Заказ",
+      "store": "Торговая точка",
+      "agent": "Агент",
+      "source": "Источник",
+      "items": "Состав",
+      "total": "Сумма",
+      "status": "Статус",
+      "createdAt": "Создан"
+    },
+    "status": {
+      "DRAFT": "Черновик",
+      "SUBMITTED": "Отправлен",
+      "CONFIRMED": "Подтверждён",
+      "DELIVERED": "Доставлен",
+      "CANCELLED": "Отменён"
+    },
+    "sourceVisit": "Из визита",
+    "sourceDirect": "Прямой заказ",
+    "offlineOrigin": "Мобильный offline",
+    "clientTrace": "Мобильная операция: {value}",
+    "viewTasks": "Задачи точки",
+    "openRoute": "Открыть маршрут",
+    "filterContext": "Фильтр исполнения: {value}",
+    "clearFilter": "Все заказы",
+    "visitStatus": {
+      "PLANNED": "визит запланирован",
+      "IN_PROGRESS": "визит идёт",
+      "COMPLETED": "визит завершён",
+      "SKIPPED": "визит пропущен"
+    },
+    "unknownAgent": "Агент не указан",
+    "lineCount": "{count, plural, one {# товарная позиция} few {# товарные позиции} many {# товарных позиций} other {# товарной позиции}}",
+    "unitCount": "{count} ед.",
+    "emptyTitle": "Заказов пока нет",
+    "emptyHint": "После того как агент создаст заказ в мобильном приложении и синхронизируется, заказ появится здесь.",
+    "recentLimit": "Показаны последние 200 заказов.",
+    "health": {
+      "title": "Состояние мобильного исполнения",
+      "subtitle": "Сигналы sync и заказов за последние {hours} ч. без показа payload.",
+      "devices": "Устройства",
+      "actionable": "Требует внимания",
+      "p95": "Задержка sync p95",
+      "conflicts": "Конфликты",
+      "rejectedOrders": "Отклонённые заказы",
+      "alertConflicts": "Число sync-конфликтов выросло относительно предыдущего периода.",
+      "alertOrders": "Появились новые отказы обработки заказов.",
+      "operationsTitle": "Детали операций",
+      "operationsHint": "Показываются только тип операции, короткий trace, агент, время и безопасный код причины.",
+      "noIssues": "За период нет конфликтов и отклонённых операций.",
+      "trace": "Trace {value}",
+      "unknownReason": "Код причины отсутствует",
+      "milliseconds": "{value} мс",
+      "seconds": "{value} с",
+      "outcome": {
+        "conflict": "Конфликт",
+        "rejected": "Отклонено"
+      },
+      "kind": {
+        "taskStatus": "Статус задачи",
+        "photoSubmit": "Отправка фото",
+        "taskComment": "Комментарий задачи",
+        "visitCheckin": "Check-in",
+        "visitCheckout": "Check-out",
+        "locationUpdate": "Геолокация",
+        "orderCreate": "Создание заказа",
+        "proofException": "Исключение съёмки",
+        "other": "Другая операция"
+      }
+    }
   },
   "dashboard": {
     "title": "Панель готовности демо",
@@ -555,6 +640,9 @@
   },
   "tasks": {
     "all": "Все",
+    "filteredStore": "Задачи точки: {store}",
+    "clearStoreFilter": "Все задачи",
+    "reviewTask": "Проверить",
     "empty": "Задач нет. Опубликуйте планограмму на точки.",
     "table": {
       "title": "Задача",
@@ -578,7 +666,8 @@
       "PHOTO_SUBMITTED": "Фото получено",
       "COMPLETED": "Принять",
       "EXPIRED": "Просрочить",
-      "EMPTY": "Пустая"
+      "EMPTY": "Пустая",
+      "actionFailed": "Не удалось обновить статус. Попробуйте ещё раз."
     },
     "confirm": {
       "COMPLETED": "Принять задачу как выполненную?",
@@ -599,6 +688,25 @@
       "videoProof": "Видео выполнения",
       "noReview": "Без review",
       "equipmentMismatch": "Оборудование не совпадает",
+      "nextAction": "Следующее решение",
+      "reviewPendingHint": "Фото ждёт проверки сотрудником. Выберите одно решение: принять, отклонить или запросить пересъёмку.",
+      "automaticReviewHint": "Автоматическая проверка не создала замечаний. Примите задачу или запросите пересъёмку.",
+      "automaticReviewAcceptHint": "Автоматическая проверка не создала замечаний. Примите задачу, чтобы завершить работу.",
+      "automaticReview": "Автоматическая проверка пройдена",
+      "decisionSaving": "Сохранение...",
+      "decisionFailed": "Не удалось сохранить решение. Попробуйте ещё раз.",
+      "proofAlt": "Подтверждение выполнения задачи «{task}»",
+      "viewStoreTasks": "Все задачи точки",
+      "viewStoreOrders": "Заказы точки",
+      "executionContext": "Визит и маршрут",
+      "openRoute": "Открыть маршрут",
+      "relatedOrders": "Заказов: {count}",
+      "visitStatus": {
+        "PLANNED": "Визит запланирован",
+        "IN_PROGRESS": "Визит идёт",
+        "COMPLETED": "Визит завершён",
+        "SKIPPED": "Визит пропущен"
+      },
       "requestRetake": "Запросить пересъемку",
       "retakeRequested": "Пересъемка запрошена",
       "retakeRequests": "Запросы пересъемки",
@@ -631,6 +739,27 @@
   "analytics": {
     "subtitle": "Первый слой аналитики: что и сколько занимает место в активных планограммах.",
     "exportExcel": "Экспорт Excel",
+    "shelfExecution": {
+      "title": "Фактическое исполнение полки",
+      "hint": "Канонические результаты проверок: соответствие, OOS, фейсинги и необходимые действия.",
+      "store": "Магазин",
+      "agent": "Мерчендайзер",
+      "planogram": "Планограмма",
+      "status": "Статус",
+      "from": "С",
+      "to": "По",
+      "all": "Все",
+      "apply": "Применить",
+      "samples": "Проверок",
+      "compliance": "Среднее соответствие",
+      "unavailable": "Без результата",
+      "oos": "OOS SKU",
+      "facingsGap": "Нехватка фейсингов",
+      "actions": "Действий",
+      "rejectedReviews": "Отклонено офисом",
+      "retakes": "Пересъёмок",
+      "statuses": { "PASS": "Соответствует", "REVIEW": "Нужна проверка", "FAIL": "Не соответствует", "UNAVAILABLE": "Недоступно" }
+    },
     "kpi": {
       "storesWithPlanograms": "Магазинов с планограммами",
       "activePlanograms": "Активных планограмм",
@@ -847,6 +976,9 @@
     "noPhoto": "Фото нет",
     "photoProof": "Фото выполнения",
     "videoProof": "Видео выполнения",
+    "proofAlt": "Фото-подтверждение для «{title}»",
+    "goldenAlt": "Эталонная выкладка для «{title}»",
+    "frameAlt": "Выбранный кадр видео для «{title}»",
     "equipmentMismatch": "Оборудование не совпадает с базой",
     "goldenReference": "Эталон",
     "noReference": "Эталон не задан",
@@ -854,6 +986,9 @@
     "unknownStore": "Точка не указана",
     "approve": "Принять",
     "reject": "Отклонить",
+    "requestRetake": "Запросить пересъёмку",
+    "saving": "Сохраняем…",
+    "actionFailed": "Не удалось сохранить решение. Попробуйте ещё раз.",
     "dashboard": {
       "pending": "На проверке",
       "approved": "Принято",
@@ -885,6 +1020,74 @@
       "PHOTO_QUALITY": "Качество фото",
       "VISION_COMPLIANCE": "Vision compliance"
     },
+    "comparison": {
+      "tabs": {
+        "scheme": "Схема",
+        "photo": "Фото",
+        "result": "Результат"
+      },
+      "photoModes": {
+        "golden": "Эталон",
+        "actual": "Факт",
+        "overlay": "Контуры"
+      },
+      "status": {
+        "PASS": "Соответствует",
+        "REVIEW": "Нужна проверка",
+        "FAIL": "Не соответствует",
+        "UNAVAILABLE": "Результата нет"
+      },
+      "outcomes": {
+        "matched": "Место и количество совпали",
+        "missing": "Товар отсутствует",
+        "wrong_product": "Стоит другой товар",
+        "wrong_position": "Товар не на своей полке",
+        "facing_mismatch": "Не совпало число фейсингов",
+        "unavailable": "Анализ недоступен"
+      },
+      "actions": {
+        "restock": "Выложить товар",
+        "add_facings": "Добавить фейсинги",
+        "remove_facings": "Сократить фронтальные фейсинги",
+        "move": "Переместить товар на правильное место",
+        "manual_review": "Проверить вручную"
+      },
+      "filters": { "all": "Все", "issues": "Нарушения", "uncertain": "Неуверенные" },
+      "schemeHint": "Сравните ожидаемые места планограммы с фактом по каждой полке.",
+      "photoHint": "Проверьте эталон, фактический снимок и контуры AI для одного выбранного товара.",
+      "resultHint": "Сначала показаны конкретные действия, которые нужно выполнить, затем показатели.",
+      "shelf": "Полка",
+      "expected": "План",
+      "actual": "Факт",
+      "structuralScore": "Соответствие схеме",
+      "visualConfidence": "Уверенность распознавания",
+      "missingProducts": "Недостающие SKU",
+      "extraProducts": "Лишние находки",
+      "noPhoto": "Фактическое фото отсутствует.",
+      "noGolden": "Эталонное фото отсутствует.",
+      "noActions": "Исправления не требуются.",
+      "noFilteredPlacements": "Для этого фильтра позиций нет.",
+      "technicalDetails": "Технические детали анализа",
+      "manual": {
+        "title": "Исправить распознавание вручную",
+        "hint": "Уточните SKU, место, число фейсингов и координаты контура. Сохранённая ручная версия имеет приоритет над последующими AI-запусками.",
+        "add": "Добавить контур",
+        "remove": "Удалить",
+        "save": "Сохранить ручной результат",
+        "saving": "Сохранение...",
+        "saved": "Ручной результат сохранён",
+        "failed": "Не удалось сохранить ручной результат",
+        "sku": "SKU",
+        "placement": "Место планограммы",
+        "facings": "Фейсинги",
+        "x": "X, %",
+        "y": "Y, %",
+        "width": "Ширина, %",
+        "height": "Высота, %",
+        "unassigned": "Не выбрано",
+        "overlayLabel": "ручная разметка"
+      }
+    },
     "vision": {
       "title": "Vision compliance",
       "score": "Score",
@@ -900,6 +1103,184 @@
     }
   },
   "fieldForce": {
+    "workspace": {
+      "title": "Маршрутный модуль",
+      "subtitle": "Карта, маршруты, агенты и контроль исполнения для полевой команды.",
+      "updated": "Обновлено {value}",
+      "refresh": "Обновить",
+      "loadError": "Не удалось загрузить маршрутный модуль. Проверьте сессию и API field-force.",
+      "allStatuses": "Все статусы",
+      "agent": "Агент",
+      "team": "Команда",
+      "status": "Статус",
+      "visits": "Визиты",
+      "progress": "Прогресс",
+      "user": "Пользователь",
+      "phone": "Телефон",
+      "date": "Дата",
+      "unassigned": "Без агента",
+      "noTeam": "Без команды",
+      "noEmail": "Без e-mail",
+      "noAddress": "Адрес не указан",
+      "storeNotFound": "Точка не найдена",
+      "edit": "Изменить",
+      "cancel": "Отменить",
+      "remove": "Убрать",
+      "close": "Закрыть",
+      "closeForm": "Закрыть форму",
+      "save": "Сохранить",
+      "saving": "Сохранение...",
+      "tabs": {
+        "map": { "label": "Карта", "description": "живое движение" },
+        "routes": { "label": "Маршруты", "description": "точки и выполнение" },
+        "agents": { "label": "Агенты", "description": "команды и статусы" },
+        "leaderboard": { "label": "Лидерборд", "description": "рейтинг исполнения" },
+        "activity": { "label": "Активность", "description": "события визитов" },
+        "reports": { "label": "Отчёты", "description": "дневная сводка" },
+        "settings": { "label": "Настройки", "description": "политики исполнения" }
+      },
+      "routeStatus": {
+        "PLANNED": "Запланирован",
+        "IN_PROGRESS": "В работе",
+        "COMPLETED": "Завершён",
+        "CANCELLED": "Отменён"
+      },
+      "fieldStatus": {
+        "CHECKED_IN": "На точке",
+        "ON_ROAD": "В пути",
+        "LATE": "Опаздывает",
+        "OFFLINE": "Офлайн"
+      },
+      "messages": {
+        "routeCreated": "Маршрут создан.",
+        "routeCreateFailed": "Маршрут не сохранён: {error}",
+        "routeUpdated": "Маршрут обновлён.",
+        "routeUpdateFailed": "Маршрут не обновлён: {error}",
+        "routeCancelled": "Маршрут отменён.",
+        "routeCancelFailed": "Маршрут не отменён: {error}",
+        "agentCreated": "Агент добавлен.",
+        "agentCreateFailed": "Агент не сохранён: {error}",
+        "agentUpdated": "Агент обновлён.",
+        "agentUpdateFailed": "Агент не обновлён: {error}",
+        "settingsSaved": "Настройки field-force сохранены на сервере.",
+        "settingsFailed": "Настройки не сохранены: {error}"
+      },
+      "routes": {
+        "search": "Найти маршрут, агента или торговую точку",
+        "new": "Новый маршрут",
+        "editTitle": "Редактировать маршрут",
+        "loading": "Загрузка маршрутов...",
+        "emptyFilter": "Маршруты под фильтр не найдены.",
+        "pointsCount": "{visited}/{total} точек",
+        "confirmPastDate": "Дата {date} уже прошла. Сохранить маршрут на прошедшую дату?",
+        "confirmCancel": "Отменить маршрут «{name}»?",
+        "lockedHint": "Точки заблокированы: по маршруту уже есть визиты.",
+        "orderHint": "Точки сохраняются в том порядке, в котором они стоят здесь.",
+        "name": "Название",
+        "namePlaceholder": "Например: Маршрут Baku-01",
+        "stops": "Точки маршрута",
+        "storeCount": "{count} точек",
+        "noStops": "Пока нет точек.",
+        "moveUp": "Поднять точку {store}",
+        "moveDown": "Опустить точку {store}",
+        "addStore": "Добавить торговую точку",
+        "details": "Детали маршрута",
+        "selectHint": "Выберите маршрут слева.",
+        "validation": {
+          "name": "Укажите название маршрута.",
+          "store": "Добавьте хотя бы одну торговую точку."
+        },
+        "metrics": { "points": "Точки", "completed": "Выполнено", "progress": "Прогресс" }
+      },
+      "agents": {
+        "search": "Найти агента, команду или код",
+        "add": "Добавить агента",
+        "editTitle": "Редактировать агента",
+        "loading": "Загрузка агентов...",
+        "emptyFilter": "Агенты под фильтр не найдены.",
+        "selectUser": "Выберите пользователя",
+        "management": "Управление агентами",
+        "userHint": "Агент привязывается к активному пользователю LeadShelf.",
+        "editHint": "Команда и телефон редактируются без пересоздания пользователя.",
+        "noCandidates": "Все активные пользователи уже назначены агентами.",
+        "validation": { "user": "Выберите пользователя." }
+      },
+      "leaderboard": {
+        "title": "Лидерборд исполнения",
+        "visits": "визитов: {count}",
+        "points": "баллов: {count}",
+        "how": "Как считается рейтинг",
+        "ruleVisit": "+20 баллов за завершённый визит сегодня.",
+        "ruleCompletion": "+процент выполнения активных точек.",
+        "ruleOnline": "+10 баллов, если агент онлайн.",
+        "ruleLate": "-20 баллов, если есть просроченная точка."
+      },
+      "activity": {
+        "title": "Журнал активности",
+        "subtitle": "Последние check-in, check-out и события маршрутов.",
+        "empty": "Событий пока нет."
+      },
+      "reports": {
+        "routes": "Маршруты",
+        "completion": "Выполнение точек",
+        "onlineAgents": "Агенты онлайн",
+        "late": "Опоздания",
+        "routeSummary": "Сводка по маршрутам",
+        "agentSummary": "Сводка по агентам"
+      },
+      "settings": {
+        "title": "Настройки маршрутов",
+        "subtitle": "Серверные политики для GPS, геозон, offline-статуса и обязательных мобильных проверок.",
+        "gps": "GPS refresh, сек",
+        "geofence": "Радиус геозоны, м",
+        "offlineAfter": "Офлайн после, мин",
+        "requirePhoto": "Требовать фото-подтверждение визита",
+        "requireScan": "Требовать сканирование полки в мобильном приложении",
+        "alertLate": "Подсвечивать просроченные визиты",
+        "save": "Сохранить настройки",
+        "connected": "Что уже подключено",
+        "connectedMap": "Карта агентов и маршрутов работает через LeadShelf API.",
+        "connectedApi": "Маршруты, агенты, активность, рейтинг и отчёты читают dedicated API.",
+        "connectedOffline": "Offline-статус агентов зависит от сохранённого server-side порога.",
+        "savedAt": "Сохранено {value}"
+      }
+    },
+    "live": {
+      "title": "Полевая команда",
+      "subtitle": "Живая карта маршрутов, агентов и визитов.",
+      "updated": "Обновлено: {value}",
+      "geofence": "Геозона",
+      "heatmap": "Тепловая карта",
+      "refresh": "Обновить",
+      "all": "Все ({count})",
+      "statusCount": "{status} ({count})",
+      "status": {
+        "checkedIn": "На точке",
+        "onRoad": "В пути",
+        "late": "Опаздывает",
+        "offline": "Офлайн"
+      },
+      "loadingMap": "Загрузка карты...",
+      "statusTitle": "Статус",
+      "feed": "Лента",
+      "hideFeed": "Скрыть ленту событий",
+      "showFeed": "Показать ленту событий",
+      "waitingEvents": "Ждём события...",
+      "agents": "Агенты ({count})",
+      "noAgents": "Нет агентов под фильтр",
+      "replay": "Replay: {agent}, точек: {count}",
+      "close": "Закрыть"
+    },
+    "execution": {
+      "tasks": "Задачи: {count}",
+      "orders": "Заказы: {count}",
+      "visitStatus": {
+        "PLANNED": "Визит запланирован",
+        "IN_PROGRESS": "Визит идёт",
+        "COMPLETED": "Визит завершён",
+        "SKIPPED": "Визит пропущен"
+      }
+    },
     "subtitle": "Команды, агенты, маршруты, визиты и live location.",
     "addAgent": "Добавить агента",
     "noUserCandidates": "Нет активных пользователей для добавления в полевую команду.",

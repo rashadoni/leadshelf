@@ -75,7 +75,7 @@ export function RouteCreateForm({
       <button
         type="button"
         onClick={submit}
-        className="h-9 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+        className="h-9 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
       >
         {t("createRoute")}
       </button>

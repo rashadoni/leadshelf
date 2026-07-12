@@ -222,6 +222,70 @@ export const mobilePhotoSubmissionReviewSchema = z.object({
 })
 export type MobilePhotoSubmissionReview = z.infer<typeof mobilePhotoSubmissionReviewSchema>
 
+const mobileShelfBBoxSchema = z.object({
+  xPct: z.number().min(0).max(100),
+  yPct: z.number().min(0).max(100),
+  widthPct: z.number().positive().max(100),
+  heightPct: z.number().positive().max(100),
+})
+
+export const mobileShelfComparisonResultSchema = z.object({
+  version: z.number().int().min(1),
+  status: z.enum(["PASS", "REVIEW", "FAIL", "UNAVAILABLE"]),
+  structuralScore: z.number().min(0).max(100).nullable(),
+  visualConfidence: z.number().min(0).max(1).nullable(),
+  strictCompliance: z.boolean(),
+  placements: z.array(z.object({
+    placementId: z.string(),
+    shelfId: z.string().nullable(),
+    productId: z.string().nullable(),
+    productSku: z.string().nullable(),
+    productName: z.string(),
+    brand: z.string().nullable(),
+    expectedFacings: z.number().int().min(0),
+    actualFacings: z.number().int().min(0).nullable(),
+    outcome: z.enum(["matched", "missing", "wrong_product", "wrong_position", "facing_mismatch", "unavailable"]),
+    confidence: z.number().min(0).max(1).nullable(),
+    detectionIds: z.array(z.string()),
+    action: z.unknown().nullable(),
+  })),
+  detections: z.array(z.object({
+    detectionId: z.string(),
+    slotId: z.string().nullable(),
+    placementId: z.string().nullable(),
+    shelfId: z.string().nullable(),
+    productId: z.string().nullable(),
+    productSku: z.string().nullable(),
+    label: z.string().nullable(),
+    brand: z.string().nullable(),
+    confidence: z.number().min(0).max(1),
+    facings: z.number().int().min(1),
+    bbox: mobileShelfBBoxSchema.nullable(),
+    source: z.enum(["ai", "manual"]),
+  })),
+  extras: z.array(z.unknown()),
+  actions: z.array(z.object({
+    type: z.enum(["restock", "add_facings", "remove_facings", "move", "manual_review"]),
+    placementId: z.string().nullable(),
+    productId: z.string().nullable(),
+    productSku: z.string().nullable(),
+    amount: z.number().int().nullable(),
+  })),
+  metrics: z.object({
+    lenientCompliance: z.number().min(0).max(100).nullable(),
+    strictCompliance: z.number().min(0).max(100).nullable(),
+    expectedFacings: z.number().int().min(0),
+    actualFacings: z.number().int().min(0).nullable(),
+    oos: z.array(z.unknown()),
+    shareOfShelf: z.array(z.unknown()),
+    brandShare: z.array(z.unknown()),
+    ourBrandSharePct: z.number().min(0).max(100).nullable(),
+    competitorSharePct: z.number().min(0).max(100).nullable(),
+  }),
+  warnings: z.array(z.string()),
+})
+export type MobileShelfComparisonResult = z.infer<typeof mobileShelfComparisonResultSchema>
+
 export const mobilePhotoSubmissionRowSchema = z.object({
   id: z.string(),
   clientPhotoId: z.string().nullable(),
@@ -235,6 +299,7 @@ export const mobilePhotoSubmissionRowSchema = z.object({
   qualityScore: z.number().nullable(),
   review: mobilePhotoSubmissionReviewSchema.nullable(),
   vision: mobilePhotoSubmissionReviewSchema.nullable(),
+  comparison: mobileShelfComparisonResultSchema.nullable().optional(),
   updatedAt: z.string(),
 })
 export type MobilePhotoSubmissionRow = z.infer<typeof mobilePhotoSubmissionRowSchema>

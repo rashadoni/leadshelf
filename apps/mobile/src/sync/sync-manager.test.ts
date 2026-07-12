@@ -44,6 +44,15 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
       calls.push("pendingOutbox")
       return state.outbox.filter((o) => o.status === "pending")
     },
+    async outboxDiagnostics() {
+      const pending = state.outbox.filter((o) => o.status === "pending")
+      return {
+        pendingOps: pending.length,
+        conflictOps: state.outbox.filter((o) => o.status === "conflict").length,
+        rejectedOps: state.outbox.filter((o) => o.status === "rejected").length,
+        oldestPendingAt: pending.map((o) => o.clientCreatedAt).filter((value): value is string => Boolean(value)).sort()[0] ?? null,
+      }
+    },
     async markOutbox(id, status) {
       calls.push(`markOutbox:${id}:${status}`)
       const op = state.outbox.find((o) => o.clientOpId === id)
@@ -56,6 +65,9 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
     async pendingPhotos() {
       calls.push("pendingPhotos")
       return state.photos.filter((p) => !p.uploaded && !quarantined.has(p.clientPhotoId))
+    },
+    async unuploadedPhotoIds() {
+      return state.photos.filter((p) => !p.uploaded).map((p) => p.clientPhotoId)
     },
     async markPhotoUploaded(id) {
       calls.push(`photoUploaded:${id}`)
@@ -220,6 +232,74 @@ describe("SyncManager", () => {
     expect(store.photos[0]!.uploaded).toBe(false)
   })
 
+  test("photo.submit не пушится до успешной загрузки файла, другие операции не блокируются", async () => {
+    const store = makeStore()
+    store.photos.push({
+      clientPhotoId: "photo-flaky-002",
+      taskId: "t1",
+      fileUri: "file:///f.jpg",
+      takenAt: "2026-07-03T10:00:00Z",
+      uploaded: false,
+    })
+    store.outbox.push(
+      {
+        clientOpId: "op-photo-flaky02",
+        kind: "photo.submit",
+        payload: { clientPhotoId: "photo-flaky-002", taskId: "t1" },
+        status: "pending",
+        attempts: 0,
+      },
+      {
+        clientOpId: "op-comment-after",
+        kind: "task.comment",
+        payload: { taskId: "t1", body: "offline note" },
+        status: "pending",
+        attempts: 0,
+      },
+    )
+    const api = makeApi({
+      async uploadPhoto() {
+        throw new HttpError(503, "service_unavailable")
+      },
+    })
+
+    const status = await new SyncManager({ api, store }).runSync()
+
+    expect(api.pushed).toEqual(["op-comment-after"])
+    expect(store.outbox[0]).toMatchObject({ status: "pending", attempts: 0 })
+    expect(status.pendingOps).toBe(1)
+    expect(status.pendingPhotos).toBe(1)
+  })
+
+  test("photo.submit для quarantined файла не отправляется", async () => {
+    const store = makeStore()
+    store.photos.push({
+      clientPhotoId: "photo-bad-0003",
+      taskId: "t1",
+      fileUri: "file:///bad.bin",
+      takenAt: "2026-07-03T10:00:00Z",
+      uploaded: false,
+    })
+    store.outbox.push({
+      clientOpId: "op-photo-bad003",
+      kind: "photo.submit",
+      payload: { clientPhotoId: "photo-bad-0003", taskId: "t1" },
+      status: "pending",
+      attempts: 0,
+    })
+    const api = makeApi({
+      async uploadPhoto() {
+        throw new HttpError(415, "unsupported_type")
+      },
+    })
+
+    await new SyncManager({ api, store }).runSync()
+
+    expect(api.pushed).toHaveLength(0)
+    expect(store.outbox[0]).toMatchObject({ status: "pending", attempts: 0 })
+    expect(store.quarantined.has("photo-bad-0003")).toBe(true)
+  })
+
   test("conflict от сервера помечает операцию, sync не падает", async () => {
     const store = makeStore()
     store.outbox.push({
@@ -292,15 +372,36 @@ describe("SyncManager", () => {
       clientOpId: "op-offline-0001",
       kind: "task.status",
       payload: { taskId: "t1", expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      clientCreatedAt: "2026-07-10T09:55:00.000Z",
       status: "pending",
       attempts: 0,
+    }, {
+      clientOpId: "op-offline-conflict",
+      kind: "task.status",
+      payload: { taskId: "t1", expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      status: "conflict",
+      attempts: 1,
+    }, {
+      clientOpId: "op-offline-rejected",
+      kind: "task.status",
+      payload: { taskId: "t1", expectedStatus: "NEW", toStatus: "IN_PROGRESS" },
+      status: "rejected",
+      attempts: 1,
     })
     const api = makeApi()
     const pullSpy = vi.spyOn(api, "pull")
-    const m = new SyncManager({ api, store, isOnline: async () => false })
+    const m = new SyncManager({
+      api,
+      store,
+      now: () => new Date("2026-07-10T10:00:00.000Z"),
+      isOnline: async () => false,
+    })
     const s = await m.runSync()
     expect(s.phase).toBe("offline")
     expect(s.pendingOps).toBe(1)
+    expect(s.conflictOps).toBe(1)
+    expect(s.rejectedOps).toBe(1)
+    expect(s.oldestPendingAgeMs).toBe(5 * 60 * 1000)
     expect(pullSpy).not.toHaveBeenCalled()
   })
 

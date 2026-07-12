@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import { useLocale, useTranslations } from "next-intl"
 import {
   AlertTriangle,
   Circle,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react"
 import type { RouteStop } from "@/components/field-force/live-map"
 import type { MtmDashboardAgent as AgentLocation } from "@/components/field-force/mtm-types"
-import { FIELD_STATUS_LABEL_KEYS } from "@/components/field-force/mtm-types"
+import { formatLocaleDate } from "@/i18n/format"
 
 const FieldForceLiveMap = dynamic(
   () => import("@/components/field-force/live-map").then((mod) => mod.FieldForceLiveMap),
@@ -40,24 +41,11 @@ const STATUS_DOT_CLASS: Record<string, string> = {
   OFFLINE: "bg-neutral-400",
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  CHECKED_IN: "На точке",
-  ON_ROAD: "В пути",
-  LATE: "Опаздывает",
-  OFFLINE: "Офлайн",
-}
-
-const statusConfig: Record<string, { labelKey: string; dotClass: string }> = Object.fromEntries(
-  Object.entries(FIELD_STATUS_LABEL_KEYS).map(([key, labelKey]) => [
-    key,
-    { labelKey, dotClass: STATUS_DOT_CLASS[key] || "bg-neutral-400" },
-  ]),
-)
-const FALLBACK_STATUS_CONFIG = { labelKey: "offline", dotClass: "bg-neutral-400" }
-
-function formatDateTime(value: string | Date | null | undefined, options?: Intl.DateTimeFormatOptions) {
-  if (!value) return "—"
-  return new Intl.DateTimeFormat("ru", options ?? { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
+const STATUS_KEY: Record<string, "checkedIn" | "onRoad" | "late" | "offline"> = {
+  CHECKED_IN: "checkedIn",
+  ON_ROAD: "onRoad",
+  LATE: "late",
+  OFFLINE: "offline",
 }
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -89,6 +77,8 @@ function pickDisplayRoute(routes: any[]) {
 }
 
 export function FieldForceDashboard() {
+  const t = useTranslations("fieldForce.live")
+  const locale = useLocale()
   const [agents, setAgents] = useState<AgentLocation[]>([])
   const [statusCounts, setStatusCounts] = useState({ total: 0, checkedIn: 0, onRoad: 0, late: 0, offline: 0 })
   const [liveFeed, setLiveFeed] = useState<LiveEvent[]>([])
@@ -224,55 +214,59 @@ export function FieldForceDashboard() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Полевая команда</h1>
-          <p className="mt-1 text-sm text-neutral-500">Живая карта маршрутов, агентов и визитов.</p>
+          <h1 className="text-2xl font-semibold">{t("title")}</h1>
+          <p className="mt-1 text-sm text-neutral-500">{t("subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {lastUpdate ? (
             <span className="flex items-center gap-1 text-xs text-neutral-500">
-              <Clock className="h-3 w-3" /> Обновлено: {formatDateTime(lastUpdate, { timeStyle: "short" })}
+              <Clock className="h-3 w-3" /> {t("updated", { value: formatLocaleDate(lastUpdate, locale, { timeStyle: "short" }) })}
             </span>
           ) : null}
           <button
-            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showGeofence ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
+            type="button"
+            aria-pressed={showGeofence}
+            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showGeofence ? "border-indigo-600 bg-indigo-600 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
             onClick={() => setShowGeofence(!showGeofence)}
           >
-            <Circle className="mr-1 h-3.5 w-3.5" /> Геозона
+            <Circle className="mr-1 h-3.5 w-3.5" /> {t("geofence")}
           </button>
           <button
-            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showHeatmap ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
+            type="button"
+            aria-pressed={showHeatmap}
+            className={`inline-flex items-center rounded-md border px-2.5 py-1.5 text-sm ${showHeatmap ? "border-indigo-600 bg-indigo-600 text-white" : "border-neutral-300 bg-white text-neutral-800"}`}
             onClick={() => setShowHeatmap(!showHeatmap)}
           >
-            <Flame className="mr-1 h-3.5 w-3.5" /> Тепловая карта
+            <Flame className="mr-1 h-3.5 w-3.5" /> {t("heatmap")}
           </button>
-          <button className="inline-flex items-center rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-800" onClick={fetchLocations}>
-            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Обновить
+          <button type="button" className="inline-flex items-center rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-800" onClick={fetchLocations}>
+            <RefreshCw className="mr-1 h-3.5 w-3.5" /> {t("refresh")}
           </button>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <button className={`rounded-md px-3 py-1.5 text-sm ${activeFilter === "all" ? "bg-neutral-900 text-white" : "border border-neutral-300 bg-white"}`} onClick={() => setActiveFilter("all")}>
-          Все ({statusCounts.total})
+        <button className={`rounded-md px-3 py-1.5 text-sm ${activeFilter === "all" ? "bg-indigo-600 text-white" : "border border-neutral-300 bg-white"}`} onClick={() => setActiveFilter("all")}>
+          {t("all", { count: statusCounts.total })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "checked_in" ? "bg-neutral-900 text-white" : "border border-green-200 bg-white text-green-700"}`} onClick={() => setActiveFilter("checked_in")}>
-          <MapPin className="mr-1 h-3 w-3" /> На точке ({statusCounts.checkedIn})
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "checked_in" ? "bg-indigo-600 text-white" : "border border-green-200 bg-white text-green-700"}`} onClick={() => setActiveFilter("checked_in")}>
+          <MapPin className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.checkedIn"), count: statusCounts.checkedIn })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "on_road" ? "bg-neutral-900 text-white" : "border border-blue-200 bg-white text-blue-700"}`} onClick={() => setActiveFilter("on_road")}>
-          <Navigation className="mr-1 h-3 w-3" /> В пути ({statusCounts.onRoad})
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "on_road" ? "bg-indigo-600 text-white" : "border border-blue-200 bg-white text-blue-700"}`} onClick={() => setActiveFilter("on_road")}>
+          <Navigation className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.onRoad"), count: statusCounts.onRoad })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "late" ? "bg-neutral-900 text-white" : "border border-red-200 bg-white text-red-700"}`} onClick={() => setActiveFilter("late")}>
-          <AlertTriangle className="mr-1 h-3 w-3" /> Опаздывает ({statusCounts.late})
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "late" ? "bg-indigo-600 text-white" : "border border-red-200 bg-white text-red-700"}`} onClick={() => setActiveFilter("late")}>
+          <AlertTriangle className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.late"), count: statusCounts.late })}
         </button>
-        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "offline" ? "bg-neutral-900 text-white" : "border border-neutral-300 bg-white text-neutral-600"}`} onClick={() => setActiveFilter("offline")}>
-          <WifiOff className="mr-1 h-3 w-3" /> Офлайн ({statusCounts.offline})
+        <button className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm ${activeFilter === "offline" ? "bg-indigo-600 text-white" : "border border-neutral-300 bg-white text-neutral-600"}`} onClick={() => setActiveFilter("offline")}>
+          <WifiOff className="mr-1 h-3 w-3" /> {t("statusCount", { status: t("status.offline"), count: statusCounts.offline })}
         </button>
       </div>
 
-      <div className="flex gap-3" style={{ height: "calc(100vh - 280px)", minHeight: 400 }}>
+      <div className="flex flex-col gap-3 xl:flex-row xl:h-[calc(100vh-280px)] xl:min-h-[400px]">
         <div className="relative flex-1 overflow-hidden rounded-lg border border-neutral-200 bg-white" style={{ height: "calc(100vh - 280px)", minHeight: 400 }}>
           {loading ? (
-            <div className="flex h-full items-center justify-center text-sm text-neutral-500">Загрузка карты...</div>
+            <div className="flex h-full items-center justify-center text-sm text-neutral-500">{t("loadingMap")}</div>
           ) : (
             <FieldForceLiveMap
               agents={mapAgents}
@@ -285,12 +279,12 @@ export function FieldForceDashboard() {
           )}
         </div>
 
-        <aside className="w-[280px] flex-shrink-0 space-y-3 overflow-y-auto">
+        <aside className="w-full flex-shrink-0 space-y-3 overflow-y-auto xl:w-[280px]">
           <div className="rounded-lg border border-neutral-200 bg-white p-3">
-            <h4 className="mb-2 text-xs font-semibold uppercase text-neutral-500">Статус</h4>
+            <h4 className="mb-2 text-xs font-semibold uppercase text-neutral-500">{t("statusTitle")}</h4>
             <div className="space-y-2">
               {(["CHECKED_IN", "ON_ROAD", "LATE", "OFFLINE"] as const).map((status) => {
-                const cfg = statusConfig[status] ?? FALLBACK_STATUS_CONFIG
+                const dotClass = STATUS_DOT_CLASS[status] ?? "bg-neutral-400"
                 const count =
                   status === "CHECKED_IN"
                     ? statusCounts.checkedIn
@@ -302,8 +296,8 @@ export function FieldForceDashboard() {
                 return (
                   <div key={status} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${cfg.dotClass}`} />
-                      <span className="text-xs">{STATUS_LABELS[status]}</span>
+                      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+                      <span className="text-xs">{t(`status.${STATUS_KEY[status]}`)}</span>
                     </div>
                     <span className="text-sm font-bold">{count}</span>
                   </div>
@@ -315,12 +309,12 @@ export function FieldForceDashboard() {
           <div className="rounded-lg border border-neutral-200 bg-white p-3">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <h4 className="text-xs font-semibold uppercase text-neutral-500">Лента</h4>
+                <h4 className="text-xs font-semibold uppercase text-neutral-500">{t("feed")}</h4>
                 <span className="flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600">
                   <Radio className="h-2 w-2 animate-pulse" /> live
                 </span>
               </div>
-              <button className="rounded p-1 text-neutral-500 hover:bg-neutral-100" onClick={() => setShowFeed(!showFeed)}>
+              <button type="button" aria-label={showFeed ? t("hideFeed") : t("showFeed")} className="rounded p-1 text-neutral-500 hover:bg-neutral-100" onClick={() => setShowFeed(!showFeed)}>
                 {showFeed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
               </button>
             </div>
@@ -333,25 +327,25 @@ export function FieldForceDashboard() {
                       <div>
                         <span className="font-medium">{event.agent}</span>
                         <span className="text-neutral-500"> {event.type === "ALERT" ? "! " : "-> "}{event.customer}</span>
-                        <div className="text-neutral-500">{formatDateTime(event.time, { timeStyle: "short" })}</div>
+                        <div className="text-neutral-500">{formatLocaleDate(event.time, locale, { timeStyle: "short" })}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="py-2 text-center text-[10px] text-neutral-500">Ждём события...</div>
+                <div className="py-2 text-center text-[10px] text-neutral-500">{t("waitingEvents")}</div>
               )
             ) : null}
           </div>
 
           <div className="rounded-lg border border-neutral-200 bg-white p-3">
-            <h4 className="mb-2 text-xs font-semibold uppercase text-neutral-500">Агенты ({filteredAgents.length})</h4>
+            <h4 className="mb-2 text-xs font-semibold uppercase text-neutral-500">{t("agents", { count: filteredAgents.length })}</h4>
             <div className="max-h-[300px] space-y-2 overflow-y-auto">
               {filteredAgents.length === 0 ? (
-                <div className="py-4 text-center text-[10px] text-neutral-500">Нет агентов под фильтр</div>
+                <div className="py-4 text-center text-[10px] text-neutral-500">{t("noAgents")}</div>
               ) : (
                 filteredAgents.map((agent) => {
-                  const cfg = statusConfig[agent.fieldStatus] ?? statusConfig.OFFLINE ?? FALLBACK_STATUS_CONFIG
+                  const dotClass = STATUS_DOT_CLASS[agent.fieldStatus] ?? STATUS_DOT_CLASS.OFFLINE
                   const isOnline = agent.fieldStatus !== "OFFLINE"
                   const isSelected = selectedAgent === agent.agentId
                   return (
@@ -368,8 +362,8 @@ export function FieldForceDashboard() {
                         <span className="block truncate text-xs font-medium">{agent.name}</span>
                         <span className="flex items-center gap-1.5 text-[10px]">
                           <span className={`inline-flex items-center gap-0.5 ${isOnline ? "font-medium text-green-600" : "text-neutral-500"}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotClass}`} />
-                            {STATUS_LABELS[agent.fieldStatus] ?? agent.fieldStatus}
+                            <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+                            {t(`status.${STATUS_KEY[agent.fieldStatus] ?? "offline"}`)}
                           </span>
                           {agent.speed != null && agent.speed > 0 ? <span className="text-neutral-500">{agent.speed.toFixed(0)} km/h</span> : null}
                           {agent.routeCompletion && agent.routeCompletion > 0 ? <span className="text-neutral-500">{agent.routeCompletion}%</span> : null}
@@ -391,8 +385,8 @@ export function FieldForceDashboard() {
       {replayAgent ? (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
           <Play className="h-3 w-3" />
-          Replay: {agents.find((agent) => agent.agentId === replayAgent)?.name ?? ""}, точек: {replayTrack.length}
-          <button className="ml-auto rounded px-2 py-1 hover:bg-amber-100" onClick={() => { setReplayAgent(null); setReplayTrack([]) }}>Закрыть</button>
+          {t("replay", { agent: agents.find((agent) => agent.agentId === replayAgent)?.name ?? "", count: replayTrack.length })}
+          <button type="button" className="ml-auto rounded px-2 py-1 hover:bg-amber-100" onClick={() => { setReplayAgent(null); setReplayTrack([]) }}>{t("close")}</button>
         </div>
       ) : null}
     </div>

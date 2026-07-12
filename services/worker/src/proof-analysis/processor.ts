@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { PrismaClient } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import {
@@ -5,8 +6,19 @@ import {
   type VisionReferenceSlot,
   type VisionScanRequest,
 } from "@leadshelf/api-contracts/vision/v1"
-import { selectProofVideoFrameTimestamps } from "@leadshelf/core"
-import { analyzeSelectedProofFrames, type ProofFrameAnalysisResult } from "./analyzer"
+import {
+  compareShelf,
+  SHELF_COMPARISON_VERSION,
+  selectProofVideoFrameTimestamps,
+  type ShelfExpectedPlacement,
+} from "@leadshelf/core"
+import { finishShelfAnalysisRun, persistShelfMetricSnapshot, startShelfAnalysisRun } from "@leadshelf/db"
+import {
+  analyzeSelectedProofFrames,
+  configuredProofAnalysisIdentity,
+  type ProofAnalysisIdentity,
+  type ProofFrameAnalysisResult,
+} from "./analyzer"
 import {
   FfmpegProofFrameExtractor,
   proofFrameKey,
@@ -26,7 +38,9 @@ export interface ProcessProofVideoAnalysisDeps {
   storage?: ProofAnalysisStorage
   extractor?: ProofFrameExtractor
   analyze?: typeof analyzeSelectedProofFrames
+  analysisIdentity?: ProofAnalysisIdentity
   now?: () => Date
+  organizationId?: string
 }
 
 export type ProcessProofVideoAnalysisResult =
@@ -46,6 +60,23 @@ function asJsonObject(value: unknown): Prisma.JsonObject {
 function truncateError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   return message.slice(0, 1000)
+}
+
+function stableInputHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex")
+}
+
+export function proofAnalysisRetryDelayMs(attempt: number, baseMs = 60_000, maxMs = 60 * 60_000): number {
+  return Math.min(
+    Math.max(1_000, maxMs),
+    Math.max(1_000, baseMs) * 2 ** Math.max(0, Math.floor(attempt) - 1),
+  )
+}
+
+export function classifyProofAnalysisError(message: string): "permanent" | "retryable" {
+  return message === "openai_api_key_missing" || message === "gemini_api_key_missing"
+    ? "permanent"
+    : "retryable"
 }
 
 function sourceExt(mimeType: string | null): string {
@@ -73,19 +104,50 @@ function framePlanFromExif(exif: unknown, durationMs: number | null): { timestam
   return generated
 }
 
-async function claimNextVideo(prisma: PrismaClient): Promise<string | null> {
+async function claimNextVideo(
+  prisma: PrismaClient,
+  now: Date,
+  organizationId?: string,
+): Promise<string | null> {
+  const maxAttempts = Math.max(1, Number(process.env.LEADSHELF_PROOF_ANALYSIS_MAX_ATTEMPTS ?? 3))
+  const staleBefore = new Date(now.getTime() - Math.max(60_000, Number(process.env.LEADSHELF_PROOF_ANALYSIS_STALE_MS ?? 15 * 60_000)))
+  const retryBaseMs = Math.max(1_000, Number(process.env.LEADSHELF_PROOF_ANALYSIS_RETRY_MS ?? 60_000))
+  const retryClauses: Prisma.PhotoSubmissionWhereInput[] = Array.from(
+    { length: Math.max(0, maxAttempts - 1) },
+    (_, index) => {
+      const attempts = index + 1
+      return {
+        analysisStatus: "FAILED",
+        analysisAttempts: attempts,
+        analysisFinishedAt: { lt: new Date(now.getTime() - proofAnalysisRetryDelayMs(attempts, retryBaseMs)) },
+      }
+    },
+  )
   const candidate = await prisma.photoSubmission.findFirst({
-    where: { mediaType: "VIDEO", analysisStatus: "PENDING" },
+    where: {
+      organizationId,
+      mediaType: { in: ["PHOTO", "VIDEO"] },
+      analysisAttempts: { lt: maxAttempts },
+      OR: [
+        { analysisStatus: "PENDING" },
+        { analysisStatus: "PROCESSING", analysisStartedAt: { lt: staleBefore } },
+        ...retryClauses,
+      ],
+    },
     orderBy: { createdAt: "asc" },
-    select: { id: true },
+    select: { id: true, analysisStatus: true, analysisAttempts: true },
   })
   if (!candidate) return null
   const claimed = await prisma.photoSubmission.updateMany({
-    where: { id: candidate.id, analysisStatus: "PENDING" },
+    where: {
+      id: candidate.id,
+      analysisStatus: candidate.analysisStatus,
+      analysisAttempts: candidate.analysisAttempts,
+    },
     data: {
       analysisStatus: "PROCESSING",
       analysisAttempts: { increment: 1 },
-      analysisStartedAt: new Date(),
+      analysisStartedAt: now,
       analysisError: null,
     },
   })
@@ -141,6 +203,82 @@ async function findActiveReference(
   }
 }
 
+async function expectedPlacements(
+  prisma: PrismaClient,
+  planogramVersionId: string,
+): Promise<ShelfExpectedPlacement[]> {
+  const placements = await prisma.planogramPlacement.findMany({
+    where: { planogramVersionId },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      shelfId: true,
+      facingsX: true,
+      facingsY: true,
+      sortOrder: true,
+      product: { select: { id: true, sku: true, name: true, brand: { select: { name: true } } } },
+    },
+  })
+  return placements.map((placement) => ({
+    placementId: placement.id,
+    shelfId: placement.shelfId,
+    productId: placement.product.id,
+    productSku: placement.product.sku,
+    productName: placement.product.name,
+    brand: placement.product.brand?.name ?? null,
+    expectedFacings: Math.max(1, placement.facingsX) * Math.max(1, placement.facingsY),
+    sortOrder: placement.sortOrder,
+  }))
+}
+
+async function persistUnavailableAnalysis(
+  prisma: PrismaClient,
+  input: {
+    organizationId: string
+    photoSubmissionId: string
+    taskId: string | null
+    planogramVersionId: string | null
+    attempt: number
+    reason: string
+    identity: ProofAnalysisIdentity
+    now: Date
+  },
+) {
+  const expected = input.planogramVersionId
+    ? await expectedPlacements(prisma, input.planogramVersionId)
+    : []
+  const result = compareShelf({ expected, detections: [], analysisAvailable: false })
+  const persistedInput = {
+    photoSubmissionId: input.photoSubmissionId,
+    planogramVersionId: input.planogramVersionId,
+    reason: input.reason,
+  }
+  const inputHash = stableInputHash(persistedInput)
+  const { run } = await startShelfAnalysisRun(prisma, input.organizationId, {
+    photoSubmissionId: input.photoSubmissionId,
+    taskId: input.taskId,
+    planogramVersionId: input.planogramVersionId,
+    idempotencyKey: `proof:${input.photoSubmissionId}:attempt:${input.attempt}:${inputHash}:${input.identity.provider}:${input.identity.modelVersion}`,
+    inputHash,
+    provider: input.identity.provider,
+    modelVersion: input.identity.modelVersion,
+    comparisonVersion: SHELF_COMPARISON_VERSION,
+    attempt: input.attempt,
+    input: persistedInput,
+    startedAt: input.now,
+  })
+  const finished = await finishShelfAnalysisRun(prisma, input.organizationId, {
+    runId: run.id,
+    status: "UNAVAILABLE",
+    result: result as unknown as Prisma.InputJsonValue,
+    warnings: [...result.warnings, input.reason],
+    error: input.reason,
+    finishedAt: input.now,
+  })
+  await persistShelfMetricSnapshot(prisma, input.organizationId, finished.id)
+  return run.id
+}
+
 async function upsertVisionReview(
   prisma: PrismaClient,
   input: {
@@ -163,6 +301,16 @@ async function upsertVisionReview(
     select: { id: true },
   })
   if (existing) {
+    const manualWinner = await prisma.shelfAnalysisRun.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        photoSubmissionId: input.photoSubmissionId,
+        source: "MANUAL",
+        isCanonical: true,
+      },
+      select: { id: true },
+    })
+    if (manualWinner) return existing.id
     const review = await prisma.humanReview.update({
       where: { id: existing.id },
       data: {
@@ -202,10 +350,22 @@ async function markSkipped(
     organizationId: string
     taskId: string | null
     planogramVersionId: string | null
+    attempt: number
+    identity: ProofAnalysisIdentity
     reason: string
     now: Date
   },
 ): Promise<void> {
+  await persistUnavailableAnalysis(prisma, {
+    organizationId: input.organizationId,
+    photoSubmissionId: input.photoSubmissionId,
+    taskId: input.taskId,
+    planogramVersionId: input.planogramVersionId,
+    attempt: input.attempt,
+    reason: input.reason,
+    identity: input.identity,
+    now: input.now,
+  })
   const findings = {
     vision: {
       workerStatus: "skipped",
@@ -232,7 +392,7 @@ async function markSkipped(
     goldenReferenceId: null,
     score: null,
     findings,
-    note: `Video proof analysis skipped: ${input.reason}.`,
+    note: `Proof analysis skipped: ${input.reason}.`,
   })
 }
 
@@ -243,10 +403,22 @@ async function markFailed(
     organizationId: string
     taskId: string | null
     planogramVersionId: string | null
+    attempt: number
+    identity: ProofAnalysisIdentity
     error: string
     now: Date
   },
 ): Promise<void> {
+  await persistUnavailableAnalysis(prisma, {
+    organizationId: input.organizationId,
+    photoSubmissionId: input.photoSubmissionId,
+    taskId: input.taskId,
+    planogramVersionId: input.planogramVersionId,
+    attempt: input.attempt,
+    reason: input.error,
+    identity: input.identity,
+    now: input.now,
+  })
   const findings = {
     vision: {
       workerStatus: "failed",
@@ -273,7 +445,7 @@ async function markFailed(
     goldenReferenceId: null,
     score: null,
     findings,
-    note: `Video proof analysis failed: ${input.error}.`,
+    note: `Proof analysis failed: ${input.error}.`,
   })
 }
 
@@ -303,14 +475,15 @@ function analysisFindings(input: {
   } satisfies Prisma.JsonObject
 }
 
-export async function processNextProofVideoAnalysisJob(
+export async function processNextProofAnalysisJob(
   prisma: PrismaClient,
   deps: ProcessProofVideoAnalysisDeps = {},
 ): Promise<ProcessProofVideoAnalysisResult> {
-  const photoSubmissionId = await claimNextVideo(prisma)
+  const now = deps.now?.() ?? new Date()
+  const identity = deps.analysisIdentity ?? configuredProofAnalysisIdentity()
+  const photoSubmissionId = await claimNextVideo(prisma, now, deps.organizationId)
   if (!photoSubmissionId) return { status: "empty" }
 
-  const now = deps.now?.() ?? new Date()
   const storage = deps.storage ?? { getObjectBuffer, putObjectBuffer }
   const extractor = deps.extractor ?? new FfmpegProofFrameExtractor()
   const analyze = deps.analyze ?? analyzeSelectedProofFrames
@@ -321,9 +494,11 @@ export async function processNextProofVideoAnalysisJob(
       id: true,
       organizationId: true,
       url: true,
+      mediaType: true,
       mimeType: true,
       durationMs: true,
       taskId: true,
+      analysisAttempts: true,
       exif: true,
       task: { select: { planogramVersionId: true } },
     },
@@ -338,10 +513,12 @@ export async function processNextProofVideoAnalysisJob(
         organizationId: photo.organizationId,
         taskId: photo.taskId,
         planogramVersionId,
-        reason: "video_without_planogram_version",
+        attempt: photo.analysisAttempts,
+        identity,
+        reason: "proof_without_planogram_version",
         now,
       })
-      return { status: "skipped", photoSubmissionId, reason: "video_without_planogram_version" }
+      return { status: "skipped", photoSubmissionId, reason: "proof_without_planogram_version" }
     }
 
     const reference = await findActiveReference(prisma, photo.organizationId, planogramVersionId)
@@ -351,6 +528,8 @@ export async function processNextProofVideoAnalysisJob(
         organizationId: photo.organizationId,
         taskId: photo.taskId,
         planogramVersionId,
+        attempt: photo.analysisAttempts,
+        identity,
         reason: "active_golden_reference_not_found",
         now,
       })
@@ -362,34 +541,42 @@ export async function processNextProofVideoAnalysisJob(
         organizationId: photo.organizationId,
         taskId: photo.taskId,
         planogramVersionId,
+        attempt: photo.analysisAttempts,
+        identity,
         reason: "active_golden_reference_has_no_slots",
         now,
       })
       return { status: "skipped", photoSubmissionId, reason: "active_golden_reference_has_no_slots" }
     }
 
-    const video = await storage.getObjectBuffer(photo.url)
-    if (!video) throw new Error("video_object_not_found")
+    const proof = await storage.getObjectBuffer(photo.url)
+    if (!proof) throw new Error("proof_object_not_found")
 
-    const framePlan = framePlanFromExif(photo.exif, photo.durationMs)
-    if (framePlan.timestampsMs.length === 0) throw new Error("video_frame_plan_empty")
-
-    const frames = await extractor.extract({
-      video: video.body,
-      timestampsMs: framePlan.timestampsMs,
-      sourceExt: sourceExt(photo.mimeType),
-    })
-    if (frames.length === 0) throw new Error("video_frame_extraction_empty")
-
+    let framePlan: { timestampsMs: number[]; strategy: string }
+    let frames: ExtractedProofFrame[]
     const frameKeys: Array<{ key: string; timestampMs: number }> = []
-    for (const frame of frames) {
-      const key = proofFrameKey({
-        organizationId: photo.organizationId,
-        photoSubmissionId: photo.id,
-        timestampMs: frame.timestampMs,
+    if (photo.mediaType === "VIDEO") {
+      framePlan = framePlanFromExif(photo.exif, photo.durationMs)
+      if (framePlan.timestampsMs.length === 0) throw new Error("video_frame_plan_empty")
+      frames = await extractor.extract({
+        video: proof.body,
+        timestampsMs: framePlan.timestampsMs,
+        sourceExt: sourceExt(photo.mimeType),
       })
-      await storage.putObjectBuffer(key, frame.buffer, frame.contentType)
-      frameKeys.push({ key, timestampMs: frame.timestampMs })
+      if (frames.length === 0) throw new Error("video_frame_extraction_empty")
+      for (const frame of frames) {
+        const key = proofFrameKey({
+          organizationId: photo.organizationId,
+          photoSubmissionId: photo.id,
+          timestampMs: frame.timestampMs,
+        })
+        await storage.putObjectBuffer(key, frame.buffer, frame.contentType)
+        frameKeys.push({ key, timestampMs: frame.timestampMs })
+      }
+    } else {
+      framePlan = { timestampsMs: [0], strategy: "photo" }
+      frames = [{ timestampMs: 0, buffer: proof.body, contentType: proof.contentType }]
+      frameKeys.push({ key: photo.url, timestampMs: 0 })
     }
 
     const request: VisionScanRequest = {
@@ -402,9 +589,60 @@ export async function processNextProofVideoAnalysisJob(
       goldenReferenceUrl: reference.imageUrl,
       slots: reference.slots,
     }
+    const expected = await expectedPlacements(prisma, planogramVersionId)
+    const persistedInput = { request, expected }
+    const inputHash = stableInputHash(persistedInput)
+    const startedAt = deps.now?.() ?? new Date()
+    const { run } = await startShelfAnalysisRun(prisma, photo.organizationId, {
+      photoSubmissionId: photo.id,
+      taskId: photo.taskId,
+      planogramVersionId,
+      goldenReferenceId: reference.id,
+      idempotencyKey: `proof:${photo.id}:attempt:${photo.analysisAttempts}:${inputHash}:${identity.provider}:${identity.modelVersion}`,
+      inputHash,
+      provider: identity.provider,
+      modelVersion: identity.modelVersion,
+      comparisonVersion: SHELF_COMPARISON_VERSION,
+      attempt: photo.analysisAttempts,
+      input: persistedInput as unknown as Prisma.InputJsonValue,
+      startedAt,
+    })
     const result = await analyze(request, frames)
     const scannedAt = deps.now?.() ?? new Date()
     const findings = analysisFindings({ result, frameKeys, scannedAt })
+    const comparison = compareShelf({
+      expected,
+      referenceSlots: reference.slots
+        .filter((slot) => slot.placementId != null)
+        .map((slot) => ({ slotId: slot.id, placementId: slot.placementId! })),
+      detections: result.response.detections.map((detection, index) => ({
+        detectionId: detection.slotId ?? `detection-${index + 1}`,
+        slotId: detection.slotId,
+        productId: detection.productId,
+        productSku: detection.productSku,
+        label: detection.label,
+        confidence: detection.confidence,
+        bbox: detection.bbox,
+        source: "ai" as const,
+      })),
+      analysisAvailable: result.response.status !== "failed",
+    })
+    const finishedRun = await finishShelfAnalysisRun(prisma, photo.organizationId, {
+      runId: run.id,
+      status:
+        comparison.status === "UNAVAILABLE"
+          ? "UNAVAILABLE"
+          : comparison.status === "REVIEW"
+            ? "REVIEW"
+            : "COMPLETED",
+      result: comparison as unknown as Prisma.InputJsonValue,
+      warnings: comparison.warnings,
+      inputTokens: result.telemetry?.inputTokens ?? null,
+      outputTokens: result.telemetry?.outputTokens ?? null,
+      costMicros: result.telemetry?.costMicros ?? null,
+      finishedAt: scannedAt,
+    })
+    await persistShelfMetricSnapshot(prisma, photo.organizationId, finishedRun.id)
     const exif = asJsonObject(photo.exif)
     const nextExif = {
       ...exif,
@@ -436,8 +674,12 @@ export async function processNextProofVideoAnalysisJob(
         goldenReferenceId: reference.id,
         score: result.response.compliance.score,
         findings,
-        note: "Selected-frame vision compliance check created from video proof.",
+        note: "Persisted shelf comparison created from proof media.",
       })
+    })
+    await prisma.shelfAnalysisRun.updateMany({
+      where: { id: run.id, organizationId: photo.organizationId },
+      data: { humanReviewId: reviewId },
     })
 
     return {
@@ -450,13 +692,15 @@ export async function processNextProofVideoAnalysisJob(
   } catch (error) {
     const message = truncateError(error)
     const failedAt = deps.now?.() ?? new Date()
-    const status = message === "openai_api_key_missing" ? "skipped" : "failed"
+    const status = classifyProofAnalysisError(message) === "permanent" ? "skipped" : "failed"
     if (status === "skipped") {
       await markSkipped(prisma, {
         photoSubmissionId,
         organizationId: photo.organizationId,
         taskId: photo.taskId,
         planogramVersionId,
+        attempt: photo.analysisAttempts,
+        identity,
         reason: message,
         now: failedAt,
       })
@@ -467,9 +711,15 @@ export async function processNextProofVideoAnalysisJob(
       organizationId: photo.organizationId,
       taskId: photo.taskId,
       planogramVersionId,
+      attempt: photo.analysisAttempts,
+      identity,
       error: message,
       now: failedAt,
     })
     return { status: "failed", photoSubmissionId, error: message }
   }
 }
+
+// Backward-compatible export for existing runner/tests while callers migrate
+// to the media-neutral name.
+export const processNextProofVideoAnalysisJob = processNextProofAnalysisJob

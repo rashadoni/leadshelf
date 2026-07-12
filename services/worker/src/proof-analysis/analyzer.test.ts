@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { VISION_PROTOCOL_VERSION, type VisionScanRequest } from "@leadshelf/api-contracts/vision/v1"
-import { analyzeSelectedProofFrames } from "./analyzer"
+import { analyzeSelectedProofFrames, configuredProofAnalysisIdentity } from "./analyzer"
 import type { ExtractedProofFrame } from "./frame-extractor"
 
 const request: VisionScanRequest = {
@@ -36,9 +36,19 @@ afterEach(() => {
   delete process.env.VISION_PROVIDER
   delete process.env.GEMINI_API_KEY
   delete process.env.GEMINI_VISION_MODEL
+  delete process.env.OPENAI_VISION_MODEL
 })
 
 describe("analyzeSelectedProofFrames gemini path", () => {
+  test("fixes provider and model identity before inference", () => {
+    process.env.LEADSHELF_PROOF_AI_PROVIDER = "openai"
+    process.env.OPENAI_VISION_MODEL = "vision-test-v2"
+    expect(configuredProofAnalysisIdentity()).toEqual({
+      provider: "openai",
+      modelVersion: "vision-test-v2",
+    })
+  })
+
   test("inlines frames as base64 and maps Gemini JSON into compliance + findings", async () => {
     process.env.LEADSHELF_PROOF_AI_PROVIDER = "gemini"
     process.env.GEMINI_API_KEY = "gemini-key"
@@ -54,6 +64,7 @@ describe("analyzeSelectedProofFrames gemini path", () => {
         status: 200,
         async json() {
           return {
+            usageMetadata: { promptTokenCount: 321, candidatesTokenCount: 87 },
             candidates: [
               {
                 content: {
@@ -106,6 +117,7 @@ describe("analyzeSelectedProofFrames gemini path", () => {
     expect(result.response.provider).toBe("gemini")
     expect(result.response.modelVersion).toBe("gemini-2.5-flash")
     expect(result.aiFindings.some((f) => f.type === "depth_not_confirmed")).toBe(true)
+    expect(result.telemetry).toEqual({ inputTokens: 321, outputTokens: 87, costMicros: null })
     // depthConfirmed=false добавляет предупреждение
     expect(result.response.warnings).toContain("depth_not_confirmed_by_selected_frames")
   })

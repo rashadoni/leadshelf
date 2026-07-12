@@ -10,6 +10,7 @@ export interface RequestCaptureRetakeInput {
   stepKind?: string | null
   note?: string | null
   requestedById: string
+  reviewId?: string | null
 }
 
 export class CaptureRepoError extends Error {
@@ -37,8 +38,7 @@ export async function requestCaptureRetake(
   // Бампаем task.updatedAt в той же транзакции: pull курсорный, и без
   // изменения задачи запрос пересъемки не переотдался бы на устройство
   // (docs/26 P0). Один $transaction — либо оба, либо ничего.
-  const [request] = await prisma.$transaction([
-    prisma.captureRetakeRequest.upsert({
+  const retakeOperation = prisma.captureRetakeRequest.upsert({
       where: {
         organizationId_taskId_stepId: {
           organizationId,
@@ -63,9 +63,39 @@ export async function requestCaptureRetake(
         resolvedAt: null,
       },
       select: { id: true, stepId: true, requestedAt: true },
-    }),
-    prisma.task.update({ where: { id: input.taskId }, data: { updatedAt: now } }),
-  ])
+    })
+  const taskOperation = prisma.task.update({ where: { id: input.taskId }, data: { updatedAt: now } })
+  if (input.reviewId) {
+    const [request] = await prisma.$transaction([
+      retakeOperation,
+      taskOperation,
+      prisma.humanReview.updateMany({
+        where: {
+          id: input.reviewId,
+          organizationId,
+          taskId: input.taskId,
+          status: "PENDING",
+        },
+        data: {
+          status: "REJECTED",
+          reviewedById: input.requestedById,
+          reviewedAt: now,
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          organizationId,
+          userId: input.requestedById,
+          action: "shelf_analysis.retake_requested",
+          entityType: "HumanReview",
+          entityId: input.reviewId,
+          payload: { taskId: input.taskId, stepId: input.stepId, stepKind: input.stepKind ?? null, note },
+        },
+      }),
+    ])
+    return request
+  }
+  const [request] = await prisma.$transaction([retakeOperation, taskOperation])
   return request
 }
 

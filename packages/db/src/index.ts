@@ -44,12 +44,40 @@ export {
 } from "./repos/mobile-sync.ts"
 export { createOrder, OrderRepoError, type CreateOrderInput, type OrderSummary } from "./repos/orders.ts"
 export {
+  getMobileExecutionHealth,
+  buildMobileExecutionHealth,
+  type MobileExecutionHealth,
+} from "./repos/mobile-observability.ts"
+export {
   requestCaptureRetake,
   resolveCaptureRetakesForStep,
   listOpenCaptureRetakes,
   CaptureRepoError,
   type OpenCaptureRetake,
 } from "./repos/capture.ts"
+export {
+  decideHumanReview,
+  ReviewRepoError,
+  type HumanReviewDecision,
+} from "./repos/reviews.ts"
+export {
+  startShelfAnalysisRun,
+  finishShelfAnalysisRun,
+  readLatestShelfAnalysis,
+  saveManualShelfAnalysis,
+  ShelfAnalysisRepoError,
+  type StartShelfAnalysisRunInput,
+  type FinishShelfAnalysisRunInput,
+  type LatestShelfAnalysis,
+  type ManualShelfAnnotationInput,
+} from "./repos/shelf-analysis.ts"
+export {
+  persistShelfMetricSnapshot,
+  buildShelfAnalytics,
+  getShelfAnalytics,
+  type ShelfAnalyticsRow,
+  type ShelfAnalyticsSummary,
+} from "./repos/shelf-analytics.ts"
 export {
   AlertRepoError,
   emitProductEvent,

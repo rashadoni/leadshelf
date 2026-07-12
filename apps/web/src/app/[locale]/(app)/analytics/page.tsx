@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { Link } from "@/i18n/navigation"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb, workerDb } from "@/server/db/client"
+import { getShelfAnalytics } from "@leadshelf/db"
 import {
   filterRowsByPlanogramVersions,
   formatMeters,
@@ -152,6 +153,14 @@ export default async function AnalyticsPage({
   const visibleColumns = parseVisibleColumns(params.cols)
   const groupBy = parseGroup(params.group)
   const colorMode = parseColorMode(params.color)
+  const shelfStatus = ["PASS", "REVIEW", "FAIL", "UNAVAILABLE"].includes(params.shelfStatus ?? "")
+    ? params.shelfStatus
+    : undefined
+  const parseFilterDate = (value: string | undefined, endOfDay = false) => {
+    if (!value) return undefined
+    const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
+    return Number.isNaN(date.getTime()) ? undefined : date
+  }
 
   const db = tenantDb(session.org)
   const [
@@ -173,6 +182,26 @@ export default async function AnalyticsPage({
     getLikeForLikeSummary(db),
     getLikeForLikeBreakdown(db, workerDb, session.org),
   ])
+  const [shelfAnalytics, shelfStores, shelfAgents] = await Promise.all([
+    getShelfAnalytics(workerDb, session.org, {
+      storeId: params.shelfStore || undefined,
+      agentId: params.shelfAgent || undefined,
+      planogramVersionId: params.shelfPlanogram || undefined,
+      status: shelfStatus,
+      from: parseFilterDate(params.shelfFrom),
+      to: parseFilterDate(params.shelfTo, true),
+    }),
+    db.store.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.user.findMany({
+      where: { role: { in: ["MERCHANDISER", "FIELD_AGENT"] }, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ])
+  const shelfPlanograms = [...new Map(rows.map((row) => [row.versionId, {
+    id: row.versionId,
+    label: `${row.planogramName} · v${row.versionNumber}`,
+  }])).values()].sort((a, b) => a.label.localeCompare(b.label))
   const stockCoverageByProduct = await getStockCoverageByProduct(
     db,
     rows.map((row) => row.productId),
@@ -381,6 +410,64 @@ export default async function AnalyticsPage({
           </div>
         ))}
       </div>
+
+      <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-200 px-4 py-3">
+          <div>
+            <h2 className="font-semibold">{t("shelfExecution.title")}</h2>
+            <p className="mt-1 text-xs text-neutral-500">{t("shelfExecution.hint")}</p>
+          </div>
+          <form className="flex flex-wrap items-end gap-2" method="get">
+            <label className="text-xs text-neutral-600">
+              <span className="mb-1 block">{t("shelfExecution.store")}</span>
+              <select name="shelfStore" defaultValue={params.shelfStore ?? ""} className="min-h-9 rounded-md border border-neutral-300 bg-white px-2 text-sm">
+                <option value="">{t("shelfExecution.all")}</option>
+                {shelfStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-neutral-600">
+              <span className="mb-1 block">{t("shelfExecution.planogram")}</span>
+              <select name="shelfPlanogram" defaultValue={params.shelfPlanogram ?? ""} className="min-h-9 max-w-48 rounded-md border border-neutral-300 bg-white px-2 text-sm">
+                <option value="">{t("shelfExecution.all")}</option>
+                {shelfPlanograms.map((planogram) => <option key={planogram.id} value={planogram.id}>{planogram.label}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-neutral-600">
+              <span className="mb-1 block">{t("shelfExecution.agent")}</span>
+              <select name="shelfAgent" defaultValue={params.shelfAgent ?? ""} className="min-h-9 rounded-md border border-neutral-300 bg-white px-2 text-sm">
+                <option value="">{t("shelfExecution.all")}</option>
+                {shelfAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-neutral-600">
+              <span className="mb-1 block">{t("shelfExecution.status")}</span>
+              <select name="shelfStatus" defaultValue={shelfStatus ?? ""} className="min-h-9 rounded-md border border-neutral-300 bg-white px-2 text-sm">
+                <option value="">{t("shelfExecution.all")}</option>
+                {(["PASS", "REVIEW", "FAIL", "UNAVAILABLE"] as const).map((status) => (
+                  <option key={status} value={status}>{t(`shelfExecution.statuses.${status}` as never)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-neutral-600"><span className="mb-1 block">{t("shelfExecution.from")}</span><input type="date" name="shelfFrom" defaultValue={params.shelfFrom ?? ""} className="min-h-9 rounded-md border border-neutral-300 px-2 text-sm" /></label>
+            <label className="text-xs text-neutral-600"><span className="mb-1 block">{t("shelfExecution.to")}</span><input type="date" name="shelfTo" defaultValue={params.shelfTo ?? ""} className="min-h-9 rounded-md border border-neutral-300 px-2 text-sm" /></label>
+            <button type="submit" className="min-h-9 rounded-md bg-neutral-900 px-3 text-sm font-medium text-white">{t("shelfExecution.apply")}</button>
+          </form>
+        </div>
+        <div className="grid gap-px bg-neutral-200 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+          {[
+            [t("shelfExecution.samples"), shelfAnalytics.samples],
+            [t("shelfExecution.compliance"), shelfAnalytics.averageStructuralScore == null ? "—" : `${shelfAnalytics.averageStructuralScore}%`],
+            [t("shelfExecution.unavailable"), shelfAnalytics.unavailableSamples],
+            [t("shelfExecution.oos"), shelfAnalytics.oosCount],
+            [t("shelfExecution.facingsGap"), shelfAnalytics.facingsGap],
+            [t("shelfExecution.actions"), shelfAnalytics.actionCount],
+            [t("shelfExecution.rejectedReviews"), shelfAnalytics.reviewRejected],
+            [t("shelfExecution.retakes"), shelfAnalytics.retakeRequests],
+          ].map(([label, value]) => (
+            <div key={label} className="bg-white px-3 py-3"><div className="text-xs text-neutral-500">{label}</div><div className="mt-1 text-xl font-semibold tabular-nums">{value}</div></div>
+          ))}
+        </div>
+      </section>
 
       <section className="mb-4 rounded-xl border border-neutral-200 bg-white">
         <div className="border-b border-neutral-200 px-4 py-3">

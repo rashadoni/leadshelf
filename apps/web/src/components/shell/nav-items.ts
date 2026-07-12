@@ -9,6 +9,7 @@ export const NAV_ITEMS = [
   { key: "tasks", href: "/tasks" },
   { key: "reviews", href: "/reviews" },
   { key: "fieldForce", href: "/field-force" },
+  { key: "orders", href: "/orders" },
   { key: "analytics", href: "/analytics" },
 ] as const
 

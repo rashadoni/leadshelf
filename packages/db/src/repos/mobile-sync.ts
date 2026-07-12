@@ -286,12 +286,22 @@ export async function pullChanges(
                 updatedAt: true,
               },
             },
+            shelfAnalysisRuns: {
+              where: { isCanonical: true },
+              orderBy: [{ finishedAt: "desc" }, { createdAt: "desc" }],
+              take: 1,
+              select: { result: true, updatedAt: true },
+            },
           },
         })
       : []
   const photoSubmissions = photoCandidates
     .map((photo) => {
-      const updatedAt = latestDate(photo.createdAt, ...photo.humanReviews.map((review) => review.updatedAt))
+      const updatedAt = latestDate(
+        photo.createdAt,
+        ...photo.humanReviews.map((review) => review.updatedAt),
+        ...photo.shelfAnalysisRuns.map((run) => run.updatedAt),
+      )
       return { photo, updatedAt }
     })
     .filter(({ photo, updatedAt }) => isAfterCursor(photoCursor, updatedAt, photo.id))
@@ -509,6 +519,7 @@ export async function pullChanges(
         qualityScore: photo.qualityScore,
         review: qualityReview ? mapMobileReview(qualityReview) : null,
         vision: visionReview ? mapMobileReview(visionReview) : null,
+        comparison: photo.shelfAnalysisRuns[0]?.result ?? null,
         updatedAt: updatedAt.toISOString(),
       }
     }),
@@ -953,6 +964,11 @@ export async function pushOperations(
       result = { status: "rejected", detail: "unknown_kind" }
     }
 
+    const processedAt = new Date()
+    const clientCreatedAt = op.clientCreatedAt ? new Date(op.clientCreatedAt) : processedAt
+    const queuedAt = Number.isFinite(clientCreatedAt.getTime()) && clientCreatedAt <= new Date(processedAt.getTime() + 5 * 60 * 1000)
+      ? clientCreatedAt
+      : processedAt
     await prisma.outboxOperation.create({
       data: {
         deviceId,
@@ -961,7 +977,8 @@ export async function pushOperations(
         payload: op.payload as object,
         status: result.status === "rejected" ? "FAILED" : "APPLIED",
         result: result as object,
-        processedAt: new Date(),
+        createdAt: queuedAt,
+        processedAt,
       },
     })
     results.push({ clientOpId: op.clientOpId, ...result })

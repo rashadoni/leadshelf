@@ -4,7 +4,11 @@
     "loading": "Yüklənir...",
     "workspace": "Rəf əməliyyat konturu",
     "demoTenant": "Demo tenant hazırdır",
-    "details": "Detallar"
+    "details": "Detallar",
+    "mainNavigation": "Əsas naviqasiya",
+    "moreNavigation": "Əlavə bölmələr",
+    "more": "Daha",
+    "fieldForceShort": "Sahə"
   },
   "auth": {
     "title": "Daxil ol",
@@ -24,7 +28,88 @@
     "tasks": "Tapşırıqlar",
     "reviews": "Foto yoxlama",
     "fieldForce": "Saha komandası",
+    "orders": "Sifarişlər",
     "analytics": "Analitika"
+  },
+  "orders": {
+    "title": "Sifarişlər",
+    "subtitle": "Sahədən sinxronlaşdırılmış sifarişlər: satış nöqtəsi, agent, vizit və kommersiya nəticəsi bir yerdə.",
+    "summary": {
+      "total": "Bütün sifarişlər",
+      "active": "İcradadır",
+      "offline": "Mobil cihazdan",
+      "value": "Ümumi məbləğ"
+    },
+    "table": {
+      "order": "Sifariş",
+      "store": "Satış nöqtəsi",
+      "agent": "Agent",
+      "source": "Mənbə",
+      "items": "Tərkib",
+      "total": "Məbləğ",
+      "status": "Status",
+      "createdAt": "Yaradılıb"
+    },
+    "status": {
+      "DRAFT": "Qaralama",
+      "SUBMITTED": "Göndərilib",
+      "CONFIRMED": "Təsdiqlənib",
+      "DELIVERED": "Çatdırılıb",
+      "CANCELLED": "Ləğv edilib"
+    },
+    "sourceVisit": "Vizitdən",
+    "sourceDirect": "Birbaşa sifariş",
+    "offlineOrigin": "Mobil offline",
+    "clientTrace": "Mobil əməliyyat: {value}",
+    "viewTasks": "Nöqtənin tapşırıqları",
+    "openRoute": "Marşrutu aç",
+    "filterContext": "İcra filtri: {value}",
+    "clearFilter": "Bütün sifarişlər",
+    "visitStatus": {
+      "PLANNED": "vizit planlanıb",
+      "IN_PROGRESS": "vizit davam edir",
+      "COMPLETED": "vizit tamamlanıb",
+      "SKIPPED": "vizit buraxılıb"
+    },
+    "unknownAgent": "Agent göstərilməyib",
+    "lineCount": "{count} məhsul mövqeyi",
+    "unitCount": "{count} vahid",
+    "emptyTitle": "Hələ sifariş yoxdur",
+    "emptyHint": "Agent mobil tətbiqdə sifariş yaradıb sinxronlaşdırdıqdan sonra o burada görünəcək.",
+    "recentLimit": "Son 200 sifariş göstərilir.",
+    "health": {
+      "title": "Mobil icra sağlamlığı",
+      "subtitle": "Son {hours} saat üzrə payload göstərilmədən sync və sifariş siqnalları.",
+      "devices": "Cihazlar",
+      "actionable": "Diqqət tələb edən",
+      "p95": "Sync gecikməsi p95",
+      "conflicts": "Konfliktlər",
+      "rejectedOrders": "Rədd edilmiş sifarişlər",
+      "alertConflicts": "Sync konfliktlərinin sayı əvvəlki dövrlə müqayisədə artır.",
+      "alertOrders": "Sifariş emalında yeni rədd cavabları var.",
+      "operationsTitle": "Əməliyyat detalları",
+      "operationsHint": "Yalnız əməliyyat növü, qısa trace, agent, vaxt və təhlükəsiz səbəb kodu göstərilir.",
+      "noIssues": "Bu dövrdə konflikt və rədd edilmiş əməliyyat yoxdur.",
+      "trace": "Trace {value}",
+      "unknownReason": "Səbəb kodu yoxdur",
+      "milliseconds": "{value} ms",
+      "seconds": "{value} san",
+      "outcome": {
+        "conflict": "Konflikt",
+        "rejected": "Rədd edilib"
+      },
+      "kind": {
+        "taskStatus": "Tapşırıq statusu",
+        "photoSubmit": "Foto göndərişi",
+        "taskComment": "Tapşırıq şərhi",
+        "visitCheckin": "Check-in",
+        "visitCheckout": "Check-out",
+        "locationUpdate": "Lokasiya",
+        "orderCreate": "Sifariş yaratma",
+        "proofException": "Çəkiliş istisnası",
+        "other": "Digər əməliyyat"
+      }
+    }
   },
   "dashboard": {
     "title": "Demo hazırlıq paneli",
@@ -555,6 +640,9 @@
   },
   "tasks": {
     "all": "Hamısı",
+    "filteredStore": "Nöqtənin tapşırıqları: {store}",
+    "clearStoreFilter": "Bütün tapşırıqlar",
+    "reviewTask": "Yoxla",
     "empty": "Tapşırıq yoxdur. Planoqramı nöqtələrə dərc edin.",
     "table": {
       "title": "Tapşırıq",
@@ -578,7 +666,8 @@
       "PHOTO_SUBMITTED": "Foto alındı",
       "COMPLETED": "Qəbul et",
       "EXPIRED": "Vaxtı keçmiş",
-      "EMPTY": "Boş"
+      "EMPTY": "Boş",
+      "actionFailed": "Statusu yeniləmək mümkün olmadı. Yenidən cəhd edin."
     },
     "confirm": {
       "COMPLETED": "Tapşırığı tamamlanmış kimi qəbul edirsiniz?",
@@ -599,6 +688,25 @@
       "videoProof": "İcra videosu",
       "noReview": "Review yoxdur",
       "equipmentMismatch": "Avadanlıq uyğun gəlmir",
+      "nextAction": "Növbəti qərar",
+      "reviewPendingHint": "Foto insan yoxlamasını gözləyir. Bir qərar seçin — qəbul, rədd və ya yenidən çəkiliş.",
+      "automaticReviewHint": "Avtomatik yoxlama əlavə problem yaratmayıb. Tapşırığı qəbul edin və ya yenidən çəkiliş istəyin.",
+      "automaticReviewAcceptHint": "Avtomatik yoxlama əlavə problem yaratmayıb. Tapşırığı qəbul edərək işi tamamlayın.",
+      "automaticReview": "Avtomatik yoxlamadan keçib",
+      "decisionSaving": "Saxlanılır...",
+      "decisionFailed": "Qərarı saxlamaq mümkün olmadı. Yenidən cəhd edin.",
+      "proofAlt": "{task} tapşırığının icra sübutu",
+      "viewStoreTasks": "Nöqtənin bütün tapşırıqları",
+      "viewStoreOrders": "Nöqtənin sifarişləri",
+      "executionContext": "Vizit və marşrut",
+      "openRoute": "Marşrutu aç",
+      "relatedOrders": "Sifarişlər: {count}",
+      "visitStatus": {
+        "PLANNED": "Vizit planlanıb",
+        "IN_PROGRESS": "Vizit davam edir",
+        "COMPLETED": "Vizit tamamlanıb",
+        "SKIPPED": "Vizit buraxılıb"
+      },
       "requestRetake": "Yenidən çəkiliş istə",
       "retakeRequested": "Yenidən çəkiliş istənilib",
       "retakeRequests": "Yenidən çəkiliş sorğuları",
@@ -631,6 +739,27 @@
   "analytics": {
     "subtitle": "Analitikanın ilk qatı: aktiv planoqramlarda hansı məhsulun nə qədər yer tutduğunu göstərir.",
     "exportExcel": "Excel ixracı",
+    "shelfExecution": {
+      "title": "Rəfin faktiki icrası",
+      "hint": "Kanonik yoxlama nəticələri: uyğunluq, OOS, feysinq və tələb olunan hərəkətlər.",
+      "store": "Mağaza",
+      "agent": "Merçendayzer",
+      "planogram": "Planoqram",
+      "status": "Status",
+      "from": "Başlanğıc",
+      "to": "Son",
+      "all": "Hamısı",
+      "apply": "Tətbiq et",
+      "samples": "Yoxlama",
+      "compliance": "Orta uyğunluq",
+      "unavailable": "Nəticəsiz",
+      "oos": "OOS SKU",
+      "facingsGap": "Feysinq çatışmazlığı",
+      "actions": "Hərəkət",
+      "rejectedReviews": "Ofisdə rədd edilib",
+      "retakes": "Yenidən çəkiliş",
+      "statuses": { "PASS": "Uyğundur", "REVIEW": "Yoxlama lazımdır", "FAIL": "Uyğun deyil", "UNAVAILABLE": "Mövcud deyil" }
+    },
     "kpi": {
       "storesWithPlanograms": "Planoqramlı mağaza",
       "activePlanograms": "Aktiv planoqram",
@@ -847,6 +976,9 @@
     "noPhoto": "Foto yoxdur",
     "photoProof": "İcra fotosu",
     "videoProof": "İcra videosu",
+    "proofAlt": "{title} üçün foto sübut",
+    "goldenAlt": "{title} üçün etalon düzülüş",
+    "frameAlt": "{title} videosundan seçilmiş kadr",
     "equipmentMismatch": "Avadanlıq baza ilə uyğun gəlmir",
     "goldenReference": "Etalon",
     "noReference": "Etalon yoxdur",
@@ -854,6 +986,9 @@
     "unknownStore": "Mağaza göstərilməyib",
     "approve": "Qəbul et",
     "reject": "Rədd et",
+    "requestRetake": "Yenidən çəkiliş istə",
+    "saving": "Saxlanılır…",
+    "actionFailed": "Qərarı saxlamaq mümkün olmadı. Yenidən cəhd edin.",
     "dashboard": {
       "pending": "Yoxlamada",
       "approved": "Qəbul edilib",
@@ -885,6 +1020,74 @@
       "PHOTO_QUALITY": "Foto keyfiyyəti",
       "VISION_COMPLIANCE": "Vision compliance"
     },
+    "comparison": {
+      "tabs": {
+        "scheme": "Sxem",
+        "photo": "Foto",
+        "result": "Nəticə"
+      },
+      "photoModes": {
+        "golden": "Etalon",
+        "actual": "Fakt",
+        "overlay": "Konturlar"
+      },
+      "status": {
+        "PASS": "Uyğundur",
+        "REVIEW": "Yoxlama lazımdır",
+        "FAIL": "Uyğun deyil",
+        "UNAVAILABLE": "Nəticə yoxdur"
+      },
+      "outcomes": {
+        "matched": "Yer və miqdar uyğundur",
+        "missing": "Məhsul yoxdur",
+        "wrong_product": "Yanlış məhsul",
+        "wrong_position": "Yanlış rəfdədir",
+        "facing_mismatch": "Feysinq sayı fərqlidir",
+        "unavailable": "Analiz mövcud deyil"
+      },
+      "actions": {
+        "restock": "Məhsulu rəfə qoyun",
+        "add_facings": "Feysinq əlavə edin",
+        "remove_facings": "Ön feysinq sayını azaldın",
+        "move": "Məhsulu düzgün yerə keçirin",
+        "manual_review": "Əl ilə yoxlayın"
+      },
+      "filters": { "all": "Hamısı", "issues": "Pozuntular", "uncertain": "Qeyri-müəyyən" },
+      "schemeHint": "Planoqramdakı gözlənilən yerləri faktiki nəticə ilə rəf-rəf müqayisə edin.",
+      "photoHint": "Etalon fotonu, faktiki çəkilişi və AI konturlarını eyni seçilmiş məhsul üzrə yoxlayın.",
+      "resultHint": "Faizdən əvvəl yerinə yetirilməli konkret hərəkətlər göstərilir.",
+      "shelf": "Rəf",
+      "expected": "Plan",
+      "actual": "Fakt",
+      "structuralScore": "Sxem uyğunluğu",
+      "visualConfidence": "Vizual əminlik",
+      "missingProducts": "Çatışmayan SKU",
+      "extraProducts": "Artıq tapıntılar",
+      "noPhoto": "Faktiki foto yoxdur.",
+      "noGolden": "Etalon foto yoxdur.",
+      "noActions": "Düzəliş tələb edən hərəkət yoxdur.",
+      "noFilteredPlacements": "Bu filtr üçün mövqe yoxdur.",
+      "technicalDetails": "Texniki analiz detalları",
+      "manual": {
+        "title": "Tanınmanı əl ilə düzəldin",
+        "hint": "SKU-nu, planoqram yerini, feysinq sayını və kontur koordinatlarını dəqiqləşdirin. Saxlanmış əl nəticəsi sonrakı AI analizlərindən üstün qalır.",
+        "add": "Kontur əlavə et",
+        "remove": "Sil",
+        "save": "Əl nəticəsini saxla",
+        "saving": "Saxlanılır...",
+        "saved": "Əl nəticəsi saxlanıldı",
+        "failed": "Əl nəticəsini saxlamaq mümkün olmadı",
+        "sku": "SKU",
+        "placement": "Planoqram yeri",
+        "facings": "Feysinq",
+        "x": "X, %",
+        "y": "Y, %",
+        "width": "En, %",
+        "height": "Hündürlük, %",
+        "unassigned": "Seçilməyib",
+        "overlayLabel": "əl işarələməsi"
+      }
+    },
     "vision": {
       "title": "Vision compliance",
       "score": "Score",
@@ -900,6 +1103,184 @@
     }
   },
   "fieldForce": {
+    "workspace": {
+      "title": "Marşrut modulu",
+      "subtitle": "Sahə komandası üçün xəritə, marşrutlar, agentlər və icra nəzarəti.",
+      "updated": "Yeniləndi {value}",
+      "refresh": "Yenilə",
+      "loadError": "Marşrut modulunu yükləmək mümkün olmadı. Sessiyanı və field-force API-ni yoxlayın.",
+      "allStatuses": "Bütün statuslar",
+      "agent": "Agent",
+      "team": "Komanda",
+      "status": "Status",
+      "visits": "Vizitlər",
+      "progress": "İrəliləyiş",
+      "user": "İstifadəçi",
+      "phone": "Telefon",
+      "date": "Tarix",
+      "unassigned": "Agentsiz",
+      "noTeam": "Komandasız",
+      "noEmail": "E-poçt yoxdur",
+      "noAddress": "Ünvan göstərilməyib",
+      "storeNotFound": "Nöqtə tapılmadı",
+      "edit": "Redaktə et",
+      "cancel": "Ləğv et",
+      "remove": "Sil",
+      "close": "Bağla",
+      "closeForm": "Formu bağla",
+      "save": "Saxla",
+      "saving": "Saxlanılır...",
+      "tabs": {
+        "map": { "label": "Xəritə", "description": "canlı hərəkət" },
+        "routes": { "label": "Marşrutlar", "description": "nöqtələr və icra" },
+        "agents": { "label": "Agentlər", "description": "komandalar və statuslar" },
+        "leaderboard": { "label": "Reytinq", "description": "icra sıralaması" },
+        "activity": { "label": "Aktivlik", "description": "vizit hadisələri" },
+        "reports": { "label": "Hesabatlar", "description": "günlük xülasə" },
+        "settings": { "label": "Ayarlar", "description": "icra siyasətləri" }
+      },
+      "routeStatus": {
+        "PLANNED": "Planlanıb",
+        "IN_PROGRESS": "İcradadır",
+        "COMPLETED": "Tamamlanıb",
+        "CANCELLED": "Ləğv edilib"
+      },
+      "fieldStatus": {
+        "CHECKED_IN": "Nöqtədə",
+        "ON_ROAD": "Yoldadır",
+        "LATE": "Gecikir",
+        "OFFLINE": "Offline"
+      },
+      "messages": {
+        "routeCreated": "Marşrut yaradıldı.",
+        "routeCreateFailed": "Marşrutu saxlamaq mümkün olmadı: {error}",
+        "routeUpdated": "Marşrut yeniləndi.",
+        "routeUpdateFailed": "Marşrutu yeniləmək mümkün olmadı: {error}",
+        "routeCancelled": "Marşrut ləğv edildi.",
+        "routeCancelFailed": "Marşrutu ləğv etmək mümkün olmadı: {error}",
+        "agentCreated": "Agent əlavə edildi.",
+        "agentCreateFailed": "Agenti saxlamaq mümkün olmadı: {error}",
+        "agentUpdated": "Agent yeniləndi.",
+        "agentUpdateFailed": "Agenti yeniləmək mümkün olmadı: {error}",
+        "settingsSaved": "Field-force ayarları serverdə saxlanıldı.",
+        "settingsFailed": "Ayarları saxlamaq mümkün olmadı: {error}"
+      },
+      "routes": {
+        "search": "Marşrut, agent və ya satış nöqtəsi axtar",
+        "new": "Yeni marşrut",
+        "editTitle": "Marşrutu redaktə et",
+        "loading": "Marşrutlar yüklənir...",
+        "emptyFilter": "Filtrə uyğun marşrut tapılmadı.",
+        "pointsCount": "{visited}/{total} nöqtə",
+        "confirmPastDate": "{date} tarixi keçib. Marşrut keçmiş tarixə saxlanılsın?",
+        "confirmCancel": "«{name}» marşrutu ləğv edilsin?",
+        "lockedHint": "Nöqtələr kilidlidir: marşrut üzrə vizit artıq var.",
+        "orderHint": "Nöqtələr burada göstərilən ardıcıllıqla saxlanılır.",
+        "name": "Ad",
+        "namePlaceholder": "Məsələn: Bakı-01 marşrutu",
+        "stops": "Marşrut nöqtələri",
+        "storeCount": "{count} nöqtə",
+        "noStops": "Hələ nöqtə yoxdur.",
+        "moveUp": "{store} nöqtəsini yuxarı daşı",
+        "moveDown": "{store} nöqtəsini aşağı daşı",
+        "addStore": "Satış nöqtəsi əlavə et",
+        "details": "Marşrut detalları",
+        "selectHint": "Soldan marşrut seçin.",
+        "validation": {
+          "name": "Marşrut adını göstərin.",
+          "store": "Ən azı bir satış nöqtəsi əlavə edin."
+        },
+        "metrics": { "points": "Nöqtələr", "completed": "Tamamlandı", "progress": "İrəliləyiş" }
+      },
+      "agents": {
+        "search": "Agent, komanda və ya kod axtar",
+        "add": "Agent əlavə et",
+        "editTitle": "Agenti redaktə et",
+        "loading": "Agentlər yüklənir...",
+        "emptyFilter": "Filtrə uyğun agent tapılmadı.",
+        "selectUser": "İstifadəçi seçin",
+        "management": "Agent idarəetməsi",
+        "userHint": "Agent aktiv LeadShelf istifadəçisinə bağlanır.",
+        "editHint": "Komanda və telefon istifadəçini yenidən yaratmadan dəyişdirilir.",
+        "noCandidates": "Bütün aktiv istifadəçilər artıq agent kimi təyin edilib.",
+        "validation": { "user": "İstifadəçi seçin." }
+      },
+      "leaderboard": {
+        "title": "İcra reytinqi",
+        "visits": "vizit: {count}",
+        "points": "bal: {count}",
+        "how": "Reytinq necə hesablanır",
+        "ruleVisit": "+20 bal — bu gün tamamlanan hər vizit üçün.",
+        "ruleCompletion": "+aktiv nöqtələrin icra faizi.",
+        "ruleOnline": "+10 bal — agent onlayndırsa.",
+        "ruleLate": "-20 bal — gecikmiş nöqtə varsa."
+      },
+      "activity": {
+        "title": "Aktivlik jurnalı",
+        "subtitle": "Son check-in, check-out və marşrut hadisələri.",
+        "empty": "Hələ hadisə yoxdur."
+      },
+      "reports": {
+        "routes": "Marşrutlar",
+        "completion": "Nöqtələrin icrası",
+        "onlineAgents": "Onlayn agentlər",
+        "late": "Gecikmələr",
+        "routeSummary": "Marşrut xülasəsi",
+        "agentSummary": "Agent xülasəsi"
+      },
+      "settings": {
+        "title": "Marşrut ayarları",
+        "subtitle": "GPS, geozona, offline statusu və məcburi mobil yoxlamalar üçün server siyasətləri.",
+        "gps": "GPS yenilənməsi, san",
+        "geofence": "Geozona radiusu, m",
+        "offlineAfter": "Offline həddi, dəq",
+        "requirePhoto": "Vizitin foto sübutunu tələb et",
+        "requireScan": "Mobil tətbiqdə rəf skanını tələb et",
+        "alertLate": "Gecikmiş vizitləri vurğula",
+        "save": "Ayarları saxla",
+        "connected": "Qoşulmuş imkanlar",
+        "connectedMap": "Agent və marşrut xəritəsi LeadShelf API ilə işləyir.",
+        "connectedApi": "Marşrutlar, agentlər, aktivlik, reytinq və hesabatlar ayrıca API-ləri oxuyur.",
+        "connectedOffline": "Agentin offline statusu serverdə saxlanan həddən asılıdır.",
+        "savedAt": "{value} tarixində saxlanıldı"
+      }
+    },
+    "live": {
+      "title": "Sahə komandası",
+      "subtitle": "Marşrutların, agentlərin və vizitlərin canlı xəritəsi.",
+      "updated": "Yeniləndi: {value}",
+      "geofence": "Geozona",
+      "heatmap": "İstilik xəritəsi",
+      "refresh": "Yenilə",
+      "all": "Hamısı ({count})",
+      "statusCount": "{status} ({count})",
+      "status": {
+        "checkedIn": "Nöqtədə",
+        "onRoad": "Yoldadır",
+        "late": "Gecikir",
+        "offline": "Offline"
+      },
+      "loadingMap": "Xəritə yüklənir...",
+      "statusTitle": "Status",
+      "feed": "Lent",
+      "hideFeed": "Hadisə lentini gizlət",
+      "showFeed": "Hadisə lentini göstər",
+      "waitingEvents": "Hadisələr gözlənilir...",
+      "agents": "Agentlər ({count})",
+      "noAgents": "Filtrə uyğun agent yoxdur",
+      "replay": "Replay: {agent}, nöqtələr: {count}",
+      "close": "Bağla"
+    },
+    "execution": {
+      "tasks": "Tapşırıqlar: {count}",
+      "orders": "Sifarişlər: {count}",
+      "visitStatus": {
+        "PLANNED": "Vizit planlanıb",
+        "IN_PROGRESS": "Vizit davam edir",
+        "COMPLETED": "Vizit tamamlanıb",
+        "SKIPPED": "Vizit buraxılıb"
+      }
+    },
     "subtitle": "Komandalar, agentlər, marşrutlar, vizitlər və canlı lokasiya.",
     "addAgent": "Agent əlavə et",
     "noUserCandidates": "Sahə komandası üçün aktiv istifadəçi yoxdur.",

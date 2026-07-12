@@ -48,11 +48,32 @@ export async function GET(req: NextRequest) {
       stops: {
         orderBy: { sortOrder: "asc" },
         include: {
-          store: { select: { id: true, name: true, code: true, address: true, latitude: true, longitude: true } },
+          store: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              address: true,
+              latitude: true,
+              longitude: true,
+              _count: {
+                select: {
+                  tasks: { where: { status: { in: ["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"] } } },
+                },
+              },
+            },
+          },
           visits: {
             where: visitDateWhere(dateFilter),
             orderBy: { createdAt: "desc" },
-            select: { id: true, status: true, checkInAt: true, checkOutAt: true, createdAt: true },
+            select: {
+              id: true,
+              status: true,
+              checkInAt: true,
+              checkOutAt: true,
+              createdAt: true,
+              _count: { select: { orders: true } },
+            },
           },
         },
       },

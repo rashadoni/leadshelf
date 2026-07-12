@@ -2,8 +2,37 @@
 
 :root {
   color-scheme: light;
+  --ls-primary: #4f46e5;
+  --ls-primary-pressed: #4338ca;
+  --ls-primary-soft: #eef2ff;
+  --ls-success: #16a34a;
+  --ls-success-soft: #ecfdf3;
+  --ls-warning: #b45309;
+  --ls-warning-soft: #fffbeb;
+  --ls-danger: #dc2626;
+  --ls-danger-soft: #fef2f2;
+  --ls-surface: #ffffff;
+  --ls-canvas: #fafafa;
+  --ls-border: #e5e5e5;
+  --focus-ring: var(--ls-primary);
 }
 
 body {
   @apply bg-neutral-50 text-neutral-900 antialiased;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

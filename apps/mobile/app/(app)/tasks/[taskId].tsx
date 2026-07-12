@@ -54,6 +54,7 @@ import {
 import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
+import { ShelfComparisonCard } from "../../../src/components/ShelfComparisonCard"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import type { TaskRow } from "../../../src/sync/ports"
@@ -169,6 +170,7 @@ export default function TaskDetailScreen() {
     exceptionStepIds,
     retakeStepIds,
   )
+  const comparisonProof = photoProofs.find((proof) => proof.comparisonResult != null) ?? null
   const equipmentSilhouette = useMemo(
     () =>
       buildEquipmentSilhouette(
@@ -753,6 +755,12 @@ export default function TaskDetailScreen() {
             </View>
           )}
         </View>
+        {comparisonProof?.comparisonResult ? (
+          <ShelfComparisonCard
+            result={comparisonProof.comparisonResult}
+            photoUri={comparisonProof.mediaType === "photo" ? comparisonProof.fileUri : null}
+          />
+        ) : null}
         <View style={styles.guidedProofCard}>
           <View style={styles.proofSummaryHeader}>
             <View style={{ flex: 1 }}>
@@ -1296,7 +1304,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#171717",
+    backgroundColor: "#6366F1",
   },
   captureStepNumberText: { color: "white", fontSize: 12, fontWeight: "800" },
   captureStepBody: { flex: 1, gap: 2 },
@@ -1310,7 +1318,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#171717",
+    backgroundColor: "#6366F1",
     paddingHorizontal: 10,
   },
   captureStepButtonText: { color: "white", fontSize: 12, fontWeight: "800" },
@@ -1383,7 +1391,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#171717",
+    backgroundColor: "#6366F1",
     paddingHorizontal: 12,
   },
   finderButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
@@ -1475,7 +1483,7 @@ const styles = StyleSheet.create({
     color: "#171717",
     textAlignVertical: "top",
   },
-  primary: { backgroundColor: "#171717", borderRadius: 10, padding: 14, alignItems: "center" },
+  primary: { backgroundColor: "#6366F1", borderRadius: 10, padding: 14, alignItems: "center" },
   primaryText: { color: "white", fontWeight: "600", fontSize: 16 },
   secondary: {
     borderWidth: 1,

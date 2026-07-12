@@ -11,6 +11,7 @@ import {
   mobileSyncPushResponseSchema,
   mobileTokenPairSchema,
 } from "@leadshelf/api-contracts/mobile/v1"
+import { File } from "expo-file-system"
 import { tokenStore } from "../auth/token-store"
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://hermescrm.xyz"
@@ -137,13 +138,10 @@ export const syncApi: SyncApi = {
     const form = new FormData()
     const mediaType = photo.mediaType ?? "photo"
     const fileExtension = mediaType === "video" ? "mp4" : "jpg"
-    const fileMime = mediaType === "video" ? "video/mp4" : "image/jpeg"
-    // RN FormData: файл как {uri, name, type}
-    form.append("file", {
-      uri: photo.fileUri,
-      name: `${photo.clientPhotoId}.${fileExtension}`,
-      type: fileMime,
-    } as unknown as Blob)
+    // Expo 57 / RN 0.86 fetch принимает Blob/File. Старый RN-объект
+    // { uri, name, type } теперь падает до запроса с
+    // "Unsupported FormDataPart implementation".
+    form.append("file", new File(photo.fileUri), `${photo.clientPhotoId}.${fileExtension}`)
     form.append("clientPhotoId", photo.clientPhotoId)
     form.append("taskId", photo.taskId)
     form.append("takenAt", photo.takenAt)

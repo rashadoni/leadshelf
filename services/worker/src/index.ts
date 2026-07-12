@@ -11,6 +11,6 @@ export {
   type PushSender,
   type PushSendResult,
 } from "./notifications/push"
-export { processNextProofVideoAnalysisJob } from "./proof-analysis/processor"
+export { processNextProofAnalysisJob, processNextProofVideoAnalysisJob } from "./proof-analysis/processor"
 export { FfmpegProofFrameExtractor, proofFrameKey } from "./proof-analysis/frame-extractor"
 export { analyzeSelectedProofFrames } from "./proof-analysis/analyzer"

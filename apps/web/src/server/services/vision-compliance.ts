@@ -146,6 +146,9 @@ export async function runVisionComplianceForPhoto({
     })),
   }
   const response = await scanWithConfiguredProvider(request)
+  if (response.status === "failed") {
+    return { status: "skipped", reason: response.warnings[0] ?? "vision_analysis_unavailable" }
+  }
   const scannedAt = new Date().toISOString()
   const findings = {
     vision: {

@@ -2,9 +2,11 @@ export type FieldForceRouteStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "C
 export type FieldForcePointStatus = "VISITED" | "SKIPPED" | "PENDING"
 
 interface FieldForceVisit {
+  id?: string
   status: "COMPLETED" | "SKIPPED" | "IN_PROGRESS" | string
   checkInAt?: Date | string | null
   checkOutAt?: Date | string | null
+  _count?: { orders: number }
 }
 
 interface FieldForceRouteStop {
@@ -20,6 +22,7 @@ interface FieldForceRouteStop {
     address?: string | null
     latitude?: number | null
     longitude?: number | null
+    _count?: { tasks: number }
   }
 }
 
@@ -48,6 +51,7 @@ export function shapeFieldForceRoute(route: FieldForceRouteRecord) {
       const completedVisit = stop.visits?.find((visit) => visit.status === "COMPLETED")
       const skippedVisit = stop.visits?.find((visit) => visit.status === "SKIPPED")
       const inProgressVisit = stop.visits?.find((visit) => visit.status === "IN_PROGRESS")
+      const linkedVisit = inProgressVisit ?? completedVisit ?? skippedVisit ?? stop.visits?.[0] ?? null
       const status: FieldForcePointStatus = completedVisit ? "VISITED" : skippedVisit ? "SKIPPED" : "PENDING"
       return {
         id: stop.id,
@@ -56,6 +60,10 @@ export function shapeFieldForceRoute(route: FieldForceRouteRecord) {
         status,
         plannedTime: stop.plannedAt ?? null,
         visitedAt: completedVisit?.checkOutAt ?? inProgressVisit?.checkInAt ?? null,
+        visitId: linkedVisit?.id ?? null,
+        visitStatus: linkedVisit?.status ?? null,
+        openTaskCount: stop.store._count?.tasks ?? 0,
+        orderCount: linkedVisit?._count?.orders ?? 0,
         customer: {
           id: stop.store.id,
           name: stop.store.name,

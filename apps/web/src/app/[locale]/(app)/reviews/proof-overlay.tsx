@@ -6,6 +6,7 @@ export type ProofOverlayStatus = "match" | "issue" | "uncertain" | "expected"
 
 export interface ProofOverlayBox {
   id: string
+  selectionKey?: string | null
   xPct: number
   yPct: number
   widthPct: number
@@ -36,36 +37,51 @@ export function ProofOverlay({
   boxes,
   statusLabels,
   emptyLabel,
+  imageAlt,
   showConfidence = true,
+  activeSelectionKey,
+  onSelectionChange,
 }: {
   src: string
   boxes: ProofOverlayBox[]
   statusLabels: Partial<Record<ProofOverlayStatus, string>>
   emptyLabel: string
+  imageAlt: string
   showConfidence?: boolean
+  activeSelectionKey?: string | null
+  onSelectionChange?: (selectionKey: string | null) => void
 }) {
-  const [active, setActive] = useState<string | null>(null)
+  const [internalActive, setInternalActive] = useState<string | null>(null)
+  const controlled = activeSelectionKey !== undefined
+  const active = controlled ? activeSelectionKey : internalActive
+  const setActive = (selectionKey: string | null) => {
+    if (!controlled) setInternalActive(selectionKey)
+    onSelectionChange?.(selectionKey)
+  }
   const label = (status: ProofOverlayStatus) => statusLabels[status] ?? status
   const legendStatuses = Array.from(new Set(boxes.map((b) => b.status)))
 
   return (
     <div>
       <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-900">
-        <img src={src} alt="" className="block w-full object-contain" />
+        <img src={src} alt={imageAlt} className="block w-full object-contain" />
         {boxes.map((box) => {
-          const isActive = active === box.id
+          const selectionKey = box.selectionKey ?? box.id
+          const isActive = active === selectionKey
           return (
             <button
               key={box.id}
               type="button"
-              onClick={() => setActive(isActive ? null : box.id)}
+              aria-label={`${label(box.status)} · ${box.sku ?? emptyLabel}`}
+              aria-pressed={isActive}
+              onClick={() => setActive(isActive ? null : selectionKey)}
               style={{
                 left: `${box.xPct}%`,
                 top: `${box.yPct}%`,
                 width: `${box.widthPct}%`,
                 height: `${box.heightPct}%`,
               }}
-              className={`absolute rounded-sm border-2 transition ${BOX_STYLE[box.status]} ${
+              className={`absolute rounded-sm border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${BOX_STYLE[box.status]} ${
                 isActive ? "ring-2 ring-white" : "hover:brightness-125"
               }`}
             >
@@ -86,7 +102,7 @@ export function ProofOverlay({
       </div>
       {active ? (
         (() => {
-          const box = boxes.find((b) => b.id === active)
+          const box = boxes.find((b) => (b.selectionKey ?? b.id) === active)
           if (!box) return null
           return (
             <div className="mt-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs">

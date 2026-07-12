@@ -13,10 +13,6 @@ import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
 import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
-import {
-  runVisionComplianceForPhoto,
-  type RunVisionComplianceResult,
-} from "@/server/services/vision-compliance"
 import { putObject } from "@/server/storage/s3"
 
 export const runtime = "nodejs"
@@ -71,42 +67,12 @@ function parseJsonObjectField(raw: string | undefined): JsonObject | null | "inv
   }
 }
 
-function skippedVision(reason: string): RunVisionComplianceResult {
-  return { status: "skipped", reason }
-}
-
-function visionAnalysisPatch(result: RunVisionComplianceResult) {
-  if ("reviewId" in result) {
-    return {
-      analysisStatus: "COMPLETED" as const,
-      analysisProvider: result.provider,
-      analysisModelVersion: result.modelVersion,
-      analysisError: null,
-      analysisFinishedAt: new Date(),
-    }
-  }
-  const failed = result.reason.startsWith("vision_scan_failed") || result.reason.includes("failed")
-  return {
-    analysisStatus: failed ? ("FAILED" as const) : ("SKIPPED" as const),
-    analysisProvider: null,
-    analysisModelVersion: null,
-    analysisError: result.reason,
-    analysisFinishedAt: new Date(),
-  }
-}
-
-async function markPhotoVisionAnalysis(photoSubmissionId: string, result: RunVisionComplianceResult): Promise<void> {
-  await workerDb.photoSubmission.update({
-    where: { id: photoSubmissionId },
-    data: visionAnalysisPatch(result),
-  })
-}
-
-async function ensureQueuedVideoVisionReview(input: {
+async function ensureQueuedVisionReview(input: {
   organizationId: string
   taskId: string | null
   photoSubmissionId: string
   planogramVersionId: string | null
+  mediaType: "photo" | "video"
   framePlan: unknown
 }): Promise<string> {
   const existing = await workerDb.humanReview.findFirst({
@@ -130,13 +96,13 @@ async function ensureQueuedVideoVisionReview(input: {
       findings: {
         vision: {
           workerStatus: "queued",
-          mediaType: "video",
+          mediaType: input.mediaType,
           framePlan: input.framePlan ?? null,
           queuedAt: new Date().toISOString(),
-          warnings: ["video_waiting_frame_extraction"],
+          warnings: ["proof_waiting_analysis_worker"],
         },
       },
-      note: "Video proof queued for frame extraction and selected-frame AI analysis.",
+      note: "Proof queued for persist-first shelf analysis worker.",
     },
     select: { id: true },
   })
@@ -209,40 +175,26 @@ export async function POST(req: NextRequest) {
   if (existing) {
     const existingExif = asObjectRecord(existing.exif)
     const existingMediaType = existing.mediaType === "VIDEO" ? "video" : "photo"
-    const visionResult =
-      existingMediaType === "photo"
-        ? await runVisionComplianceForPhoto({
-            organizationId: session.org,
-            photoSubmissionId: existing.id,
-          }).catch((error: unknown) =>
-            skippedVision(error instanceof Error ? error.message : "vision_scan_failed"),
-          )
-        : skippedVision("vision_queued_frame_extraction")
-    if (existingMediaType === "photo") await markPhotoVisionAnalysis(existing.id, visionResult)
-    const nextAnalysisStatus =
-      existingMediaType === "photo" ? visionAnalysisPatch(visionResult).analysisStatus : existing.analysisStatus
-    const queuedVideoReviewId =
-      existingMediaType === "video"
-        ? await ensureQueuedVideoVisionReview({
-            organizationId: session.org,
-            taskId: existing.taskId,
-            photoSubmissionId: existing.id,
-            planogramVersionId: existing.task?.planogramVersionId ?? null,
-            framePlan: asObjectRecord(existingExif.qualityCheck).framePlan ?? null,
-          })
-        : null
+    const queuedVisionReviewId = await ensureQueuedVisionReview({
+      organizationId: session.org,
+      taskId: existing.taskId,
+      photoSubmissionId: existing.id,
+      planogramVersionId: existing.task?.planogramVersionId ?? null,
+      mediaType: existingMediaType,
+      framePlan: asObjectRecord(existingExif.qualityCheck).framePlan ?? null,
+    })
     return NextResponse.json({
       photoId: existing.id,
       key: existing.url,
       mediaType: existingMediaType,
       durationMs: existing.durationMs,
-      analysisStatus: nextAnalysisStatus,
+      analysisStatus: existing.analysisStatus,
       qualityScore: existing.qualityScore,
       qualityCheck: existingExif.qualityCheck ?? null,
       deduplicated: true,
-      visionReviewId: "reviewId" in visionResult ? visionResult.reviewId : queuedVideoReviewId,
-      visionStatus: existingMediaType === "video" ? "queued" : visionResult.status,
-      visionReason: "reason" in visionResult ? visionResult.reason : null,
+      visionReviewId: queuedVisionReviewId,
+      visionStatus: existing.analysisStatus === "PENDING" ? "queued" : existing.analysisStatus.toLowerCase(),
+      visionReason: null,
     })
   }
 
@@ -366,30 +318,27 @@ export async function POST(req: NextRequest) {
             },
             select: { id: true },
           })
-    const queuedVisionReview =
-      uploadType.mediaType === "video"
-        ? await tx.humanReview.create({
-            data: {
-              organizationId: session.org,
-              reason: "VISION_COMPLIANCE",
-              status: "PENDING",
-              taskId: task.id,
-              photoSubmissionId: photo.id,
-              planogramVersionId: task.planogramVersionId,
-              findings: {
-                vision: {
-                  workerStatus: "queued",
-                  mediaType: "video",
-                  framePlan: framePlan as unknown as JsonValue,
-                  queuedAt: new Date().toISOString(),
-                  warnings: ["video_waiting_frame_extraction"],
-                },
-              },
-              note: "Video proof queued for frame extraction and selected-frame AI analysis.",
-            },
-            select: { id: true },
-          })
-        : null
+    const queuedVisionReview = await tx.humanReview.create({
+      data: {
+        organizationId: session.org,
+        reason: "VISION_COMPLIANCE",
+        status: "PENDING",
+        taskId: task.id,
+        photoSubmissionId: photo.id,
+        planogramVersionId: task.planogramVersionId,
+        findings: {
+          vision: {
+            workerStatus: "queued",
+            mediaType: uploadType.mediaType,
+            framePlan: framePlan as unknown as JsonValue,
+            queuedAt: new Date().toISOString(),
+            warnings: ["proof_waiting_analysis_worker"],
+          },
+        },
+        note: "Proof queued for persist-first shelf analysis worker.",
+      },
+      select: { id: true },
+    })
     return { photo, reviewId: qualityReview?.id ?? null, queuedVisionReviewId: queuedVisionReview?.id ?? null }
   })
   // Новое фото шага закрывает открытый запрос пересъемки офиса (docs/23).
@@ -417,29 +366,19 @@ export async function POST(req: NextRequest) {
       // событие — best effort: фото уже сохранено, флаг лежит на нем
     })
   }
-  const visionResult =
-    uploadType.mediaType === "photo"
-      ? await runVisionComplianceForPhoto({
-          organizationId: session.org,
-          photoSubmissionId: photo.id,
-        }).catch((error: unknown) =>
-          skippedVision(error instanceof Error ? error.message : "vision_scan_failed"),
-        )
-      : skippedVision("vision_queued_frame_extraction")
-  if (uploadType.mediaType === "photo") await markPhotoVisionAnalysis(photo.id, visionResult)
   return NextResponse.json(
     {
       photoId: photo.id,
       key,
       mediaType: uploadType.mediaType,
       durationMs: parsed.data.durationMs ?? null,
-      analysisStatus: uploadType.mediaType === "video" ? "PENDING" : visionAnalysisPatch(visionResult).analysisStatus,
+      analysisStatus: "PENDING",
       qualityScore: combinedQualityScore,
       qualityCheck: exifWithQuality.qualityCheck,
       reviewId,
-      visionReviewId: "reviewId" in visionResult ? visionResult.reviewId : queuedVisionReviewId,
-      visionStatus: uploadType.mediaType === "video" ? "queued" : visionResult.status,
-      visionReason: "reason" in visionResult ? visionResult.reason : null,
+      visionReviewId: queuedVisionReviewId,
+      visionStatus: "queued",
+      visionReason: null,
     },
     { status: 201 },
   )

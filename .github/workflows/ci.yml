@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.13
           cache: pnpm
 
       - name: Install
@@ -59,6 +59,31 @@ jobs:
         run: pnpm --filter @leadshelf/web build
         env:
           JWT_SECRET: ci-only-not-a-secret
+
+      - name: Seed demo and verify readiness
+        run: pnpm --filter @leadshelf/db seed:demo
+
+      - name: Frozen mobile protocol compatibility
+        run: pnpm --filter @leadshelf/web test:protocol
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @leadshelf/web exec playwright install --with-deps chromium
+
+      - name: Responsive execution screenshots
+        run: pnpm --filter @leadshelf/web test:e2e:responsive
+        env:
+          CI: true
+          JWT_SECRET: ci-only-not-a-secret
+
+      - name: Upload responsive regression artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-responsive-regression
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 14
 
   deploy:
     needs: ci

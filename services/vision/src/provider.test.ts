@@ -5,16 +5,20 @@ import {
   type VisionScanRequest,
 } from "@leadshelf/api-contracts/vision/v1"
 import {
+  createConfiguredSkuRecognizer,
   createConfiguredVisionProvider,
   DEFAULT_GEMINI_VISION_MODEL,
   DEFAULT_OPENAI_VISION_MODEL,
+  GeminiSkuRecognizer,
   GeminiVisionProvider,
   GEMINI_PROVIDER,
+  OpenAiSkuRecognizer,
   OpenAiVisionProvider,
   OPENAI_PROVIDER,
   ReferenceSlotStubProvider,
   STUB_MODEL_VERSION,
   STUB_PROVIDER,
+  StubShelfSkuRecognizer,
   type VisionFetch,
   type VisionImageFetch,
 } from "./provider"
@@ -238,7 +242,7 @@ describe("GeminiVisionProvider", () => {
                 content: {
                   parts: [
                     {
-                      text: JSON.stringify({
+                      text: `\`\`\`json\n${JSON.stringify({
                         detections: [
                           {
                             slotId: "slot-a",
@@ -246,11 +250,11 @@ describe("GeminiVisionProvider", () => {
                             productSku: "SKU-A",
                             label: "Product A",
                             confidence: 0.9,
-                            bbox: { xPct: 12, yPct: 22, widthPct: 28, heightPct: 38 },
+                            bbox: { xPct: 0.1, yPct: 0.2, widthPct: 0.3, heightPct: 0.4 },
                           },
                         ],
                         warnings: ["depth_not_confirmed"],
-                      }),
+                      })}\n\`\`\``,
                     },
                   ],
                 },
@@ -279,7 +283,9 @@ describe("GeminiVisionProvider", () => {
     expect(response.modelVersion).toBe(DEFAULT_GEMINI_VISION_MODEL)
     expect(response.status).toBe("completed")
     expect(response.compliance).toMatchObject({ score: 0.9, status: "PASS", matchedSlots: 1 })
+    expect(response.detections[0]?.bbox).toEqual({ xPct: 10, yPct: 20, widthPct: 30, heightPct: 40 })
     expect(response.warnings).toContain("depth_not_confirmed")
+    expect(response.warnings).toContain("bbox_unit_interval_normalized")
   })
 
   it("fails explicitly when there are no reference slots", async () => {
@@ -301,5 +307,160 @@ describe("GeminiVisionProvider", () => {
         GEMINI_VISION_MODEL: "gemini-2.5-pro",
       }).metadata,
     ).toEqual({ provider: GEMINI_PROVIDER, modelVersion: "gemini-2.5-pro" })
+  })
+})
+
+describe("SKU recognizers (two-stage second stage)", () => {
+  const boxes = [
+    { id: "box-1", bbox: { xPct: 0, yPct: 0, widthPct: 20, heightPct: 20 } },
+    { id: "box-2", bbox: { xPct: 30, yPct: 0, widthPct: 20, heightPct: 20 } },
+    { id: "box-3", bbox: { xPct: 60, yPct: 0, widthPct: 20, heightPct: 20 } },
+  ]
+  const catalog = ["SKU-A", "SKU-B"]
+  const dataUrlPhoto = `data:image/jpeg;base64,${Buffer.from("fake").toString("base64")}`
+
+  it("stub возвращает только «не уверен» и не может нарисовать accuracy", async () => {
+    const result = await new StubShelfSkuRecognizer().recognizeDetailed("private://x", boxes, catalog)
+    expect(result.assignments).toEqual(boxes.map((box) => ({ id: box.id, productSku: null, confidence: 0 })))
+    expect(result.warnings).toContain("stub_sku_recognizer_returns_uncertain_only")
+  })
+
+  it("gemini: numbered-boxes промпт, маппинг ответов, анти-галлюцинация и недостающие боксы", async () => {
+    let promptText = ""
+    const fetchImpl: VisionFetch = async (_url, init) => {
+      const body = JSON.parse(init.body) as {
+        contents: Array<{ parts: Array<{ text?: string }> }>
+      }
+      promptText = body.contents[0]!.parts[0]!.text ?? ""
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        assignments: [
+                          { boxId: "box-1", productSku: "SKU-A", confidence: 0.9 },
+                          { boxId: "box-2", productSku: "SKU-HALLUCINATED", confidence: 0.8 },
+                          // box-3 отсутствует в ответе
+                          { boxId: "box-unknown", productSku: "SKU-B", confidence: 0.7 },
+                        ],
+                        warnings: ["label_partially_occluded"],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          })
+        },
+      }
+    }
+
+    const result = await new GeminiSkuRecognizer({ apiKey: "gemini-key", fetchImpl }).recognizeDetailed(
+      dataUrlPhoto,
+      boxes,
+      catalog,
+    )
+
+    // Промпт содержит кандидатов и нумерованные боксы — контекст для аудита.
+    expect(promptText).toContain("candidateSkus")
+    expect(promptText).toContain("SKU-A")
+    expect(promptText).toContain("box-1")
+    expect(result.assignments).toEqual([
+      { id: "box-1", productSku: "SKU-A", confidence: 0.9 },
+      { id: "box-2", productSku: null, confidence: 0 }, // вне candidate-списка
+      { id: "box-3", productSku: null, confidence: 0 }, // не пришёл в ответе
+    ])
+    expect(result.warnings).toContain("label_partially_occluded")
+    expect(result.warnings).toContain("sku_not_in_candidates:box-2:SKU-HALLUCINATED")
+    expect(result.warnings).toContain("box_missing_from_response:box-3")
+    expect(result.warnings).toContain("unknown_box_in_response:box-unknown")
+  })
+
+  it("gemini: пустой productSku означает «не уверен» (null)", async () => {
+    const fetchImpl: VisionFetch = async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      assignments: boxes.map((box) => ({ boxId: box.id, productSku: "", confidence: 0.1 })),
+                      warnings: [],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        })
+      },
+    })
+    const result = await new GeminiSkuRecognizer({ apiKey: "gemini-key", fetchImpl }).recognizeDetailed(
+      dataUrlPhoto,
+      boxes,
+      catalog,
+    )
+    expect(result.assignments.every((row) => row.productSku === null)).toBe(true)
+  })
+
+  it("openai: строгая json_schema и маппинг через output_text", async () => {
+    let requestBody: Record<string, unknown> | null = null
+    const fetchImpl: VisionFetch = async (url, init) => {
+      expect(url).toBe("https://api.openai.com/v1/responses")
+      requestBody = JSON.parse(init.body) as Record<string, unknown>
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            output_text: JSON.stringify({
+              assignments: [
+                { boxId: "box-1", productSku: "SKU-B", confidence: 0.85 },
+                { boxId: "box-2", productSku: "", confidence: 0.2 },
+                { boxId: "box-3", productSku: "SKU-A", confidence: 0.75 },
+              ],
+              warnings: [],
+            }),
+          })
+        },
+      }
+    }
+    const result = await new OpenAiSkuRecognizer({ apiKey: "openai-key", fetchImpl }).recognizeDetailed(
+      dataUrlPhoto,
+      boxes,
+      catalog,
+    )
+    const format = (requestBody as unknown as {
+      text: { format: { type: string; name: string; strict: boolean } }
+    }).text.format
+    expect(format).toMatchObject({ type: "json_schema", name: "leadshelf_sku_recognition", strict: true })
+    expect(result.assignments).toEqual([
+      { id: "box-1", productSku: "SKU-B", confidence: 0.85 },
+      { id: "box-2", productSku: null, confidence: 0.2 },
+      { id: "box-3", productSku: "SKU-A", confidence: 0.75 },
+    ])
+  })
+
+  it("фабрика выбирает recognizer по VISION_PROVIDER", () => {
+    expect(createConfiguredSkuRecognizer({ VISION_PROVIDER: "stub" }).provider).toBe(STUB_PROVIDER)
+    expect(
+      createConfiguredSkuRecognizer({ VISION_PROVIDER: "gemini", GEMINI_API_KEY: "k" }).provider,
+    ).toBe(GEMINI_PROVIDER)
+    expect(
+      createConfiguredSkuRecognizer({ VISION_PROVIDER: "openai", OPENAI_API_KEY: "k" }).provider,
+    ).toBe(OPENAI_PROVIDER)
+    expect(() => createConfiguredSkuRecognizer({ VISION_PROVIDER: "nope" })).toThrow(
+      "Unsupported VISION_PROVIDER",
+    )
   })
 })

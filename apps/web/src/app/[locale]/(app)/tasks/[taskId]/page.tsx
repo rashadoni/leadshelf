@@ -1,22 +1,16 @@
 import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
-import { getTranslations } from "next-intl/server"
+import { getLocale, getTranslations } from "next-intl/server"
 import { getSession } from "@/server/auth/require-session"
 import { tenantDb } from "@/server/db/client"
 import { Link } from "@/i18n/navigation"
 import { AssigneeSelect } from "../assignee-select"
 import { TaskStatusActions } from "../task-status-actions"
 import { CaptureRetakeButton } from "./capture-retake-button"
+import { ProofDecisionActions } from "./proof-decision-actions"
 import { PlanogramThumbnail } from "../../planograms/planogram-thumbnail"
 import { ASSIGNABLE_ROLES } from "@/server/tasks/assignable-roles"
-
-function formatDate(value: Date | null | undefined): string {
-  return value ? value.toLocaleDateString() : "—"
-}
-
-function formatDateTime(value: Date | null | undefined): string {
-  return value ? value.toLocaleString() : "—"
-}
+import { formatLocaleDate, formatLocaleDateTime } from "@/i18n/format"
 
 function score(value: number | null | undefined): string {
   return value == null ? "—" : `${Math.round(value * 100)}%`
@@ -42,20 +36,22 @@ function ProofMedia({
   url,
   mediaType,
   className,
+  alt,
 }: {
   url: string
   mediaType?: "PHOTO" | "VIDEO" | null
   className: string
+  alt: string
 }) {
   const src = `/api/media/${url}`
   if (mediaType === "VIDEO") {
     return (
-      <video className={className} controls muted playsInline preload="metadata">
+      <video aria-label={alt} className={className} controls muted playsInline preload="metadata">
         <source src={src} />
       </video>
     )
   }
-  return <img src={src} alt="" className={className} />
+  return <img src={src} alt={alt} className={className} />
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
@@ -89,13 +85,14 @@ export default async function TaskDetailPage({
 }: {
   params: Promise<{ taskId: string }>
 }) {
-  const [{ taskId }, t, tStores, tReviews, tPlanograms, session] = await Promise.all([
+  const [{ taskId }, t, tStores, tReviews, tPlanograms, session, locale] = await Promise.all([
     params,
     getTranslations("tasks"),
     getTranslations("stores"),
     getTranslations("reviews"),
     getTranslations("planograms"),
     getSession(),
+    getLocale(),
   ])
   if (!session) return null
 
@@ -204,7 +201,24 @@ export default async function TaskDetailPage({
 
   if (!task) notFound()
 
+  const relatedVisit = await db.visit.findFirst({
+    where: {
+      storeId: task.storeId,
+      ...(task.assigneeId ? { agent: { userId: task.assigneeId } } : {}),
+    },
+    orderBy: [{ checkInAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      status: true,
+      checkInAt: true,
+      checkOutAt: true,
+      routeStop: { select: { route: { select: { id: true, name: true } } } },
+      _count: { select: { orders: true } },
+    },
+  })
+
   const pendingReviews = task.humanReviews.filter((review) => review.status === "PENDING").length
+  const primaryPendingReview = task.humanReviews.find((review) => review.status === "PENDING") ?? null
   const latestPhoto = task.photoSubmissions[0]
   const openRetakeStepIds = new Set(task.captureRetakeRequests.map((request) => request.stepId))
 
@@ -227,16 +241,40 @@ export default async function TaskDetailPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AssigneeSelect taskId={task.id} current={task.assigneeId} users={assignableUsers} />
-          <TaskStatusActions taskId={task.id} status={task.status} />
+          {task.status === "PHOTO_SUBMITTED" ? null : <TaskStatusActions taskId={task.id} status={task.status} />}
         </div>
       </div>
 
+      {task.status === "PHOTO_SUBMITTED" ? (
+        <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <h2 className="text-sm font-semibold text-indigo-950">{t("detail.nextAction")}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-indigo-900/75">
+                {primaryPendingReview
+                  ? t("detail.reviewPendingHint")
+                  : latestPhoto?.captureStepId
+                    ? t("detail.automaticReviewHint")
+                    : t("detail.automaticReviewAcceptHint")}
+              </p>
+            </div>
+            <ProofDecisionActions
+              taskId={task.id}
+              reviewId={primaryPendingReview?.id ?? null}
+              stepId={latestPhoto?.captureStepId ?? null}
+              stepKind={latestPhoto?.captureStepKind ?? null}
+              retakeRequested={Boolean(latestPhoto?.captureStepId && openRetakeStepIds.has(latestPhoto.captureStepId))}
+            />
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <Metric label={t("detail.metrics.due")} value={formatDate(task.dueAt)} />
+        <Metric label={t("detail.metrics.due")} value={formatLocaleDate(task.dueAt, locale)} />
         <Metric label={t("detail.metrics.assignee")} value={task.assignee?.name ?? t("unassigned")} />
         <Metric label={t("detail.metrics.photos")} value={task.photoSubmissions.length} />
         <Metric label={t("detail.metrics.pendingReviews")} value={pendingReviews} />
-        <Metric label={t("detail.metrics.latestPhoto")} value={latestPhoto ? formatDate(latestPhoto.takenAt) : "—"} />
+        <Metric label={t("detail.metrics.latestPhoto")} value={latestPhoto ? formatLocaleDate(latestPhoto.takenAt, locale) : "—"} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -253,6 +291,7 @@ export default async function TaskDetailPage({
                         url={photo.url}
                         mediaType={photo.mediaType}
                         className="h-48 w-full bg-neutral-100 object-cover"
+                        alt={t("detail.proofAlt", { task: task.title })}
                       />
                     ) : (
                       <a href={`/api/media/${photo.url}`} target="_blank" rel="noreferrer">
@@ -260,12 +299,13 @@ export default async function TaskDetailPage({
                           url={photo.url}
                           mediaType={photo.mediaType}
                           className="h-48 w-full bg-neutral-100 object-cover"
+                          alt={t("detail.proofAlt", { task: task.title })}
                         />
                       </a>
                     )}
                     <div className="space-y-2 p-3 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{formatDateTime(photo.takenAt)}</span>
+                        <span className="font-medium">{formatLocaleDateTime(photo.takenAt, locale)}</span>
                         <span className="text-neutral-500">{score(photo.qualityScore)}</span>
                       </div>
                       <div className="text-xs text-neutral-500">
@@ -280,7 +320,9 @@ export default async function TaskDetailPage({
                         ) : null}
                         {photo.humanReviews.length === 0 ? (
                           <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
-                            {t("detail.noReview")}
+                            {task.status === "PHOTO_SUBMITTED" && photo.id === latestPhoto?.id
+                              ? t("detail.automaticReview")
+                              : t("detail.noReview")}
                           </span>
                         ) : (
                           photo.humanReviews.map((review) => (
@@ -293,7 +335,7 @@ export default async function TaskDetailPage({
                           ))
                         )}
                       </div>
-                      {photo.captureStepId ? (
+                      {photo.captureStepId && !(task.status === "PHOTO_SUBMITTED" && photo.id === latestPhoto?.id) ? (
                         <div className="flex items-center justify-end">
                           <CaptureRetakeButton
                             taskId={task.id}
@@ -317,7 +359,7 @@ export default async function TaskDetailPage({
                   <div key={request.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium text-neutral-800">{request.stepId}</span>
-                      <span className="text-xs text-neutral-500">{formatDateTime(request.requestedAt)}</span>
+                      <span className="text-xs text-neutral-500">{formatLocaleDateTime(request.requestedAt, locale)}</span>
                     </div>
                     {request.note ? <div className="mt-1 text-neutral-600">{request.note}</div> : null}
                   </div>
@@ -335,7 +377,7 @@ export default async function TaskDetailPage({
                       <span className="font-medium text-amber-900">
                         {exception.stepId} · {t(`detail.captureExceptionReason.${exception.reason}` as never)}
                       </span>
-                      <span className="text-xs text-amber-700">{formatDateTime(exception.createdAt)}</span>
+                      <span className="text-xs text-amber-700">{formatLocaleDateTime(exception.createdAt, locale)}</span>
                     </div>
                     {exception.note ? <div className="mt-1 text-amber-800">{exception.note}</div> : null}
                     <div className="mt-1 text-xs text-amber-700">{exception.user.name}</div>
@@ -352,7 +394,7 @@ export default async function TaskDetailPage({
               <div className="divide-y divide-neutral-100">
                 {task.statusHistory.map((item) => (
                   <div key={`${item.toStatus}-${item.createdAt.toISOString()}`} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                    <span className="text-neutral-500">{formatDateTime(item.createdAt)}</span>
+                    <span className="text-neutral-500">{formatLocaleDateTime(item.createdAt, locale)}</span>
                     <span>
                       {item.fromStatus ? t(`status.${item.fromStatus}` as never) : "—"} →{" "}
                       <span className="font-medium">{t(`status.${item.toStatus}` as never)}</span>
@@ -372,7 +414,7 @@ export default async function TaskDetailPage({
                   <div key={`${comment.user.name}-${comment.createdAt.toISOString()}`} className="rounded-lg bg-neutral-50 p-3">
                     <div className="text-sm text-neutral-800">{comment.body}</div>
                     <div className="mt-1 text-xs text-neutral-500">
-                      {comment.user.name} · {formatDateTime(comment.createdAt)}
+                      {comment.user.name} · {formatLocaleDateTime(comment.createdAt, locale)}
                     </div>
                   </div>
                 ))}
@@ -394,8 +436,45 @@ export default async function TaskDetailPage({
               <div className="text-xs text-neutral-500">
                 {[task.store.format?.name, task.store.region?.name].filter(Boolean).join(" · ") || "—"}
               </div>
+              <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-3 text-xs font-medium">
+                <Link
+                  href={`/tasks?storeId=${encodeURIComponent(task.store.id)}`}
+                  className="text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  {t("detail.viewStoreTasks")}
+                </Link>
+                <Link
+                  href={`/orders?storeId=${encodeURIComponent(task.store.id)}${relatedVisit ? `&visitId=${encodeURIComponent(relatedVisit.id)}` : ""}`}
+                  className="text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  {t("detail.viewStoreOrders")}
+                </Link>
+              </div>
             </div>
           </Panel>
+
+          {relatedVisit ? (
+            <Panel title={t("detail.executionContext")}>
+              <div className="space-y-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusClass(relatedVisit.status)}`}>
+                    {t(`detail.visitStatus.${relatedVisit.status}` as never)}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    {t("detail.relatedOrders", { count: relatedVisit._count.orders })}
+                  </span>
+                </div>
+                {relatedVisit.routeStop?.route ? (
+                  <Link
+                    href={`/field-force?view=routes&routeId=${encodeURIComponent(relatedVisit.routeStop.route.id)}`}
+                    className="block font-medium text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                  >
+                    {t("detail.openRoute")} · {relatedVisit.routeStop.route.name}
+                  </Link>
+                ) : null}
+              </div>
+            </Panel>
+          ) : null}
 
           <Panel title={t("table.planogram")}>
             {task.planogramVersion ? (
@@ -416,7 +495,7 @@ export default async function TaskDetailPage({
                   <Metric label={t("detail.metrics.equipment")} value={task.planogramVersion._count.equipment} />
                 </div>
                 <div className="text-xs text-neutral-500">
-                  {tPlanograms(`state.${task.planogramVersion.state}` as never)} · {formatDate(task.planogramVersion.publishedAt)}
+                  {tPlanograms(`state.${task.planogramVersion.state}` as never)} · {formatLocaleDate(task.planogramVersion.publishedAt, locale)}
                 </div>
               </div>
             ) : (
@@ -426,7 +505,13 @@ export default async function TaskDetailPage({
 
           <Panel title={t("detail.reviews")}>
             {task.humanReviews.length === 0 ? (
-              <div className="text-sm text-neutral-500">{t("detail.noReview")}</div>
+              <div className="text-sm text-neutral-500">
+                {task.status === "PHOTO_SUBMITTED"
+                  ? latestPhoto?.captureStepId
+                    ? t("detail.automaticReviewHint")
+                    : t("detail.automaticReviewAcceptHint")
+                  : t("detail.noReview")}
+              </div>
             ) : (
               <div className="space-y-2 text-sm">
                 {task.humanReviews.map((review) => (
@@ -440,7 +525,7 @@ export default async function TaskDetailPage({
                     </div>
                     {review.note ? <div className="mt-1 text-xs text-neutral-600">{review.note}</div> : null}
                     <div className="mt-1 text-xs text-neutral-400">
-                      {formatDateTime(review.reviewedAt ?? review.updatedAt)}
+                      {formatLocaleDateTime(review.reviewedAt ?? review.updatedAt, locale)}
                     </div>
                   </div>
                 ))}
