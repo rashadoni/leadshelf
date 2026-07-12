@@ -166,6 +166,11 @@ const E2E_ROUTE_PREFIXES = ["Codex smoke", "UI E2E"] as const
 const E2E_TASK_ID_PREFIXES = ["task-mob-e2e"] as const
 const E2E_TASK_TITLE_MARKERS = ["мобильный тест", "UI E2E"] as const
 
+// Детерминированная свежая photo-proof задача для Android offline smoke
+// (docs/31). Отдельный title от showcase "Выполнить выкладку OTC-зоны", чтобы
+// не задеть readiness-счётчик showcase и не попасть под E2E-очистку.
+const FRESH_PROOF_TASK_TITLE = "Свежая выкладка OTC — фотоотчёт"
+
 function startOfToday(offsetDays = 0) {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
@@ -1106,6 +1111,127 @@ async function ensureAssignmentTaskAndProof(input: {
   return { assignment, task, photo, review, goldenReference }
 }
 
+// Свежая непросроченная photo-proof задача для полного зелёного Android smoke
+// (docs/31). Frozen server policy переводит photo.submit в PHOTO_SUBMITTED
+// только из IN_PROGRESS, поэтому showcase-задача (PHOTO_SUBMITTED) даёт
+// already_applied/conflict. Эта задача — M-001, сегодняшний маршрут (store
+// DEMO-001 уже стоит в "Mars Nizami pharmacy execution", offsetDays 0),
+// IN_PROGRESS, dueAt в будущем (expireOverdueTasks её не трогает).
+// Переиспользует ту же опубликованную OTC-версию/assignment/store, что и
+// showcase, поэтому pull отдаёт captureTemplate (rack) + planogram bundle.
+// Идемпотентна: повторный seed сбрасывает задачу в чистый IN_PROGRESS и
+// удаляет фото/анализ прошлого прогона строго по task.id — showcase
+// (demo-proof-001) не затрагивается.
+async function ensureFreshProofTask(input: {
+  organizationId: string
+  storeId: string
+  planogramVersionId: string
+  assignmentId: string
+  mobileUserId: string
+}) {
+  const candidates = await prisma.task.findMany({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      title: FRESH_PROOF_TASK_TITLE,
+    },
+    orderBy: { createdAt: "asc" },
+  })
+  // Схлопнуть возможные дубли прошлых прогонов до одной задачи.
+  const kept = candidates[0]
+  if (candidates.length > 1) {
+    await deleteDemoTasks(
+      input.organizationId,
+      candidates.slice(1).map((candidate) => candidate.id),
+    )
+  }
+
+  const dueAt = startOfToday(2)
+  const task = kept
+    ? await prisma.task.update({
+        where: { id: kept.id },
+        data: {
+          storeId: input.storeId,
+          planogramVersionId: input.planogramVersionId,
+          assignmentId: input.assignmentId,
+          assigneeId: input.mobileUserId,
+          status: "IN_PROGRESS",
+          dueAt,
+          completedAt: null,
+        },
+      })
+    : await prisma.task.create({
+        data: {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          planogramVersionId: input.planogramVersionId,
+          assignmentId: input.assignmentId,
+          assigneeId: input.mobileUserId,
+          title: FRESH_PROOF_TASK_TITLE,
+          description:
+            "Снять guided-фотоотчёт по опубликованной планограмме OTC-зоны и отправить с телефона.",
+          status: "IN_PROGRESS",
+          dueAt,
+        },
+      })
+
+  // Reset-on-reseed: очистить фото/анализ/ревью/исключения прошлого smoke,
+  // чтобы следующий прогон стартовал с пустой IN_PROGRESS задачи. Порядок
+  // FK-safe (как deleteDemoTasks): human_reviews -> null golden_reference ->
+  // photo_submissions (каскадит shelf_analysis_runs + metric snapshots).
+  // capture_* и task_status_history задача переживает, поэтому чистим явно.
+  const priorPhotos = await prisma.photoSubmission.findMany({
+    where: { organizationId: input.organizationId, taskId: task.id },
+    select: { id: true },
+  })
+  const priorPhotoIds = priorPhotos.map((photo) => photo.id)
+  await prisma.humanReview.deleteMany({
+    where: {
+      organizationId: input.organizationId,
+      OR: [
+        { taskId: task.id },
+        ...(priorPhotoIds.length ? [{ photoSubmissionId: { in: priorPhotoIds } }] : []),
+      ],
+    },
+  })
+  if (priorPhotoIds.length) {
+    await prisma.goldenReference.updateMany({
+      where: { organizationId: input.organizationId, photoSubmissionId: { in: priorPhotoIds } },
+      data: { photoSubmissionId: null },
+    })
+    await prisma.photoSubmission.deleteMany({
+      where: { organizationId: input.organizationId, id: { in: priorPhotoIds } },
+    })
+  }
+  await prisma.captureStepException.deleteMany({
+    where: { organizationId: input.organizationId, taskId: task.id },
+  })
+  await prisma.captureRetakeRequest.deleteMany({
+    where: { organizationId: input.organizationId, taskId: task.id },
+  })
+  await prisma.taskStatusHistory.deleteMany({ where: { taskId: task.id } })
+  const historyBase = startOfToday(0)
+  await prisma.taskStatusHistory.createMany({
+    data: [
+      {
+        taskId: task.id,
+        fromStatus: null,
+        toStatus: "NEW",
+        createdAt: new Date(historyBase.getTime() + 8 * 60 * 60 * 1000),
+      },
+      {
+        taskId: task.id,
+        fromStatus: "NEW",
+        toStatus: "IN_PROGRESS",
+        byUserId: input.mobileUserId,
+        createdAt: new Date(historyBase.getTime() + 8 * 60 * 60 * 1000 + 5 * 60 * 1000),
+      },
+    ],
+  })
+
+  return { task }
+}
+
 async function ensureRouteRegion(organizationId: string, name: string) {
   const existing = await prisma.region.findFirst({ where: { organizationId, name } })
   if (existing) return existing
@@ -1544,6 +1670,13 @@ async function main() {
     planogramVersionId: planogramVersion.id,
     mobileUserId: mobileUser.id,
   })
+  await ensureFreshProofTask({
+    organizationId: org.id,
+    storeId: store.id,
+    planogramVersionId: planogramVersion.id,
+    assignmentId: proof.assignment.id,
+    mobileUserId: mobileUser.id,
+  })
   await ensureFieldForceScenario({
     organizationId: org.id,
     formatId: format.id,
@@ -1567,12 +1700,21 @@ async function main() {
 
   // Readiness-check через tenant client: зелёный статус печатается только
   // после проверки целостности customer-facing demo baseline.
-  const [stores, productsCount, floorPlans, planograms, tasks, reviews, agents, routes, visits, sales, stocks, prices, e2eRoutes, e2eTasks] = await Promise.all([
+  const [stores, productsCount, floorPlans, planograms, tasks, freshProofTasks, reviews, agents, routes, visits, sales, stocks, prices, e2eRoutes, e2eTasks] = await Promise.all([
     db.store.count({ where: { code: "DEMO-001", isActive: true } }),
     db.product.count({ where: { isActive: true } }),
     db.floorPlan.count(),
     db.planogram.count(),
     db.task.count({ where: { title: "Выполнить выкладку OTC-зоны", status: "PHOTO_SUBMITTED" } }),
+    db.task.count({
+      where: {
+        title: FRESH_PROOF_TASK_TITLE,
+        status: "IN_PROGRESS",
+        assigneeId: mobileUser.id,
+        dueAt: { gt: new Date() },
+        planogramVersionId: planogramVersion.id,
+      },
+    }),
     db.humanReview.count({ where: { status: "PENDING" } }),
     db.fieldAgent.count(),
     db.route.count({ where: { isActive: true } }),
@@ -1596,6 +1738,7 @@ async function main() {
     floorPlans,
     planograms,
     tasks,
+    freshProofTasks,
     reviews,
     agents,
     routes,
@@ -1606,7 +1749,7 @@ async function main() {
     e2eRoutes,
     e2eTasks,
   }
-  const ready = stores === 1 && productsCount >= 6 && floorPlans > 0 && planograms > 0 && tasks === 1 && reviews >= 2 && agents >= 5 && routes >= 5 && visits > 0 && sales > 0 && stocks > 0 && prices > 0 && e2eRoutes === 0 && e2eTasks === 0
+  const ready = stores === 1 && productsCount >= 6 && floorPlans > 0 && planograms > 0 && tasks === 1 && freshProofTasks === 1 && reviews >= 2 && agents >= 5 && routes >= 5 && visits > 0 && sales > 0 && stocks > 0 && prices > 0 && e2eRoutes === 0 && e2eTasks === 0
   if (!ready) throw new Error(`Demo readiness-check failed: ${JSON.stringify(readiness)}`)
 
   console.log(`Удалены e2e artifacts: routes=${cleanup.routes}, tasks=${cleanup.tasks}`)

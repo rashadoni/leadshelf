@@ -94,3 +94,31 @@ server status `EXPIRED`. Frozen server policy переводит фото в
 видимым conflict, хотя файл и comparison result сохранены. Sync-протокол и
 API-контракты не менялись; для полностью зелёного повторения нужен свежий
 непросроченный task.
+
+### Свежая photo-proof задача для зелёного smoke — 12 июля 2026
+
+Чтобы закрыть предыдущее ограничение (`EXPIRED` -> conflict), demo seed теперь
+детерминированно создаёт свежую задачу `Свежая выкладка OTC — фотоотчёт`
+(`ensureFreshProofTask` в `packages/db/prisma/seed-demo.ts`):
+
+- назначена M-001; store `DEMO-001` уже стоит в сегодняшнем маршруте
+  `Mars Nizami pharmacy execution`;
+- статус `IN_PROGRESS`, `dueAt` в будущем (`expireOverdueTasks` её не трогает);
+- переиспользует опубликованную OTC-версию/assignment, поэтому sync pull отдаёт
+  `captureTemplate` (rack, 4 шага) + planogram bundle;
+- идемпотентна: повторный `seed:demo` сбрасывает её в чистый `IN_PROGRESS` и
+  удаляет фото/анализ прошлого прогона строго по `task.id`, не трогая
+  customer-facing showcase `Выполнить выкладку OTC-зоны` (остаётся
+  `PHOTO_SUBMITTED`). Readiness-check требует ровно одну такую задачу.
+
+Серверный/протокольный зелёный путь на этой фикстуре покрыт регрессией
+`packages/db/src/__tests__/mobile-photo-proof.test.ts`: pull резолвит
+`captureTemplate` + bundle, `photo.submit` из `IN_PROGRESS` -> `applied`
+(не conflict/rejected) -> `PHOTO_SUBMITTED`, повтор `clientOpId` ->
+`already_applied` без дубля фото.
+
+Остаётся выполнить реальный on-device прогон (`maestro` / ручной цикл выше)
+против этой свежей задачи и подтвердить device-observable критерии
+(`pendingOps=0`, `pendingPhotos=0`, `rejectedOps=0`, `conflictOps=0`, видимый
+SyncBar, тёмные поверхности камеры/viewer без изменений). Он требует
+эмулятора/устройства с ADB и в headless-агенте не запускался.
