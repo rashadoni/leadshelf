@@ -63,6 +63,11 @@ export interface VisionEvalMetrics {
   expectedCalibrationError: number
 }
 
+export interface VisionEvalDatasetSample {
+  expected: Array<Omit<EvalDetection, "confidence">>
+  actual: EvalDetection[]
+}
+
 function intersectionOverUnion(a: EvalDetection["bbox"], b: EvalDetection["bbox"]): number {
   const left = Math.max(a.xPct, b.xPct)
   const top = Math.max(a.yPct, b.yPct)
@@ -92,11 +97,11 @@ function calibrationError(rows: Array<{ confidence: number; correct: boolean }>)
  * Greedy one-to-one localization matching keeps localization and SKU quality
  * separate. Threshold calibration must happen on the calibration split only.
  */
-export function evaluateVisionDetections(
+function evaluateVisionDetectionDetails(
   expected: Array<Omit<EvalDetection, "confidence">>,
   actual: EvalDetection[],
   iouThreshold = 0.5,
-): VisionEvalMetrics {
+): { metrics: VisionEvalMetrics; calibrationRows: Array<{ confidence: number; correct: boolean }> } {
   const candidates = expected.flatMap((target, expectedIndex) =>
     actual.map((detection, actualIndex) => ({
       expectedIndex,
@@ -125,15 +130,59 @@ export function evaluateVisionDetections(
   })
   const ratio = (numerator: number, denominator: number) => denominator === 0 ? 0 : numerator / denominator
   return {
-    expected: expected.length,
-    detected: actual.length,
-    localized: matches.length,
-    skuCorrect,
-    localizationPrecision: ratio(matches.length, actual.length),
-    localizationRecall: ratio(matches.length, expected.length),
-    skuAccuracyOnLocalized: ratio(skuCorrect, matches.length),
-    endToEndRecall: ratio(skuCorrect, expected.length),
-    meanIou: ratio(matches.reduce((sum, match) => sum + match.iou, 0), matches.length),
+    metrics: {
+      expected: expected.length,
+      detected: actual.length,
+      localized: matches.length,
+      skuCorrect,
+      localizationPrecision: ratio(matches.length, actual.length),
+      localizationRecall: ratio(matches.length, expected.length),
+      skuAccuracyOnLocalized: ratio(skuCorrect, matches.length),
+      endToEndRecall: ratio(skuCorrect, expected.length),
+      meanIou: ratio(matches.reduce((sum, match) => sum + match.iou, 0), matches.length),
+      expectedCalibrationError: calibrationError(calibrationRows),
+    },
+    calibrationRows,
+  }
+}
+
+export function evaluateVisionDetections(
+  expected: Array<Omit<EvalDetection, "confidence">>,
+  actual: EvalDetection[],
+  iouThreshold = 0.5,
+): VisionEvalMetrics {
+  return evaluateVisionDetectionDetails(expected, actual, iouThreshold).metrics
+}
+
+export function evaluateVisionDataset(
+  samples: VisionEvalDatasetSample[],
+  iouThreshold = 0.5,
+): VisionEvalMetrics {
+  const details = samples.map((sample) =>
+    evaluateVisionDetectionDetails(sample.expected, sample.actual, iouThreshold),
+  )
+  const totals = details.reduce(
+    (result, detail) => ({
+      expected: result.expected + detail.metrics.expected,
+      detected: result.detected + detail.metrics.detected,
+      localized: result.localized + detail.metrics.localized,
+      skuCorrect: result.skuCorrect + detail.metrics.skuCorrect,
+      iouSum: result.iouSum + detail.metrics.meanIou * detail.metrics.localized,
+    }),
+    { expected: 0, detected: 0, localized: 0, skuCorrect: 0, iouSum: 0 },
+  )
+  const calibrationRows = details.flatMap((detail) => detail.calibrationRows)
+  const ratio = (numerator: number, denominator: number) => denominator === 0 ? 0 : numerator / denominator
+  return {
+    expected: totals.expected,
+    detected: totals.detected,
+    localized: totals.localized,
+    skuCorrect: totals.skuCorrect,
+    localizationPrecision: ratio(totals.localized, totals.detected),
+    localizationRecall: ratio(totals.localized, totals.expected),
+    skuAccuracyOnLocalized: ratio(totals.skuCorrect, totals.localized),
+    endToEndRecall: ratio(totals.skuCorrect, totals.expected),
+    meanIou: ratio(totals.iouSum, totals.localized),
     expectedCalibrationError: calibrationError(calibrationRows),
   }
 }

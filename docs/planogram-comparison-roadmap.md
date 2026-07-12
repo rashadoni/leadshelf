@@ -174,16 +174,17 @@ Gate: аналитика не читает произвольный legacy JSON 
 - [x] Создать versioned eval manifest schema без приватных фото в git.
 - [x] Зафиксировать отдельные `ShelfLocalizer` и `ShelfSkuRecognizer` интерфейсы и two-stage pipeline.
 - [x] Добавить deterministic golden comparison path через общий engine.
-- [ ] Калибровать thresholds только на реальном LeadShelf eval data (датасет пока отсутствует).
+- [ ] Калибровать thresholds только на реальном LeadShelf eval data; приватный calibration pilot собран, внешний inference-run ещё требует явного privacy-разрешения.
 - [x] Добавить воспроизводимые localization/SKU/calibration metrics и provider/model/cost/latency telemetry.
 - [x] Не заявлять подтверждённую accuracy без реальных размеченных фото.
 
 Gate: provider выбирается по воспроизводимому eval, а не по названию модели.
 
-Реальный размеченный LeadShelf photo dataset отсутствует. Поэтому accuracy,
-threshold calibration и выбор production provider/model не считаются
-подтверждёнными; это единственный продуктовый input, который нельзя честно
-сгенерировать кодом.
+Приватный размеченный calibration pilot теперь содержит шесть реальных фото:
+golden, missing SKU, wrong position, perspective, extra facing и rotated label.
+Фото и отчёты не хранятся в Git. Validation/test split пока отсутствуют, а
+внешний provider-run не выполнен без отдельного разрешения на передачу фото.
+Поэтому accuracy и выбор production provider/model ещё не подтверждены.
 
 ## Фаза 9 — Поздние возможности
 
