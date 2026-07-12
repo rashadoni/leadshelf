@@ -152,6 +152,7 @@ export interface CompareShelfInput {
 interface NormalizedDetection extends ShelfVisualDetection {
   productKey: string | null
   targetPlacementId: string | null
+  candidatePlacementIds: string[]
   usable: boolean
   consumed: boolean
 }
@@ -313,6 +314,7 @@ function normalizeDetections(
       bbox,
       source: detection.source ?? "ai",
       productKey: detectionProductKey(detection),
+      candidatePlacementIds: [],
       usable: detection.source === "manual" || confidence >= minConfidence,
       consumed: false,
     }
@@ -462,6 +464,21 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
     const matchingExpected = expected.find((placement) => productsMatch(placement, detection))
     if (matchingExpected) detection.productKey = expectedProductKey(matchingExpected)
   }
+  for (const detection of detections) {
+    if (detection.targetPlacementId || !detection.usable) continue
+    const candidates = expected.filter(
+      (placement) =>
+        productsMatch(placement, detection) &&
+        (detection.shelfId == null || placement.shelfId === detection.shelfId),
+    )
+    detection.candidatePlacementIds = candidates.map((placement) => placement.placementId)
+    if (candidates.length === 1) {
+      detection.targetPlacementId = candidates[0]!.placementId
+      detection.placementId = candidates[0]!.placementId
+    } else if (candidates.length > 1) {
+      warnings.push(`ambiguous_placement:${detection.detectionId}`)
+    }
+  }
 
   const placementResults: ShelfPlacementComparison[] = []
   for (const placement of expected) {
@@ -470,45 +487,27 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
     for (const detection of correctTargeted) detection.consumed = true
     const wrongTargeted = targeted.filter((detection) => detection.usable && !productsMatch(placement, detection))
     for (const detection of wrongTargeted) detection.consumed = true
-    const uncertainTargeted = targeted.filter((detection) => !detection.usable)
+    const ambiguousCandidates = detections.filter(
+      (detection) =>
+        !detection.targetPlacementId &&
+        detection.candidatePlacementIds.includes(placement.placementId),
+    )
+    const uncertainTargeted = [
+      ...targeted.filter((detection) => !detection.usable),
+      ...(correctTargeted.length === 0 && wrongTargeted.length === 0 ? ambiguousCandidates : []),
+    ]
 
-    let assigned = correctTargeted
-    let wrongPosition = false
-    if (assigned.length === 0 && wrongTargeted.length === 0) {
-      const sameShelf = detections.filter(
+    const assigned = correctTargeted
+    const wrongPosition =
+      assigned.length === 0 &&
+      wrongTargeted.length === 0 &&
+      detections.some(
         (detection) =>
-          !detection.consumed &&
           detection.usable &&
-          !detection.targetPlacementId &&
-          detection.shelfId === placement.shelfId &&
-          productsMatch(placement, detection),
+          productsMatch(placement, detection) &&
+          ((detection.targetPlacementId && detection.targetPlacementId !== placement.placementId) ||
+            (detection.shelfId != null && detection.shelfId !== placement.shelfId)),
       )
-      if (sameShelf.length > 0) {
-        assigned = sameShelf
-        for (const detection of assigned) detection.consumed = true
-      } else {
-        const withoutPosition = detections.filter(
-          (detection) =>
-            !detection.consumed &&
-            detection.usable &&
-            !detection.targetPlacementId &&
-            detection.shelfId == null &&
-            productsMatch(placement, detection),
-        )
-        if (withoutPosition.length > 0) {
-          assigned = withoutPosition
-          for (const detection of assigned) detection.consumed = true
-        } else {
-          wrongPosition = detections.some(
-            (detection) =>
-              detection.usable &&
-              productsMatch(placement, detection) &&
-              ((detection.targetPlacementId && detection.targetPlacementId !== placement.placementId) ||
-                (detection.shelfId != null && detection.shelfId !== placement.shelfId)),
-          )
-        }
-      }
-    }
 
     const actualFacings = assigned.reduce((sum, detection) => sum + detection.facings, 0)
     const confidence = average([...assigned, ...wrongTargeted, ...uncertainTargeted].map((detection) => detection.confidence))
@@ -587,14 +586,18 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
   let status: ShelfComparisonStatus
   if (!analysisAvailable || structuralScore == null) {
     status = "UNAVAILABLE"
-  } else if (warnings.some((warning) => warning.startsWith("low_confidence:") || warning.startsWith("invalid_bbox:"))) {
-    status = "REVIEW"
   } else if (
-    placementResults.some((placement) => placement.outcome === "missing") &&
-    structuralScore >= passScore
+    warnings.some(
+      (warning) =>
+        warning.startsWith("low_confidence:") ||
+        warning.startsWith("invalid_bbox:") ||
+        warning.startsWith("ambiguous_placement:"),
+    )
   ) {
+    status = "REVIEW"
+  } else if (actions.length > 0 && structuralScore >= passScore) {
     // Keep the numeric compliance score independent from the workflow status:
-    // an actionable missing SKU must not be presented as a clean pass.
+    // an actionable discrepancy must not be presented as a clean pass.
     status = "REVIEW"
   } else if (structuralScore >= passScore) {
     status = "PASS"
@@ -611,8 +614,26 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
     visualConfidence,
     strictCompliance,
     placements: finalPlacements,
-    detections: detections.map(({ productKey: _productKey, targetPlacementId: _target, usable: _usable, consumed: _consumed, ...detection }) => detection),
-    extras: extras.map(({ productKey: _productKey, targetPlacementId: _target, usable: _usable, consumed: _consumed, ...detection }) => detection),
+    detections: detections.map(
+      ({
+        productKey: _productKey,
+        targetPlacementId: _target,
+        candidatePlacementIds: _candidates,
+        usable: _usable,
+        consumed: _consumed,
+        ...detection
+      }) => detection,
+    ),
+    extras: extras.map(
+      ({
+        productKey: _productKey,
+        targetPlacementId: _target,
+        candidatePlacementIds: _candidates,
+        usable: _usable,
+        consumed: _consumed,
+        ...detection
+      }) => detection,
+    ),
     actions,
     metrics: {
       lenientCompliance: analysisAvailable ? compliance.lenient : null,

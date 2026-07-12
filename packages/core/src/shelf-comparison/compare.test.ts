@@ -85,6 +85,51 @@ describe("shelf comparison", () => {
     expect(result.actions[0]).toMatchObject({ type: "remove_facings", amount: 1 })
   })
 
+  it("attaches an extra front detection to its unique shelf placement", () => {
+    const result = compareShelf({
+      expected: [placement({ expectedFacings: 1 })],
+      detections: [
+        detection({ detectionId: "detection-planned", facings: 1 }),
+        detection({
+          detectionId: "detection-extra-front",
+          placementId: null,
+          shelfId: "shelf-1",
+          facings: 1,
+        }),
+      ],
+    })
+
+    expect(result.structuralScore).toBe(100)
+    expect(result.status).toBe("REVIEW")
+    expect(result.placements[0]).toMatchObject({ outcome: "facing_mismatch", actualFacings: 2 })
+    expect(result.actions).toEqual([
+      expect.objectContaining({ type: "remove_facings", productSku: "SKU-A", amount: 1 }),
+    ])
+    expect(result.extras).toEqual([])
+  })
+
+  it("keeps an extra detection unresolved when the same SKU has multiple shelf placements", () => {
+    const expected = [
+      placement({ placementId: "placement-a", expectedFacings: 1, sortOrder: 1 }),
+      placement({ placementId: "placement-b", expectedFacings: 1, sortOrder: 2 }),
+    ]
+    const result = compareShelf({
+      expected,
+      detections: [
+        detection({ detectionId: "detection-a", placementId: "placement-a", facings: 1 }),
+        detection({ detectionId: "detection-b", placementId: "placement-b", facings: 1 }),
+        detection({ detectionId: "detection-ambiguous", placementId: null, facings: 1 }),
+      ],
+    })
+
+    expect(result.status).toBe("REVIEW")
+    expect(result.placements.map((item) => item.outcome)).toEqual(["matched", "matched"])
+    expect(result.extras).toEqual([
+      expect.objectContaining({ detectionId: "detection-ambiguous", productSku: "SKU-A" }),
+    ])
+    expect(result.warnings).toContain("ambiguous_placement:detection-ambiguous")
+  })
+
   it("marks a product detected in an explicitly targeted foreign slot as wrong", () => {
     const result = compareShelf({
       expected: [placement()],

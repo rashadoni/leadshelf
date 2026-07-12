@@ -1048,7 +1048,7 @@
       "actions": {
         "restock": "Məhsulu rəfə qoyun",
         "add_facings": "Feysinq əlavə edin",
-        "remove_facings": "Artıq feysinqi çıxarın",
+        "remove_facings": "Ön feysinq sayını azaldın",
         "move": "Məhsulu düzgün yerə keçirin",
         "manual_review": "Əl ilə yoxlayın"
       },
