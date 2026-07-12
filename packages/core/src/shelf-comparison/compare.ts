@@ -352,7 +352,9 @@ function buildProductAggregates(
 }
 
 function calculateCompliance(placements: ShelfPlacementComparison[]): { lenient: number | null; strict: number | null } {
-  if (placements.length === 0) return { lenient: null, strict: null }
+  if (placements.length === 0 || placements.some((placement) => placement.outcome === "unavailable")) {
+    return { lenient: null, strict: null }
+  }
   const lenient = placements.reduce(
     (sum, placement) =>
       sum +
@@ -533,8 +535,8 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
       productName: placement.productName,
       brand: placement.brand,
       expectedFacings: placement.expectedFacings,
-      actualFacings,
-      outcome,
+      actualFacings: uncertain ? null : actualFacings,
+      outcome: uncertain ? "unavailable" : outcome,
       confidence,
       detectionIds,
       action: actionForPlacement(placement, outcome, actualFacings, uncertain),
@@ -546,8 +548,17 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
   const compliance = calculateCompliance(placementResults)
   const shareOfShelf = shelfShare(detections)
   const brands = brandShare(detections, products, input.competitorBucketLabel ?? "Competitor / Other")
+  const uncertainProductKeys = new Set(
+    placementResults
+      .filter((placement) => placement.outcome === "unavailable")
+      .map((placement) => expectedProductKey(placement)),
+  )
   const oos = products
-    .filter((product) => product.actualFacings < product.expectedFacings)
+    .filter(
+      (product) =>
+        !uncertainProductKeys.has(product.key) &&
+        product.actualFacings < product.expectedFacings,
+    )
     .map((product) => ({
       productId: product.productId,
       productSku: product.productSku,
@@ -557,6 +568,7 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
       deficit: product.expectedFacings - product.actualFacings,
     }))
   const structuralScore = strictCompliance ? compliance.strict : compliance.lenient
+  const hasUncertainPlacements = placementResults.some((placement) => placement.outcome === "unavailable")
   const visualConfidence = average(detections.filter((detection) => detection.bbox).map((detection) => detection.confidence))
   const analysisAvailable = input.analysisAvailable ?? true
   const finalPlacements = analysisAvailable
@@ -584,7 +596,7 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
   warnings.sort()
 
   let status: ShelfComparisonStatus
-  if (!analysisAvailable || structuralScore == null) {
+  if (!analysisAvailable) {
     status = "UNAVAILABLE"
   } else if (
     warnings.some(
@@ -595,6 +607,8 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
     )
   ) {
     status = "REVIEW"
+  } else if (structuralScore == null) {
+    status = "UNAVAILABLE"
   } else if (actions.length > 0 && structuralScore >= passScore) {
     // Keep the numeric compliance score independent from the workflow status:
     // an actionable discrepancy must not be presented as a clean pass.
@@ -639,7 +653,7 @@ export function compareShelf(input: CompareShelfInput): ShelfComparisonResult {
       lenientCompliance: analysisAvailable ? compliance.lenient : null,
       strictCompliance: analysisAvailable ? compliance.strict : null,
       expectedFacings: products.reduce((sum, product) => sum + product.expectedFacings, 0),
-      actualFacings: analysisAvailable
+      actualFacings: analysisAvailable && !hasUncertainPlacements
         ? detections.filter((detection) => detection.usable).reduce((sum, detection) => sum + detection.facings, 0)
         : null,
       oos: analysisAvailable ? oos : [],

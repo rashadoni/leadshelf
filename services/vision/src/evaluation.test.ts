@@ -27,7 +27,7 @@ describe("vision evaluation", () => {
   })
 
   test("validates a privacy-safe manifest of references rather than embedding photos", () => {
-    expect(visionEvalManifestSchema.parse({
+    const result = visionEvalManifestSchema.parse({
       version: 1,
       datasetId: "pilot-v1",
       createdAt: "2026-07-11T00:00:00.000Z",
@@ -37,9 +37,22 @@ describe("vision evaluation", () => {
         photoRef: "s3://private-eval/sample-1.jpg",
         goldenReferenceRef: null,
         planogramVersionId: "version-1",
-        annotations: [],
+        scenario: "rotated_label",
+        annotations: [{
+          id: "annotation-1",
+          productSku: "SKU-A",
+          bbox: { xPct: 1, yPct: 2, widthPct: 3, heightPct: 4 },
+          facings: 1,
+          recognitionCondition: "rotated_label",
+        }],
       }],
-    }).samples).toHaveLength(1)
+    })
+
+    expect(result.samples).toHaveLength(1)
+    expect(result.samples[0]).toMatchObject({
+      scenario: "rotated_label",
+      annotations: [{ recognitionCondition: "rotated_label" }],
+    })
   })
 
   test("runs localization before SKU recognition and combines confidence conservatively", async () => {

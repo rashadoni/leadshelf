@@ -254,8 +254,45 @@ describe("shelf comparison", () => {
     })
 
     expect(result.status).toBe("REVIEW")
+    expect(result.structuralScore).toBeNull()
+    expect(result.placements[0]).toMatchObject({ outcome: "unavailable", actualFacings: null })
     expect(result.warnings).toContain("low_confidence:detection-a")
     expect(result.actions).toEqual([expect.objectContaining({ type: "manual_review" })])
+    expect(result.metrics.oos).toEqual([])
+    expect(result.metrics.actualFacings).toBeNull()
+  })
+
+  it("does not count one uncertain placement as missing or out of stock", () => {
+    const result = compareShelf({
+      expected: [
+        placement({ placementId: "placement-clear", productId: "clear", productSku: "CLEAR", sortOrder: 1 }),
+        placement({ placementId: "placement-rotated", productId: "rotated", productSku: "ROTATED", sortOrder: 2 }),
+      ],
+      detections: [
+        detection({
+          detectionId: "detection-clear",
+          placementId: "placement-clear",
+          productId: "clear",
+          productSku: "CLEAR",
+        }),
+        detection({
+          detectionId: "detection-rotated",
+          placementId: "placement-rotated",
+          productId: "rotated",
+          productSku: "ROTATED",
+          confidence: 0.35,
+        }),
+      ],
+    })
+
+    expect(result.status).toBe("REVIEW")
+    expect(result.structuralScore).toBeNull()
+    expect(result.placements[1]).toMatchObject({ outcome: "unavailable", actualFacings: null })
+    expect(result.actions).toEqual([
+      expect.objectContaining({ type: "manual_review", productSku: "ROTATED", amount: null }),
+    ])
+    expect(result.metrics.oos).toEqual([])
+    expect(result.metrics.actualFacings).toBeNull()
   })
 
   it("drops invalid spatial data without discarding the whole analysis", () => {

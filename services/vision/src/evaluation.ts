@@ -7,6 +7,20 @@ const bboxSchema = z.object({
   heightPct: z.number().positive().max(100),
 })
 
+const evalScenarioSchema = z.enum([
+  "golden",
+  "missing_sku",
+  "wrong_position",
+  "perspective",
+  "extra_facing",
+  "rotated_label",
+  "partial_occlusion",
+  "low_light",
+  "blur",
+])
+
+const recognitionConditionSchema = z.enum(["clear", "rotated_label", "partial_occlusion", "occluded"])
+
 export const visionEvalManifestSchema = z.object({
   version: z.literal(1),
   datasetId: z.string().min(1),
@@ -17,11 +31,13 @@ export const visionEvalManifestSchema = z.object({
     photoRef: z.string().min(1),
     goldenReferenceRef: z.string().min(1).nullable(),
     planogramVersionId: z.string().min(1),
+    scenario: evalScenarioSchema.optional(),
     annotations: z.array(z.object({
       id: z.string().min(1),
       productSku: z.string().min(1),
       bbox: bboxSchema,
       facings: z.number().int().min(1),
+      recognitionCondition: recognitionConditionSchema.default("clear"),
     })),
   })),
 })
