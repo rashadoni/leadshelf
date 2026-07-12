@@ -98,6 +98,38 @@ describe("shelf comparison", () => {
     expect(result.extras).toEqual([])
   })
 
+  it("reports a reciprocal product swap as two moves without a false out-of-stock", () => {
+    const expected = [
+      placement({ placementId: "p-mirinda", productId: "mirinda", productSku: "MIRINDA", sortOrder: 1 }),
+      placement({ placementId: "p-saffir", productId: "saffir", productSku: "SAFFIR", sortOrder: 2 }),
+    ]
+    const detections = [
+      detection({
+        detectionId: "d-saffir",
+        placementId: "p-mirinda",
+        productId: "saffir",
+        productSku: "SAFFIR",
+        label: "Saffir",
+      }),
+      detection({
+        detectionId: "d-mirinda",
+        placementId: "p-saffir",
+        productId: "mirinda",
+        productSku: "MIRINDA",
+        label: "Mirinda",
+      }),
+    ]
+
+    const result = compareShelf({ expected, detections })
+
+    expect(result.placements.map((item) => item.outcome)).toEqual(["wrong_product", "wrong_product"])
+    expect(result.actions).toEqual([
+      expect.objectContaining({ type: "move", placementId: "p-mirinda", productSku: "MIRINDA" }),
+      expect.objectContaining({ type: "move", placementId: "p-saffir", productSku: "SAFFIR" }),
+    ])
+    expect(result.metrics.oos).toEqual([])
+  })
+
   it("creates a restock action when an expected product is absent", () => {
     const result = compareShelf({ expected: [placement({ expectedFacings: 3 })], detections: [] })
 
