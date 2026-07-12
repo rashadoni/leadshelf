@@ -1,0 +1,44 @@
+# Delivers help-guide videos (recorder output, too heavy for git) to the prod
+# host. Flow: `gh release create help-videos-vN *.mp4 *.jpg` → this workflow
+# downloads the release assets and scp's them to /opt/leadshelf/prod/
+# help-videos/player, which deploy/docker-compose.prod.yml mounts read-only
+# into the web container (HELP_VIDEO_ASSET_DIR). Re-runnable: assets overwrite.
+name: Deploy help videos
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag holding the video assets"
+        required: true
+        default: "help-videos-v1"
+
+jobs:
+  upload:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'help-videos-')
+    runs-on: ubuntu-latest
+    concurrency: deploy-help-videos
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mkdir -p assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          ls -la assets
+
+      - name: Upload to leadshelf-1
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key "root@$HOST" 'mkdir -p /opt/leadshelf/prod/help-videos/player'
+          scp -i ~/.ssh/deploy_key assets/* "root@$HOST:/opt/leadshelf/prod/help-videos/player/"
+          ssh -i ~/.ssh/deploy_key "root@$HOST" 'ls -la /opt/leadshelf/prod/help-videos/player'

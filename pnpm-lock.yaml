@@ -33,6 +33,9 @@ importers:
       eslint:
         specifier: ^9.20.0
         version: 9.39.4(jiti@2.7.0)
+      playwright:
+        specifier: 1.61.1
+        version: 1.61.1
       typescript-eslint:
         specifier: ^8.24.0
         version: 8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
@@ -6869,9 +6872,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.86.0': {}
 

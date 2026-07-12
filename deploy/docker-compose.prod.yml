@@ -22,8 +22,15 @@ services:
       dockerfile: deploy/Dockerfile.web
       target: runner
     env_file: .env.production
+    environment:
+      # Help-guide videos live OUTSIDE the image (too heavy for git/registry):
+      # recorder output is rsync'ed to /opt/leadshelf/prod/help-videos/player
+      # and mounted read-only below; /api/help-videos streams from this dir.
+      HELP_VIDEO_ASSET_DIR: /help-videos/player
     expose:
       - "3000"
+    volumes:
+      - ./help-videos:/help-videos:ro
     depends_on:
       postgres:
         condition: service_healthy

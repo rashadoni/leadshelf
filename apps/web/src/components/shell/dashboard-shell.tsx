@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { getTranslations } from "next-intl/server"
+import { HelpVideoButton } from "@/components/help/help-video-button"
 import { LocaleSwitcher } from "./locale-switcher"
 import { ShellBreadcrumbs, ShellNav } from "./shell-navigation"
 import { UserMenu } from "./user-menu"
@@ -33,6 +34,7 @@ export async function DashboardShell({
                 {tc("demoTenant")}
               </span>
             ) : null}
+            <HelpVideoButton />
             <LocaleSwitcher />
             <UserMenu email={userEmail} />
           </div>
