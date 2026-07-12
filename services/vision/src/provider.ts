@@ -198,16 +198,46 @@ function buildPrompt(request: VisionScanRequest): string {
     "Use known slotId values only from referenceSlots. Use an empty slotId for extra visible products.",
     "Use the expected productId/productSku only when that product is visibly recognized. Otherwise use empty strings.",
     "Bounding boxes must be percentages of the target photo, not the golden reference image.",
+    "Coordinates MUST use 0..100 percentage units: xPct=25 means one quarter of the image, never 0.25.",
     "If recognition is uncertain, keep confidence below 0.5 or omit the detection.",
     `referenceSlots=${JSON.stringify(slots)}`,
   ].join("\n")
 }
 
 function parseJsonObject(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error("openai_response_not_json")
+  const trimmed = text.trim()
+  const candidates = [trimmed]
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed)
+  if (fenced?.[1]) candidates.push(fenced[1].trim())
+  const objectStart = trimmed.indexOf("{")
+  const objectEnd = trimmed.lastIndexOf("}")
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    candidates.push(trimmed.slice(objectStart, objectEnd + 1))
+  }
+  for (const candidate of new Set(candidates)) {
+    try {
+      return JSON.parse(candidate)
+    } catch {
+      // Try the next safe extraction; zod still validates the parsed shape.
+    }
+  }
+  throw new Error("vision_response_not_json")
+}
+
+type DetectionBBox = z.infer<typeof openAiDetectionOutputSchema>["bbox"]
+
+function usesUnitInterval(bbox: DetectionBBox): boolean {
+  return [bbox.xPct, bbox.yPct, bbox.widthPct, bbox.heightPct]
+    .every((value) => Number.isFinite(value) && value >= 0 && value <= 1)
+}
+
+function normalizeDetectionBBox(bbox: DetectionBBox) {
+  const scale = usesUnitInterval(bbox) ? 100 : 1
+  return {
+    xPct: clampPct(bbox.xPct * scale, 0),
+    yPct: clampPct(bbox.yPct * scale, 0),
+    widthPct: clampPct(bbox.widthPct * scale, 0.1),
+    heightPct: clampPct(bbox.heightPct * scale, 0.1),
   }
 }
 
@@ -349,18 +379,14 @@ export class OpenAiVisionProvider implements VisionProvider {
 
       const outputText = extractOpenAiOutputText(parseJsonObject(responseText))
       const output = openAiScanOutputSchema.parse(parseJsonObject(outputText))
+      const normalizedUnitInterval = output.detections.some((detection) => usesUnitInterval(detection.bbox))
       const detections: VisionDetection[] = output.detections.map((detection) => ({
         slotId: emptyToNull(detection.slotId),
         productId: emptyToNull(detection.productId),
         productSku: emptyToNull(detection.productSku),
         label: emptyToNull(detection.label),
         confidence: detection.confidence,
-        bbox: {
-          xPct: clampPct(detection.bbox.xPct, 0),
-          yPct: clampPct(detection.bbox.yPct, 0),
-          widthPct: clampPct(detection.bbox.widthPct, 0.1),
-          heightPct: clampPct(detection.bbox.heightPct, 0.1),
-        },
+        bbox: normalizeDetectionBBox(detection.bbox),
       }))
 
       const complianceResult = calculateShelfCompliance({
@@ -373,6 +399,7 @@ export class OpenAiVisionProvider implements VisionProvider {
         minConfidence: this.minConfidence,
       })
       const warnings = [...output.warnings]
+      if (normalizedUnitInterval) warnings.push("bbox_unit_interval_normalized")
       if (request.goldenReferenceUrl && !goldenReferenceUrl) warnings.push("golden_reference_url_not_resolvable")
 
       return {
@@ -561,18 +588,14 @@ export class GeminiVisionProvider implements VisionProvider {
 
       const outputText = extractGeminiText(parseJsonObject(responseText))
       const output = openAiScanOutputSchema.parse(parseJsonObject(outputText))
+      const normalizedUnitInterval = output.detections.some((detection) => usesUnitInterval(detection.bbox))
       const detections: VisionDetection[] = output.detections.map((detection) => ({
         slotId: emptyToNull(detection.slotId),
         productId: emptyToNull(detection.productId),
         productSku: emptyToNull(detection.productSku),
         label: emptyToNull(detection.label),
         confidence: detection.confidence,
-        bbox: {
-          xPct: clampPct(detection.bbox.xPct, 0),
-          yPct: clampPct(detection.bbox.yPct, 0),
-          widthPct: clampPct(detection.bbox.widthPct, 0.1),
-          heightPct: clampPct(detection.bbox.heightPct, 0.1),
-        },
+        bbox: normalizeDetectionBBox(detection.bbox),
       }))
 
       const complianceResult = calculateShelfCompliance({
@@ -602,7 +625,11 @@ export class GeminiVisionProvider implements VisionProvider {
           extraDetections: complianceResult.extraDetections,
         },
         findings: complianceResult.findings,
-        warnings: [...output.warnings, ...warnings],
+        warnings: [
+          ...output.warnings,
+          ...(normalizedUnitInterval ? ["bbox_unit_interval_normalized"] : []),
+          ...warnings,
+        ],
       }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {

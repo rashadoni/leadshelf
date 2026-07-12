@@ -238,7 +238,7 @@ describe("GeminiVisionProvider", () => {
                 content: {
                   parts: [
                     {
-                      text: JSON.stringify({
+                      text: `\`\`\`json\n${JSON.stringify({
                         detections: [
                           {
                             slotId: "slot-a",
@@ -246,11 +246,11 @@ describe("GeminiVisionProvider", () => {
                             productSku: "SKU-A",
                             label: "Product A",
                             confidence: 0.9,
-                            bbox: { xPct: 12, yPct: 22, widthPct: 28, heightPct: 38 },
+                            bbox: { xPct: 0.1, yPct: 0.2, widthPct: 0.3, heightPct: 0.4 },
                           },
                         ],
                         warnings: ["depth_not_confirmed"],
-                      }),
+                      })}\n\`\`\``,
                     },
                   ],
                 },
@@ -279,7 +279,9 @@ describe("GeminiVisionProvider", () => {
     expect(response.modelVersion).toBe(DEFAULT_GEMINI_VISION_MODEL)
     expect(response.status).toBe("completed")
     expect(response.compliance).toMatchObject({ score: 0.9, status: "PASS", matchedSlots: 1 })
+    expect(response.detections[0]?.bbox).toEqual({ xPct: 10, yPct: 20, widthPct: 30, heightPct: 40 })
     expect(response.warnings).toContain("depth_not_confirmed")
+    expect(response.warnings).toContain("bbox_unit_interval_normalized")
   })
 
   it("fails explicitly when there are no reference slots", async () => {

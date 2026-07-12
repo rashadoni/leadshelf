@@ -183,8 +183,12 @@ Gate: provider выбирается по воспроизводимому eval, 
 Приватный размеченный calibration pilot теперь содержит шесть реальных фото:
 golden, missing SKU, wrong position, perspective, extra facing и rotated label.
 Фото и отчёты не хранятся в Git. Validation/test split пока отсутствуют, а
-внешний provider-run не выполнен без отдельного разрешения на передачу фото.
-Поэтому accuracy и выбор production provider/model ещё не подтверждены.
+первый разрешённый Gemini provider-run выявил integration defects: пять ответов
+не прошли JSON extraction, а успешный ответ вернул bbox в масштабе 0..1 вместо
+0..100. Tolerant extraction и bbox normalization добавлены со строгой
+последующей Zod-валидацией; повторный внешний run требует нового явного
+privacy-разрешения. Поэтому результаты первого run не являются accuracy,
+threshold calibration и выбор production provider/model ещё не подтверждены.
 
 ## Фаза 9 — Поздние возможности
 

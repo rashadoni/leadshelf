@@ -79,3 +79,9 @@ configured external provider. Reports keep `costUsd: null` until the provider
 path exposes trustworthy usage/cost data. A calibration-only dataset can
 suggest a threshold, but it cannot validate accuracy or select production
 provider/model without a separate validation split.
+
+Provider output remains strictly schema-validated, but the parser tolerates a
+JSON object wrapped in Markdown/prose because Gemini may ignore
+`responseMimeType`. Bounding boxes returned in unit-interval coordinates are
+normalized to 0..100 percentages and emit `bbox_unit_interval_normalized` for
+auditability.
