@@ -117,8 +117,48 @@ API-контракты не менялись; для полностью зелё
 (не conflict/rejected) -> `PHOTO_SUBMITTED`, повтор `clientOpId` ->
 `already_applied` без дубля фото.
 
-Остаётся выполнить реальный on-device прогон (`maestro` / ручной цикл выше)
-против этой свежей задачи и подтвердить device-observable критерии
-(`pendingOps=0`, `pendingPhotos=0`, `rejectedOps=0`, `conflictOps=0`, видимый
-SyncBar, тёмные поверхности камеры/viewer без изменений). Он требует
-эмулятора/устройства с ADB и в headless-агенте не запускался.
+### Зелёный on-device прогон против свежей задачи — 12 июля 2026 (вечер)
+
+На Android 15 / API 35 AVD (`leadshelf_smoke`) пройден полный цикл против
+`Свежая выкладка OTC — фотоотчёт` БЕЗ conflict/rejected:
+
+1. чистый login M-001 (`pm clear`, PIN), pull отдал свежую `IN_PROGRESS`
+   задачу с captureTemplate (rack, 4 шага) и planogram bundle;
+2. check-in по реальным координатам точки — `visit.checkin -> applied`,
+   geofence `outside=false`;
+3. API остановлен; сняты все обязательные guided-шаги (front, left/right
+   depth) — 3 JPG в `files/photo-outbox`, в SQLite 3 строки `photo_queue`
+   (uploaded=0) и 3 `photo.submit` pending в `outbox_ops`;
+4. force-stop -> запуск без API: сессия, визит («N dəq keçdi»), 3 фото, 3/4
+   шага и глубина очереди («6 növbədə») восстановлены; SyncBar виден;
+5. API возвращён: multipart upload всех файлов, push -> `applied` +
+   2×`already_applied` (повторные `photo.submit` той же задачи), задача
+   `IN_PROGRESS -> PHOTO_SUBMITTED`, `sync_conflicts` = 0;
+6. proof-analysis worker создал по одному canonical `REVIEW`-анализу на фото
+   (провайдер `leadshelf-stub`, внешним AI ничего не отправлялось), pull
+   принёс `comparisonResult` (~6.5KB JSON) в `server_photo_submissions`;
+7. эмулятор был убит жёстко (эквивалент потери питания) и перезапущен при
+   выключенном API: экран задачи восстановился из SQLite, вкладки
+   `Sxem / Foto / Nəticə` открылись offline (тёмный viewer с bbox-оверлеями),
+   баннер «saxlanmış nüsxə göstərilir» виден.
+
+Acceptance-метрики: устройство — `pendingOps=0`, `pendingPhotos(uploaded=0)=0`,
+`rejectedOps=0`, `conflictOps=0`, quarantined=0; сервер — ровно одна
+`photo_submission` на каждый `clientPhotoId`, по одному canonical analysis
+(1 run, retry не потребовался). Код мобильного приложения не менялся.
+
+Операционные заметки прогона:
+
+- **Release APK не ходит по HTTP**: в release-манифесте нет
+  `usesCleartextTraffic`, поэтому `http://10.0.2.2:3100` блокируется ОС ещё до
+  сети (login показывает generic-ошибку). Локальный smoke идёт на debug APK
+  (cleartext разрешён) + Metro c `EXPO_PUBLIC_API_URL=http://10.0.2.2:3100`;
+  прод не задет — там HTTPS.
+- Порт 9000 хоста занят чужим MinIO (`leadprocure`), поэтому web поднимается с
+  `S3_ENDPOINT=http://localhost:59000` (контейнер `leadshelf-minio-smoke`).
+- Останавливать API нужно точечно (по PID `next start`): `lsof -ti :3100`
+  включает и qemu-эмулятор, и proof-analysis worker, держащих коннекты к
+  порту, — слепой `kill` роняет их вместе с сервером.
+- Перед повторным smoke на том же AVD обязательно `pm clear` (clearState):
+  повторный seed сбрасывает задачу на сервере, а локальная БД устройства
+  всё ещё хранит фото/шаги прошлого прогона для того же task id.
