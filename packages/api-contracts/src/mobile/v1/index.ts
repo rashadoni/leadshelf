@@ -713,3 +713,24 @@ export const mobilePhotoUploadResponseSchema = z.object({
   visionReason: z.string().nullable().optional(),
 })
 export type MobilePhotoUploadResponse = z.infer<typeof mobilePhotoUploadResponseSchema>
+
+export const mobileCommercialMediaPurposeSchema = z.enum([
+  "PROMOTION_PROOF",
+  "RETURN_EVIDENCE",
+])
+export type MobileCommercialMediaPurpose = z.infer<typeof mobileCommercialMediaPurposeSchema>
+
+export const mobileCommercialMediaUploadFieldsSchema = z.object({
+  clientMediaId: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
+  purpose: mobileCommercialMediaPurposeSchema,
+  takenAt: z.string().datetime(),
+})
+export type MobileCommercialMediaUploadFields = z.infer<typeof mobileCommercialMediaUploadFieldsSchema>
+
+export const mobileCommercialMediaUploadResponseSchema = z.object({
+  mediaId: z.string().min(8).max(128),
+  key: z.string().min(1).max(2048),
+  purpose: mobileCommercialMediaPurposeSchema,
+  deduplicated: z.boolean().optional(),
+})
+export type MobileCommercialMediaUploadResponse = z.infer<typeof mobileCommercialMediaUploadResponseSchema>
