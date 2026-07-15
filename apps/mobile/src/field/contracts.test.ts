@@ -8,9 +8,11 @@ import {
   parseFieldNotifications,
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
+  parseFieldLocationHistory,
   parseFieldProfile,
   parseFieldVisitWorkspace,
   parseFieldWeek,
+  parseFieldWorkday,
 } from "./contracts"
 
 function day(date: string) {
@@ -133,6 +135,94 @@ describe("LeadDrive field contracts", () => {
       },
     })
     expect(inbox.unread).toBe(1)
+  })
+
+  it("accepts an active workday and zero-valued GPS telemetry", () => {
+    const workday = {
+      id: "workday-1",
+      workDate: "2026-07-15T00:00:00.000Z",
+      status: "STARTED",
+      startedAt: "2026-07-15T05:00:00.000Z",
+      pausedAt: null,
+      completedAt: null,
+      totalPausedSeconds: 0,
+      workedSeconds: 120,
+      startLatitude: 0,
+      startLongitude: 0,
+      endLatitude: null,
+      endLongitude: null,
+      availableActions: ["PAUSE", "FINISH"],
+      events: [{
+        id: "event-1",
+        clientEventId: "mobile-event-1",
+        type: "START",
+        occurredAt: "2026-07-15T05:00:00.000Z",
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0,
+        note: null,
+      }],
+    }
+    expect(parseFieldWorkday({
+      success: true,
+      data: {
+        date: "2026-07-15",
+        today: "2026-07-15",
+        timezone: "Asia/Baku",
+        gpsIntervalSeconds: 30,
+        workday,
+        activeWorkday: workday,
+        availableActions: ["PAUSE", "FINISH"],
+      },
+    }).workday?.status).toBe("STARTED")
+
+    expect(parseFieldLocationHistory({
+      success: true,
+      data: {
+        date: "2026-07-15",
+        timezone: "Asia/Baku",
+        gpsIntervalSeconds: 30,
+        distanceMeters: 0,
+        locations: [{
+          id: "location-1",
+          clientLocationId: "gps-1",
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          speed: 0,
+          heading: 0,
+          altitude: 0,
+          battery: null,
+          isMoving: false,
+          recordedAt: "2026-07-15T05:00:00.000Z",
+        }],
+      },
+    }).locations[0]).toMatchObject({ latitude: 0, speed: 0, isMoving: false })
+  })
+
+  it("rejects invalid workday transitions and location coordinates at the boundary", () => {
+    expect(() => parseFieldWorkday({
+      success: true,
+      data: {
+        date: "2026-07-15",
+        today: "2026-07-15",
+        timezone: "Asia/Baku",
+        gpsIntervalSeconds: 30,
+        workday: null,
+        activeWorkday: null,
+        availableActions: ["RESTART"],
+      },
+    })).toThrow(FieldContractError)
+    expect(() => parseFieldLocationHistory({
+      success: true,
+      data: {
+        date: "2026-07-15",
+        timezone: "Asia/Baku",
+        gpsIntervalSeconds: 30,
+        distanceMeters: 0,
+        locations: [{ id: "x", latitude: "40", longitude: 49, isMoving: false, recordedAt: new Date().toISOString() }],
+      },
+    })).toThrow(FieldContractError)
   })
 
   it("accepts scoped organization list and detail envelopes", () => {

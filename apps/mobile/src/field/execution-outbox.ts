@@ -56,6 +56,30 @@ export type FieldVisitPhotoPayload = {
   takenAt: string
 }
 
+export type FieldWorkdayAction = "START" | "PAUSE" | "RESUME" | "FINISH"
+
+export type FieldWorkdayEventPayload = {
+  action: FieldWorkdayAction
+  workdayId: string
+  occurredAt: string
+  latitude: number | null
+  longitude: number | null
+  accuracy: number | null
+  note: string | null
+}
+
+export type FieldLocationPayload = {
+  clientLocationId: string
+  latitude: number
+  longitude: number
+  accuracy: number | null
+  speed: number | null
+  heading: number | null
+  altitude: number | null
+  battery: number | null
+  recordedAt: string
+}
+
 export type FieldExecutionPushOperation = {
   clientOpId: string
   clientCreatedAt?: string
@@ -63,6 +87,7 @@ export type FieldExecutionPushOperation = {
   | { kind: "field.visit.checkin"; payload: FieldVisitCheckInPayload }
   | { kind: "field.visit.action"; payload: FieldVisitActionPayload }
   | { kind: "field.visit.update"; payload: FieldVisitUpdatePayload }
+  | { kind: "field.workday.event"; payload: FieldWorkdayEventPayload }
 )
 
 export type FieldVisitPhotoPushOperation = {
@@ -72,10 +97,17 @@ export type FieldVisitPhotoPushOperation = {
   payload: FieldVisitPhotoPayload
 }
 
+export type FieldLocationPushOperation = {
+  clientOpId: string
+  clientCreatedAt?: string
+  kind: "field.location"
+  payload: FieldLocationPayload
+}
+
 export type FieldServerOperation = {
   operationId: string
   op: "create" | "update"
-  entity: "visits" | "visitActions"
+  entity: "visits" | "visitActions" | "workdays"
   data: Record<string, unknown>
   clientTimestamp: number
 }
@@ -189,12 +221,52 @@ export function parseFieldVisitPhotoPayload(value: unknown): FieldVisitPhotoPayl
   return payload as unknown as FieldVisitPhotoPayload
 }
 
+export function parseFieldWorkdayEventPayload(value: unknown): FieldWorkdayEventPayload {
+  const payload = record(value)
+  const actions = ["START", "PAUSE", "RESUME", "FINISH"]
+  const coordinatesValid = (
+    (payload?.latitude == null && payload?.longitude == null) ||
+    (finite(payload?.latitude) && finite(payload?.longitude) &&
+      payload.latitude >= -90 && payload.latitude <= 90 &&
+      payload.longitude >= -180 && payload.longitude <= 180)
+  )
+  if (
+    !payload ||
+    !actions.includes(String(payload.action)) ||
+    !string(payload.workdayId) ||
+    !parseDate(payload.occurredAt) ||
+    !coordinatesValid ||
+    !(payload.accuracy == null || (finite(payload.accuracy) && payload.accuracy >= 0)) ||
+    !(payload.note == null || (typeof payload.note === "string" && payload.note.length <= 500))
+  ) throw new Error("Invalid field workday event payload")
+  return payload as unknown as FieldWorkdayEventPayload
+}
+
+export function parseFieldLocationPayload(value: unknown): FieldLocationPayload {
+  const payload = record(value)
+  if (
+    !payload ||
+    !string(payload.clientLocationId) ||
+    payload.clientLocationId.length > 100 ||
+    !finite(payload.latitude) || payload.latitude < -90 || payload.latitude > 90 ||
+    !finite(payload.longitude) || payload.longitude < -180 || payload.longitude > 180 ||
+    !(payload.accuracy == null || (finite(payload.accuracy) && payload.accuracy >= 0)) ||
+    !(payload.speed == null || (finite(payload.speed) && payload.speed >= 0)) ||
+    !(payload.heading == null || (finite(payload.heading) && payload.heading >= 0 && payload.heading <= 360)) ||
+    !(payload.altitude == null || finite(payload.altitude)) ||
+    !(payload.battery == null || (finite(payload.battery) && payload.battery >= 0 && payload.battery <= 100)) ||
+    !parseDate(payload.recordedAt)
+  ) throw new Error("Invalid field location payload")
+  return payload as unknown as FieldLocationPayload
+}
+
 export function isFieldExecutionPushOperation(
   operation: { kind: string },
 ): operation is FieldExecutionPushOperation {
   return operation.kind === "field.visit.checkin" ||
     operation.kind === "field.visit.action" ||
-    operation.kind === "field.visit.update"
+    operation.kind === "field.visit.update" ||
+    operation.kind === "field.workday.event"
 }
 
 export function isFieldVisitPhotoPushOperation(
@@ -203,10 +275,28 @@ export function isFieldVisitPhotoPushOperation(
   return operation.kind === "field.visit.photo"
 }
 
+export function isFieldLocationPushOperation(
+  operation: { kind: string },
+): operation is FieldLocationPushOperation {
+  return operation.kind === "field.location"
+}
+
 export function toFieldServerOperation(operation: FieldExecutionPushOperation): FieldServerOperation {
   const clientTimestamp = operation.clientCreatedAt
     ? new Date(operation.clientCreatedAt).getTime()
     : Date.now()
+  if (operation.kind === "field.workday.event") {
+    const { workdayId, ...payload } = operation.payload
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "workdays",
+      clientTimestamp,
+      data: operation.payload.action === "START"
+        ? { ...payload, id: workdayId }
+        : { ...payload, workdayId },
+    }
+  }
   if (operation.kind === "field.visit.checkin") {
     const { visitId, accuracyM, ...payload } = operation.payload
     return {
@@ -282,6 +372,24 @@ export async function sendFieldVisitPhotoOperation(
       status: "applied",
       detail: { photo },
     }
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error
+    if (error.status === 408 || error.status === 429 || error.status >= 500) throw error
+    return {
+      clientOpId: operation.clientOpId,
+      status: [403, 404, 409, 422].includes(error.status) ? "conflict" : "rejected",
+      detail: error.detail ?? { error: error.message, status: error.status },
+    }
+  }
+}
+
+export async function sendFieldLocationOperation(
+  operation: FieldLocationPushOperation,
+  api: { upload(payload: FieldLocationPayload): Promise<Record<string, unknown>> },
+): Promise<FieldExecutionPushResult> {
+  try {
+    const location = await api.upload(operation.payload)
+    return { clientOpId: operation.clientOpId, status: "applied", detail: { location } }
   } catch (error) {
     if (!(error instanceof HttpError)) throw error
     if (error.status === 408 || error.status === 429 || error.status >= 500) throw error

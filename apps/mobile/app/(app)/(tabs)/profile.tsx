@@ -12,6 +12,7 @@ import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useField } from "../../../src/field/field-context"
+import { stopWorkdayTracking } from "../../../src/location/workday-tracking"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
@@ -33,7 +34,8 @@ export default function ProfileTab() {
   }
 
   async function logout() {
-    await mobileLogout()
+    await stopWorkdayTracking().catch(() => {})
+    await mobileLogout().catch(() => {})
     await tokenStore.clearSession()
     router.replace("/(auth)/login" as never)
   }

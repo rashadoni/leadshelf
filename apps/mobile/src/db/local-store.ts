@@ -51,12 +51,16 @@ import {
 import {
   parseFieldVisitActionPayload,
   parseFieldVisitCheckInPayload,
+  parseFieldLocationPayload,
   parseFieldVisitPhotoPayload,
   parseFieldVisitUpdatePayload,
+  parseFieldWorkdayEventPayload,
+  type FieldLocationPayload,
   type FieldVisitActionPayload,
   type FieldVisitCheckInPayload,
   type FieldVisitPhotoPayload,
   type FieldVisitUpdatePayload,
+  type FieldWorkdayEventPayload,
 } from "../field/execution-outbox"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
@@ -464,7 +468,7 @@ export const localStore: LocalStore = {
         `SELECT * FROM outbox_ops
          WHERE status='pending'
             OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"')
-         ORDER BY clientCreatedAt LIMIT ?`,
+         ORDER BY clientCreatedAt, rowid LIMIT ?`,
         [limit],
       )
       .map((r): OutboxRow => {
@@ -594,6 +598,26 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.visit.photo",
             payload: parseFieldVisitPhotoPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.workday.event") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.workday.event",
+            payload: parseFieldWorkdayEventPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.location") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.location",
+            payload: parseFieldLocationPayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -1086,6 +1110,69 @@ function applyOutboxResultSideEffects(
   status: "pending" | "applied" | "conflict" | "rejected",
   detail: unknown,
 ): void {
+  if (kind === "field.workday.event") {
+    try {
+      const payload = parseFieldWorkdayEventPayload(JSON.parse(rawPayload) as unknown)
+      const cached = readFieldCache<Record<string, unknown>>("field.workday.current")
+      if (!cached) return
+      const detailRecord = unknownRecord(detail)
+      const serverWorkday = unknownRecord(detailRecord?.workday)
+      const serverEvent = unknownRecord(detailRecord?.event)
+      const currentWorkday = unknownRecord(cached.value.workday)
+      const base = serverWorkday ?? currentWorkday
+      if (!base) return
+      const currentEvents = Array.isArray(currentWorkday?.events) ? currentWorkday.events : []
+      const events = serverEvent && !currentEvents.some((value) => unknownRecord(value)?.id === serverEvent.id)
+        ? [...currentEvents.filter((value) => unknownRecord(value)?.clientEventId !== clientOpId), serverEvent]
+        : currentEvents
+      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
+      const nextWorkday: Record<string, unknown> = {
+        ...(currentWorkday ?? {}),
+        ...base,
+        events,
+      }
+      if (syncState) nextWorkday.syncState = syncState
+      else delete nextWorkday.syncState
+      const workdayStatus = String(nextWorkday.status ?? "")
+      nextWorkday.availableActions = workdayStatus === "STARTED"
+        ? ["PAUSE", "FINISH"]
+        : workdayStatus === "PAUSED"
+          ? ["RESUME", "FINISH"]
+          : []
+      writeFieldCache("field.workday.current", {
+        ...cached.value,
+        workday: nextWorkday,
+        availableActions: nextWorkday.availableActions,
+      })
+    } catch {
+      // A corrupt cache must never wedge the durable outbox.
+    }
+    return
+  }
+
+  if (kind === "field.location") {
+    try {
+      const payload = parseFieldLocationPayload(JSON.parse(rawPayload) as unknown)
+      const cached = readFieldCache<Record<string, unknown>>("field.locations.current")
+      if (!cached || !Array.isArray(cached.value.locations)) return
+      const serverLocation = unknownRecord(unknownRecord(detail)?.location)
+      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
+      const locations = cached.value.locations.map((value) => {
+        const location = unknownRecord(value)
+        if (!location || location.clientLocationId !== payload.clientLocationId) return value
+        if (status === "applied" && serverLocation) return serverLocation
+        const next = { ...location }
+        if (syncState) next.syncState = syncState
+        else delete next.syncState
+        return next
+      })
+      writeFieldCache("field.locations.current", { ...cached.value, locations })
+    } catch {
+      // A corrupt cache must never wedge the durable outbox.
+    }
+    return
+  }
+
   if (
     kind === "field.route.create" ||
     kind === "field.route.update" ||
@@ -1657,6 +1744,55 @@ export function enqueueFieldVisitPhoto(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [clientOpId, "field.visit.photo", JSON.stringify(input), input.takenAt],
   )
+  return { clientOpId }
+}
+
+export function enqueueFieldWorkdayEvent(
+  input: FieldWorkdayEventPayload,
+): { clientOpId: string } {
+  const payload = parseFieldWorkdayEventPayload(input)
+  const clientOpId = `field-workday-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.workday.event", JSON.stringify(payload), payload.occurredAt],
+  )
+  return { clientOpId }
+}
+
+export function enqueueFieldLocation(
+  input: FieldLocationPayload,
+): { clientOpId: string } {
+  const payload = parseFieldLocationPayload(input)
+  const existing = db.getFirstSync<{ clientOpId: string }>(
+    `SELECT clientOpId FROM outbox_ops
+     WHERE kind='field.location'
+       AND json_extract(payload, '$.clientLocationId')=?
+     ORDER BY clientCreatedAt DESC LIMIT 1`,
+    [payload.clientLocationId],
+  )
+  if (existing) return existing
+  const clientOpId = `field-location-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.location", JSON.stringify(payload), payload.recordedAt],
+  )
+  const cached = readFieldCache<Record<string, unknown>>("field.locations.current")
+  if (cached && Array.isArray(cached.value.locations)) {
+    const alreadyCached = cached.value.locations.some(
+      (value) => unknownRecord(value)?.clientLocationId === payload.clientLocationId,
+    )
+    if (!alreadyCached) {
+      writeFieldCache("field.locations.current", {
+        ...cached.value,
+        locations: [...cached.value.locations, {
+          id: payload.clientLocationId,
+          ...payload,
+          isMoving: (payload.speed ?? 0) > 1,
+          syncState: "PENDING",
+        }],
+      })
+    }
+  }
   return { clientOpId }
 }
 

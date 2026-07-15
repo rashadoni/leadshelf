@@ -18,9 +18,13 @@ import { prepareMobileSessionScope } from "../db/local-store"
 import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
 import {
   isFieldExecutionPushOperation,
+  isFieldLocationPushOperation,
   isFieldVisitPhotoPushOperation,
   sendFieldExecutionOperations,
+  sendFieldLocationOperation,
   sendFieldVisitPhotoOperation,
+  type FieldExecutionPushOperation,
+  type FieldLocationPayload,
   type FieldServerOperation,
   type FieldServerPushResponse,
   type FieldVisitPhotoPayload,
@@ -28,6 +32,7 @@ import {
 import {
   parseFieldProfile,
   parseFieldNotifications,
+  parseFieldLocationHistory,
   parseFieldContactDetail,
   parseFieldContacts,
   parseFieldCustomerRequest,
@@ -35,6 +40,7 @@ import {
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
   parseFieldWeek,
+  parseFieldWorkday,
   parseFieldVisitWorkspace,
   type CreateFieldCustomerRequest,
   type FieldContactDetailData,
@@ -44,9 +50,11 @@ import {
   type FieldAgentProfile,
   type FieldProfileData,
   type FieldNotificationsData,
+  type FieldLocationHistoryData,
   type FieldOrganizationDetailData,
   type FieldOrganizationListData,
   type FieldWeekData,
+  type FieldWorkdayData,
   type FieldVisitWorkspaceData,
 } from "../field/contracts"
 
@@ -174,6 +182,27 @@ export const fieldApi = {
       .then(parseFieldWeek),
   notifications: () =>
     request<unknown>("/api/v1/mtm/mobile/notifications").then(parseFieldNotifications),
+  workday: (date?: string) =>
+    request<unknown>(`/api/v1/mtm/mobile/workday${date ? `?date=${encodeURIComponent(date)}` : ""}`)
+      .then(parseFieldWorkday),
+  locations: (date?: string) =>
+    request<unknown>(`/api/v1/mtm/mobile/location${date ? `?date=${encodeURIComponent(date)}` : ""}`)
+      .then(parseFieldLocationHistory),
+  uploadLocation: async (input: FieldLocationPayload) => {
+    const body = await request<{ success?: boolean; data?: { location?: unknown } }>(
+      "/api/v1/mtm/mobile/location",
+      json(input),
+    )
+    const location = body.data?.location
+    if (body.success !== true || !location || typeof location !== "object" || Array.isArray(location)) {
+      throw new Error("Invalid mobile location response")
+    }
+    const value = location as Record<string, unknown>
+    if (typeof value.id !== "string" || typeof value.latitude !== "number" || typeof value.longitude !== "number") {
+      throw new Error("Invalid mobile location response")
+    }
+    return value
+  },
   visitWorkspace: (id: string) =>
     request<unknown>(`/api/v1/mtm/mobile/visits/${encodeURIComponent(id)}/workspace`)
       .then(parseFieldVisitWorkspace),
@@ -266,6 +295,9 @@ export const fieldApi = {
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
   notifications(): Promise<FieldNotificationsData>
+  workday(date?: string): Promise<FieldWorkdayData>
+  locations(date?: string): Promise<FieldLocationHistoryData>
+  uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
   uploadVisitPhoto(input: FieldVisitPhotoPayload): Promise<Record<string, unknown>>
   markNotificationsRead(input: { ids?: string[]; all?: boolean; isRead: boolean }): Promise<void>
@@ -305,7 +337,7 @@ export const syncApi: SyncApi = {
   push: async (operations: PushOperation[]) => {
     const results: PushResult[] = []
     const shelfOperations: PushOperation[] = []
-    let fieldExecutionOperations: Array<Extract<PushOperation, { kind: "field.visit.checkin" | "field.visit.action" | "field.visit.update" }>> = []
+    let fieldExecutionOperations: FieldExecutionPushOperation[] = []
     const flushFieldExecution = async () => {
       if (fieldExecutionOperations.length === 0) return
       const deviceId = await tokenStore.getDeviceId()
@@ -329,6 +361,8 @@ export const syncApi: SyncApi = {
       await flushFieldExecution()
       if (isFieldRoutePushOperation(operation)) {
         results.push(await sendFieldRouteOperation(operation, fieldApi))
+      } else if (isFieldLocationPushOperation(operation)) {
+        results.push(await sendFieldLocationOperation(operation, { upload: fieldApi.uploadLocation }))
       } else if (isFieldVisitPhotoPushOperation(operation)) {
         const result = await sendFieldVisitPhotoOperation(operation, { upload: fieldApi.uploadVisitPhoto })
         results.push(result)

@@ -21,6 +21,7 @@ export default function WorkTab() {
   const field = useField()
   const openTasks = countOpenTasks()
   const modules: Module[] = [
+    { label: t("workdayTitle"), hint: t("workdayHint"), glyph: "◷", href: "/(app)/workday", background: colors.successBg, color: colors.successDark },
     { label: t("tabRoute"), hint: t("todayRoute"), glyph: "↗", href: "/(app)/routes", background: colors.infoBg, color: colors.info },
     { label: t("moduleOrganizations"), hint: t("organizationsSearch"), glyph: "⌂", href: "/(app)/organizations", background: colors.primarySoft, color: colors.primary },
     { label: t("moduleContacts"), hint: t("contactsSearch"), glyph: "◎", href: "/(app)/contacts", background: colors.holidayBg, color: colors.holiday },

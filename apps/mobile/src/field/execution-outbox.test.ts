@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  parseFieldLocationPayload,
   parseFieldVisitActionPayload,
   parseFieldVisitCheckInPayload,
   parseFieldVisitPhotoPayload,
+  parseFieldWorkdayEventPayload,
+  sendFieldLocationOperation,
   sendFieldVisitPhotoOperation,
   sendFieldExecutionOperations,
   toFieldServerOperation,
@@ -48,6 +51,61 @@ describe("field execution outbox", () => {
         contactId: "doctor-1",
       }),
     })
+  })
+
+  it("preserves causal workday ids for start and subsequent transitions", () => {
+    const start: FieldExecutionPushOperation = {
+      clientOpId: "field-workday-start-1",
+      clientCreatedAt: "2026-07-15T05:00:00.000Z",
+      kind: "field.workday.event",
+      payload: parseFieldWorkdayEventPayload({
+        action: "START",
+        workdayId: "mobile-workday-1",
+        occurredAt: "2026-07-15T05:00:00.000Z",
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0,
+        note: null,
+      }),
+    }
+    const pause: FieldExecutionPushOperation = {
+      ...start,
+      clientOpId: "field-workday-pause-1",
+      kind: "field.workday.event",
+      payload: { ...start.payload, action: "PAUSE", occurredAt: "2026-07-15T06:00:00.000Z" },
+    }
+    expect(toFieldServerOperation(start)).toMatchObject({
+      operationId: "field-workday-start-1",
+      op: "create",
+      entity: "workdays",
+      data: { id: "mobile-workday-1", action: "START", latitude: 0, longitude: 0, accuracy: 0 },
+    })
+    expect(toFieldServerOperation(pause)).toMatchObject({
+      operationId: "field-workday-pause-1",
+      entity: "workdays",
+      data: { workdayId: "mobile-workday-1", action: "PAUSE" },
+    })
+  })
+
+  it("validates replay-safe locations and classifies deterministic GPS conflicts", async () => {
+    const payload = parseFieldLocationPayload({
+      clientLocationId: "gps-1784091600000-0.000000-0.000000",
+      latitude: 0,
+      longitude: 0,
+      accuracy: 0,
+      speed: 0,
+      heading: 0,
+      altitude: 0,
+      battery: 0,
+      recordedAt: "2026-07-15T05:00:00.000Z",
+    })
+    const operation = { clientOpId: "field-location-1", kind: "field.location" as const, payload }
+    await expect(sendFieldLocationOperation(operation, {
+      upload: vi.fn().mockResolvedValue({ id: "server-location-1", ...payload }),
+    })).resolves.toMatchObject({ status: "applied", detail: { location: { id: "server-location-1" } } })
+    await expect(sendFieldLocationOperation(operation, {
+      upload: vi.fn().mockRejectedValue(new (await import("../sync/ports-error")).HttpError(409, "stale workday")),
+    })).resolves.toMatchObject({ status: "conflict" })
   })
 
   it("keeps visit create, action and checkout in batch order", async () => {

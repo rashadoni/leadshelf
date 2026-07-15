@@ -242,6 +242,72 @@ export interface FieldWeekData {
   }
 }
 
+export type FieldWorkdayStatus = "STARTED" | "PAUSED" | "COMPLETED"
+export type FieldWorkdayAction = "START" | "PAUSE" | "RESUME" | "FINISH"
+
+export interface FieldWorkdayEvent {
+  id: string
+  clientEventId: string | null
+  type: FieldWorkdayAction
+  occurredAt: string
+  latitude: number | null
+  longitude: number | null
+  accuracy: number | null
+  note: string | null
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldWorkday {
+  id: string
+  workDate: string
+  status: FieldWorkdayStatus
+  startedAt: string
+  pausedAt: string | null
+  completedAt: string | null
+  totalPausedSeconds: number
+  workedSeconds: number
+  startLatitude: number | null
+  startLongitude: number | null
+  endLatitude: number | null
+  endLongitude: number | null
+  availableActions: FieldWorkdayAction[]
+  events: FieldWorkdayEvent[]
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldWorkdayData {
+  date: string
+  today: string
+  timezone: string
+  gpsIntervalSeconds: number
+  workday: FieldWorkday | null
+  activeWorkday: FieldWorkday | null
+  availableActions: FieldWorkdayAction[]
+}
+
+export interface FieldAgentLocation {
+  id: string
+  clientLocationId: string | null
+  latitude: number
+  longitude: number
+  accuracy: number | null
+  speed: number | null
+  heading: number | null
+  altitude: number | null
+  battery: number | null
+  isMoving: boolean
+  recordedAt: string
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldLocationHistoryData {
+  date: string
+  timezone: string
+  gpsIntervalSeconds: number
+  distanceMeters: number
+  locations: FieldAgentLocation[]
+}
+
 export interface FieldNotification {
   id: string
   title: string
@@ -608,6 +674,85 @@ export function parseFieldWeek(value: unknown): FieldWeekData {
     throw new FieldContractError("mobile week")
   }
   return data as unknown as FieldWeekData
+}
+
+const workdayActions = new Set<FieldWorkdayAction>(["START", "PAUSE", "RESUME", "FINISH"])
+const workdayStatuses = new Set<FieldWorkdayStatus>(["STARTED", "PAUSED", "COMPLETED"])
+
+function validWorkday(value: unknown): boolean {
+  if (value == null) return true
+  const workday = record(value)
+  return Boolean(
+    workday &&
+      string(workday.id) &&
+      timestamp(workday.workDate) &&
+      string(workday.status) &&
+      workdayStatuses.has(workday.status as FieldWorkdayStatus) &&
+      timestamp(workday.startedAt) &&
+      (workday.pausedAt == null || timestamp(workday.pausedAt)) &&
+      (workday.completedAt == null || timestamp(workday.completedAt)) &&
+      number(workday.totalPausedSeconds) &&
+      number(workday.workedSeconds) &&
+      Array.isArray(workday.availableActions) &&
+      workday.availableActions.every((action) => string(action) && workdayActions.has(action as FieldWorkdayAction)) &&
+      Array.isArray(workday.events) &&
+      workday.events.every((rawEvent) => {
+        const event = record(rawEvent)
+        return Boolean(
+          event &&
+            string(event.id) &&
+            string(event.type) &&
+            workdayActions.has(event.type as FieldWorkdayAction) &&
+            timestamp(event.occurredAt),
+        )
+      }),
+  )
+}
+
+export function parseFieldWorkday(value: unknown): FieldWorkdayData {
+  const data = validEnvelope(value)
+  if (
+    !data ||
+    !dateKey(data.date) ||
+    !dateKey(data.today) ||
+    !string(data.timezone) ||
+    !number(data.gpsIntervalSeconds) ||
+    !validWorkday(data.workday) ||
+    !validWorkday(data.activeWorkday) ||
+    !Array.isArray(data.availableActions) ||
+    !data.availableActions.every((action) => string(action) && workdayActions.has(action as FieldWorkdayAction))
+  ) {
+    throw new FieldContractError("mobile workday")
+  }
+  return data as unknown as FieldWorkdayData
+}
+
+export function parseFieldLocationHistory(value: unknown): FieldLocationHistoryData {
+  const data = validEnvelope(value)
+  if (
+    !data ||
+    !dateKey(data.date) ||
+    !string(data.timezone) ||
+    !number(data.gpsIntervalSeconds) ||
+    !number(data.distanceMeters) ||
+    !Array.isArray(data.locations)
+  ) {
+    throw new FieldContractError("mobile location history")
+  }
+  for (const rawLocation of data.locations) {
+    const location = record(rawLocation)
+    if (
+      !location ||
+      !string(location.id) ||
+      !number(location.latitude) ||
+      !number(location.longitude) ||
+      !boolean(location.isMoving) ||
+      !timestamp(location.recordedAt)
+    ) {
+      throw new FieldContractError("mobile location history")
+    }
+  }
+  return data as unknown as FieldLocationHistoryData
 }
 
 export function parseFieldVisitWorkspace(value: unknown): FieldVisitWorkspaceData {
