@@ -189,6 +189,8 @@ export class SyncManager {
     } catch (e) {
       if (e instanceof UpgradeRequiredError) {
         this.patch({ phase: "upgradeRequired", error: null, lastDurationMs: Date.now() - startedAt })
+      } else if (e instanceof AuthLostError) {
+        this.patch({ phase: "authLost", error: null, lastDurationMs: Date.now() - startedAt })
       } else {
         this.patch({ phase: "error", error: e instanceof Error ? e.message : String(e), lastDurationMs: Date.now() - startedAt })
       }

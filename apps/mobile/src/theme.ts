@@ -26,6 +26,18 @@ export const colors = {
   dangerBorder: "#FECACA",
   warningBg: "#FEF3C7",
   warning: "#B45309",
+  infoBg: "#EAF2FF",
+  infoBorder: "#BDD2FF",
+  info: "#2457C5",
+  draftBg: "#F1F2F4",
+  draftBorder: "#D9DCE1",
+  draft: "#5D6470",
+  missedBg: "#FDECEC",
+  missedBorder: "#F8C8C8",
+  missed: "#B42318",
+  holidayBg: "#F4EEFF",
+  holidayBorder: "#DCCBFF",
+  holiday: "#6D3BB7",
   tabInactive: "#9CA3AF",
 } as const
 

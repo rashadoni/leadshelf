@@ -11,12 +11,14 @@ import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useField } from "../../../src/field/field-context"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
 export default function ProfileTab() {
   const locale = useLocale()
   const { status, sync } = useSync()
+  const field = useField()
   const [userName, setUserName] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
 
@@ -26,18 +28,20 @@ export default function ProfileTab() {
 
   async function onSyncNow() {
     setSyncing(true)
-    await sync()
+    await Promise.all([sync(), field.refresh()])
     setSyncing(false)
   }
 
   async function logout() {
-    await mobileLogout() // best-effort отзыв refresh-сессии на сервере
+    await mobileLogout()
     await tokenStore.clearSession()
     router.replace("/(auth)/login" as never)
   }
 
-  const initial = (userName ?? "?").trim().charAt(0).toUpperCase() || "?"
-  const running = !["idle", "offline", "error", "upgradeRequired"].includes(status.phase)
+  const agent = field.profile?.agent
+  const displayName = agent?.name ?? userName
+  const initial = (displayName ?? "?").trim().charAt(0).toUpperCase() || "?"
+  const running = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
   const issueCount = status.conflictOps + status.rejectedOps + status.quarantinedPhotos
   const duration = status.lastDurationMs == null
     ? t("profileNever")
@@ -67,10 +71,31 @@ export default function ProfileTab() {
           <View style={styles.accountBody}>
             <Text style={styles.accountLabel}>{t("profileAccount")}</Text>
             <Text style={styles.accountName} numberOfLines={1}>
-              {userName ?? "—"}
+              {displayName ?? "—"}
             </Text>
+            {agent?.role ? <Text style={styles.accountMeta}>{agent.role}</Text> : null}
           </View>
         </View>
+
+        {agent ? (
+          <View style={styles.card}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{t("organization")}</Text>
+              <Text style={styles.detailValue}>{agent.organizationName}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{t("manager")}</Text>
+              <Text style={styles.detailValue}>{agent.manager?.name ?? "—"}</Text>
+            </View>
+            <View style={[styles.detailRow, styles.detailRowLast]}>
+              <Text style={styles.detailLabel}>{t("shelfConnection")}</Text>
+              <View style={styles.connectionValue}>
+                <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
+                <Text style={styles.detailValue}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("profileLanguage")}</Text>
@@ -152,6 +177,13 @@ const styles = StyleSheet.create({
   accountBody: { flex: 1, minWidth: 0 },
   accountLabel: { fontSize: 11, fontWeight: "700", color: colors.faint, letterSpacing: 0.4, textTransform: "uppercase" },
   accountName: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 2 },
+  accountMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  detailRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  detailRowLast: { borderBottomWidth: 0 },
+  detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "600" },
+  detailValue: { flexShrink: 1, color: colors.text, fontSize: 12, fontWeight: "800", textAlign: "right" },
+  connectionValue: { flexDirection: "row", alignItems: "center", gap: 6 },
+  connectionDot: { width: 7, height: 7, borderRadius: 4 },
   sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 10 },
   localeRow: { flexDirection: "row", gap: 8 },
   localeBtn: {

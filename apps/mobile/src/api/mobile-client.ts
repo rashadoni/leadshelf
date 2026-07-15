@@ -1,71 +1,65 @@
-// Клиент замороженного mobile API (docs/18): bearer, protocolVersion=1,
-// singleflight-refresh (гонка рефрешей ломает grace-ротацию), 426 -> upgrade.
+// Единый мобильный транспорт: пользователь входит только в LeadDrive.
+// CRM-запросы обслуживает LeadDrive, а коммерческий sync/photo трафик он
+// проксирует в LeadShelf через доверенный Field BFF.
 
 import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
 import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
 import {
   MOBILE_PROTOCOL_VERSION,
-  mobileLoginResponseSchema,
   mobilePhotoUploadResponseSchema,
   mobileSyncPullResponseSchema,
   mobileSyncPushResponseSchema,
-  mobileTokenPairSchema,
 } from "@leadshelf/api-contracts/mobile/v1"
 import { File } from "expo-file-system"
+import { Platform } from "react-native"
 import { tokenStore } from "../auth/token-store"
+import { prepareMobileSessionScope } from "../db/local-store"
+import {
+  parseFieldProfile,
+  parseFieldNotifications,
+  parseFieldWeek,
+  type FieldAgentProfile,
+  type FieldProfileData,
+  type FieldNotificationsData,
+  type FieldWeekData,
+} from "../field/contracts"
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://hermescrm.xyz"
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://app.leaddrivecrm.org"
 export const PROTOCOL_VERSION = MOBILE_PROTOCOL_VERSION
 
 export { AuthLostError } from "../sync/ports-error"
 
-let refreshInFlight: Promise<boolean> | null = null
-
-async function refreshTokens(): Promise<boolean> {
-  // singleflight: параллельные 401 ждут ОДИН рефреш
-  refreshInFlight ??= (async () => {
-    try {
-      const refresh = await tokenStore.getRefresh()
-      const deviceId = await tokenStore.getDeviceId()
-      if (!refresh || !deviceId) return false
-      const res = await fetch(`${API_URL}/api/v1/mobile/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ protocolVersion: PROTOCOL_VERSION, refreshToken: refresh, deviceId }),
-      })
-      if (!res.ok) return false
-      const body = mobileTokenPairSchema.parse(await res.json())
-      await tokenStore.setTokens(body.access, body.refresh)
-      return true
-    } catch {
-      return false
-    } finally {
-      refreshInFlight = null
-    }
-  })()
-  return refreshInFlight
+export class AccountSwitchBlockedError extends Error {
+  constructor(
+    public pendingOps: number,
+    public pendingPhotos: number,
+  ) {
+    super("Unsynced work belongs to another mobile account")
+    this.name = "AccountSwitchBlockedError"
+  }
 }
 
 async function request<T>(
   path: string,
-  init: RequestInit & { retryOn401?: boolean } = {},
+  init: RequestInit = {},
 ): Promise<T> {
-  const { retryOn401 = true, ...rest } = init
-  const access = await tokenStore.getAccess()
+  const [access, deviceId] = await Promise.all([
+    tokenStore.getAccess(),
+    tokenStore.getDeviceId(),
+  ])
   const res = await fetch(`${API_URL}${path}`, {
-    ...rest,
+    ...init,
     headers: {
-      ...(rest.headers as Record<string, string>),
+      ...(init.headers as Record<string, string>),
       // Протокол на не-JSON путях (multipart upload, media) едет заголовком.
       "x-leadshelf-protocol": String(PROTOCOL_VERSION),
+      ...(deviceId ? { "x-field-device-id": deviceId } : {}),
+      "x-field-device-platform": Platform.OS,
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
     },
   })
   if (res.status === 426) throw new UpgradeRequiredError()
-  if (res.status === 401 && retryOn401) {
-    if (await refreshTokens()) return request<T>(path, { ...init, retryOn401: false })
-    throw new AuthLostError()
-  }
+  if (res.status === 401) throw new AuthLostError()
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const message = (body as { message?: string; error?: string }).message ??
@@ -85,52 +79,135 @@ function json(body: unknown): RequestInit {
 
 export async function mobileLogin(input: {
   orgSlug: string
-  employeeCode: string
-  pin: string
-}): Promise<{ user: { id?: string; name: string } } | null> {
-  const deviceId = (await tokenStore.getDeviceId())!
-  const res = await fetch(`${API_URL}/api/v1/mobile/auth/login`, {
+  email: string
+  password: string
+}): Promise<{ agent: FieldAgentProfile } | null> {
+  const deviceId = await tokenStore.getDeviceId()
+  const res = await fetch(`${API_URL}/api/v1/mtm/mobile/auth`, {
     ...json({
-      protocolVersion: PROTOCOL_VERSION,
-      orgSlug: input.orgSlug,
-      employeeCode: input.employeeCode,
-      pin: input.pin,
-      device: { id: deviceId, platform: "expo" },
+      organizationSlug: input.orgSlug,
+      email: input.email,
+      password: input.password,
     }),
+    headers: {
+      "Content-Type": "application/json",
+      ...(deviceId ? { "x-field-device-id": deviceId } : {}),
+      "x-field-device-platform": Platform.OS,
+    },
   })
-  if (res.status === 426) throw new UpgradeRequiredError()
-  if (!res.ok) return null
-  const body = mobileLoginResponseSchema.parse(await res.json())
-  await tokenStore.setTokens(body.tokens.access, body.tokens.refresh)
-  await tokenStore.setUserId(body.user.id ?? null)
-  await tokenStore.setUserName(body.user.name)
+  if (res.status === 401 || res.status === 404) return null
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new HttpError(res.status, (error as { error?: string }).error)
+  }
+  const body = await res.json() as {
+    success?: boolean
+    data?: { token?: unknown; agent?: Record<string, unknown> }
+  }
+  const token = body.data?.token
+  const rawAgent = body.data?.agent
+  if (body.success !== true || typeof token !== "string" || !rawAgent) {
+    throw new Error("Invalid mobile auth response")
+  }
+  const agent: FieldAgentProfile = {
+    id: String(rawAgent.id ?? ""),
+    name: String(rawAgent.name ?? ""),
+    email: typeof rawAgent.email === "string" ? rawAgent.email : null,
+    phone: typeof rawAgent.phone === "string" ? rawAgent.phone : null,
+    role: String(rawAgent.role ?? "AGENT"),
+    status: "ACTIVE",
+    avatar: typeof rawAgent.avatar === "string" ? rawAgent.avatar : null,
+    isOnline: true,
+    organizationId: String(rawAgent.organizationId ?? ""),
+    organizationName: String(rawAgent.organizationName ?? ""),
+    manager: null,
+  }
+  if (!agent.id || !agent.name || !agent.organizationId) {
+    throw new Error("Invalid mobile auth agent")
+  }
+  const scope = prepareMobileSessionScope(input.orgSlug, agent.id)
+  if (!scope.ok) throw new AccountSwitchBlockedError(scope.pendingOps, scope.pendingPhotos)
+  await tokenStore.setAccess(token)
+  await tokenStore.setUserId(agent.id)
+  await tokenStore.setUserName(agent.name)
   await tokenStore.setOrgSlug(input.orgSlug)
-  return { user: body.user }
+  await tokenStore.setLastEmail(input.email)
+  return { agent }
 }
 
-// Серверный logout: отзывает refresh-сессию. Best-effort — если сети нет,
-// вызывающий всё равно чистит локальную сессию (docs/26 §5).
+// LeadDrive выдаёт короткоживущий bearer без refresh-сессии. Выход локальный;
+// серверная ревокация будет подключена отдельным endpoint без смены клиента.
 export async function mobileLogout(): Promise<void> {
-  const refresh = await tokenStore.getRefresh()
-  await fetch(`${API_URL}/api/v1/mobile/auth/logout`, {
-    ...json({ protocolVersion: PROTOCOL_VERSION, refreshToken: refresh ?? undefined }),
-  }).catch(() => {})
+  return Promise.resolve()
+}
+
+export const fieldApi = {
+  profile: () => request<unknown>("/api/v1/mtm/mobile/profile").then(parseFieldProfile),
+  week: (start?: string) =>
+    request<unknown>(`/api/v1/mtm/mobile/week${start ? `?start=${encodeURIComponent(start)}` : ""}`)
+      .then(parseFieldWeek),
+  notifications: () =>
+    request<unknown>("/api/v1/mtm/mobile/notifications").then(parseFieldNotifications),
+  markNotificationsRead: async (input: { ids?: string[]; all?: boolean; isRead: boolean }) => {
+    await request("/api/v1/mtm/mobile/notifications", {
+      ...json(input),
+      method: "PATCH",
+    })
+  },
+  updateRoute: async (routeId: string, input: {
+    name?: string | null
+    notes?: string | null
+    points: Array<{ customerId: string; plannedTime: string | null }>
+  }) => {
+    await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}`, {
+      ...json(input),
+      method: "PUT",
+    })
+  },
+  publishRoute: async (routeId: string) => {
+    await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}/publish`, json({}))
+  },
+  requestRouteChange: async (routeId: string, input: {
+    changeType: "REMOVE_STOP" | "ADD_STOP" | "CONFLICT_OVERRIDE"
+    routePointId?: string
+    reason: string
+    payload?: Record<string, unknown>
+  }) => {
+    await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}/change-requests`, json(input))
+  },
+} satisfies {
+  profile(): Promise<FieldProfileData>
+  week(start?: string): Promise<FieldWeekData>
+  notifications(): Promise<FieldNotificationsData>
+  markNotificationsRead(input: { ids?: string[]; all?: boolean; isRead: boolean }): Promise<void>
+  updateRoute(routeId: string, input: {
+    name?: string | null
+    notes?: string | null
+    points: Array<{ customerId: string; plannedTime: string | null }>
+  }): Promise<void>
+  publishRoute(routeId: string): Promise<void>
+  requestRouteChange(routeId: string, input: {
+    changeType: "REMOVE_STOP" | "ADD_STOP" | "CONFLICT_OVERRIDE"
+    routePointId?: string
+    reason: string
+    payload?: Record<string, unknown>
+  }): Promise<void>
 }
 
 export const syncApi: SyncApi = {
   pull: (cursors) =>
     request<PullResponse>(
-      "/api/v1/mobile/sync/pull",
+      "/api/v1/mtm/mobile/shelf/sync/pull",
       json({ protocolVersion: PROTOCOL_VERSION, cursors }),
     ).then((body) => mobileSyncPullResponseSchema.parse(body)),
   push: (operations: PushOperation[]) =>
     request<{ results: PushResult[] }>(
-      "/api/v1/mobile/sync/push",
+      "/api/v1/mtm/mobile/shelf/sync/push",
       json({ protocolVersion: PROTOCOL_VERSION, operations }),
     ).then((body) => mobileSyncPushResponseSchema.parse(body)),
   ack: async (appliedCursors) => {
     await request(
-      "/api/v1/mobile/sync/ack",
+      "/api/v1/mtm/mobile/shelf/sync/ack",
       json({ protocolVersion: PROTOCOL_VERSION, appliedCursors }),
     )
   },
@@ -151,7 +228,7 @@ export const syncApi: SyncApi = {
     if (photo.exifJson) form.append("exifJson", photo.exifJson)
     if (photo.captureFlagsJson) form.append("captureFlagsJson", photo.captureFlagsJson)
     if (photo.captureTelemetryJson) form.append("captureTelemetryJson", photo.captureTelemetryJson)
-    return request("/api/v1/mobile/photos/upload", {
+    return request("/api/v1/mtm/mobile/shelf/photos/upload", {
       method: "POST",
       body: form,
     }).then((body) => mobilePhotoUploadResponseSchema.parse(body))

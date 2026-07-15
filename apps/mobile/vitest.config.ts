@@ -13,6 +13,7 @@ export default defineConfig({
       "src/navigation/**/*.test.ts",
       "src/i18n/**/*.test.ts",
       "src/observability/**/*.test.ts",
+      "src/field/**/*.test.ts",
     ],
     environment: "node",
   },

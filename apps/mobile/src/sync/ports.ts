@@ -101,6 +101,7 @@ export type SyncPhase =
   | "pushing"
   | "error"
   | "offline"
+  | "authLost"
   | "upgradeRequired"
 
 export interface SyncStatus {

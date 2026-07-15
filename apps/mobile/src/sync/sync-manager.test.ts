@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
-import { HttpError } from "./ports-error"
+import { AuthLostError, HttpError } from "./ports-error"
 import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi, SyncCursors } from "./ports"
 
 function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
@@ -415,6 +415,19 @@ describe("SyncManager", () => {
     const m = new SyncManager({ api, store })
     const s = await m.runSync()
     expect(s.phase).toBe("upgradeRequired")
+  })
+
+  test("401 завершает цикл как authLost без бесконечного retry", async () => {
+    const store = makeStore()
+    const api = makeApi({
+      pull: async () => {
+        throw new AuthLostError()
+      },
+    })
+    const manager = new SyncManager({ api, store })
+    const status = await manager.runSync()
+    expect(status.phase).toBe("authLost")
+    expect(status.error).toBeNull()
   })
 
   test("операции с исчерпанными попытками не шлются повторно", async () => {

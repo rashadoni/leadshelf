@@ -9,6 +9,7 @@ import { nextBackoffMs } from "./backoff"
 import type { SyncStatus } from "./ports"
 import { syncApi } from "../api/mobile-client"
 import { localStore } from "../db/local-store"
+import { tokenStore } from "../auth/token-store"
 
 const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
 
@@ -40,6 +41,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       if (next.phase === "upgradeRequired") {
         clearRetry()
         router.replace("/upgrade-required" as never)
+      } else if (next.phase === "authLost") {
+        clearRetry()
+        void tokenStore.clearSession().finally(() => {
+          router.replace("/(auth)/login" as never)
+        })
       } else if (next.phase === "error") {
         consecutiveErrors.current += 1
         clearRetry()

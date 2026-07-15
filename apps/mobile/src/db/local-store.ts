@@ -85,6 +85,15 @@ export function initDb(): void {
       status TEXT, checkInAt TEXT, checkOutAt TEXT, anomalyFlags TEXT, updatedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS cursors (k TEXT PRIMARY KEY, v TEXT);
+    CREATE TABLE IF NOT EXISTS field_cache (
+      k TEXT PRIMARY KEY, json TEXT NOT NULL, updatedAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS mobile_session_scope (
+      id INTEGER PRIMARY KEY CHECK (id=1),
+      organizationSlug TEXT NOT NULL,
+      agentId TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS outbox_ops (
       clientOpId TEXT PRIMARY KEY, kind TEXT, payload TEXT,
       clientCreatedAt TEXT, status TEXT DEFAULT 'pending',
@@ -184,6 +193,84 @@ export function initDb(): void {
   db.withTransactionSync(() => {
     for (const photo of uploadedWithStuckSubmit) resetRecoverablePhotoSubmit(photo.clientPhotoId)
   })
+}
+
+export type SessionScopeResult =
+  | { ok: true; changed: boolean }
+  | { ok: false; pendingOps: number; pendingPhotos: number }
+
+/**
+ * Prevent cached data from one agent becoming visible to another agent.
+ * A scope switch is automatic only when there is no unsent work to lose.
+ */
+export function prepareMobileSessionScope(
+  organizationSlug: string,
+  agentId: string,
+): SessionScopeResult {
+  const current = db.getFirstSync<{ organizationSlug: string; agentId: string }>(
+    "SELECT organizationSlug, agentId FROM mobile_session_scope WHERE id=1",
+  )
+  if (current?.organizationSlug === organizationSlug && current.agentId === agentId) {
+    return { ok: true, changed: false }
+  }
+
+  const pendingOps = db.getFirstSync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM outbox_ops WHERE status IN ('pending','conflict','rejected')",
+  )?.n ?? 0
+  const pendingPhotos = db.getFirstSync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM photo_queue WHERE uploaded=0",
+  )?.n ?? 0
+  if ((current || pendingOps > 0 || pendingPhotos > 0) && (pendingOps > 0 || pendingPhotos > 0)) {
+    return { ok: false, pendingOps, pendingPhotos }
+  }
+
+  db.withTransactionSync(() => {
+    for (const table of [
+      "tasks",
+      "stores",
+      "planogram_bundles",
+      "routes",
+      "route_stops",
+      "visits",
+      "cursors",
+      "outbox_ops",
+      "photo_queue",
+      "server_photo_submissions",
+      "field_cache",
+    ]) {
+      db.execSync(`DELETE FROM ${table}`)
+    }
+    db.runSync(
+      `INSERT INTO mobile_session_scope (id, organizationSlug, agentId, updatedAt)
+       VALUES (1,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET organizationSlug=excluded.organizationSlug,
+         agentId=excluded.agentId, updatedAt=excluded.updatedAt`,
+      [organizationSlug, agentId, new Date().toISOString()],
+    )
+  })
+  return { ok: true, changed: true }
+}
+
+export function writeFieldCache(key: string, value: unknown): void {
+  db.runSync(
+    `INSERT INTO field_cache (k, json, updatedAt) VALUES (?,?,?)
+     ON CONFLICT(k) DO UPDATE SET json=excluded.json, updatedAt=excluded.updatedAt`,
+    [key, JSON.stringify(value), new Date().toISOString()],
+  )
+}
+
+export function readFieldCache<T>(key: string): { value: T; updatedAt: string } | null {
+  const row = db.getFirstSync<{ json: string; updatedAt: string }>(
+    "SELECT json, updatedAt FROM field_cache WHERE k=?",
+    [key],
+  )
+  if (!row) return null
+  try {
+    return { value: JSON.parse(row.json) as T, updatedAt: row.updatedAt }
+  } catch {
+    db.runSync("DELETE FROM field_cache WHERE k=?", [key])
+    return null
+  }
 }
 
 export const localStore: LocalStore = {
