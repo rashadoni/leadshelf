@@ -204,6 +204,107 @@ export interface FieldAgentTasksData {
   }
 }
 
+export interface FieldKpiRatio {
+  numerator: number
+  denominator: number
+  percentage: number
+}
+
+export interface FieldKpiUncoveredSubject {
+  subjectKey: string
+  customerId: string
+  contactId: string | null
+  name: string
+  segment: "DOCTOR" | "PHARMACY" | "OTHER"
+}
+
+export interface FieldKpiCoverage extends FieldKpiRatio {
+  uncovered: FieldKpiUncoveredSubject[]
+}
+
+export interface FieldCommercialKpiData {
+  source: "LEADSHELF"
+  generatedAt: string
+  period: { kind: "week" | "month"; from: string; to: string }
+  orders: {
+    total: number
+    placed: number
+    delivered: number
+    cancelled: number
+    amounts: Array<{ currency: string; totalAmount: number; discountAmount: number }>
+    fulfillment: FieldKpiRatio
+    ids: string[]
+  }
+  promotions: {
+    active: number
+    ordersWithPromotion: number
+    distinctApplied: number
+    adoption: FieldKpiRatio
+  }
+  shelfTasks: {
+    assigned: number
+    completed: number
+    overdue: number
+    completion: FieldKpiRatio
+    overdueIds: string[]
+  }
+}
+
+export interface FieldPersonalKpiData {
+  protocolVersion: 2
+  source: "LEADDRIVE"
+  generatedAt: string
+  timezone: string
+  period: {
+    kind: "week" | "month"
+    anchor: string
+    start: string
+    endExclusive: string
+    from: string
+    to: string
+  }
+  visits: {
+    planned: number
+    completedPlanned: number
+    completedTotal: number
+    unplannedCompleted: number
+    missed: number
+    fulfillment: FieldKpiRatio
+  }
+  coverage: {
+    overall: FieldKpiCoverage
+    doctors: FieldKpiCoverage
+    pharmacies: FieldKpiCoverage
+    other: FieldKpiCoverage
+  }
+  tasks: {
+    assigned: number
+    completed: number
+    overdue: number
+    completion: FieldKpiRatio
+    overdueIds: string[]
+  }
+  gps: {
+    workdays: number
+    workdaysWithGps: number
+    dayCoverage: FieldKpiRatio
+    points: number
+    distanceMeters: number | null
+    workedSeconds: number
+    averageAccuracyMeters: number | null
+    lastRecordedAt: string | null
+    truncated: boolean
+    daysWithoutPoints: string[]
+  }
+  drilldown: {
+    missedStopIds: string[]
+    unplannedVisitIds: string[]
+  }
+  commercial:
+    | { availability: "READY"; source: "LEADSHELF"; reason: null; data: FieldCommercialKpiData }
+    | { availability: "UNAVAILABLE"; source: "LEADSHELF"; reason: string; data: null }
+}
+
 export interface FieldWeekVisit {
   id: string
   customerId: string
@@ -833,6 +934,118 @@ export function parseFieldAgentTasks(value: unknown): FieldAgentTasksData {
     throw new FieldContractError("mobile agent tasks")
   }
   return data as unknown as FieldAgentTasksData
+}
+
+function validKpiRatio(value: unknown): boolean {
+  const metric = record(value)
+  return Boolean(
+    metric &&
+      number(metric.numerator) && metric.numerator >= 0 &&
+      number(metric.denominator) && metric.denominator >= 0 &&
+      number(metric.percentage) && metric.percentage >= 0,
+  )
+}
+
+function validStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(string)
+}
+
+function validKpiCoverage(value: unknown): boolean {
+  const metric = record(value)
+  return Boolean(
+    metric &&
+      validKpiRatio(metric) &&
+      Array.isArray(metric.uncovered) &&
+      metric.uncovered.every((raw) => {
+        const subject = record(raw)
+        return Boolean(
+          subject &&
+            string(subject.subjectKey) &&
+            string(subject.customerId) &&
+            (subject.contactId == null || string(subject.contactId)) &&
+            string(subject.name) &&
+            ["DOCTOR", "PHARMACY", "OTHER"].includes(String(subject.segment)),
+        )
+      }),
+  )
+}
+
+function validCommercialKpi(value: unknown): boolean {
+  const commercial = record(value)
+  if (!commercial || commercial.source !== "LEADSHELF") return false
+  if (commercial.availability === "UNAVAILABLE") {
+    return string(commercial.reason) && commercial.data == null
+  }
+  if (commercial.availability !== "READY" || commercial.reason != null) return false
+  const data = record(commercial.data)
+  const period = record(data?.period)
+  const orders = record(data?.orders)
+  const promotions = record(data?.promotions)
+  const shelfTasks = record(data?.shelfTasks)
+  return Boolean(
+    data &&
+      data.source === "LEADSHELF" &&
+      timestamp(data.generatedAt) &&
+      period &&
+      ["week", "month"].includes(String(period.kind)) &&
+      timestamp(period.from) && timestamp(period.to) &&
+      orders &&
+      number(orders.total) && number(orders.placed) && number(orders.delivered) && number(orders.cancelled) &&
+      Array.isArray(orders.amounts) && orders.amounts.every((raw) => {
+        const amount = record(raw)
+        return Boolean(amount && string(amount.currency) && number(amount.totalAmount) && number(amount.discountAmount))
+      }) &&
+      validKpiRatio(orders.fulfillment) &&
+      validStringArray(orders.ids) &&
+      promotions &&
+      number(promotions.active) && number(promotions.ordersWithPromotion) && number(promotions.distinctApplied) &&
+      validKpiRatio(promotions.adoption) &&
+      shelfTasks &&
+      number(shelfTasks.assigned) && number(shelfTasks.completed) && number(shelfTasks.overdue) &&
+      validKpiRatio(shelfTasks.completion) &&
+      validStringArray(shelfTasks.overdueIds),
+  )
+}
+
+export function parseFieldPersonalKpi(value: unknown): FieldPersonalKpiData {
+  const data = validEnvelope(value)
+  const period = record(data?.period)
+  const visits = record(data?.visits)
+  const coverage = record(data?.coverage)
+  const tasks = record(data?.tasks)
+  const gps = record(data?.gps)
+  const drilldown = record(data?.drilldown)
+  if (
+    !data ||
+    data.protocolVersion !== 2 ||
+    data.source !== "LEADDRIVE" ||
+    !timestamp(data.generatedAt) ||
+    !string(data.timezone) ||
+    !period ||
+    !["week", "month"].includes(String(period.kind)) ||
+    !dateKey(period.anchor) || !dateKey(period.start) || !dateKey(period.endExclusive) ||
+    !timestamp(period.from) || !timestamp(period.to) ||
+    !visits ||
+    !number(visits.planned) || !number(visits.completedPlanned) || !number(visits.completedTotal) ||
+    !number(visits.unplannedCompleted) || !number(visits.missed) || !validKpiRatio(visits.fulfillment) ||
+    !coverage ||
+    !validKpiCoverage(coverage.overall) || !validKpiCoverage(coverage.doctors) ||
+    !validKpiCoverage(coverage.pharmacies) || !validKpiCoverage(coverage.other) ||
+    !tasks ||
+    !number(tasks.assigned) || !number(tasks.completed) || !number(tasks.overdue) ||
+    !validKpiRatio(tasks.completion) || !validStringArray(tasks.overdueIds) ||
+    !gps ||
+    !number(gps.workdays) || !number(gps.workdaysWithGps) || !validKpiRatio(gps.dayCoverage) ||
+    !number(gps.points) || (gps.distanceMeters != null && !number(gps.distanceMeters)) ||
+    !number(gps.workedSeconds) || (gps.averageAccuracyMeters != null && !number(gps.averageAccuracyMeters)) ||
+    !nullableTimestamp(gps.lastRecordedAt) || !boolean(gps.truncated) || !Array.isArray(gps.daysWithoutPoints) ||
+    !gps.daysWithoutPoints.every(dateKey) ||
+    !drilldown || !validStringArray(drilldown.missedStopIds) || !validStringArray(drilldown.unplannedVisitIds) ||
+    !validCommercialKpi(data.commercial)
+  ) {
+    throw new FieldContractError("mobile personal KPI")
+  }
+  return data as unknown as FieldPersonalKpiData
 }
 
 const workdayActions = new Set<FieldWorkdayAction>(["START", "PAUSE", "RESUME", "FINISH"])

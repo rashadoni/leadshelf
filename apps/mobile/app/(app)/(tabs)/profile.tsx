@@ -99,6 +99,20 @@ export default function ProfileTab() {
           </View>
         ) : null}
 
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(app)/kpi" as never)}
+          style={({ pressed }) => [styles.card, styles.kpiEntry, pressed && styles.kpiEntryPressed]}
+        >
+          <View style={styles.kpiIcon}><Text style={styles.kpiIconText}>%</Text></View>
+          <View style={styles.kpiBody}>
+            <Text style={styles.kpiTitle}>{t("personalKpiTitle")}</Text>
+            <Text style={styles.kpiHint}>{t("personalKpiHint")}</Text>
+            <Text style={styles.kpiAction}>{t("personalKpiOpen")}</Text>
+          </View>
+          <Text style={styles.kpiArrow}>›</Text>
+        </Pressable>
+
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("profileLanguage")}</Text>
           <View style={styles.localeRow}>
@@ -180,6 +194,15 @@ const styles = StyleSheet.create({
   accountLabel: { fontSize: 11, fontWeight: "700", color: colors.faint, letterSpacing: 0.4, textTransform: "uppercase" },
   accountName: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 2 },
   accountMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  kpiEntry: { minHeight: 112, flexDirection: "row", alignItems: "center", gap: 13, borderWidth: 1, borderColor: colors.infoBorder },
+  kpiEntryPressed: { backgroundColor: colors.primarySoft },
+  kpiIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  kpiIconText: { color: colors.headerText, fontSize: 20, fontWeight: "900" },
+  kpiBody: { flex: 1, minWidth: 0 },
+  kpiTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  kpiHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  kpiAction: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 7 },
+  kpiArrow: { color: colors.primary, fontSize: 30, fontWeight: "500" },
   detailRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   detailRowLast: { borderBottomWidth: 0 },
   detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "600" },

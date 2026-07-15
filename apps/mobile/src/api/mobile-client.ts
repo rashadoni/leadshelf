@@ -32,6 +32,7 @@ import {
 import {
   parseFieldProfile,
   parseFieldAgentTasks,
+  parseFieldPersonalKpi,
   parseFieldNotifications,
   parseFieldLocationHistory,
   parseFieldContactDetail,
@@ -51,6 +52,7 @@ import {
   type FieldAgentProfile,
   type FieldProfileData,
   type FieldAgentTasksData,
+  type FieldPersonalKpiData,
   type FieldNotificationsData,
   type FieldLocationHistoryData,
   type FieldOrganizationDetailData,
@@ -185,6 +187,12 @@ export const fieldApi = {
   agentTasks: (query = "") =>
     request<unknown>(`/api/v1/mtm/mobile/tasks${query ? `?${query}` : ""}`)
       .then(parseFieldAgentTasks),
+  personalKpi: (period: "week" | "month", anchor?: string) => {
+    const query = new URLSearchParams({ period })
+    if (anchor) query.set("anchor", anchor)
+    return request<unknown>(`/api/v1/mtm/mobile/kpi?${query.toString()}`)
+      .then(parseFieldPersonalKpi)
+  },
   notifications: () =>
     request<unknown>("/api/v1/mtm/mobile/notifications").then(parseFieldNotifications),
   workday: (date?: string) =>
@@ -300,6 +308,7 @@ export const fieldApi = {
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
   agentTasks(query?: string): Promise<FieldAgentTasksData>
+  personalKpi(period: "week" | "month", anchor?: string): Promise<FieldPersonalKpiData>
   notifications(): Promise<FieldNotificationsData>
   workday(date?: string): Promise<FieldWorkdayData>
   locations(date?: string): Promise<FieldLocationHistoryData>

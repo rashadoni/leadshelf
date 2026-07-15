@@ -9,6 +9,7 @@ import {
   parseFieldNotifications,
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
+  parseFieldPersonalKpi,
   parseFieldLocationHistory,
   parseFieldProfile,
   parseFieldVisitWorkspace,
@@ -35,6 +36,92 @@ function day(date: string) {
 }
 
 describe("LeadDrive field contracts", () => {
+  it("accepts auditable personal KPI and commercial source metrics", () => {
+    const metric = { numerator: 1, denominator: 2, percentage: 50 }
+    const coverage = { ...metric, uncovered: [{
+      subjectKey: "customer:pharmacy-2",
+      customerId: "pharmacy-2",
+      contactId: null,
+      name: "Aptek 2",
+      segment: "PHARMACY",
+    }] }
+    const data = parseFieldPersonalKpi({
+      success: true,
+      data: {
+        protocolVersion: 2,
+        source: "LEADDRIVE",
+        generatedAt: "2026-07-15T08:00:00.000Z",
+        timezone: "Asia/Baku",
+        period: {
+          kind: "week",
+          anchor: "2026-07-15",
+          start: "2026-07-13",
+          endExclusive: "2026-07-20",
+          from: "2026-07-12T20:00:00.000Z",
+          to: "2026-07-19T20:00:00.000Z",
+        },
+        visits: {
+          planned: 2,
+          completedPlanned: 1,
+          completedTotal: 2,
+          unplannedCompleted: 1,
+          missed: 1,
+          fulfillment: metric,
+        },
+        coverage: { overall: coverage, doctors: { ...metric, uncovered: [] }, pharmacies: coverage, other: { numerator: 0, denominator: 0, percentage: 0, uncovered: [] } },
+        tasks: { assigned: 2, completed: 1, overdue: 1, completion: metric, overdueIds: ["task-late"] },
+        gps: {
+          workdays: 2,
+          workdaysWithGps: 1,
+          dayCoverage: metric,
+          points: 120,
+          distanceMeters: 12_300,
+          workedSeconds: 28_800,
+          averageAccuracyMeters: 11.5,
+          lastRecordedAt: "2026-07-15T07:55:00.000Z",
+          truncated: false,
+          daysWithoutPoints: ["2026-07-14"],
+        },
+        drilldown: { missedStopIds: ["point-2"], unplannedVisitIds: ["visit-2"] },
+        commercial: {
+          availability: "READY",
+          source: "LEADSHELF",
+          reason: null,
+          data: {
+            source: "LEADSHELF",
+            generatedAt: "2026-07-15T08:00:00.000Z",
+            period: { kind: "week", from: "2026-07-12T20:00:00.000Z", to: "2026-07-19T20:00:00.000Z" },
+            orders: {
+              total: 2,
+              placed: 2,
+              delivered: 1,
+              cancelled: 0,
+              amounts: [{ currency: "AZN", totalAmount: 160.5, discountAmount: 10.25 }],
+              fulfillment: metric,
+              ids: ["order-1", "order-2"],
+            },
+            promotions: { active: 3, ordersWithPromotion: 1, distinctApplied: 1, adoption: metric },
+            shelfTasks: { assigned: 2, completed: 1, overdue: 1, completion: metric, overdueIds: ["shelf-late"] },
+          },
+        },
+      },
+    })
+
+    expect(data.coverage.pharmacies.uncovered[0]?.name).toBe("Aptek 2")
+    expect(data.commercial.availability === "READY" && data.commercial.data.orders.amounts[0]).toMatchObject({ currency: "AZN", totalAmount: 160.5 })
+  })
+
+  it("rejects a KPI response that turns a commercial outage into fake zeroes", () => {
+    expect(() => parseFieldPersonalKpi({
+      success: true,
+      data: {
+        protocolVersion: 2,
+        source: "LEADDRIVE",
+        commercial: { availability: "READY", source: "LEADSHELF", reason: null, data: null },
+      },
+    })).toThrow(FieldContractError)
+  })
+
   it("accepts versioned agent tasks with an immutable timeline", () => {
     const data = parseFieldAgentTasks({
       success: true,
