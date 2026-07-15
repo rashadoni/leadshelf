@@ -14,6 +14,7 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../src/field/route-target-picker"
+import { addMinutesToRouteTime, formatRouteTime, isValidRouteTime, routePlannedTime } from "../../../src/field/route-time"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -47,6 +48,7 @@ export default function FieldRouteDetailScreen() {
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
   const [points, setPoints] = useState<FieldRoutePoint[]>([])
+  const [timeInputs, setTimeInputs] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [requestPoint, setRequestPoint] = useState<FieldRoutePoint | null>(null)
   const [reason, setReason] = useState("")
@@ -59,7 +61,11 @@ export default function FieldRouteDetailScreen() {
     setName(routeData.name ?? "")
     setNotes(routeData.notes ?? "")
     setPoints(routeData.points)
-  }, [routeData])
+    setTimeInputs(Object.fromEntries(routeData.points.map((point) => [
+      point.id,
+      formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC"),
+    ])))
+  }, [field.week?.timezone, routeData])
 
   if (!routeData) {
     return (
@@ -79,12 +85,31 @@ export default function FieldRouteDetailScreen() {
   const excludedTargets = new Set(points.map((point) => routeTargetKey(point.customerId, point.contactId)))
 
   async function save() {
+    const dateKey = routeData!.date.slice(0, 10)
+    const timezone = field.week?.timezone ?? "UTC"
+    const mappedPoints = points.map((point) => {
+      const time = (timeInputs[point.id] ?? "").trim()
+      return {
+        customerId: point.customerId,
+        contactId: point.contactId,
+        plannedTime: time ? routePlannedTime(dateKey, time, timezone) : null,
+        time,
+      }
+    })
+    if (mappedPoints.some((point) => !isValidRouteTime(point.time) || (point.time && !point.plannedTime))) {
+      Alert.alert(t("invalidRouteTime"))
+      return
+    }
     setSaving(true)
     try {
       await fieldApi.updateRoute(routeData!.id, {
         name: name.trim() || null,
         notes: notes.trim() || null,
-        points: points.map((point) => ({ customerId: point.customerId, contactId: point.contactId, plannedTime: point.plannedTime })),
+        points: mappedPoints.map((point) => ({
+          customerId: point.customerId,
+          contactId: point.contactId,
+          plannedTime: point.plannedTime,
+        })),
       })
       if (field.week) await field.loadWeek(field.week.weekStart)
       Alert.alert(t("changesSaved"))
@@ -104,6 +129,13 @@ export default function FieldRouteDetailScreen() {
         onPress: () => setPoints((current) => current.filter((_, itemIndex) => itemIndex !== index).map((point, nextIndex) => ({ ...point, orderIndex: nextIndex + 1 }))),
       },
     ])
+  }
+
+  function autoSchedule() {
+    setTimeInputs(Object.fromEntries(points.map((point, index) => [
+      point.id,
+      addMinutesToRouteTime("09:00", index * 30),
+    ])))
   }
 
   async function submitRemovalRequest() {
@@ -128,8 +160,9 @@ export default function FieldRouteDetailScreen() {
 
   function selectTarget(target: RouteTarget) {
     if (routeData!.canEdit) {
+      const pointId = `draft-${target.key}-${Date.now()}`
       setPoints((current) => [...current, {
-        id: `draft-${target.key}-${Date.now()}`,
+        id: pointId,
         customerId: target.customer.id,
         contactId: target.contact?.id ?? null,
         orderIndex: current.length + 1,
@@ -141,6 +174,7 @@ export default function FieldRouteDetailScreen() {
         customer: target.customer,
         contact: target.contact,
       }])
+      setTimeInputs((current) => ({ ...current, [pointId]: "" }))
       setPickerOpen(false)
       return
     }
@@ -223,6 +257,9 @@ export default function FieldRouteDetailScreen() {
           <Text style={styles.sectionTitle}>{t("routePointsLabel")}</Text>
           <Text style={styles.pointsCount}>{points.length}</Text>
         </View>
+        {routeData.canEdit && points.length > 0 ? (
+          <Pressable onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable>
+        ) : null}
         {routeData.canEdit || canRequestStopAddition ? (
           <Pressable onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
             <Text style={styles.addButtonIcon}>＋</Text>
@@ -242,7 +279,20 @@ export default function FieldRouteDetailScreen() {
                 <Text style={styles.pointName}>{point.contact?.displayName ?? point.customer.name}</Text>
                 {point.contact ? <Text style={styles.pointSubject}>{point.contact.specialtyName ?? point.contact.type} · {point.customer.name}</Text> : null}
                 <Text style={styles.pointMeta}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
-                {point.plannedTime ? <Text style={styles.pointTime}>{point.plannedTime.slice(11, 16)}</Text> : null}
+                {routeData.canEdit ? (
+                  <View style={styles.timeRow}>
+                    <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
+                    <TextInput
+                      value={timeInputs[point.id] ?? ""}
+                      onChangeText={(value) => setTimeInputs((current) => ({ ...current, [point.id]: value }))}
+                      placeholder="09:30"
+                      placeholderTextColor={colors.faint}
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={5}
+                      style={[styles.timeInput, !isValidRouteTime(timeInputs[point.id] ?? "") && styles.timeInputInvalid]}
+                    />
+                  </View>
+                ) : point.plannedTime ? <Text style={styles.pointTime}>{formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
               </View>
             </View>
             {routeData.canEdit ? (
@@ -299,6 +349,13 @@ export default function FieldRouteDetailScreen() {
             {routeData.canPublish ? <Pressable disabled={saving} onPress={publish} style={[styles.publishButton, saving && styles.disabled]}><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable> : null}
           </View>
         ) : null}
+        <Pressable
+          onPress={() => router.push({ pathname: "/(app)/routes/new", params: { copyFrom: routeData.id } } as never)}
+          style={styles.copyButton}
+        >
+          <Text style={styles.copyTitle}>{t("copyRoute")}</Text>
+          <Text style={styles.copyHint}>{t("copyRouteHint")}</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   )
@@ -334,6 +391,10 @@ const styles = StyleSheet.create({
   pointSubject: { color: colors.primary, fontSize: 10, fontWeight: "800", marginTop: 3 },
   pointMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   pointTime: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 4 },
+  timeRow: { marginTop: 9, flexDirection: "row", alignItems: "center", gap: 8 },
+  timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  timeInput: { width: 72, height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
+  timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
   pointActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
   smallButton: { minHeight: 38, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   smallButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
@@ -353,10 +414,15 @@ const styles = StyleSheet.create({
   addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
   addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, color: colors.headerText, fontSize: 22, lineHeight: 38, textAlign: "center" },
   addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
+  autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 38, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
   saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   saveText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   publishButton: { minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, alignItems: "center", justifyContent: "center" },
   publishText: { color: colors.successDark, fontSize: 14, fontWeight: "900" },
+  copyButton: { marginHorizontal: 14, marginTop: 10, minHeight: 62, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  copyTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  copyHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   missingTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center", marginBottom: 14 },
