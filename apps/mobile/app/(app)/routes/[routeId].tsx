@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
+import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../src/field/route-target-picker"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -49,6 +50,9 @@ export default function FieldRouteDetailScreen() {
   const [saving, setSaving] = useState(false)
   const [requestPoint, setRequestPoint] = useState<FieldRoutePoint | null>(null)
   const [reason, setReason] = useState("")
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [addRequestTarget, setAddRequestTarget] = useState<RouteTarget | null>(null)
+  const [addReason, setAddReason] = useState("")
 
   useEffect(() => {
     if (!routeData) return
@@ -71,6 +75,8 @@ export default function FieldRouteDetailScreen() {
   const meta = routeStatusMeta(routeData.effectiveStatus)
   const tone = tones[meta.tone]
   const canRequestStopRemoval = ["PLANNED", "IN_PROGRESS"].includes(routeData.persistedStatus)
+  const canRequestStopAddition = canRequestStopRemoval
+  const excludedTargets = new Set(points.map((point) => routeTargetKey(point.customerId, point.contactId)))
 
   async function save() {
     setSaving(true)
@@ -78,7 +84,7 @@ export default function FieldRouteDetailScreen() {
       await fieldApi.updateRoute(routeData!.id, {
         name: name.trim() || null,
         notes: notes.trim() || null,
-        points: points.map((point) => ({ customerId: point.customerId, plannedTime: point.plannedTime })),
+        points: points.map((point) => ({ customerId: point.customerId, contactId: point.contactId, plannedTime: point.plannedTime })),
       })
       if (field.week) await field.loadWeek(field.week.weekStart)
       Alert.alert(t("changesSaved"))
@@ -111,6 +117,51 @@ export default function FieldRouteDetailScreen() {
       })
       setRequestPoint(null)
       setReason("")
+      Alert.alert(t("requestSent"))
+      await field.refresh()
+    } catch (error) {
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function selectTarget(target: RouteTarget) {
+    if (routeData!.canEdit) {
+      setPoints((current) => [...current, {
+        id: `draft-${target.key}-${Date.now()}`,
+        customerId: target.customer.id,
+        contactId: target.contact?.id ?? null,
+        orderIndex: current.length + 1,
+        status: "PENDING",
+        effectiveStatus: "PENDING",
+        plannedTime: null,
+        visitedAt: null,
+        notes: null,
+        customer: target.customer,
+        contact: target.contact,
+      }])
+      setPickerOpen(false)
+      return
+    }
+    setAddRequestTarget(target)
+    setPickerOpen(false)
+  }
+
+  async function submitAdditionRequest() {
+    if (!addRequestTarget || addReason.trim().length < 3) return
+    setSaving(true)
+    try {
+      await fieldApi.requestRouteChange(routeData!.id, {
+        changeType: "ADD_STOP",
+        reason: addReason.trim(),
+        payload: {
+          customerId: addRequestTarget.customer.id,
+          contactId: addRequestTarget.contact?.id ?? null,
+        },
+      })
+      setAddRequestTarget(null)
+      setAddReason("")
       Alert.alert(t("requestSent"))
       await field.refresh()
     } catch (error) {
@@ -172,13 +223,24 @@ export default function FieldRouteDetailScreen() {
           <Text style={styles.sectionTitle}>{t("routePointsLabel")}</Text>
           <Text style={styles.pointsCount}>{points.length}</Text>
         </View>
+        {routeData.canEdit || canRequestStopAddition ? (
+          <Pressable onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
+            <Text style={styles.addButtonIcon}>＋</Text>
+            <View style={styles.addButtonBody}>
+              <Text style={styles.addButtonTitle}>{t("addStop")}</Text>
+              <Text style={styles.addButtonHint}>{routeData.canEdit ? t("chooseStop") : t("addStopRequestHint")}</Text>
+            </View>
+          </Pressable>
+        ) : null}
+        {pickerOpen ? <RouteTargetPicker excluded={excludedTargets} onSelect={selectTarget} onCancel={() => setPickerOpen(false)} /> : null}
         {points.length === 0 ? <View style={styles.card}><Text style={styles.noPoints}>{t("noRoutePoints")}</Text></View> : null}
         {points.map((point, index) => (
           <View key={point.id} style={styles.pointCard}>
             <View style={styles.pointTop}>
               <View style={styles.indexBadge}><Text style={styles.indexText}>{index + 1}</Text></View>
               <View style={styles.pointBody}>
-                <Text style={styles.pointName}>{point.customer.name}</Text>
+                <Text style={styles.pointName}>{point.contact?.displayName ?? point.customer.name}</Text>
+                {point.contact ? <Text style={styles.pointSubject}>{point.contact.specialtyName ?? point.contact.type} · {point.customer.name}</Text> : null}
                 <Text style={styles.pointMeta}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
                 {point.plannedTime ? <Text style={styles.pointTime}>{point.plannedTime.slice(11, 16)}</Text> : null}
               </View>
@@ -212,6 +274,21 @@ export default function FieldRouteDetailScreen() {
             <View style={styles.requestActions}>
               <Pressable onPress={() => { setRequestPoint(null); setReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
               <Pressable disabled={saving || reason.trim().length < 3} onPress={() => void submitRemovalRequest()} style={[styles.primaryButton, (saving || reason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {addRequestTarget ? (
+          <View style={[styles.card, styles.requestCard]}>
+            <Text style={styles.sectionTitle}>{t("addStop")}: {addRequestTarget.contact?.displayName ?? addRequestTarget.customer.name}</Text>
+            {addRequestTarget.contact ? <Text style={styles.requestTargetMeta}>{addRequestTarget.customer.name}</Text> : null}
+            <Text style={styles.hint}>{t("addStopRequestHint")}</Text>
+            <Text style={styles.label}>{t("addStopReason")}</Text>
+            <TextInput style={[styles.input, styles.notes]} value={addReason} onChangeText={setAddReason} multiline textAlignVertical="top" />
+            {addReason.length > 0 && addReason.trim().length < 3 ? <Text style={styles.validation}>{t("minimumReason")}</Text> : null}
+            <View style={styles.requestActions}>
+              <Pressable onPress={() => { setAddRequestTarget(null); setAddReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              <Pressable disabled={saving || addReason.trim().length < 3} onPress={() => void submitAdditionRequest()} style={[styles.primaryButton, (saving || addReason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
             </View>
           </View>
         ) : null}
@@ -254,6 +331,7 @@ const styles = StyleSheet.create({
   indexText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   pointBody: { flex: 1 },
   pointName: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  pointSubject: { color: colors.primary, fontSize: 10, fontWeight: "800", marginTop: 3 },
   pointMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   pointTime: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 4 },
   pointActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
@@ -264,6 +342,7 @@ const styles = StyleSheet.create({
   requestButton: { marginTop: 10, minHeight: 41, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   requestText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   requestCard: { borderWidth: 1, borderColor: colors.warning },
+  requestTargetMeta: { color: colors.muted, fontSize: 11, marginTop: 4 },
   validation: { color: colors.missed, fontSize: 10, marginTop: 5 },
   requestActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 12 },
   secondaryButton: { minHeight: 43, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
@@ -271,6 +350,9 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 43, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   footerActions: { marginHorizontal: 14, marginTop: 18, gap: 9 },
+  addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
+  addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, color: colors.headerText, fontSize: 22, lineHeight: 38, textAlign: "center" },
+  addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
   saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   saveText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   publishButton: { minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, alignItems: "center", justifyContent: "center" },

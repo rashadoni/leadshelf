@@ -50,6 +50,7 @@ export interface FieldProfileData {
 export interface FieldRoutePoint {
   id: string
   customerId: string
+  contactId: string | null
   orderIndex: number
   status: string
   effectiveStatus: "PENDING" | "VISITED" | "MISSED"
@@ -68,6 +69,13 @@ export interface FieldRoutePoint {
     latitude: number | null
     longitude: number | null
   }
+  contact: {
+    id: string
+    displayName: string
+    type: string
+    specialtyName: string | null
+    phone: string | null
+  } | null
 }
 
 export interface FieldWeekRoute {
@@ -103,11 +111,13 @@ export interface FieldWeekTask {
 export interface FieldWeekVisit {
   id: string
   customerId: string
+  contactId: string | null
   status: string
   checkInAt: string
   checkOutAt: string | null
   outcome: string | null
   customer: { id: string; name: string; objectType: string }
+  contact: { id: string; displayName: string; type: string } | null
 }
 
 export interface FieldWeekDay {
@@ -234,7 +244,19 @@ export interface FieldContact {
     isPrimary: boolean
     position: string | null
     department: string | null
-    customer: { id: string; name: string; objectType: string; address: string | null; city: string | null }
+    customer: {
+      id: string
+      code: string | null
+      name: string
+      objectType: string
+      category: string
+      address: string | null
+      city: string | null
+      district: string | null
+      phone: string | null
+      latitude: number | null
+      longitude: number | null
+    }
   }>
   agentAssignments?: Array<{ role: string; agent: { id: string; name: string; role: string } }>
   fieldPotentials?: FieldPotential[]

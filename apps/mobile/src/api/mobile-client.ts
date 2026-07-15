@@ -167,10 +167,29 @@ export const fieldApi = {
       method: "PATCH",
     })
   },
+  createRoute: async (input: {
+    agentId: string
+    date: string
+    name?: string | null
+    notes?: string | null
+    points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
+  }) => {
+    const body = await request<{ success?: boolean; data?: { id?: unknown } }>("/api/v1/mtm/routes", json({
+      agentId: input.agentId,
+      assignments: [{ agentId: input.agentId, role: "PRIMARY" }],
+      date: input.date,
+      status: "DRAFT",
+      name: input.name ?? null,
+      notes: input.notes ?? null,
+      points: input.points,
+    }))
+    if (body.success !== true || typeof body.data?.id !== "string") throw new Error("Invalid route create response")
+    return { id: body.data.id }
+  },
   updateRoute: async (routeId: string, input: {
     name?: string | null
     notes?: string | null
-    points: Array<{ customerId: string; plannedTime: string | null }>
+    points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
   }) => {
     await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}`, {
       ...json(input),
@@ -211,10 +230,17 @@ export const fieldApi = {
   week(start?: string): Promise<FieldWeekData>
   notifications(): Promise<FieldNotificationsData>
   markNotificationsRead(input: { ids?: string[]; all?: boolean; isRead: boolean }): Promise<void>
+  createRoute(input: {
+    agentId: string
+    date: string
+    name?: string | null
+    notes?: string | null
+    points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
+  }): Promise<{ id: string }>
   updateRoute(routeId: string, input: {
     name?: string | null
     notes?: string | null
-    points: Array<{ customerId: string; plannedTime: string | null }>
+    points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
   }): Promise<void>
   publishRoute(routeId: string): Promise<void>
   requestRouteChange(routeId: string, input: {
