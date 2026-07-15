@@ -49,3 +49,15 @@ export function parseQueuedOrderDetailCode(raw: string | null): string | null {
     return null
   }
 }
+
+export function parseQueuedOrderServerId(raw: string | null): string | null {
+  if (!raw) return null
+  try {
+    const detail = record(JSON.parse(raw) as unknown)
+    const order = record(detail?.order)
+    const id = order?.id
+    return typeof id === "string" && id.length > 0 ? id : null
+  } catch {
+    return null
+  }
+}

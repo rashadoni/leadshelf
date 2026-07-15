@@ -45,6 +45,7 @@ import { OPEN_TASK_STATUSES } from "../tasks/status"
 import {
   parseQueuedOrderDetailCode,
   parseQueuedOrderPayload,
+  parseQueuedOrderServerId,
   type QueuedOrderLine,
 } from "../orders/queued-order"
 import {
@@ -1742,6 +1743,7 @@ export interface QueuedOrderRow {
   unitCount: number
   lines: QueuedOrderLine[]
   detailCode: string | null
+  serverOrderId: string | null
 }
 
 /** Заказы из локальной очереди (order.create) для вкладки «Заказы». */
@@ -1765,6 +1767,7 @@ export function listQueuedOrders(): QueuedOrderRow[] {
       unitCount: payload.unitCount,
       lines: payload.lines,
       detailCode: parseQueuedOrderDetailCode(row.detail),
+      serverOrderId: parseQueuedOrderServerId(row.detail),
     }
   })
 }
@@ -1793,16 +1796,19 @@ export type CommercialOperationKind =
   | "return.create"
   | "reward.claim"
 
-export interface LocalCommercialOperation {
-  clientOpId: string
-  kind: CommercialOperationKind
-  payload: MobilePushOperation["payload"]
+type CommercialPushOperation = Extract<MobilePushOperation, { kind: CommercialOperationKind }>
+
+type WithLocalOperationState<T> = T extends CommercialPushOperation
+  ? Omit<T, "clientCreatedAt"> & {
   clientCreatedAt: string
   status: "pending" | "applied" | "conflict" | "rejected"
   attempts: number
   detailCode: string | null
   detail: unknown
-}
+    }
+  : never
+
+export type LocalCommercialOperation = WithLocalOperationState<CommercialPushOperation>
 
 function detailCode(raw: string | null): { code: string | null; detail: unknown } {
   if (!raw) return { code: null, detail: null }
@@ -1829,34 +1835,40 @@ export function listCommercialOperations(): LocalCommercialOperation[] {
       FROM outbox_ops
       WHERE kind IN ('promotion.enroll','promotion.submit','inventory.record','return.create','reward.claim')
       ORDER BY clientCreatedAt DESC`)
-  return rows.flatMap((row) => {
+  return rows.flatMap((row): LocalCommercialOperation[] => {
     const rawPayload = parseJsonOrNull<unknown>(row.payload)
-    const operation = rawPayload == null
-      ? null
-      : ({ clientOpId: row.clientOpId, kind: row.kind, payload: rawPayload } as const)
-    const parsed = operation == null
-      ? null
-      : (() => {
-          switch (row.kind) {
-            case "promotion.enroll": return mobilePromotionEnrollPayloadSchema.safeParse(rawPayload)
-            case "promotion.submit": return mobilePromotionSubmitPayloadSchema.safeParse(rawPayload)
-            case "inventory.record": return mobilePromoInventoryRecordPayloadSchema.safeParse(rawPayload)
-            case "return.create": return mobileSalesReturnCreatePayloadSchema.safeParse(rawPayload)
-            case "reward.claim": return mobileRewardClaimPayloadSchema.safeParse(rawPayload)
-          }
-        })()
-    if (!parsed?.success) return []
+    if (rawPayload == null) return []
     const result = detailCode(row.detail)
-    return [{
+    const state = {
       clientOpId: row.clientOpId,
-      kind: row.kind,
-      payload: parsed.data,
       clientCreatedAt: row.clientCreatedAt,
       status: row.status,
       attempts: row.attempts,
       detailCode: result.code,
       detail: result.detail,
-    }]
+    }
+    switch (row.kind) {
+      case "promotion.enroll": {
+        const parsed = mobilePromotionEnrollPayloadSchema.safeParse(rawPayload)
+        return parsed.success ? [{ ...state, kind: row.kind, payload: parsed.data }] : []
+      }
+      case "promotion.submit": {
+        const parsed = mobilePromotionSubmitPayloadSchema.safeParse(rawPayload)
+        return parsed.success ? [{ ...state, kind: row.kind, payload: parsed.data }] : []
+      }
+      case "inventory.record": {
+        const parsed = mobilePromoInventoryRecordPayloadSchema.safeParse(rawPayload)
+        return parsed.success ? [{ ...state, kind: row.kind, payload: parsed.data }] : []
+      }
+      case "return.create": {
+        const parsed = mobileSalesReturnCreatePayloadSchema.safeParse(rawPayload)
+        return parsed.success ? [{ ...state, kind: row.kind, payload: parsed.data }] : []
+      }
+      case "reward.claim": {
+        const parsed = mobileRewardClaimPayloadSchema.safeParse(rawPayload)
+        return parsed.success ? [{ ...state, kind: row.kind, payload: parsed.data }] : []
+      }
+    }
   })
 }
 

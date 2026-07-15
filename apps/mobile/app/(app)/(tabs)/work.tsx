@@ -31,6 +31,7 @@ export default function WorkTab() {
     { label: t("myCustomerRequests"), hint: t("newCustomerHint"), glyph: "+", href: "/(app)/customer-requests", background: colors.warningBg, color: colors.warning },
     { label: t("agentTasksTitle"), hint: t("agentTasksHint"), glyph: "✓", href: "/(app)/field-tasks", background: colors.warningBg, color: colors.warning, badge: agentOpenTasks },
     { label: t("shelfTasksTitle"), hint: t("shelfTasksHint"), glyph: "▦", href: "/(app)/(tabs)/tasks", background: colors.infoBg, color: colors.info, badge: shelfOpenTasks },
+    { label: t("commercialCenterTitle"), hint: t("commercialCenterHint"), glyph: "₼", href: "/(app)/commercial", background: colors.successBg, color: colors.successDark },
     { label: t("tabOrders"), hint: t("selectedOrderSummary"), glyph: "▤", href: "/(app)/(tabs)/orders", background: colors.successBg, color: colors.successDark },
     { label: t("tabShelves"), hint: t("shelvesSectionSubtitle"), glyph: "▦", href: "/(app)/(tabs)/shelves", background: colors.holidayBg, color: colors.holiday },
     { label: t("tabPlanograms"), hint: t("planogramsSectionSubtitle"), glyph: "▥", href: "/(app)/(tabs)/planograms", background: colors.primarySoft, color: colors.primary },
