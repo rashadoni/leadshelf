@@ -9,6 +9,7 @@ import {
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
   parseFieldProfile,
+  parseFieldVisitWorkspace,
   parseFieldWeek,
 } from "./contracts"
 
@@ -240,6 +241,69 @@ describe("LeadDrive field contracts", () => {
     }
     expect(parseFieldCustomerRequests({ success: true, data: { requests: [request] } }).requests).toHaveLength(1)
     expect(parseFieldCustomerRequest({ success: true, data: request }).duplicateCandidates[0]?.score).toBe(92)
+  })
+
+  it("validates the visit workspace policy and completed evidence", () => {
+    const workspace = {
+      success: true,
+      data: {
+        visit: {
+          id: "visit-1",
+          agentId: "agent-1",
+          customerId: "customer-1",
+          contactId: null,
+          routeId: "route-1",
+          routePointId: "point-1",
+          status: "CHECKED_IN",
+          checkInAt: "2026-07-15T08:00:00.000Z",
+          customer: { id: "customer-1", name: "Clinic", objectType: "CLINIC" },
+          contact: null,
+          requirementSnapshot: {
+            id: "snapshot-1",
+            sourcePolicyId: "policy-1",
+            resolvedAt: "2026-07-15T08:00:00.000Z",
+            sourcePolicy: { id: "policy-1", name: "Clinic visit" },
+            requirements: [{
+              id: "requirement-1",
+              actionKey: "VISIT_NOTE",
+              mode: "REQUIRED",
+              minCount: 1,
+              conditions: null,
+              allowWaiver: false,
+            }],
+          },
+          actionResults: [{
+            id: "action-1",
+            requirementId: "requirement-1",
+            actionKey: "VISIT_NOTE",
+            status: "COMPLETED",
+            evidence: { note: "Done" },
+            completedAt: "2026-07-15T08:10:00.000Z",
+            createdAt: "2026-07-15T08:10:00.000Z",
+          }],
+          photos: [],
+          tasks: [],
+        },
+        reminders: [],
+      },
+    }
+    expect(parseFieldVisitWorkspace(workspace).visit.actionResults[0]?.actionKey).toBe("VISIT_NOTE")
+    expect(() => parseFieldVisitWorkspace({
+      ...workspace,
+      data: {
+        ...workspace.data,
+        visit: {
+          ...workspace.data.visit,
+          requirementSnapshot: {
+            ...workspace.data.visit.requirementSnapshot,
+            requirements: [{
+              ...workspace.data.visit.requirementSnapshot.requirements[0],
+              actionKey: "UNKNOWN",
+            }],
+          },
+        },
+      },
+    })).toThrow(FieldContractError)
   })
 
   it("rejects malformed master data and request envelopes", () => {

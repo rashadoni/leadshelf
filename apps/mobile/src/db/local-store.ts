@@ -48,6 +48,14 @@ import {
   type FieldRouteChangeRequestPayload,
   type FieldRouteUpdatePayload,
 } from "../field/route-outbox"
+import {
+  parseFieldVisitActionPayload,
+  parseFieldVisitCheckInPayload,
+  parseFieldVisitUpdatePayload,
+  type FieldVisitActionPayload,
+  type FieldVisitCheckInPayload,
+  type FieldVisitUpdatePayload,
+} from "../field/execution-outbox"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -544,6 +552,36 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.route.change-request",
             payload: parseFieldRouteChangeRequestPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.visit.checkin") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.visit.checkin",
+            payload: parseFieldVisitCheckInPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.visit.action") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.visit.action",
+            payload: parseFieldVisitActionPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.visit.update") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.visit.update",
+            payload: parseFieldVisitUpdatePayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -1091,6 +1129,85 @@ function applyOutboxResultSideEffects(
     }
     return
   }
+  if (
+    kind === "field.visit.checkin" ||
+    kind === "field.visit.action" ||
+    kind === "field.visit.update"
+  ) {
+    try {
+      const raw = JSON.parse(rawPayload) as unknown
+      const visitId = kind === "field.visit.checkin"
+        ? parseFieldVisitCheckInPayload(raw).visitId
+        : kind === "field.visit.action"
+          ? parseFieldVisitActionPayload(raw).visitId
+          : parseFieldVisitUpdatePayload(raw).visitId
+      const actionResultId = kind === "field.visit.action"
+        ? parseFieldVisitActionPayload(raw).actionResultId
+        : null
+      const syncState = status === "conflict"
+        ? "CONFLICT"
+        : status === "rejected"
+          ? "REJECTED"
+          : null
+      const rows = db.getAllSync<{ k: string; json: string }>("SELECT k, json FROM field_cache")
+      for (const row of rows) {
+        const cached = unknownRecord(JSON.parse(row.json) as unknown)
+        if (!cached) continue
+        let changed = false
+        let next: Record<string, unknown> = cached
+
+        if (Array.isArray(cached.days)) {
+          const days = cached.days.map((rawDay) => {
+            const day = unknownRecord(rawDay)
+            if (!day || !unknownRecord(day.visits) || !Array.isArray(unknownRecord(day.visits)?.items)) return rawDay
+            const visits = unknownRecord(day.visits)!
+            let dayChanged = false
+            const items = (visits.items as unknown[]).map((rawVisit) => {
+              const visit = unknownRecord(rawVisit)
+              if (!visit || visit.id !== visitId) return rawVisit
+              changed = true
+              dayChanged = true
+              const updated = { ...visit }
+              if (syncState) updated.syncState = syncState
+              else delete updated.syncState
+              return updated
+            })
+            return dayChanged ? { ...day, visits: { ...visits, items } } : rawDay
+          })
+          if (changed) next = { ...next, days }
+        }
+
+        const workspaceVisit = unknownRecord(cached.visit)
+        if (workspaceVisit?.id === visitId) {
+          const updatedVisit = { ...workspaceVisit }
+          if (syncState) updatedVisit.syncState = syncState
+          else delete updatedVisit.syncState
+          if (actionResultId && Array.isArray(workspaceVisit.actionResults)) {
+            updatedVisit.actionResults = workspaceVisit.actionResults.map((rawResult) => {
+              const result = unknownRecord(rawResult)
+              if (!result || result.id !== actionResultId) return rawResult
+              const updatedResult = { ...result }
+              if (syncState) updatedResult.syncState = syncState
+              else delete updatedResult.syncState
+              return updatedResult
+            })
+          }
+          next = { ...next, visit: updatedVisit }
+          changed = true
+        }
+
+        if (changed) {
+          db.runSync(
+            "UPDATE field_cache SET json=?, updatedAt=? WHERE k=?",
+            [JSON.stringify(next), new Date().toISOString(), row.k],
+          )
+        }
+      }
+    } catch {
+      // Legacy/corrupt cache must not wedge the durable execution queue.
+    }
+    return
+  }
   if (kind !== "visit.checkin") return
 
   const payload = parseJsonObject(rawPayload)
@@ -1467,18 +1584,63 @@ export function enqueueFieldRouteChangeRequest(
   return { clientOpId }
 }
 
-export function fieldRouteOutboxResult(clientOpId: string): {
+export function enqueueFieldVisitCheckIn(
+  input: FieldVisitCheckInPayload,
+): { clientOpId: string } {
+  const clientOpId = `field-visit-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.visit.checkin", JSON.stringify(input), input.checkInAt],
+  )
+  return { clientOpId }
+}
+
+export function enqueueFieldVisitAction(
+  input: FieldVisitActionPayload,
+): { clientOpId: string } {
+  const clientOpId = `field-visit-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.visit.action", JSON.stringify(input), input.completedAt],
+  )
+  return { clientOpId }
+}
+
+export function enqueueFieldVisitUpdate(
+  input: FieldVisitUpdatePayload,
+): { clientOpId: string } {
+  const clientOpId = `field-visit-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.visit.update", JSON.stringify(input), input.checkOutAt ?? new Date().toISOString()],
+  )
+  return { clientOpId }
+}
+
+export function fieldOutboxResult(clientOpId: string): {
   status: "pending" | "applied" | "conflict" | "rejected"
-  routeId: string | null
+  detail: unknown
 } | null {
   const row = db.getFirstSync<{ status: string; detail: string | null }>(
     "SELECT status, detail FROM outbox_ops WHERE clientOpId=?",
     [clientOpId],
   )
   if (!row) return null
-  const detail = row.detail ? unknownRecord(JSON.parse(row.detail) as unknown) : null
   return {
     status: row.status as "pending" | "applied" | "conflict" | "rejected",
+    detail: row.detail ? JSON.parse(row.detail) as unknown : null,
+  }
+}
+
+export function fieldRouteOutboxResult(clientOpId: string): {
+  status: "pending" | "applied" | "conflict" | "rejected"
+  routeId: string | null
+} | null {
+  const result = fieldOutboxResult(clientOpId)
+  if (!result) return null
+  const detail = unknownRecord(result.detail)
+  return {
+    status: result.status,
     routeId: stringValue(detail?.routeId),
   }
 }

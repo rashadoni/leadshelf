@@ -17,6 +17,7 @@ const point: FieldRoutePoint = {
     address: null, city: "Baku", phone: null, latitude: null, longitude: null,
   },
   contact: null,
+  visitPolicy: null,
 }
 
 const week = {

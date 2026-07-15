@@ -76,6 +76,31 @@ export interface FieldRoutePoint {
     specialtyName: string | null
     phone: string | null
   } | null
+  visitPolicy: FieldVisitPolicy | null
+}
+
+export type FieldVisitActionKey =
+  | "PHOTO"
+  | "PRESENTATION"
+  | "STOCK_CHECK"
+  | "VISIT_NOTE"
+  | "CHECKLIST"
+  | "FEEDBACK"
+  | "NEXT_ACTION"
+
+export interface FieldVisitRequirement {
+  id?: string
+  actionKey: FieldVisitActionKey
+  mode: "REQUIRED" | "OPTIONAL" | "HIDDEN"
+  minCount: number
+  conditions: Record<string, unknown> | null
+  allowWaiver: boolean
+}
+
+export interface FieldVisitPolicy {
+  sourcePolicyId: string | null
+  sourcePolicyName: string | null
+  requirements: FieldVisitRequirement[]
 }
 
 export interface FieldWeekRoute {
@@ -113,12 +138,52 @@ export interface FieldWeekVisit {
   id: string
   customerId: string
   contactId: string | null
+  routeId: string | null
+  routePointId: string | null
   status: string
   checkInAt: string
   checkOutAt: string | null
   outcome: string | null
+  potential: string | null
+  notes: string | null
+  resultNotes: string | null
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
   customer: { id: string; name: string; objectType: string }
   contact: { id: string; displayName: string; type: string } | null
+}
+
+export interface FieldVisitActionResult {
+  id: string
+  requirementId: string | null
+  actionKey: FieldVisitActionKey
+  status: "COMPLETED" | "WAIVED"
+  evidence: unknown | null
+  completedAt: string | null
+  createdAt: string
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldVisitWorkspaceData {
+  visit: FieldWeekVisit & {
+    agentId: string
+    checkInLat: number | null
+    checkInLng: number | null
+    checkOutLat: number | null
+    checkOutLng: number | null
+    duration: number | null
+    nextActionDueAt: string | null
+    requirementSnapshot: {
+      id: string
+      sourcePolicyId: string | null
+      resolvedAt: string
+      sourcePolicy: { id: string; name: string } | null
+      requirements: FieldVisitRequirement[]
+    } | null
+    actionResults: FieldVisitActionResult[]
+    photos: Array<Record<string, unknown>>
+    tasks: FieldWeekTask[]
+  }
+  reminders: FieldWeekTask[]
 }
 
 export interface FieldWeekDay {
@@ -377,6 +442,67 @@ function dateKey(value: unknown): value is string {
   return string(value) && /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
+function timestamp(value: unknown): value is string {
+  return string(value) && !Number.isNaN(new Date(value).getTime())
+}
+
+const visitActionKeys = new Set<FieldVisitActionKey>([
+  "PHOTO",
+  "PRESENTATION",
+  "STOCK_CHECK",
+  "VISIT_NOTE",
+  "CHECKLIST",
+  "FEEDBACK",
+  "NEXT_ACTION",
+])
+
+function validVisitRequirement(value: unknown): boolean {
+  const requirement = record(value)
+  return Boolean(
+    requirement &&
+      (requirement.id == null || string(requirement.id)) &&
+      string(requirement.actionKey) &&
+      visitActionKeys.has(requirement.actionKey as FieldVisitActionKey) &&
+      ["REQUIRED", "OPTIONAL", "HIDDEN"].includes(String(requirement.mode)) &&
+      number(requirement.minCount) &&
+      requirement.minCount >= 0 &&
+      (requirement.conditions == null || Boolean(record(requirement.conditions))) &&
+      boolean(requirement.allowWaiver),
+  )
+}
+
+function validVisitPolicy(value: unknown): boolean {
+  if (value == null) return true
+  const policy = record(value)
+  return Boolean(
+    policy &&
+      (policy.sourcePolicyId == null || string(policy.sourcePolicyId)) &&
+      (policy.sourcePolicyName == null || string(policy.sourcePolicyName)) &&
+      Array.isArray(policy.requirements) &&
+      policy.requirements.every(validVisitRequirement),
+  )
+}
+
+function validRoutePoint(value: unknown): boolean {
+  const point = record(value)
+  const customer = record(point?.customer)
+  const contact = point?.contact == null ? null : record(point.contact)
+  return Boolean(
+    point &&
+      string(point.id) &&
+      string(point.customerId) &&
+      (point.contactId == null || string(point.contactId)) &&
+      number(point.orderIndex) &&
+      string(point.effectiveStatus) &&
+      customer &&
+      string(customer.id) &&
+      string(customer.name) &&
+      string(customer.objectType) &&
+      (!contact || (string(contact.id) && string(contact.displayName) && string(contact.type))) &&
+      validVisitPolicy(point.visitPolicy),
+  )
+}
+
 export function parseFieldProfile(value: unknown): FieldProfileData {
   const data = validEnvelope(value)
   const agent = record(data?.agent)
@@ -416,7 +542,8 @@ function validWeekRoute(value: unknown): boolean {
       number(route.visitedPoints) &&
       boolean(route.canExecute) &&
       boolean(route.canEdit) &&
-      Array.isArray(route.points),
+      Array.isArray(route.points) &&
+      route.points.every(validRoutePoint),
   )
 }
 
@@ -470,6 +597,55 @@ export function parseFieldWeek(value: unknown): FieldWeekData {
     throw new FieldContractError("mobile week")
   }
   return data as unknown as FieldWeekData
+}
+
+export function parseFieldVisitWorkspace(value: unknown): FieldVisitWorkspaceData {
+  const data = validEnvelope(value)
+  const visit = record(data?.visit)
+  const customer = record(visit?.customer)
+  const contact = visit?.contact == null ? null : record(visit.contact)
+  const snapshot = visit?.requirementSnapshot == null ? null : record(visit.requirementSnapshot)
+  const snapshotRequirements = snapshot?.requirements
+  if (
+    !data ||
+    !visit ||
+    !string(visit.id) ||
+    !string(visit.customerId) ||
+    !(visit.contactId == null || string(visit.contactId)) ||
+    !(visit.routeId == null || string(visit.routeId)) ||
+    !(visit.routePointId == null || string(visit.routePointId)) ||
+    !string(visit.status) ||
+    !timestamp(visit.checkInAt) ||
+    !customer ||
+    !string(customer.id) ||
+    !string(customer.name) ||
+    !string(customer.objectType) ||
+    (contact != null && (!string(contact.id) || !string(contact.displayName) || !string(contact.type))) ||
+    (snapshot != null && (
+      !string(snapshot.id) ||
+      !timestamp(snapshot.resolvedAt) ||
+      !Array.isArray(snapshotRequirements) ||
+      !snapshotRequirements.every(validVisitRequirement)
+    )) ||
+    !Array.isArray(visit.actionResults) ||
+    !visit.actionResults.every((value) => {
+      const result = record(value)
+      return Boolean(
+        result &&
+          string(result.id) &&
+          string(result.actionKey) &&
+          visitActionKeys.has(result.actionKey as FieldVisitActionKey) &&
+          ["COMPLETED", "WAIVED"].includes(String(result.status)) &&
+          timestamp(result.createdAt),
+      )
+    }) ||
+    !Array.isArray(visit.photos) ||
+    !Array.isArray(visit.tasks) ||
+    !Array.isArray(data.reminders)
+  ) {
+    throw new FieldContractError("mobile visit workspace")
+  }
+  return data as unknown as FieldVisitWorkspaceData
 }
 
 export function parseFieldNotifications(value: unknown): FieldNotificationsData {

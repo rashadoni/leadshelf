@@ -136,6 +136,7 @@ export default function NewRouteScreen() {
           notes: null,
           customer: target.customer,
           contact: target.contact,
+          visitPolicy: null,
         })),
       }))
       await sync()

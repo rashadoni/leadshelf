@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
+import * as Crypto from "expo-crypto"
 import { SafeAreaView } from "react-native-safe-area-context"
 import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
@@ -16,16 +17,23 @@ import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../sr
 import { addMinutesToRouteTime, formatRouteTime, isValidRouteTime, routePlannedTime } from "../../../src/field/route-time"
 import { setOptimisticRouteSyncState, updateOptimisticRoute } from "../../../src/field/route-cache"
 import {
+  enqueueFieldVisitCheckIn,
   enqueueFieldRouteChangeRequest,
   enqueueFieldRoutePublish,
   enqueueFieldRouteUpdate,
   fieldRouteOutboxResult,
   fieldRouteServerId,
+  fieldOutboxResult,
 } from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { getCurrentDeviceLocation } from "../../../src/location/device-location"
+import {
+  setOptimisticFieldVisitSyncState,
+  startOptimisticFieldVisit,
+} from "../../../src/field/visit-cache"
 
 const tones: Record<RouteStatusTone, { bg: string; border: string; text: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
@@ -64,6 +72,7 @@ export default function FieldRouteDetailScreen() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [addRequestTarget, setAddRequestTarget] = useState<RouteTarget | null>(null)
   const [addReason, setAddReason] = useState("")
+  const [checkingInPointId, setCheckingInPointId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!routeData) return
@@ -103,6 +112,63 @@ export default function FieldRouteDetailScreen() {
   const canRequestStopRemoval = ["PLANNED", "IN_PROGRESS"].includes(routeData.persistedStatus)
   const canRequestStopAddition = canRequestStopRemoval
   const excludedTargets = new Set(points.map((point) => routeTargetKey(point.customerId, point.contactId)))
+  const activeVisit = field.week?.days
+    .flatMap((day) => day.visits.items)
+    .find((visit) => visit.status === "CHECKED_IN") ?? null
+  const canStartVisits = routeData.canExecute && routeData.date === field.week?.today
+
+  async function startVisit(point: FieldRoutePoint) {
+    if (activeVisit) {
+      router.push(`/(app)/field-visits/${activeVisit.id}` as never)
+      return
+    }
+    setCheckingInPointId(point.id)
+    try {
+      const location = await getCurrentDeviceLocation()
+      if (!location) {
+        Alert.alert(t("locationPermissionDenied"))
+        return
+      }
+      const visitId = `field-visit-${Crypto.randomUUID()}`
+      const checkInAt = new Date().toISOString()
+      const queued = enqueueFieldVisitCheckIn({
+        visitId,
+        customerId: point.customerId,
+        contactId: point.contactId,
+        routeId: routeData!.id,
+        routePointId: point.id,
+        checkInAt,
+        checkInLat: location.latitude,
+        checkInLng: location.longitude,
+        accuracyM: location.accuracyM,
+      })
+      const week = field.week!
+      field.applyLocalWeek(startOptimisticFieldVisit(week, {
+        visitId,
+        routeId: routeData!.id,
+        routePoint: point,
+        routeDate: routeData!.date,
+        checkInAt,
+      }))
+      await sync()
+      const result = fieldOutboxResult(queued.clientOpId)
+      if (result?.status === "conflict" || result?.status === "rejected") {
+        field.applyLocalWeek(setOptimisticFieldVisitSyncState(
+          startOptimisticFieldVisit(week, { visitId, routeId: routeData!.id, routePoint: point, routeDate: routeData!.date, checkInAt }),
+          visitId,
+          result.status === "conflict" ? "CONFLICT" : "REJECTED",
+        ))
+        Alert.alert(t("fieldVisitConflict"))
+        return
+      }
+      if (result?.status !== "applied") Alert.alert(t("fieldVisitQueued"))
+      router.push(`/(app)/field-visits/${visitId}` as never)
+    } catch (error) {
+      Alert.alert(t("locationUnavailable"), error instanceof Error ? error.message : String(error))
+    } finally {
+      setCheckingInPointId(null)
+    }
+  }
 
   async function save() {
     const dateKey = routeData!.date.slice(0, 10)
@@ -228,6 +294,7 @@ export default function FieldRouteDetailScreen() {
         notes: null,
         customer: target.customer,
         contact: target.contact,
+        visitPolicy: null,
       }])
       setTimeInputs((current) => ({ ...current, [pointId]: "" }))
       setPickerOpen(false)
@@ -385,10 +452,27 @@ export default function FieldRouteDetailScreen() {
                   <Text style={styles.removeText}>{t("removeStop")}</Text>
                 </Pressable>
               </View>
-            ) : canRequestStopRemoval && point.effectiveStatus === "PENDING" ? (
-              <Pressable onPress={() => setRequestPoint(point)} style={styles.requestButton}>
-                <Text style={styles.requestText}>{t("requestRouteChange")}</Text>
-              </Pressable>
+            ) : point.effectiveStatus === "PENDING" ? (
+              <View style={styles.executionActions}>
+                {activeVisit?.routePointId === point.id ? (
+                  <Pressable onPress={() => router.push(`/(app)/field-visits/${activeVisit.id}` as never)} style={styles.startVisitButton}>
+                    <Text style={styles.startVisitText}>{t("continueFieldVisit")}</Text>
+                  </Pressable>
+                ) : canStartVisits && !activeVisit ? (
+                  <Pressable
+                    disabled={checkingInPointId !== null}
+                    onPress={() => void startVisit(point)}
+                    style={[styles.startVisitButton, checkingInPointId !== null && styles.disabled]}
+                  >
+                    <Text style={styles.startVisitText}>{checkingInPointId === point.id ? t("locationLoading") : t("startFieldVisit")}</Text>
+                  </Pressable>
+                ) : null}
+                {canRequestStopRemoval ? (
+                  <Pressable onPress={() => setRequestPoint(point)} style={styles.requestButton}>
+                    <Text style={styles.requestText}>{t("requestRouteChange")}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
         ))}
@@ -478,6 +562,9 @@ const styles = StyleSheet.create({
   smallButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   removeButton: { backgroundColor: colors.missedBg },
   removeText: { color: colors.missed, fontSize: 10, fontWeight: "900" },
+  executionActions: { gap: 8, marginTop: 10 },
+  startVisitButton: { minHeight: 48, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
+  startVisitText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   requestButton: { marginTop: 10, minHeight: 41, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   requestText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   requestCard: { borderWidth: 1, borderColor: colors.warning },

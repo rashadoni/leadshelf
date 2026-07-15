@@ -16,6 +16,12 @@ import { tokenStore } from "../auth/token-store"
 import { prepareMobileSessionScope } from "../db/local-store"
 import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
 import {
+  isFieldExecutionPushOperation,
+  sendFieldExecutionOperations,
+  type FieldServerOperation,
+  type FieldServerPushResponse,
+} from "../field/execution-outbox"
+import {
   parseFieldProfile,
   parseFieldNotifications,
   parseFieldContactDetail,
@@ -25,6 +31,7 @@ import {
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
   parseFieldWeek,
+  parseFieldVisitWorkspace,
   type CreateFieldCustomerRequest,
   type FieldContactDetailData,
   type FieldContactListData,
@@ -36,6 +43,7 @@ import {
   type FieldOrganizationDetailData,
   type FieldOrganizationListData,
   type FieldWeekData,
+  type FieldVisitWorkspaceData,
 } from "../field/contracts"
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://app.leaddrivecrm.org"
@@ -162,6 +170,9 @@ export const fieldApi = {
       .then(parseFieldWeek),
   notifications: () =>
     request<unknown>("/api/v1/mtm/mobile/notifications").then(parseFieldNotifications),
+  visitWorkspace: (id: string) =>
+    request<unknown>(`/api/v1/mtm/mobile/visits/${encodeURIComponent(id)}/workspace`)
+      .then(parseFieldVisitWorkspace),
   markNotificationsRead: async (input: { ids?: string[]; all?: boolean; isRead: boolean }) => {
     await request("/api/v1/mtm/mobile/notifications", {
       ...json(input),
@@ -230,6 +241,7 @@ export const fieldApi = {
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
   notifications(): Promise<FieldNotificationsData>
+  visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
   markNotificationsRead(input: { ids?: string[]; all?: boolean; isRead: boolean }): Promise<void>
   createRoute(input: {
     agentId: string
@@ -270,7 +282,19 @@ export const syncApi: SyncApi = {
       if (!isFieldRoutePushOperation(operation)) continue
       results.push(await sendFieldRouteOperation(operation, fieldApi))
     }
-    const shelfOperations = operations.filter((operation) => !isFieldRoutePushOperation(operation))
+    const fieldExecutionOperations = operations.filter(isFieldExecutionPushOperation)
+    if (fieldExecutionOperations.length > 0) {
+      const deviceId = await tokenStore.getDeviceId()
+      results.push(...await sendFieldExecutionOperations(fieldExecutionOperations, {
+        push: (fieldOperations: FieldServerOperation[]) => request<FieldServerPushResponse>(
+          "/api/v1/mtm/mobile/sync/push",
+          json({ clientId: deviceId ?? "unknown-device", operations: fieldOperations }),
+        ),
+      }))
+    }
+    const shelfOperations = operations.filter((operation) => (
+      !isFieldRoutePushOperation(operation) && !isFieldExecutionPushOperation(operation)
+    ))
     if (shelfOperations.length > 0) {
       const shelf = await request<{ results: PushResult[] }>(
         "/api/v1/mtm/mobile/shelf/sync/push",
