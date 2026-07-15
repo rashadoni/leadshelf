@@ -55,13 +55,28 @@ import {
   parseFieldVisitPhotoPayload,
   parseFieldVisitUpdatePayload,
   parseFieldWorkdayEventPayload,
+  parseFieldTaskCreatePayload,
+  parseFieldTaskEventPayload,
+  parseFieldTaskUpdatePayload,
   type FieldLocationPayload,
+  type FieldTaskCreatePayload,
+  type FieldTaskEventPayload,
+  type FieldTaskUpdatePayload,
   type FieldVisitActionPayload,
   type FieldVisitCheckInPayload,
   type FieldVisitPhotoPayload,
   type FieldVisitUpdatePayload,
   type FieldWorkdayEventPayload,
 } from "../field/execution-outbox"
+import type { FieldAgentTasksData } from "../field/contracts"
+import {
+  FIELD_AGENT_TASKS_CACHE_KEY,
+  addOptimisticAgentTask,
+  appendOptimisticAgentTaskEvent,
+  reconcileAgentTaskOperation,
+  updateOptimisticAgentTask,
+  type FieldTaskCustomerPreview,
+} from "../field/task-cache"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -623,6 +638,36 @@ export const localStore: LocalStore = {
             attempts: r.attempts,
           }
         }
+        if (r.kind === "field.task.create") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.task.create",
+            payload: parseFieldTaskCreatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.task.update") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.task.update",
+            payload: parseFieldTaskUpdatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.task.event") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.task.event",
+            payload: parseFieldTaskEventPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
         if (r.kind === "order.create") {
           return {
             clientOpId: r.clientOpId,
@@ -1110,6 +1155,45 @@ function applyOutboxResultSideEffects(
   status: "pending" | "applied" | "conflict" | "rejected",
   detail: unknown,
 ): void {
+  if (kind === "field.task.create" || kind === "field.task.update" || kind === "field.task.event") {
+    try {
+      const raw = JSON.parse(rawPayload) as unknown
+      const operation: Parameters<typeof reconcileAgentTaskOperation>[1] = kind === "field.task.create"
+        ? { kind, payload: parseFieldTaskCreatePayload(raw), clientOpId }
+        : kind === "field.task.update"
+          ? { kind, payload: parseFieldTaskUpdatePayload(raw), clientOpId }
+          : { kind, payload: parseFieldTaskEventPayload(raw), clientOpId }
+      const cached = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
+      if (!cached || status === "pending") return
+      const taskId = operation.payload.taskId
+      const remaining = db.getFirstSync<{ status: "pending" | "conflict" | "rejected" }>(
+        `SELECT status FROM outbox_ops
+         WHERE kind IN ('field.task.create','field.task.update','field.task.event')
+           AND json_extract(payload, '$.taskId')=?
+           AND status IN ('pending','conflict','rejected')
+         ORDER BY CASE status WHEN 'conflict' THEN 1 WHEN 'rejected' THEN 2 ELSE 3 END
+         LIMIT 1`,
+        [taskId],
+      )
+      const reconciled = reconcileAgentTaskOperation(cached.value, operation, status, detail)
+      const next = remaining
+        ? {
+            ...reconciled,
+            tasks: reconciled.tasks.map((task) => task.id === taskId
+              ? { ...task, syncState: remaining.status === "pending" ? "PENDING" as const : remaining.status === "conflict" ? "CONFLICT" as const : "REJECTED" as const }
+              : task),
+          }
+        : reconciled
+      writeFieldCache(
+        FIELD_AGENT_TASKS_CACHE_KEY,
+        next,
+      )
+    } catch {
+      // Corrupt legacy task cache must not block the durable queue.
+    }
+    return
+  }
+
   if (kind === "field.workday.event") {
     try {
       const payload = parseFieldWorkdayEventPayload(JSON.parse(rawPayload) as unknown)
@@ -1700,6 +1784,71 @@ export function enqueueFieldRouteChangeRequest(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [clientOpId, "field.route.change-request", JSON.stringify(input), new Date().toISOString()],
   )
+  return { clientOpId }
+}
+
+function agentTaskCache(): FieldAgentTasksData {
+  return readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)?.value ?? {
+    tasks: [],
+    capabilities: { createSelfTask: true, recurringTasks: true },
+  }
+}
+
+export function enqueueFieldTaskCreate(
+  input: Omit<FieldTaskCreatePayload, "taskId">,
+  customer?: FieldTaskCustomerPreview | null,
+): { clientOpId: string; taskId: string } {
+  const taskId = `field-task-${Crypto.randomUUID()}`
+  const clientOpId = `field-task-op-${Crypto.randomUUID()}`
+  const occurredAt = new Date().toISOString()
+  const payload = parseFieldTaskCreatePayload({ ...input, taskId })
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.task.create", JSON.stringify(payload), occurredAt],
+    )
+    writeFieldCache(
+      FIELD_AGENT_TASKS_CACHE_KEY,
+      addOptimisticAgentTask(agentTaskCache(), payload, { clientOpId, occurredAt, customer }),
+    )
+  })
+  return { clientOpId, taskId }
+}
+
+export function enqueueFieldTaskUpdate(
+  input: FieldTaskUpdatePayload,
+): { clientOpId: string } {
+  const payload = parseFieldTaskUpdatePayload(input)
+  const clientOpId = `field-task-op-${Crypto.randomUUID()}`
+  const occurredAt = new Date().toISOString()
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.task.update", JSON.stringify(payload), occurredAt],
+    )
+    writeFieldCache(
+      FIELD_AGENT_TASKS_CACHE_KEY,
+      updateOptimisticAgentTask(agentTaskCache(), payload, { clientOpId, occurredAt }),
+    )
+  })
+  return { clientOpId }
+}
+
+export function enqueueFieldTaskEvent(
+  input: FieldTaskEventPayload,
+): { clientOpId: string } {
+  const payload = parseFieldTaskEventPayload(input)
+  const clientOpId = `field-task-op-${Crypto.randomUUID()}`
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.task.event", JSON.stringify(payload), payload.occurredAt],
+    )
+    writeFieldCache(
+      FIELD_AGENT_TASKS_CACHE_KEY,
+      appendOptimisticAgentTaskEvent(agentTaskCache(), payload, clientOpId),
+    )
+  })
   return { clientOpId }
 }
 

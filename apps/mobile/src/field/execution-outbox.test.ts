@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   parseFieldLocationPayload,
+  parseFieldTaskCreatePayload,
+  parseFieldTaskEventPayload,
+  parseFieldTaskUpdatePayload,
   parseFieldVisitActionPayload,
   parseFieldVisitCheckInPayload,
   parseFieldVisitPhotoPayload,
@@ -85,6 +88,43 @@ describe("field execution outbox", () => {
       entity: "workdays",
       data: { workdayId: "mobile-workday-1", action: "PAUSE" },
     })
+  })
+
+  it("maps task create, versioned update and comment to the LeadDrive sync protocol", () => {
+    const create: FieldExecutionPushOperation = {
+      clientOpId: "field-task-create-1",
+      clientCreatedAt: "2026-07-15T08:00:00.000Z",
+      kind: "field.task.create",
+      payload: parseFieldTaskCreatePayload({
+        taskId: "field-task-1",
+        title: "Call clinic",
+        priority: "HIGH",
+        dueDate: "2026-07-16T09:00:00.000Z",
+        recurrence: { rule: "WEEKLY", interval: 1, until: null },
+      }),
+    }
+    const update: FieldExecutionPushOperation = {
+      clientOpId: "field-task-update-1",
+      kind: "field.task.update",
+      payload: parseFieldTaskUpdatePayload({
+        taskId: "field-task-1",
+        expectedVersion: 1,
+        status: "IN_PROGRESS",
+      }),
+    }
+    const comment: FieldExecutionPushOperation = {
+      clientOpId: "field-task-comment-1",
+      kind: "field.task.event",
+      payload: parseFieldTaskEventPayload({
+        taskId: "field-task-1",
+        type: "COMMENTED",
+        occurredAt: "2026-07-15T08:05:00.000Z",
+        comment: "Doctor asked to call later",
+      }),
+    }
+    expect(toFieldServerOperation(create)).toMatchObject({ op: "create", entity: "tasks", data: { id: "field-task-1", title: "Call clinic" } })
+    expect(toFieldServerOperation(update)).toMatchObject({ op: "update", entity: "tasks", data: { id: "field-task-1", expectedVersion: 1, status: "IN_PROGRESS" } })
+    expect(toFieldServerOperation(comment)).toMatchObject({ op: "create", entity: "taskEvents", data: { taskId: "field-task-1", type: "COMMENTED" } })
   })
 
   it("validates replay-safe locations and classifies deterministic GPS conflicts", async () => {

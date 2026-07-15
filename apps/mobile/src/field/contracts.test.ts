@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   FieldContractError,
   parseFieldContactDetail,
+  parseFieldAgentTasks,
   parseFieldContacts,
   parseFieldCustomerRequest,
   parseFieldCustomerRequests,
@@ -34,6 +35,60 @@ function day(date: string) {
 }
 
 describe("LeadDrive field contracts", () => {
+  it("accepts versioned agent tasks with an immutable timeline", () => {
+    const data = parseFieldAgentTasks({
+      success: true,
+      data: {
+        capabilities: { createSelfTask: true, recurringTasks: true },
+        tasks: [{
+          id: "task-1",
+          title: "Call the clinic",
+          description: null,
+          status: "OVERDUE",
+          persistedStatus: "PENDING",
+          priority: "HIGH",
+          dueDate: "2026-07-14T09:00:00.000Z",
+          completedAt: null,
+          acceptedAt: null,
+          startedAt: null,
+          result: null,
+          version: 2,
+          customerId: "customer-1",
+          visitId: null,
+          sourceKey: null,
+          copiedFromId: null,
+          recurrenceRule: null,
+          recurrenceInterval: null,
+          recurrenceUntil: null,
+          recurrenceParentId: null,
+          canEditContent: false,
+          customer: { id: "customer-1", name: "Clinic", objectType: "CLINIC", address: null, city: "Baku" },
+          events: [{
+            id: "event-1",
+            clientEventId: null,
+            type: "CREATED",
+            occurredAt: "2026-07-13T09:00:00.000Z",
+            comment: null,
+            evidence: null,
+            fromStatus: null,
+            toStatus: "PENDING",
+            oldDueDate: null,
+            newDueDate: null,
+          }],
+        }],
+      },
+    })
+    expect(data.tasks[0]).toMatchObject({ status: "OVERDUE", persistedStatus: "PENDING", version: 2 })
+    expect(data.tasks[0]?.events[0]?.type).toBe("CREATED")
+  })
+
+  it("rejects an agent task without a concurrency version", () => {
+    expect(() => parseFieldAgentTasks({
+      success: true,
+      data: { capabilities: { createSelfTask: true, recurringTasks: true }, tasks: [{ id: "task-1", title: "x" }] },
+    })).toThrow(FieldContractError)
+  })
+
   it("accepts the profile envelope used by the mobile dashboard", () => {
     const profile = parseFieldProfile({
       success: true,

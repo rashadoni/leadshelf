@@ -134,6 +134,76 @@ export interface FieldWeekTask {
   customer: { id: string; name: string } | null
 }
 
+export type FieldAgentTaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "OVERDUE"
+export type FieldAgentTaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+export type FieldAgentTaskRecurrence = "DAILY" | "WEEKLY" | "MONTHLY"
+export type FieldAgentTaskEventType =
+  | "CREATED"
+  | "ACCEPTED"
+  | "STARTED"
+  | "COMPLETED"
+  | "RESCHEDULED"
+  | "COMMENTED"
+  | "EVIDENCE_ADDED"
+  | "COPIED"
+  | "CANCELLED"
+  | "EDITED"
+
+export interface FieldAgentTaskEvent {
+  id: string
+  clientEventId: string | null
+  type: FieldAgentTaskEventType
+  occurredAt: string
+  comment: string | null
+  evidence: unknown | null
+  fromStatus: FieldAgentTaskStatus | null
+  toStatus: FieldAgentTaskStatus | null
+  oldDueDate: string | null
+  newDueDate: string | null
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldAgentTask {
+  id: string
+  title: string
+  description: string | null
+  status: FieldAgentTaskStatus
+  persistedStatus: FieldAgentTaskStatus
+  priority: FieldAgentTaskPriority
+  dueDate: string | null
+  completedAt: string | null
+  acceptedAt: string | null
+  startedAt: string | null
+  result: string | null
+  version: number
+  customerId: string | null
+  visitId: string | null
+  sourceKey: string | null
+  copiedFromId: string | null
+  recurrenceRule: FieldAgentTaskRecurrence | null
+  recurrenceInterval: number | null
+  recurrenceUntil: string | null
+  recurrenceParentId: string | null
+  canEditContent: boolean
+  customer: {
+    id: string
+    name: string
+    objectType: string
+    address: string | null
+    city: string | null
+  } | null
+  events: FieldAgentTaskEvent[]
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldAgentTasksData {
+  tasks: FieldAgentTask[]
+  capabilities: {
+    createSelfTask: boolean
+    recurringTasks: boolean
+  }
+}
+
 export interface FieldWeekVisit {
   id: string
   customerId: string
@@ -533,6 +603,79 @@ const visitActionKeys = new Set<FieldVisitActionKey>([
   "NEXT_ACTION",
 ])
 
+const agentTaskStatuses = new Set<FieldAgentTaskStatus>([
+  "PENDING",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
+  "OVERDUE",
+])
+const agentTaskPriorities = new Set<FieldAgentTaskPriority>(["LOW", "MEDIUM", "HIGH", "URGENT"])
+const agentTaskRecurrence = new Set<FieldAgentTaskRecurrence>(["DAILY", "WEEKLY", "MONTHLY"])
+const agentTaskEventTypes = new Set<FieldAgentTaskEventType>([
+  "CREATED",
+  "ACCEPTED",
+  "STARTED",
+  "COMPLETED",
+  "RESCHEDULED",
+  "COMMENTED",
+  "EVIDENCE_ADDED",
+  "COPIED",
+  "CANCELLED",
+  "EDITED",
+])
+
+function nullableTimestamp(value: unknown): boolean {
+  return value == null || timestamp(value)
+}
+
+function validAgentTaskEvent(value: unknown): boolean {
+  const event = record(value)
+  return Boolean(
+    event &&
+      string(event.id) &&
+      (event.clientEventId == null || string(event.clientEventId)) &&
+      string(event.type) && agentTaskEventTypes.has(event.type as FieldAgentTaskEventType) &&
+      timestamp(event.occurredAt) &&
+      (event.comment == null || typeof event.comment === "string") &&
+      (event.fromStatus == null || (string(event.fromStatus) && agentTaskStatuses.has(event.fromStatus as FieldAgentTaskStatus))) &&
+      (event.toStatus == null || (string(event.toStatus) && agentTaskStatuses.has(event.toStatus as FieldAgentTaskStatus))) &&
+      nullableTimestamp(event.oldDueDate) &&
+      nullableTimestamp(event.newDueDate),
+  )
+}
+
+function validAgentTask(value: unknown): boolean {
+  const task = record(value)
+  const customer = task?.customer == null ? null : record(task.customer)
+  return Boolean(
+    task &&
+      string(task.id) &&
+      string(task.title) &&
+      (task.description == null || typeof task.description === "string") &&
+      string(task.status) && agentTaskStatuses.has(task.status as FieldAgentTaskStatus) &&
+      string(task.persistedStatus) && agentTaskStatuses.has(task.persistedStatus as FieldAgentTaskStatus) &&
+      string(task.priority) && agentTaskPriorities.has(task.priority as FieldAgentTaskPriority) &&
+      nullableTimestamp(task.dueDate) &&
+      nullableTimestamp(task.completedAt) &&
+      nullableTimestamp(task.acceptedAt) &&
+      nullableTimestamp(task.startedAt) &&
+      (task.result == null || typeof task.result === "string") &&
+      number(task.version) && task.version >= 1 &&
+      (task.customerId == null || string(task.customerId)) &&
+      (task.visitId == null || string(task.visitId)) &&
+      (task.sourceKey == null || string(task.sourceKey)) &&
+      (task.copiedFromId == null || string(task.copiedFromId)) &&
+      (task.recurrenceRule == null || (string(task.recurrenceRule) && agentTaskRecurrence.has(task.recurrenceRule as FieldAgentTaskRecurrence))) &&
+      (task.recurrenceInterval == null || (number(task.recurrenceInterval) && task.recurrenceInterval >= 1)) &&
+      nullableTimestamp(task.recurrenceUntil) &&
+      (task.recurrenceParentId == null || string(task.recurrenceParentId)) &&
+      boolean(task.canEditContent) &&
+      (!customer || (string(customer.id) && string(customer.name) && string(customer.objectType))) &&
+      Array.isArray(task.events) && task.events.every(validAgentTaskEvent),
+  )
+}
+
 function validVisitRequirement(value: unknown): boolean {
   const requirement = record(value)
   return Boolean(
@@ -674,6 +817,22 @@ export function parseFieldWeek(value: unknown): FieldWeekData {
     throw new FieldContractError("mobile week")
   }
   return data as unknown as FieldWeekData
+}
+
+export function parseFieldAgentTasks(value: unknown): FieldAgentTasksData {
+  const data = validEnvelope(value)
+  const capabilities = record(data?.capabilities)
+  if (
+    !data ||
+    !Array.isArray(data.tasks) ||
+    !data.tasks.every(validAgentTask) ||
+    !capabilities ||
+    !boolean(capabilities.createSelfTask) ||
+    !boolean(capabilities.recurringTasks)
+  ) {
+    throw new FieldContractError("mobile agent tasks")
+  }
+  return data as unknown as FieldAgentTasksData
 }
 
 const workdayActions = new Set<FieldWorkdayAction>(["START", "PAUSE", "RESUME", "FINISH"])

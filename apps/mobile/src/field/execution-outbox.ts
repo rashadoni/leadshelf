@@ -80,6 +80,46 @@ export type FieldLocationPayload = {
   recordedAt: string
 }
 
+export type FieldTaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+export type FieldTaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+export type FieldTaskRecurrenceRule = "DAILY" | "WEEKLY" | "MONTHLY"
+
+export type FieldTaskCreatePayload = {
+  taskId: string
+  title: string
+  description?: string | null
+  customerId?: string | null
+  visitId?: string | null
+  priority: FieldTaskPriority
+  dueDate?: string | null
+  copiedFromId?: string | null
+  recurrence?: {
+    rule: FieldTaskRecurrenceRule
+    interval: number
+    until?: string | null
+  } | null
+}
+
+export type FieldTaskUpdatePayload = {
+  taskId: string
+  expectedVersion: number
+  status?: FieldTaskStatus
+  title?: string
+  description?: string | null
+  priority?: FieldTaskPriority
+  dueDate?: string | null
+  result?: string | null
+  acceptedAt?: string
+}
+
+export type FieldTaskEventPayload = {
+  taskId: string
+  type: "COMMENTED" | "EVIDENCE_ADDED"
+  occurredAt: string
+  comment?: string | null
+  evidence?: Record<string, unknown> | null
+}
+
 export type FieldExecutionPushOperation = {
   clientOpId: string
   clientCreatedAt?: string
@@ -88,6 +128,9 @@ export type FieldExecutionPushOperation = {
   | { kind: "field.visit.action"; payload: FieldVisitActionPayload }
   | { kind: "field.visit.update"; payload: FieldVisitUpdatePayload }
   | { kind: "field.workday.event"; payload: FieldWorkdayEventPayload }
+  | { kind: "field.task.create"; payload: FieldTaskCreatePayload }
+  | { kind: "field.task.update"; payload: FieldTaskUpdatePayload }
+  | { kind: "field.task.event"; payload: FieldTaskEventPayload }
 )
 
 export type FieldVisitPhotoPushOperation = {
@@ -107,7 +150,7 @@ export type FieldLocationPushOperation = {
 export type FieldServerOperation = {
   operationId: string
   op: "create" | "update"
-  entity: "visits" | "visitActions" | "workdays"
+  entity: "visits" | "visitActions" | "workdays" | "tasks" | "taskEvents"
   data: Record<string, unknown>
   clientTimestamp: number
 }
@@ -149,6 +192,10 @@ function finite(value: unknown): value is number {
 
 function parseDate(value: unknown): value is string {
   return string(value) && !Number.isNaN(new Date(value).getTime())
+}
+
+function safeId(value: unknown): value is string {
+  return string(value) && value.length <= 100 && /^[A-Za-z0-9._:-]+$/.test(value)
 }
 
 export function parseFieldVisitCheckInPayload(value: unknown): FieldVisitCheckInPayload {
@@ -260,13 +307,79 @@ export function parseFieldLocationPayload(value: unknown): FieldLocationPayload 
   return payload as unknown as FieldLocationPayload
 }
 
+export function parseFieldTaskCreatePayload(value: unknown): FieldTaskCreatePayload {
+  const payload = record(value)
+  const recurrence = payload?.recurrence == null ? null : record(payload.recurrence)
+  const dueDateValid = payload?.dueDate == null || parseDate(payload.dueDate)
+  const recurrenceValid = !recurrence || (
+    ["DAILY", "WEEKLY", "MONTHLY"].includes(String(recurrence.rule)) &&
+    finite(recurrence.interval) && Number.isInteger(recurrence.interval) &&
+    recurrence.interval >= 1 && recurrence.interval <= 30 &&
+    (recurrence.until == null || parseDate(recurrence.until))
+  )
+  if (
+    !payload ||
+    !safeId(payload.taskId) ||
+    !string(payload.title) || payload.title.trim().length < 1 || payload.title.trim().length > 200 ||
+    !(payload.description == null || (typeof payload.description === "string" && payload.description.length <= 5_000)) ||
+    !(payload.customerId == null || safeId(payload.customerId)) ||
+    !(payload.visitId == null || safeId(payload.visitId)) ||
+    !["LOW", "MEDIUM", "HIGH", "URGENT"].includes(String(payload.priority)) ||
+    !dueDateValid ||
+    !(payload.copiedFromId == null || safeId(payload.copiedFromId)) ||
+    !recurrenceValid ||
+    (recurrence != null && payload.dueDate == null) ||
+    (recurrence?.until != null && new Date(String(recurrence.until)).getTime() < new Date(String(payload.dueDate)).getTime())
+  ) throw new Error("Invalid field task create payload")
+  return payload as unknown as FieldTaskCreatePayload
+}
+
+export function parseFieldTaskUpdatePayload(value: unknown): FieldTaskUpdatePayload {
+  const payload = record(value)
+  const mutationKeys = ["status", "title", "description", "priority", "dueDate", "result", "acceptedAt"]
+  if (
+    !payload ||
+    !safeId(payload.taskId) ||
+    !finite(payload.expectedVersion) || !Number.isInteger(payload.expectedVersion) || payload.expectedVersion < 1 ||
+    !mutationKeys.some((key) => payload[key] !== undefined) ||
+    !(payload.status === undefined || ["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"].includes(String(payload.status))) ||
+    !(payload.title === undefined || (string(payload.title) && payload.title.trim().length <= 200)) ||
+    !(payload.description == null || (typeof payload.description === "string" && payload.description.length <= 5_000)) ||
+    !(payload.priority === undefined || ["LOW", "MEDIUM", "HIGH", "URGENT"].includes(String(payload.priority))) ||
+    !(payload.dueDate == null || parseDate(payload.dueDate)) ||
+    !(payload.result == null || (typeof payload.result === "string" && payload.result.length <= 5_000)) ||
+    !(payload.acceptedAt === undefined || parseDate(payload.acceptedAt))
+  ) throw new Error("Invalid field task update payload")
+  return payload as unknown as FieldTaskUpdatePayload
+}
+
+export function parseFieldTaskEventPayload(value: unknown): FieldTaskEventPayload {
+  const payload = record(value)
+  const evidence = payload?.evidence == null ? null : record(payload.evidence)
+  if (
+    !payload ||
+    !safeId(payload.taskId) ||
+    !["COMMENTED", "EVIDENCE_ADDED"].includes(String(payload.type)) ||
+    !parseDate(payload.occurredAt) ||
+    !(payload.comment == null || (typeof payload.comment === "string" && payload.comment.trim().length > 0 && payload.comment.length <= 2_000)) ||
+    !(payload.evidence == null || evidence) ||
+    (payload.type === "COMMENTED" && !payload.comment) ||
+    (payload.type === "EVIDENCE_ADDED" && !evidence) ||
+    (evidence != null && JSON.stringify(evidence).length > 25_000)
+  ) throw new Error("Invalid field task event payload")
+  return payload as unknown as FieldTaskEventPayload
+}
+
 export function isFieldExecutionPushOperation(
   operation: { kind: string },
 ): operation is FieldExecutionPushOperation {
   return operation.kind === "field.visit.checkin" ||
     operation.kind === "field.visit.action" ||
     operation.kind === "field.visit.update" ||
-    operation.kind === "field.workday.event"
+    operation.kind === "field.workday.event" ||
+    operation.kind === "field.task.create" ||
+    operation.kind === "field.task.update" ||
+    operation.kind === "field.task.event"
 }
 
 export function isFieldVisitPhotoPushOperation(
@@ -295,6 +408,35 @@ export function toFieldServerOperation(operation: FieldExecutionPushOperation): 
       data: operation.payload.action === "START"
         ? { ...payload, id: workdayId }
         : { ...payload, workdayId },
+    }
+  }
+  if (operation.kind === "field.task.create") {
+    const { taskId, ...payload } = operation.payload
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "tasks",
+      clientTimestamp,
+      data: { id: taskId, ...payload },
+    }
+  }
+  if (operation.kind === "field.task.update") {
+    const { taskId, ...payload } = operation.payload
+    return {
+      operationId: operation.clientOpId,
+      op: "update",
+      entity: "tasks",
+      clientTimestamp,
+      data: { id: taskId, ...payload },
+    }
+  }
+  if (operation.kind === "field.task.event") {
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "taskEvents",
+      clientTimestamp,
+      data: operation.payload,
     }
   }
   if (operation.kind === "field.visit.checkin") {

@@ -13,7 +13,9 @@ import { tokenStore } from "../auth/token-store"
 import { readFieldCache, writeFieldCache } from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
+import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
 import type {
+  FieldAgentTasksData,
   FieldLocationHistoryData,
   FieldNotificationsData,
   FieldProfileData,
@@ -29,6 +31,9 @@ type FieldContextValue = {
   notifications: FieldNotificationsData
   workday: FieldWorkdayData | null
   locations: FieldLocationHistoryData | null
+  agentTasks: FieldAgentTasksData | null
+  taskPhase: FieldPhase
+  taskError: string | null
   activityPhase: FieldPhase
   activityError: string | null
   phase: FieldPhase
@@ -37,9 +42,11 @@ type FieldContextValue = {
   refresh: () => Promise<void>
   loadWeek: (start: string) => Promise<void>
   refreshActivity: (date?: string) => Promise<void>
+  refreshAgentTasks: () => Promise<void>
   applyLocalWeek: (week: FieldWeekData) => void
   applyLocalWorkday: (workday: FieldWorkdayData) => void
   applyLocalLocations: (locations: FieldLocationHistoryData) => void
+  applyLocalAgentTasks: (tasks: FieldAgentTasksData) => void
   markAllNotificationsRead: () => Promise<void>
 }
 
@@ -60,6 +67,9 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<FieldNotificationsData>({ items: [], unread: 0 })
   const [workday, setWorkday] = useState<FieldWorkdayData | null>(null)
   const [locations, setLocations] = useState<FieldLocationHistoryData | null>(null)
+  const [agentTasks, setAgentTasks] = useState<FieldAgentTasksData | null>(null)
+  const [taskPhase, setTaskPhase] = useState<FieldPhase>("loading")
+  const [taskError, setTaskError] = useState<string | null>(null)
   const [activityPhase, setActivityPhase] = useState<FieldPhase>("loading")
   const [activityError, setActivityError] = useState<string | null>(null)
   const [phase, setPhase] = useState<FieldPhase>("loading")
@@ -150,6 +160,26 @@ export function FieldProvider({ children }: { children: ReactNode }) {
         : null
     setActivityError(reason instanceof Error ? reason.message : String(reason ?? "Field activity unavailable"))
     setActivityPhase(workdayCache || locationsCache ? "stale" : "error")
+  }, [loseSession])
+
+  const refreshAgentTasks = useCallback(async () => {
+    const cached = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
+    if (cached) setAgentTasks(cached.value)
+    setTaskPhase(cached ? "refreshing" : "loading")
+    setTaskError(null)
+    try {
+      const next = await fieldApi.agentTasks("limit=200")
+      setAgentTasks(next)
+      writeFieldCache(FIELD_AGENT_TASKS_CACHE_KEY, next)
+      setTaskPhase("ready")
+    } catch (reason) {
+      if (reason instanceof AuthLostError) {
+        await loseSession()
+        return
+      }
+      setTaskError(reason instanceof Error ? reason.message : String(reason))
+      setTaskPhase(cached ? "stale" : "error")
+    }
   }, [loseSession])
 
   const refresh = useCallback(async () => {
@@ -244,12 +274,19 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     setActivityPhase("stale")
   }, [])
 
+  const applyLocalAgentTasks = useCallback((next: FieldAgentTasksData) => {
+    setAgentTasks(next)
+    writeFieldCache(FIELD_AGENT_TASKS_CACHE_KEY, next)
+    setTaskPhase("stale")
+  }, [])
+
   useEffect(() => {
     const profileCache = readFieldCache<FieldProfileData>(PROFILE_KEY)
     const weekCache = readFieldCache<FieldWeekData>(CURRENT_WEEK_KEY)
     const notificationsCache = readFieldCache<FieldNotificationsData>(NOTIFICATIONS_KEY)
     const workdayCache = readFieldCache<FieldWorkdayData>(WORKDAY_KEY)
     const locationsCache = readFieldCache<FieldLocationHistoryData>(LOCATIONS_KEY)
+    const agentTasksCache = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
     if (profileCache) setProfile(profileCache.value)
     if (weekCache) {
       setWeek(weekCache.value)
@@ -258,6 +295,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     if (notificationsCache) setNotifications(notificationsCache.value)
     if (workdayCache) setWorkday(workdayCache.value)
     if (locationsCache) setLocations(locationsCache.value)
+    if (agentTasksCache) setAgentTasks(agentTasksCache.value)
     const cachedAt = [profileCache?.updatedAt, weekCache?.updatedAt, notificationsCache?.updatedAt]
       .filter((value): value is string => Boolean(value))
       .sort()
@@ -265,8 +303,10 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     setLastUpdatedAt(cachedAt)
     if (profileCache || weekCache || notificationsCache) setPhase("stale")
     if (workdayCache || locationsCache) setActivityPhase("stale")
+    if (agentTasksCache) setTaskPhase("stale")
     void refresh()
     void refreshActivity()
+    void refreshAgentTasks()
   // Initial cache hydration and refresh belong to this provider lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -278,6 +318,9 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       notifications,
       workday,
       locations,
+      agentTasks,
+      taskPhase,
+      taskError,
       activityPhase,
       activityError,
       phase,
@@ -286,9 +329,11 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       refresh,
       loadWeek,
       refreshActivity,
+      refreshAgentTasks,
       applyLocalWeek,
       applyLocalWorkday,
       applyLocalLocations,
+      applyLocalAgentTasks,
       markAllNotificationsRead,
     }}>
       {children}

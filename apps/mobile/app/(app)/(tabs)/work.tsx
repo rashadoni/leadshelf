@@ -19,14 +19,18 @@ type Module = {
 export default function WorkTab() {
   useLocale()
   const field = useField()
-  const openTasks = countOpenTasks()
+  const shelfOpenTasks = countOpenTasks()
+  const agentOpenTasks = field.agentTasks?.tasks.filter((task) => (
+    task.status !== "COMPLETED" && task.status !== "CANCELLED"
+  )).length ?? 0
   const modules: Module[] = [
     { label: t("workdayTitle"), hint: t("workdayHint"), glyph: "◷", href: "/(app)/workday", background: colors.successBg, color: colors.successDark },
     { label: t("tabRoute"), hint: t("todayRoute"), glyph: "↗", href: "/(app)/routes", background: colors.infoBg, color: colors.info },
     { label: t("moduleOrganizations"), hint: t("organizationsSearch"), glyph: "⌂", href: "/(app)/organizations", background: colors.primarySoft, color: colors.primary },
     { label: t("moduleContacts"), hint: t("contactsSearch"), glyph: "◎", href: "/(app)/contacts", background: colors.holidayBg, color: colors.holiday },
     { label: t("myCustomerRequests"), hint: t("newCustomerHint"), glyph: "+", href: "/(app)/customer-requests", background: colors.warningBg, color: colors.warning },
-    { label: t("tabTasks"), hint: t("allTasks"), glyph: "✓", href: "/(app)/(tabs)/tasks", background: colors.warningBg, color: colors.warning, badge: openTasks },
+    { label: t("agentTasksTitle"), hint: t("agentTasksHint"), glyph: "✓", href: "/(app)/field-tasks", background: colors.warningBg, color: colors.warning, badge: agentOpenTasks },
+    { label: t("shelfTasksTitle"), hint: t("shelfTasksHint"), glyph: "▦", href: "/(app)/(tabs)/tasks", background: colors.infoBg, color: colors.info, badge: shelfOpenTasks },
     { label: t("tabOrders"), hint: t("selectedOrderSummary"), glyph: "▤", href: "/(app)/(tabs)/orders", background: colors.successBg, color: colors.successDark },
     { label: t("tabShelves"), hint: t("shelvesSectionSubtitle"), glyph: "▦", href: "/(app)/(tabs)/shelves", background: colors.holidayBg, color: colors.holiday },
     { label: t("tabPlanograms"), hint: t("planogramsSectionSubtitle"), glyph: "▥", href: "/(app)/(tabs)/planograms", background: colors.primarySoft, color: colors.primary },

@@ -31,6 +31,7 @@ import {
 } from "../field/execution-outbox"
 import {
   parseFieldProfile,
+  parseFieldAgentTasks,
   parseFieldNotifications,
   parseFieldLocationHistory,
   parseFieldContactDetail,
@@ -49,6 +50,7 @@ import {
   type FieldCustomerRequestsData,
   type FieldAgentProfile,
   type FieldProfileData,
+  type FieldAgentTasksData,
   type FieldNotificationsData,
   type FieldLocationHistoryData,
   type FieldOrganizationDetailData,
@@ -180,6 +182,9 @@ export const fieldApi = {
   week: (start?: string) =>
     request<unknown>(`/api/v1/mtm/mobile/week${start ? `?start=${encodeURIComponent(start)}` : ""}`)
       .then(parseFieldWeek),
+  agentTasks: (query = "") =>
+    request<unknown>(`/api/v1/mtm/mobile/tasks${query ? `?${query}` : ""}`)
+      .then(parseFieldAgentTasks),
   notifications: () =>
     request<unknown>("/api/v1/mtm/mobile/notifications").then(parseFieldNotifications),
   workday: (date?: string) =>
@@ -294,6 +299,7 @@ export const fieldApi = {
 } satisfies {
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
+  agentTasks(query?: string): Promise<FieldAgentTasksData>
   notifications(): Promise<FieldNotificationsData>
   workday(date?: string): Promise<FieldWorkdayData>
   locations(date?: string): Promise<FieldLocationHistoryData>
