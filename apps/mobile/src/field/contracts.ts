@@ -163,6 +163,17 @@ export interface FieldVisitActionResult {
   syncState?: "PENDING" | "CONFLICT" | "REJECTED"
 }
 
+export interface FieldVisitPhoto {
+  id: string
+  url: string
+  thumbnailUrl: string | null
+  category: string | null
+  status: string
+  createdAt: string
+  localUri?: string
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
 export interface FieldVisitWorkspaceData {
   visit: FieldWeekVisit & {
     agentId: string
@@ -180,7 +191,7 @@ export interface FieldVisitWorkspaceData {
       requirements: FieldVisitRequirement[]
     } | null
     actionResults: FieldVisitActionResult[]
-    photos: Array<Record<string, unknown>>
+    photos: FieldVisitPhoto[]
     tasks: FieldWeekTask[]
   }
   reminders: FieldWeekTask[]

@@ -1,5 +1,6 @@
 import type {
   FieldVisitActionResult,
+  FieldVisitPhoto,
   FieldVisitRequirement,
   FieldVisitWorkspaceData,
   FieldWeekData,
@@ -87,16 +88,57 @@ export function visitRequirementProgress(
   workspace: FieldVisitWorkspaceData,
   requirement: FieldVisitRequirement,
 ): { completed: number; required: number; satisfied: boolean } {
-  const completed = workspace.visit.actionResults.filter((result) => (
+  const actionCount = workspace.visit.actionResults.filter((result) => (
     result.actionKey === requirement.actionKey &&
     (result.status === "COMPLETED" || result.status === "WAIVED") &&
     result.syncState !== "REJECTED"
   )).length
+  const completed = requirement.actionKey === "PHOTO"
+    ? Math.max(
+      actionCount,
+      workspace.visit.photos.filter((photo) => photo.syncState !== "REJECTED").length,
+    )
+    : actionCount
   return {
     completed,
     required: requirement.minCount,
     satisfied: completed >= requirement.minCount,
   }
+}
+
+export function addOptimisticVisitPhoto(
+  workspace: FieldVisitWorkspaceData,
+  input: { clientPhotoId: string; fileUri: string; category: string | null; takenAt: string },
+): FieldVisitWorkspaceData {
+  if (workspace.visit.photos.some((photo) => photo.id === input.clientPhotoId)) return workspace
+  const photo: FieldVisitPhoto = {
+    id: input.clientPhotoId,
+    url: input.fileUri,
+    thumbnailUrl: null,
+    category: input.category,
+    status: "LOCAL_PENDING",
+    createdAt: input.takenAt,
+    localUri: input.fileUri,
+    syncState: "PENDING",
+  }
+  return {
+    ...workspace,
+    visit: { ...workspace.visit, photos: [photo, ...workspace.visit.photos] },
+  }
+}
+
+export function setVisitPhotoSyncState(
+  workspace: FieldVisitWorkspaceData,
+  clientPhotoId: string,
+  syncState: FieldVisitPhoto["syncState"],
+): FieldVisitWorkspaceData {
+  let changed = false
+  const photos = workspace.visit.photos.map((photo) => {
+    if (photo.id !== clientPhotoId) return photo
+    changed = true
+    return { ...photo, syncState }
+  })
+  return changed ? { ...workspace, visit: { ...workspace.visit, photos } } : workspace
 }
 
 export function missingRequiredVisitActions(
@@ -116,11 +158,16 @@ export function mergeServerVisitWorkspace(
   const pendingLocal = local.visit.actionResults.filter((result) => (
     !serverResultIds.has(result.id) && result.syncState === "PENDING"
   ))
+  const serverPhotoIds = new Set(server.visit.photos.map((photo) => photo.id))
+  const pendingLocalPhotos = local.visit.photos.filter((photo) => (
+    !serverPhotoIds.has(photo.id) && photo.syncState === "PENDING"
+  ))
   return {
     ...server,
     visit: {
       ...server.visit,
       actionResults: [...server.visit.actionResults, ...pendingLocal],
+      photos: [...server.visit.photos, ...pendingLocalPhotos],
       syncState: local.visit.syncState === "PENDING" ? "PENDING" : server.visit.syncState,
     },
   }

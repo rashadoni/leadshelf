@@ -51,9 +51,11 @@ import {
 import {
   parseFieldVisitActionPayload,
   parseFieldVisitCheckInPayload,
+  parseFieldVisitPhotoPayload,
   parseFieldVisitUpdatePayload,
   type FieldVisitActionPayload,
   type FieldVisitCheckInPayload,
+  type FieldVisitPhotoPayload,
   type FieldVisitUpdatePayload,
 } from "../field/execution-outbox"
 
@@ -582,6 +584,16 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.visit.update",
             payload: parseFieldVisitUpdatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.visit.photo") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.visit.photo",
+            payload: parseFieldVisitPhotoPayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -1132,7 +1144,8 @@ function applyOutboxResultSideEffects(
   if (
     kind === "field.visit.checkin" ||
     kind === "field.visit.action" ||
-    kind === "field.visit.update"
+    kind === "field.visit.update" ||
+    kind === "field.visit.photo"
   ) {
     try {
       const raw = JSON.parse(rawPayload) as unknown
@@ -1140,10 +1153,16 @@ function applyOutboxResultSideEffects(
         ? parseFieldVisitCheckInPayload(raw).visitId
         : kind === "field.visit.action"
           ? parseFieldVisitActionPayload(raw).visitId
-          : parseFieldVisitUpdatePayload(raw).visitId
+          : kind === "field.visit.update"
+            ? parseFieldVisitUpdatePayload(raw).visitId
+            : parseFieldVisitPhotoPayload(raw).visitId
       const actionResultId = kind === "field.visit.action"
         ? parseFieldVisitActionPayload(raw).actionResultId
         : null
+      const clientPhotoId = kind === "field.visit.photo"
+        ? parseFieldVisitPhotoPayload(raw).clientPhotoId
+        : null
+      const serverPhoto = unknownRecord(unknownRecord(detail)?.photo)
       const syncState = status === "conflict"
         ? "CONFLICT"
         : status === "rejected"
@@ -1180,8 +1199,10 @@ function applyOutboxResultSideEffects(
         const workspaceVisit = unknownRecord(cached.visit)
         if (workspaceVisit?.id === visitId) {
           const updatedVisit = { ...workspaceVisit }
-          if (syncState) updatedVisit.syncState = syncState
-          else delete updatedVisit.syncState
+          if (kind !== "field.visit.photo") {
+            if (syncState) updatedVisit.syncState = syncState
+            else delete updatedVisit.syncState
+          }
           if (actionResultId && Array.isArray(workspaceVisit.actionResults)) {
             updatedVisit.actionResults = workspaceVisit.actionResults.map((rawResult) => {
               const result = unknownRecord(rawResult)
@@ -1190,6 +1211,17 @@ function applyOutboxResultSideEffects(
               if (syncState) updatedResult.syncState = syncState
               else delete updatedResult.syncState
               return updatedResult
+            })
+          }
+          if (clientPhotoId && Array.isArray(workspaceVisit.photos)) {
+            updatedVisit.photos = workspaceVisit.photos.map((rawPhoto) => {
+              const photo = unknownRecord(rawPhoto)
+              if (!photo || photo.id !== clientPhotoId) return rawPhoto
+              if (status === "applied" && serverPhoto) return serverPhoto
+              const updatedPhoto = { ...photo }
+              if (syncState) updatedPhoto.syncState = syncState
+              else delete updatedPhoto.syncState
+              return updatedPhoto
             })
           }
           next = { ...next, visit: updatedVisit }
@@ -1613,6 +1645,17 @@ export function enqueueFieldVisitUpdate(
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [clientOpId, "field.visit.update", JSON.stringify(input), input.checkOutAt ?? new Date().toISOString()],
+  )
+  return { clientOpId }
+}
+
+export function enqueueFieldVisitPhoto(
+  input: FieldVisitPhotoPayload,
+): { clientOpId: string } {
+  const clientOpId = `field-photo-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.visit.photo", JSON.stringify(input), input.takenAt],
   )
   return { clientOpId }
 }

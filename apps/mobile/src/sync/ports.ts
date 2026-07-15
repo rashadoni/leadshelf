@@ -13,7 +13,7 @@ import type {
   MobileVisitRow,
 } from "@leadshelf/api-contracts/mobile/v1"
 import type { FieldRoutePushOperation } from "../field/route-outbox"
-import type { FieldExecutionPushOperation } from "../field/execution-outbox"
+import type { FieldExecutionPushOperation, FieldVisitPhotoPushOperation } from "../field/execution-outbox"
 
 export type TaskRow = MobileTaskRow
 export type StoreRow = MobileStoreRow
@@ -21,7 +21,7 @@ export type RouteRow = MobileRouteRow
 export type RouteStopRow = MobileRouteStopRow
 export type VisitRow = MobileVisitRow
 export type PullResponse = MobileSyncPullResponse
-export type PushOperation = MobilePushOperation | FieldRoutePushOperation | FieldExecutionPushOperation
+export type PushOperation = MobilePushOperation | FieldRoutePushOperation | FieldExecutionPushOperation | FieldVisitPhotoPushOperation
 export type PushResult = MobilePushResult
 
 export type SyncCursors = {

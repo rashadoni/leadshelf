@@ -11,15 +11,19 @@ import {
   mobileSyncPushResponseSchema,
 } from "@leadshelf/api-contracts/mobile/v1"
 import { File } from "expo-file-system"
+import * as FileSystem from "expo-file-system/legacy"
 import { Platform } from "react-native"
 import { tokenStore } from "../auth/token-store"
 import { prepareMobileSessionScope } from "../db/local-store"
 import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
 import {
   isFieldExecutionPushOperation,
+  isFieldVisitPhotoPushOperation,
   sendFieldExecutionOperations,
+  sendFieldVisitPhotoOperation,
   type FieldServerOperation,
   type FieldServerPushResponse,
+  type FieldVisitPhotoPayload,
 } from "../field/execution-outbox"
 import {
   parseFieldProfile,
@@ -173,6 +177,27 @@ export const fieldApi = {
   visitWorkspace: (id: string) =>
     request<unknown>(`/api/v1/mtm/mobile/visits/${encodeURIComponent(id)}/workspace`)
       .then(parseFieldVisitWorkspace),
+  uploadVisitPhoto: async (input: FieldVisitPhotoPayload) => {
+    const form = new FormData()
+    form.append("file", new File(input.fileUri), `${input.clientPhotoId}.jpg`)
+    form.append("clientPhotoId", input.clientPhotoId)
+    form.append("agentId", input.agentId)
+    form.append("visitId", input.visitId)
+    if (input.category) form.append("category", input.category)
+    if (input.latitude != null) form.append("latitude", String(input.latitude))
+    if (input.longitude != null) form.append("longitude", String(input.longitude))
+    const body = await request<{ success?: boolean; data?: unknown }>("/api/v1/mtm/photos", {
+      method: "POST",
+      body: form,
+    })
+    const photo = body.data && typeof body.data === "object" && !Array.isArray(body.data)
+      ? body.data as Record<string, unknown>
+      : null
+    if (body.success !== true || !photo || typeof photo.id !== "string" || typeof photo.url !== "string") {
+      throw new Error("Invalid visit photo response")
+    }
+    return photo
+  },
   markNotificationsRead: async (input: { ids?: string[]; all?: boolean; isRead: boolean }) => {
     await request("/api/v1/mtm/mobile/notifications", {
       ...json(input),
@@ -242,6 +267,7 @@ export const fieldApi = {
   week(start?: string): Promise<FieldWeekData>
   notifications(): Promise<FieldNotificationsData>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
+  uploadVisitPhoto(input: FieldVisitPhotoPayload): Promise<Record<string, unknown>>
   markNotificationsRead(input: { ids?: string[]; all?: boolean; isRead: boolean }): Promise<void>
   createRoute(input: {
     agentId: string
@@ -278,12 +304,10 @@ export const syncApi: SyncApi = {
     ).then((body) => mobileSyncPullResponseSchema.parse(body)),
   push: async (operations: PushOperation[]) => {
     const results: PushResult[] = []
-    for (const operation of operations) {
-      if (!isFieldRoutePushOperation(operation)) continue
-      results.push(await sendFieldRouteOperation(operation, fieldApi))
-    }
-    const fieldExecutionOperations = operations.filter(isFieldExecutionPushOperation)
-    if (fieldExecutionOperations.length > 0) {
+    const shelfOperations: PushOperation[] = []
+    let fieldExecutionOperations: Array<Extract<PushOperation, { kind: "field.visit.checkin" | "field.visit.action" | "field.visit.update" }>> = []
+    const flushFieldExecution = async () => {
+      if (fieldExecutionOperations.length === 0) return
       const deviceId = await tokenStore.getDeviceId()
       results.push(...await sendFieldExecutionOperations(fieldExecutionOperations, {
         push: (fieldOperations: FieldServerOperation[]) => request<FieldServerPushResponse>(
@@ -291,10 +315,29 @@ export const syncApi: SyncApi = {
           json({ clientId: deviceId ?? "unknown-device", operations: fieldOperations }),
         ),
       }))
+      fieldExecutionOperations = []
     }
-    const shelfOperations = operations.filter((operation) => (
-      !isFieldRoutePushOperation(operation) && !isFieldExecutionPushOperation(operation)
-    ))
+
+    // Preserve causal order around multipart evidence: queued check-in/action
+    // batches flush before a photo; checkout queued after it cannot reach the
+    // server until the required photo upload has succeeded.
+    for (const operation of operations) {
+      if (isFieldExecutionPushOperation(operation)) {
+        fieldExecutionOperations.push(operation)
+        continue
+      }
+      await flushFieldExecution()
+      if (isFieldRoutePushOperation(operation)) {
+        results.push(await sendFieldRouteOperation(operation, fieldApi))
+      } else if (isFieldVisitPhotoPushOperation(operation)) {
+        const result = await sendFieldVisitPhotoOperation(operation, { upload: fieldApi.uploadVisitPhoto })
+        results.push(result)
+        await FileSystem.deleteAsync(operation.payload.fileUri, { idempotent: true }).catch(() => {})
+      } else {
+        shelfOperations.push(operation)
+      }
+    }
+    await flushFieldExecution()
     if (shelfOperations.length > 0) {
       const shelf = await request<{ results: PushResult[] }>(
         "/api/v1/mtm/mobile/shelf/sync/push",

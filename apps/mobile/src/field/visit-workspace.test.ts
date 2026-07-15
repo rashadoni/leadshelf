@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { FieldVisitWorkspaceData } from "./contracts"
 import {
+  addOptimisticVisitPhoto,
   addOptimisticVisitAction,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
@@ -20,6 +21,7 @@ const workspace = {
       }],
     },
     actionResults: [],
+    photos: [],
   },
   reminders: [],
 } as unknown as FieldVisitWorkspaceData
@@ -56,5 +58,37 @@ describe("field visit workspace", () => {
       visit: { ...workspace.visit, actionResults: [] },
     })
     expect(merged.visit.actionResults.map((result) => result.id)).toEqual(["action-local-1"])
+  })
+
+  it("counts queued visit photos and preserves them across a server refresh", () => {
+    const photoWorkspace = {
+      ...workspace,
+      visit: {
+        ...workspace.visit,
+        requirementSnapshot: {
+          requirements: [{
+            id: "requirement-photo",
+            actionKey: "PHOTO",
+            mode: "REQUIRED",
+            minCount: 1,
+            conditions: null,
+            allowWaiver: false,
+          }],
+        },
+        photos: [],
+      },
+    } as unknown as FieldVisitWorkspaceData
+    const local = addOptimisticVisitPhoto(photoWorkspace, {
+      clientPhotoId: "mobile-photo-1",
+      fileUri: "file:///photo.jpg",
+      category: "visit",
+      takenAt: "2026-07-15T08:15:00.000Z",
+    })
+    expect(missingRequiredVisitActions(local)).toEqual([])
+    const merged = mergeServerVisitWorkspace(local, photoWorkspace)
+    expect(merged.visit.photos[0]).toMatchObject({
+      id: "mobile-photo-1",
+      syncState: "PENDING",
+    })
   })
 })

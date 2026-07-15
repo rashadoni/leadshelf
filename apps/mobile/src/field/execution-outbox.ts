@@ -45,6 +45,17 @@ export type FieldVisitUpdatePayload = {
   resultNotes?: string | null
 }
 
+export type FieldVisitPhotoPayload = {
+  clientPhotoId: string
+  visitId: string
+  agentId: string
+  fileUri: string
+  category: string | null
+  latitude: number | null
+  longitude: number | null
+  takenAt: string
+}
+
 export type FieldExecutionPushOperation = {
   clientOpId: string
   clientCreatedAt?: string
@@ -53,6 +64,13 @@ export type FieldExecutionPushOperation = {
   | { kind: "field.visit.action"; payload: FieldVisitActionPayload }
   | { kind: "field.visit.update"; payload: FieldVisitUpdatePayload }
 )
+
+export type FieldVisitPhotoPushOperation = {
+  clientOpId: string
+  clientCreatedAt?: string
+  kind: "field.visit.photo"
+  payload: FieldVisitPhotoPayload
+}
 
 export type FieldServerOperation = {
   operationId: string
@@ -148,12 +166,41 @@ export function parseFieldVisitUpdatePayload(value: unknown): FieldVisitUpdatePa
   return payload as unknown as FieldVisitUpdatePayload
 }
 
+export function parseFieldVisitPhotoPayload(value: unknown): FieldVisitPhotoPayload {
+  const payload = record(value)
+  const coordinatesValid = (
+    (payload?.latitude == null && payload?.longitude == null) ||
+    (finite(payload?.latitude) && finite(payload?.longitude) &&
+      payload.latitude >= -90 && payload.latitude <= 90 &&
+      payload.longitude >= -180 && payload.longitude <= 180)
+  )
+  if (
+    !payload ||
+    !string(payload.clientPhotoId) ||
+    payload.clientPhotoId.length < 8 ||
+    payload.clientPhotoId.length > 128 ||
+    !string(payload.visitId) ||
+    !string(payload.agentId) ||
+    !string(payload.fileUri) ||
+    !(payload.category == null || string(payload.category)) ||
+    !coordinatesValid ||
+    !parseDate(payload.takenAt)
+  ) throw new Error("Invalid field visit photo payload")
+  return payload as unknown as FieldVisitPhotoPayload
+}
+
 export function isFieldExecutionPushOperation(
   operation: { kind: string },
 ): operation is FieldExecutionPushOperation {
   return operation.kind === "field.visit.checkin" ||
     operation.kind === "field.visit.action" ||
     operation.kind === "field.visit.update"
+}
+
+export function isFieldVisitPhotoPushOperation(
+  operation: { kind: string },
+): operation is FieldVisitPhotoPushOperation {
+  return operation.kind === "field.visit.photo"
 }
 
 export function toFieldServerOperation(operation: FieldExecutionPushOperation): FieldServerOperation {
@@ -222,4 +269,26 @@ export async function sendFieldExecutionOperations(
       detail,
     }
   })
+}
+
+export async function sendFieldVisitPhotoOperation(
+  operation: FieldVisitPhotoPushOperation,
+  api: { upload(payload: FieldVisitPhotoPayload): Promise<Record<string, unknown>> },
+): Promise<FieldExecutionPushResult> {
+  try {
+    const photo = await api.upload(operation.payload)
+    return {
+      clientOpId: operation.clientOpId,
+      status: "applied",
+      detail: { photo },
+    }
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error
+    if (error.status === 408 || error.status === 429 || error.status >= 500) throw error
+    return {
+      clientOpId: operation.clientOpId,
+      status: [403, 404, 409, 422].includes(error.status) ? "conflict" : "rejected",
+      detail: error.detail ?? { error: error.message, status: error.status },
+    }
+  }
 }

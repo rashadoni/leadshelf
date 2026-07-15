@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Alert,
   Pressable,
@@ -6,9 +6,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  Vibration,
   View,
 } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
+import { CameraView, useCameraPermissions } from "expo-camera"
 import * as Crypto from "expo-crypto"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -35,12 +37,15 @@ import {
 } from "../../../src/field/visit-cache"
 import {
   addOptimisticVisitAction,
+  addOptimisticVisitPhoto,
   localFieldVisitWorkspace,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
   setVisitActionSyncState,
+  setVisitPhotoSyncState,
   visitRequirementProgress,
 } from "../../../src/field/visit-workspace"
+import { persistAndQueueFieldVisitPhoto } from "../../../src/field/visit-photo-store"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
@@ -64,6 +69,8 @@ export default function FieldVisitWorkspaceScreen() {
   const { visitId } = useLocalSearchParams<{ visitId: string }>()
   const field = useField()
   const { sync } = useSync()
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+  const cameraRef = useRef<CameraView | null>(null)
   const cacheKey = `field.visit.workspace.${visitId}`
   const cached = readFieldCache<FieldVisitWorkspaceData>(cacheKey)?.value ?? null
   const local = localFieldVisitWorkspace(field.week, visitId, field.profile?.agent.id ?? "")
@@ -75,6 +82,7 @@ export default function FieldVisitWorkspaceScreen() {
   const [potential, setPotential] = useState<FieldVisitPotential>("UNKNOWN")
   const [resultNote, setResultNote] = useState("")
   const [saving, setSaving] = useState(false)
+  const [photoCameraOpen, setPhotoCameraOpen] = useState(false)
 
   const weekVisit = findFieldVisit(field.week, visitId)
   const requirements = workspace?.visit.requirementSnapshot?.requirements
@@ -108,10 +116,7 @@ export default function FieldVisitWorkspaceScreen() {
 
   async function saveAction(status: "COMPLETED" | "WAIVED") {
     if (!activeRequirement || !workspace) return
-    if (activeRequirement.actionKey === "PHOTO") {
-      Alert.alert(t("photoActionComing"))
-      return
-    }
+    if (activeRequirement.actionKey === "PHOTO") return
     const trimmed = evidence.trim()
     if (trimmed.length < 2) return
     if (status === "WAIVED" && !activeRequirement.allowWaiver) return
@@ -148,6 +153,63 @@ export default function FieldVisitWorkspaceScreen() {
       } else {
         Alert.alert(t("fieldVisitActionQueued"))
       }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function openPhotoCamera() {
+    const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
+    if (!permission.granted) {
+      Alert.alert(t("cameraPermissionDenied"))
+      return
+    }
+    setPhotoCameraOpen(true)
+  }
+
+  async function captureVisitPhoto() {
+    if (!workspace || !field.profile || saving) return
+    setSaving(true)
+    try {
+      const picture = await cameraRef.current?.takePictureAsync({ quality: 0.7, exif: true })
+      if (!picture?.uri) return
+      const location = await getCurrentDeviceLocation().catch(() => null)
+      const takenAt = new Date().toISOString()
+      const queued = await persistAndQueueFieldVisitPhoto({
+        visitId,
+        agentId: field.profile.agent.id,
+        sourceUri: picture.uri,
+        category: "visit",
+        latitude: location?.latitude ?? null,
+        longitude: location?.longitude ?? null,
+        takenAt,
+      })
+      const optimistic = addOptimisticVisitPhoto(workspace, {
+        clientPhotoId: queued.payload.clientPhotoId,
+        fileUri: queued.payload.fileUri,
+        category: queued.payload.category,
+        takenAt,
+      })
+      persist(optimistic)
+      setPhotoCameraOpen(false)
+      setActiveRequirement(null)
+      Vibration.vibrate(40)
+      await sync()
+      const result = fieldOutboxResult(queued.clientOpId)
+      if (result?.status === "conflict" || result?.status === "rejected") {
+        persist(setVisitPhotoSyncState(
+          optimistic,
+          queued.payload.clientPhotoId,
+          result.status === "conflict" ? "CONFLICT" : "REJECTED",
+        ))
+        Alert.alert(t("syncNeedsAttention"))
+      } else if (result?.status === "applied") {
+        await refreshWorkspace(optimistic)
+      } else {
+        Alert.alert(t("photoQueued"))
+      }
+    } catch (error) {
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
@@ -225,6 +287,27 @@ export default function FieldVisitWorkspaceScreen() {
     }
   }
 
+  if (photoCameraOpen) {
+    return (
+      <SafeAreaView style={styles.cameraRoot} edges={["top", "bottom"]}>
+        <CameraView ref={cameraRef} style={styles.camera} facing="back" mode="picture" />
+        <View style={styles.cameraTop}>
+          <Text style={styles.cameraTitle}>{t("visitAction_PHOTO")}</Text>
+          <Text style={styles.cameraHint}>{t("photoActionComing")}</Text>
+        </View>
+        <View style={styles.cameraActions}>
+          <Pressable disabled={saving} onPress={() => setPhotoCameraOpen(false)} style={styles.cameraCancel}>
+            <Text style={styles.cameraCancelText}>{t("cancel")}</Text>
+          </Pressable>
+          <Pressable disabled={saving} onPress={() => void captureVisitPhoto()} style={[styles.shutter, saving && styles.disabled]}>
+            <View style={styles.shutterInner} />
+          </Pressable>
+          <View style={styles.cameraSpacer} />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   if (!workspace || !weekVisit) {
     return (
       <SafeAreaView style={styles.root}>
@@ -290,7 +373,12 @@ export default function FieldVisitWorkspaceScreen() {
           <View style={styles.editorCard}>
             <Text style={styles.editorTitle}>{actionLabel(activeRequirement)}</Text>
             {activeRequirement.actionKey === "PHOTO" ? (
-              <Text style={styles.editorHint}>{t("photoActionComing")}</Text>
+              <>
+                <Text style={styles.editorHint}>{t("photoActionComing")}</Text>
+                <Pressable disabled={saving} onPress={() => void openPhotoCamera()} style={styles.photoButton}>
+                  <Text style={styles.photoButtonText}>{t("takePhoto")}</Text>
+                </Pressable>
+              </>
             ) : (
               <>
                 <Text style={styles.label}>{t("fieldVisitEvidence")}</Text>
@@ -305,8 +393,8 @@ export default function FieldVisitWorkspaceScreen() {
             )}
             <View style={styles.editorActions}>
               <Pressable onPress={() => setActiveRequirement(null)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
-              {activeRequirement.allowWaiver ? <Pressable disabled={saving || evidence.trim().length < 2} onPress={() => void saveAction("WAIVED")} style={styles.waiveButton}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
-              <Pressable disabled={saving || evidence.trim().length < 2 || activeRequirement.actionKey === "PHOTO"} onPress={() => void saveAction("COMPLETED")} style={[styles.primaryButton, (saving || evidence.trim().length < 2 || activeRequirement.actionKey === "PHOTO") && styles.disabled]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable>
+              {activeRequirement.actionKey !== "PHOTO" && activeRequirement.allowWaiver ? <Pressable disabled={saving || evidence.trim().length < 2} onPress={() => void saveAction("WAIVED")} style={styles.waiveButton}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
+              {activeRequirement.actionKey !== "PHOTO" ? <Pressable disabled={saving || evidence.trim().length < 2} onPress={() => void saveAction("COMPLETED")} style={[styles.primaryButton, (saving || evidence.trim().length < 2) && styles.disabled]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable> : null}
             </View>
           </View>
         ) : null}
@@ -370,4 +458,17 @@ const styles = StyleSheet.create({
   checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", marginTop: 15, paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
+  photoButton: { minHeight: 50, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  photoButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  cameraRoot: { flex: 1, backgroundColor: "#08111E" },
+  camera: { flex: 1 },
+  cameraTop: { position: "absolute", top: 24, left: 18, right: 18, borderRadius: radii.card, padding: 14, backgroundColor: "rgba(8,17,30,0.78)" },
+  cameraTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "900" },
+  cameraHint: { color: "rgba(255,255,255,0.74)", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  cameraActions: { position: "absolute", left: 20, right: 20, bottom: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cameraCancel: { width: 76, minHeight: 46, borderRadius: radii.pill, backgroundColor: "rgba(8,17,30,0.78)", alignItems: "center", justifyContent: "center" },
+  cameraCancelText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.18)" },
+  shutterInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#FFFFFF" },
+  cameraSpacer: { width: 76 },
 })

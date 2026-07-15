@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest"
 import {
   parseFieldVisitActionPayload,
   parseFieldVisitCheckInPayload,
+  parseFieldVisitPhotoPayload,
+  sendFieldVisitPhotoOperation,
   sendFieldExecutionOperations,
   toFieldServerOperation,
   type FieldExecutionPushOperation,
@@ -115,5 +117,31 @@ describe("field execution outbox", () => {
         results: [{ operationId: checkIn.clientOpId, status: "error", error: "Internal error, retry" }],
       }),
     })).rejects.toThrow("Internal error")
+  })
+
+  it("validates and uploads durable visit photos with conflict classification", async () => {
+    const operation = {
+      clientOpId: "field-photo-op-0001",
+      kind: "field.visit.photo" as const,
+      payload: parseFieldVisitPhotoPayload({
+        clientPhotoId: "mobile-photo-0001",
+        visitId: "field-visit-1",
+        agentId: "agent-1",
+        fileUri: "file:///photo.jpg",
+        category: "visit",
+        latitude: 40.4,
+        longitude: 49.8,
+        takenAt: "2026-07-15T08:15:00.000Z",
+      }),
+    }
+    await expect(sendFieldVisitPhotoOperation(operation, {
+      upload: vi.fn().mockResolvedValue({ id: "server-photo-1", url: "/photo.jpg" }),
+    })).resolves.toMatchObject({
+      status: "applied",
+      detail: { photo: { id: "server-photo-1" } },
+    })
+    await expect(sendFieldVisitPhotoOperation(operation, {
+      upload: vi.fn().mockRejectedValue(new (await import("../sync/ports-error")).HttpError(409, "visit closed")),
+    })).resolves.toMatchObject({ status: "conflict" })
   })
 })
