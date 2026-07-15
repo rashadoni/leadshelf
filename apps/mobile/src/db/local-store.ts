@@ -41,8 +41,11 @@ import {
 } from "../planogram/local-library"
 import {
   parseFieldRouteCreatePayload,
+  parseFieldRouteChangeRequestPayload,
+  parseFieldRoutePublishPayload,
   parseFieldRouteUpdatePayload,
   type FieldRouteCreatePayload,
+  type FieldRouteChangeRequestPayload,
   type FieldRouteUpdatePayload,
 } from "../field/route-outbox"
 
@@ -521,6 +524,26 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.route.update",
             payload: parseFieldRouteUpdatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.route.publish") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.route.publish",
+            payload: parseFieldRoutePublishPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.route.change-request") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.route.change-request",
+            payload: parseFieldRouteChangeRequestPayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -1013,11 +1036,21 @@ function applyOutboxResultSideEffects(
   status: "pending" | "applied" | "conflict" | "rejected",
   detail: unknown,
 ): void {
-  if (kind === "field.route.create" || kind === "field.route.update") {
+  if (
+    kind === "field.route.create" ||
+    kind === "field.route.update" ||
+    kind === "field.route.publish" ||
+    kind === "field.route.change-request"
+  ) {
     try {
+      const raw = JSON.parse(rawPayload) as unknown
       const routeId = kind === "field.route.create"
-        ? parseFieldRouteCreatePayload(JSON.parse(rawPayload) as unknown).localRouteId
-        : parseFieldRouteUpdatePayload(JSON.parse(rawPayload) as unknown).routeId
+        ? parseFieldRouteCreatePayload(raw).localRouteId
+        : kind === "field.route.update"
+          ? parseFieldRouteUpdatePayload(raw).routeId
+          : kind === "field.route.publish"
+            ? parseFieldRoutePublishPayload(raw).routeId
+            : parseFieldRouteChangeRequestPayload(raw).routeId
       const serverRouteId = stringValue(unknownRecord(detail)?.routeId)
       const rows = db.getAllSync<{ k: string; json: string }>("SELECT k, json FROM field_cache")
       for (const row of rows) {
@@ -1034,6 +1067,13 @@ function applyOutboxResultSideEffects(
             const next = { ...route }
             if (status === "applied" && serverRouteId) next.id = serverRouteId
             if (status === "applied") delete next.syncState
+            if (status === "applied" && kind === "field.route.publish") {
+              next.persistedStatus = "PLANNED"
+              next.effectiveStatus = "PLANNED"
+              next.canEdit = false
+              next.canPublish = false
+              next.canExecute = true
+            }
             if (status === "conflict") next.syncState = "CONFLICT"
             if (status === "rejected") next.syncState = "REJECTED"
             return next
@@ -1403,6 +1443,26 @@ export function enqueueFieldRouteUpdate(input: FieldRouteUpdatePayload): { clien
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [clientOpId, "field.route.update", JSON.stringify(input), new Date().toISOString()],
+  )
+  return { clientOpId }
+}
+
+export function enqueueFieldRoutePublish(routeId: string): { clientOpId: string } {
+  const clientOpId = `field-route-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.route.publish", JSON.stringify({ routeId }), new Date().toISOString()],
+  )
+  return { clientOpId }
+}
+
+export function enqueueFieldRouteChangeRequest(
+  input: FieldRouteChangeRequestPayload,
+): { clientOpId: string } {
+  const clientOpId = `field-route-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.route.change-request", JSON.stringify(input), new Date().toISOString()],
   )
   return { clientOpId }
 }

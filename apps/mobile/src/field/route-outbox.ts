@@ -22,12 +22,24 @@ export type FieldRouteUpdatePayload = {
   points: FieldRouteMutationPoint[]
 }
 
+export type FieldRoutePublishPayload = { routeId: string }
+
+export type FieldRouteChangeRequestPayload = {
+  routeId: string
+  changeType: "REMOVE_STOP" | "ADD_STOP" | "CONFLICT_OVERRIDE"
+  routePointId?: string
+  reason: string
+  payload?: Record<string, unknown>
+}
+
 export type FieldRoutePushOperation = {
   clientOpId: string
   clientCreatedAt?: string
 } & (
   | { kind: "field.route.create"; payload: FieldRouteCreatePayload }
   | { kind: "field.route.update"; payload: FieldRouteUpdatePayload }
+  | { kind: "field.route.publish"; payload: FieldRoutePublishPayload }
+  | { kind: "field.route.change-request"; payload: FieldRouteChangeRequestPayload }
 )
 
 export type FieldRoutePushResult = {
@@ -39,6 +51,11 @@ export type FieldRoutePushResult = {
 type RouteMutationApi = {
   createRoute(input: Omit<FieldRouteCreatePayload, "localRouteId">): Promise<{ id: string }>
   updateRoute(routeId: string, input: Omit<FieldRouteUpdatePayload, "routeId">): Promise<void>
+  publishRoute(routeId: string): Promise<void>
+  requestRouteChange(
+    routeId: string,
+    input: Omit<FieldRouteChangeRequestPayload, "routeId">,
+  ): Promise<void>
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -105,8 +122,37 @@ export function parseFieldRouteUpdatePayload(value: unknown): FieldRouteUpdatePa
   }
 }
 
+export function parseFieldRoutePublishPayload(value: unknown): FieldRoutePublishPayload {
+  const payload = record(value)
+  if (!payload || typeof payload.routeId !== "string") throw new Error("Invalid field route publish payload")
+  return { routeId: payload.routeId }
+}
+
+export function parseFieldRouteChangeRequestPayload(value: unknown): FieldRouteChangeRequestPayload {
+  const payload = record(value)
+  const changeType = payload?.changeType
+  if (
+    !payload ||
+    typeof payload.routeId !== "string" ||
+    !["REMOVE_STOP", "ADD_STOP", "CONFLICT_OVERRIDE"].includes(String(changeType)) ||
+    typeof payload.reason !== "string" ||
+    (payload.routePointId != null && typeof payload.routePointId !== "string") ||
+    (payload.payload != null && !record(payload.payload))
+  ) throw new Error("Invalid field route change request payload")
+  return {
+    routeId: payload.routeId,
+    changeType: changeType as FieldRouteChangeRequestPayload["changeType"],
+    routePointId: typeof payload.routePointId === "string" ? payload.routePointId : undefined,
+    reason: payload.reason,
+    payload: record(payload.payload) ?? undefined,
+  }
+}
+
 export function isFieldRoutePushOperation(operation: { kind: string }): operation is FieldRoutePushOperation {
-  return operation.kind === "field.route.create" || operation.kind === "field.route.update"
+  return operation.kind === "field.route.create" ||
+    operation.kind === "field.route.update" ||
+    operation.kind === "field.route.publish" ||
+    operation.kind === "field.route.change-request"
 }
 
 function duplicateRouteId(error: HttpError): string | null {
@@ -127,11 +173,18 @@ export async function sendFieldRouteOperation(
       const route = await api.createRoute(input)
       return { clientOpId: operation.clientOpId, status: "applied", detail: { routeId: route.id } }
     }
-    await api.updateRoute(operation.payload.routeId, {
-      name: operation.payload.name,
-      notes: operation.payload.notes,
-      points: operation.payload.points,
-    })
+    if (operation.kind === "field.route.update") {
+      await api.updateRoute(operation.payload.routeId, {
+        name: operation.payload.name,
+        notes: operation.payload.notes,
+        points: operation.payload.points,
+      })
+    } else if (operation.kind === "field.route.publish") {
+      await api.publishRoute(operation.payload.routeId)
+    } else {
+      const { routeId, ...input } = operation.payload
+      await api.requestRouteChange(routeId, input)
+    }
     return {
       clientOpId: operation.clientOpId,
       status: "applied",

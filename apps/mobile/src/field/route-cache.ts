@@ -73,3 +73,22 @@ export function updateOptimisticRoute(
   })
   return changed ? { ...week, days } : week
 }
+
+export function setOptimisticRouteSyncState(
+  week: FieldWeekData,
+  routeId: string,
+  syncState: FieldWeekRoute["syncState"],
+): FieldWeekData {
+  let changed = false
+  const days = week.days.map((day) => {
+    let dayChanged = false
+    const routes = day.routes.map((route) => {
+      if (route.id !== routeId) return route
+      changed = true
+      dayChanged = true
+      return { ...route, syncState }
+    })
+    return dayChanged ? { ...day, routes } : day
+  })
+  return changed ? { ...week, days } : week
+}

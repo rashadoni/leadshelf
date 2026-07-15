@@ -27,6 +27,8 @@ describe("field route outbox", () => {
         duplicate: { id: "route-existing" },
       })),
       updateRoute: vi.fn(),
+      publishRoute: vi.fn(),
+      requestRouteChange: vi.fn(),
     }
     const result = await sendFieldRouteOperation({
       clientOpId: "op-create-0001",
@@ -49,6 +51,8 @@ describe("field route outbox", () => {
     const conflictApi = {
       createRoute: vi.fn(),
       updateRoute: vi.fn().mockRejectedValue(new HttpError(409, "changed", { code: "ROUTE_DUPLICATE" })),
+      publishRoute: vi.fn(),
+      requestRouteChange: vi.fn(),
     }
     await expect(sendFieldRouteOperation({
       clientOpId: "op-update-0001",
@@ -59,6 +63,8 @@ describe("field route outbox", () => {
     const transientApi = {
       createRoute: vi.fn().mockRejectedValue(new HttpError(503, "offline")),
       updateRoute: vi.fn(),
+      publishRoute: vi.fn(),
+      requestRouteChange: vi.fn(),
     }
     await expect(sendFieldRouteOperation({
       clientOpId: "op-create-0002",
@@ -70,5 +76,31 @@ describe("field route outbox", () => {
         points,
       },
     }, transientApi)).rejects.toThrow("offline")
+  })
+
+  it("dispatches publication and approval requests through the same queue contract", async () => {
+    const api = {
+      createRoute: vi.fn(),
+      updateRoute: vi.fn(),
+      publishRoute: vi.fn().mockResolvedValue(undefined),
+      requestRouteChange: vi.fn().mockResolvedValue(undefined),
+    }
+    await expect(sendFieldRouteOperation({
+      clientOpId: "op-publish-0001",
+      kind: "field.route.publish",
+      payload: { routeId: "route-1" },
+    }, api)).resolves.toMatchObject({ status: "applied", detail: { routeId: "route-1" } })
+    await expect(sendFieldRouteOperation({
+      clientOpId: "op-change-0001",
+      kind: "field.route.change-request",
+      payload: {
+        routeId: "route-1",
+        changeType: "ADD_STOP",
+        reason: "Urgent doctor visit",
+        payload: { customerId: "clinic-1", contactId: "doctor-1" },
+      },
+    }, api)).resolves.toMatchObject({ status: "applied" })
+    expect(api.publishRoute).toHaveBeenCalledWith("route-1")
+    expect(api.requestRouteChange).toHaveBeenCalledWith("route-1", expect.objectContaining({ changeType: "ADD_STOP" }))
   })
 })

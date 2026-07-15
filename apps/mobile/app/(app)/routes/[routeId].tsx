@@ -10,13 +10,18 @@ import {
 } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { fieldApi } from "../../../src/api/mobile-client"
 import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../src/field/route-target-picker"
 import { addMinutesToRouteTime, formatRouteTime, isValidRouteTime, routePlannedTime } from "../../../src/field/route-time"
-import { updateOptimisticRoute } from "../../../src/field/route-cache"
-import { enqueueFieldRouteUpdate, fieldRouteOutboxResult, fieldRouteServerId } from "../../../src/db/local-store"
+import { setOptimisticRouteSyncState, updateOptimisticRoute } from "../../../src/field/route-cache"
+import {
+  enqueueFieldRouteChangeRequest,
+  enqueueFieldRoutePublish,
+  enqueueFieldRouteUpdate,
+  fieldRouteOutboxResult,
+  fieldRouteServerId,
+} from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
@@ -180,15 +185,27 @@ export default function FieldRouteDetailScreen() {
     if (!requestPoint || reason.trim().length < 3) return
     setSaving(true)
     try {
-      await fieldApi.requestRouteChange(routeData!.id, {
+      const queued = enqueueFieldRouteChangeRequest({
+        routeId: routeData!.id,
         changeType: "REMOVE_STOP",
         routePointId: requestPoint.id,
         reason: reason.trim(),
       })
+      const week = field.week!
+      field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, "PENDING"))
       setRequestPoint(null)
       setReason("")
-      Alert.alert(t("requestSent"))
-      await field.refresh()
+      await sync()
+      const result = fieldRouteOutboxResult(queued.clientOpId)
+      if (result?.status === "applied") {
+        Alert.alert(t("requestSent"))
+        await field.refresh()
+      } else if (result?.status === "conflict" || result?.status === "rejected") {
+        field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, result.status === "conflict" ? "CONFLICT" : "REJECTED"))
+        Alert.alert(t("syncNeedsAttention"))
+      } else {
+        Alert.alert(t("requestQueued"))
+      }
     } catch (error) {
       Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
@@ -224,7 +241,8 @@ export default function FieldRouteDetailScreen() {
     if (!addRequestTarget || addReason.trim().length < 3) return
     setSaving(true)
     try {
-      await fieldApi.requestRouteChange(routeData!.id, {
+      const queued = enqueueFieldRouteChangeRequest({
+        routeId: routeData!.id,
         changeType: "ADD_STOP",
         reason: addReason.trim(),
         payload: {
@@ -232,10 +250,21 @@ export default function FieldRouteDetailScreen() {
           contactId: addRequestTarget.contact?.id ?? null,
         },
       })
+      const week = field.week!
+      field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, "PENDING"))
       setAddRequestTarget(null)
       setAddReason("")
-      Alert.alert(t("requestSent"))
-      await field.refresh()
+      await sync()
+      const result = fieldRouteOutboxResult(queued.clientOpId)
+      if (result?.status === "applied") {
+        Alert.alert(t("requestSent"))
+        await field.refresh()
+      } else if (result?.status === "conflict" || result?.status === "rejected") {
+        field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, result.status === "conflict" ? "CONFLICT" : "REJECTED"))
+        Alert.alert(t("syncNeedsAttention"))
+      } else {
+        Alert.alert(t("requestQueued"))
+      }
     } catch (error) {
       Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
@@ -251,8 +280,19 @@ export default function FieldRouteDetailScreen() {
         onPress: () => void (async () => {
           setSaving(true)
           try {
-            await fieldApi.publishRoute(routeData!.id)
-            if (field.week) await field.loadWeek(field.week.weekStart)
+            const queued = enqueueFieldRoutePublish(routeData!.id)
+            const week = field.week!
+            field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, "PENDING"))
+            await sync()
+            const result = fieldRouteOutboxResult(queued.clientOpId)
+            if (result?.status === "applied") {
+              await field.loadWeek(week.weekStart)
+            } else if (result?.status === "conflict" || result?.status === "rejected") {
+              field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, result.status === "conflict" ? "CONFLICT" : "REJECTED"))
+              Alert.alert(t("syncNeedsAttention"))
+            } else {
+              Alert.alert(t("publishQueued"))
+            }
           } catch (error) {
             Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
           } finally {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { FieldRoutePoint, FieldWeekData } from "./contracts"
-import { addOptimisticRoute, updateOptimisticRoute } from "./route-cache"
+import { addOptimisticRoute, setOptimisticRouteSyncState, updateOptimisticRoute } from "./route-cache"
 
 const point: FieldRoutePoint = {
   id: "local-point-1",
@@ -55,5 +55,6 @@ describe("optimistic field route cache", () => {
     })
     expect(next.days[0]?.routes).toHaveLength(1)
     expect(next.days[0]?.routes[0]).toMatchObject({ name: "North updated", syncState: "PENDING" })
+    expect(setOptimisticRouteSyncState(next, "local-route-1", "CONFLICT").days[0]?.routes[0]).toMatchObject({ syncState: "CONFLICT" })
   })
 })
