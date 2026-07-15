@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
-import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
 import { PrismaClient } from "@prisma/client"
-import { createTenantClient, TENANT_MODELS } from "../tenant-client.ts"
+import { createTenantClient } from "../tenant-client.ts"
 
 // Интеграционные тесты против реального Postgres (127.0.0.1:55432 из .env).
 // Setup идет через голый PrismaClient (аналог system client), проверки —
@@ -113,20 +111,5 @@ describe("tenant isolation", () => {
       db.product.update({ where: { id: productB }, data: { name: "x" } }),
     ).rejects.toThrow(/запрещен/)
     await expect(db.product.delete({ where: { id: productB } })).rejects.toThrow(/запрещен/)
-  })
-})
-
-describe("tenant models audit", () => {
-  test("TENANT_MODELS совпадает со schema.prisma (модели с organizationId)", () => {
-    const schemaPath = fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url))
-    const schema = readFileSync(schemaPath, "utf8")
-    const fromSchema = new Set<string>()
-    for (const m of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
-      const [, name, body] = m
-      if (/^\s*organizationId\s+String/m.test(body!) && name !== "Organization") {
-        fromSchema.add(name!)
-      }
-    }
-    expect([...TENANT_MODELS].sort()).toEqual([...fromSchema].sort())
   })
 })

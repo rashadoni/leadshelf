@@ -71,6 +71,14 @@ model Organization {
   visits                 Visit[]
   orders                 Order[]
   promotions             Promotion[]
+  promotionExecutions    PromotionExecution[]
+  promoInventoryItems    PromoInventoryItem[]
+  promoInventoryEvents   PromoInventoryEvent[]
+  salesReturns           SalesReturn[]
+  rewardCatalogItems     RewardCatalogItem[]
+  rewardAccounts         RewardAccount[]
+  rewardLedgerEntries    RewardLedgerEntry[]
+  rewardClaims           RewardClaim[]
   productEvents          ProductEvent[]
   alerts                 Alert[]
   notificationDeliveries NotificationDelivery[]
@@ -113,6 +121,9 @@ model User {
   captureStepExceptions CaptureStepException[]
   captureRetakeRequests CaptureRetakeRequest[]
   shelfMetricSnapshots  ShelfMetricSnapshot[]
+  promotionDecisions    PromotionExecution[] @relation("PromotionDecisionBy")
+  salesReturnDecisions  SalesReturn[]         @relation("SalesReturnDecisionBy")
+  rewardClaimDecisions  RewardClaim[]         @relation("RewardClaimDecisionBy")
 
   @@unique([organizationId, email])
   @@unique([organizationId, employeeCode])
@@ -264,6 +275,9 @@ model Store {
   routeStops           RouteStop[]
   visits               Visit[]
   orders               Order[]
+  promotionExecutions  PromotionExecution[]
+  promoInventoryEvents PromoInventoryEvent[]
+  salesReturns         SalesReturn[]
   creditLimit          CreditLimit?
   photoSubmissions     PhotoSubmission[]
   priceSnapshots       PriceSnapshot[]
@@ -453,6 +467,8 @@ model Product {
   placements           PlanogramPlacement[]
   orderLines           OrderLine[]
   promotions           PromotionProduct[]
+  promoInventoryItems  PromoInventoryItem[]
+  salesReturnLines     SalesReturnLine[]
   goldenReferenceSlots GoldenReferenceSlot[]
 
   @@unique([organizationId, sku])
@@ -1572,6 +1588,10 @@ model FieldAgent {
   visits    Visit[]
   locations AgentLocation[]
   orders    Order[]
+  promotionExecutions PromotionExecution[]
+  promoInventoryEvents PromoInventoryEvent[]
+  salesReturns SalesReturn[]
+  rewardAccount RewardAccount?
 
   @@index([organizationId, teamId])
   @@map("field_agents")
@@ -1641,6 +1661,9 @@ model Visit {
 
   photoSubmissions PhotoSubmission[]
   orders           Order[]
+  promotionExecutions PromotionExecution[]
+  promoInventoryEvents PromoInventoryEvent[]
+  salesReturns SalesReturn[]
 
   @@index([organizationId, agentId, checkInAt])
   @@index([storeId, checkInAt])
@@ -1717,6 +1740,7 @@ model Order {
   updatedAt         DateTime     @updatedAt
 
   lines OrderLine[]
+  salesReturns SalesReturn[]
 
   @@unique([clientDeviceId, clientOpId])
   @@unique([organizationId, invoiceNumber])
@@ -1741,6 +1765,7 @@ model OrderLine {
   totalAmount    Decimal    @default(0) @db.Decimal(14, 2)
   promotionId    String?
   promotion      Promotion? @relation(fields: [promotionId], references: [id])
+  salesReturnLines SalesReturnLine[]
 
   @@index([orderId])
   @@map("order_lines")
@@ -1760,6 +1785,7 @@ model Promotion {
 
   products   PromotionProduct[]
   orderLines OrderLine[]
+  executions PromotionExecution[]
 
   @@index([organizationId, isActive])
   @@map("promotions")
@@ -1786,6 +1812,253 @@ model CreditLimit {
   updatedAt   DateTime @updatedAt
 
   @@map("credit_limits")
+}
+
+enum PromotionExecutionStatus {
+  ENROLLED
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model PromotionExecution {
+  id                String                   @id @default(cuid())
+  organizationId    String
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  promotionId       String
+  promotion         Promotion                @relation(fields: [promotionId], references: [id])
+  agentId           String
+  agent             FieldAgent               @relation(fields: [agentId], references: [id])
+  storeId           String
+  store             Store                    @relation(fields: [storeId], references: [id])
+  visitId           String?
+  visit             Visit?                   @relation(fields: [visitId], references: [id])
+  clientExecutionId String
+  status            PromotionExecutionStatus @default(ENROLLED)
+  note              String?
+  proofPhotoUrl     String?
+  submittedAt       DateTime?
+  decidedAt         DateTime?
+  decidedById       String?
+  decidedBy         User?                    @relation("PromotionDecisionBy", fields: [decidedById], references: [id])
+  decisionNote      String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@unique([organizationId, clientExecutionId])
+  @@index([organizationId, agentId, updatedAt])
+  @@index([organizationId, promotionId, storeId])
+  @@map("promotion_executions")
+}
+
+enum PromoInventoryItemKind {
+  SAMPLE
+  MATERIAL
+}
+
+enum PromoInventoryEventType {
+  RECEIVE
+  ISSUE
+  RETURN
+  COUNT_ADJUSTMENT
+}
+
+model PromoInventoryItem {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  code           String
+  name           String
+  kind           PromoInventoryItemKind
+  productId      String?
+  product        Product?               @relation(fields: [productId], references: [id])
+  unit           String                 @default("PCS")
+  isActive       Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  events PromoInventoryEvent[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, kind, isActive])
+  @@map("promo_inventory_items")
+}
+
+model PromoInventoryEvent {
+  id               String                  @id @default(cuid())
+  organizationId   String
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  itemId            String
+  item              PromoInventoryItem      @relation(fields: [itemId], references: [id])
+  agentId           String
+  agent             FieldAgent              @relation(fields: [agentId], references: [id])
+  storeId           String?
+  store             Store?                  @relation(fields: [storeId], references: [id])
+  visitId           String?
+  visit             Visit?                  @relation(fields: [visitId], references: [id])
+  eventType         PromoInventoryEventType
+  quantityDelta     Decimal                 @db.Decimal(14, 3)
+  countedBalance    Decimal?                @db.Decimal(14, 3)
+  reason            String?
+  note              String?
+  recordedAt        DateTime
+  clientDeviceId    String
+  clientOpId        String
+  createdAt         DateTime                @default(now())
+
+  @@unique([clientDeviceId, clientOpId])
+  @@index([organizationId, agentId, itemId, recordedAt])
+  @@index([organizationId, storeId, recordedAt])
+  @@map("promo_inventory_events")
+}
+
+enum SalesReturnStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  RECEIVED
+}
+
+model SalesReturn {
+  id               String            @id @default(cuid())
+  organizationId   String
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orderId           String
+  order             Order             @relation(fields: [orderId], references: [id])
+  agentId           String
+  agent             FieldAgent        @relation(fields: [agentId], references: [id])
+  storeId           String
+  store             Store             @relation(fields: [storeId], references: [id])
+  visitId           String?
+  visit             Visit?            @relation(fields: [visitId], references: [id])
+  status            SalesReturnStatus @default(SUBMITTED)
+  reason            String
+  note              String?
+  evidencePhotoUrl  String?
+  clientDeviceId    String
+  clientOpId        String
+  submittedAt       DateTime          @default(now())
+  decidedAt         DateTime?
+  decidedById       String?
+  decidedBy         User?             @relation("SalesReturnDecisionBy", fields: [decidedById], references: [id])
+  decisionNote      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  lines SalesReturnLine[]
+
+  @@unique([clientDeviceId, clientOpId])
+  @@index([organizationId, agentId, updatedAt])
+  @@index([organizationId, orderId])
+  @@map("sales_returns")
+}
+
+model SalesReturnLine {
+  id            String      @id @default(cuid())
+  salesReturnId String
+  salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+  orderLineId   String
+  orderLine     OrderLine   @relation(fields: [orderLineId], references: [id])
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  quantity      Decimal     @db.Decimal(14, 3)
+  unitAmount    Decimal     @db.Decimal(12, 2)
+
+  @@unique([salesReturnId, orderLineId])
+  @@index([productId])
+  @@map("sales_return_lines")
+}
+
+model RewardCatalogItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  code           String
+  name           String
+  description    String?
+  pointsCost     Int
+  stockQuantity  Int?
+  imageUrl       String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  claims RewardClaim[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@map("reward_catalog_items")
+}
+
+model RewardAccount {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentId        String       @unique
+  agent          FieldAgent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  pointsBalance  Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  ledgerEntries RewardLedgerEntry[]
+  claims        RewardClaim[]
+
+  @@index([organizationId, updatedAt])
+  @@map("reward_accounts")
+}
+
+model RewardLedgerEntry {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        RewardAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pointsDelta    Int
+  reason         String
+  sourceType     String?
+  sourceId       String?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, accountId, createdAt])
+  @@index([organizationId, sourceType, sourceId])
+  @@map("reward_ledger_entries")
+}
+
+enum RewardClaimStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  FULFILLED
+  CANCELLED
+}
+
+model RewardClaim {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        RewardAccount     @relation(fields: [accountId], references: [id])
+  rewardItemId   String
+  rewardItem     RewardCatalogItem @relation(fields: [rewardItemId], references: [id])
+  status         RewardClaimStatus @default(SUBMITTED)
+  quantity       Int               @default(1)
+  pointsCost     Int
+  note           String?
+  clientDeviceId String
+  clientOpId     String
+  submittedAt    DateTime          @default(now())
+  decidedAt      DateTime?
+  decidedById    String?
+  decidedBy      User?             @relation("RewardClaimDecisionBy", fields: [decidedById], references: [id])
+  decisionNote   String?
+  fulfilledAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([clientDeviceId, clientOpId])
+  @@index([organizationId, accountId, updatedAt])
+  @@index([organizationId, status, submittedAt])
+  @@map("reward_claims")
 }
 
 // ---------------------------------------------------------------------------
