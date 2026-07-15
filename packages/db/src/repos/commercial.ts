@@ -79,6 +79,19 @@ export interface RewardClaimCreateInput {
   clientOpId: string
 }
 
+export function emptyAgentCommercialSnapshot(now = new Date()) {
+  return {
+    version: 1 as const,
+    generatedAt: now.toISOString(),
+    promotions: [],
+    promotionExecutions: [],
+    inventory: { items: [], events: [] },
+    orders: [],
+    returns: [],
+    rewards: { balance: 0, catalog: [], claims: [], ledger: [] },
+  }
+}
+
 function decimal(value: Prisma.Decimal | number | string | null | undefined): number {
   return value == null ? 0 : Number(value)
 }

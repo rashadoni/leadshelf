@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { createSystemClient } from "../tenant-client.ts"
 import { createOrder } from "../repos/orders.ts"
+import { pushOperations } from "../repos/mobile-sync.ts"
 import {
   CommercialRepoError,
   createRewardClaim,
@@ -43,6 +44,9 @@ beforeAll(async () => {
     },
   })
   userId = user.id
+  await prisma.mobileDevice.create({
+    data: { id: deviceId, userId, platform: "test" },
+  })
   const agent = await prisma.fieldAgent.create({
     data: { organizationId, userId, employeeCode: "COM-AGENT" },
   })
@@ -284,19 +288,77 @@ describe("commercial execution repo", () => {
     expect(await prisma.salesReturn.count({ where: { organizationId } })).toBe(1)
   })
 
+  test("dispatches every commercial mobile operation and replays the outbox result", async () => {
+    const operations = [
+      {
+        clientOpId: operationId("push-promo-enroll"),
+        kind: "promotion.enroll" as const,
+        payload: {
+          promotionId,
+          storeId,
+          visitId,
+          clientExecutionId: `${promotionExecutionClientId}-push`,
+          note: "Mobile enrollment",
+        },
+      },
+      {
+        clientOpId: operationId("push-promo-submit"),
+        kind: "promotion.submit" as const,
+        payload: {
+          clientExecutionId: `${promotionExecutionClientId}-push`,
+          note: "Mobile proof",
+        },
+      },
+      {
+        clientOpId: operationId("push-inventory"),
+        kind: "inventory.record" as const,
+        payload: {
+          itemId: inventoryItemId,
+          eventType: "RECEIVE",
+          quantity: 1,
+          recordedAt: "2026-07-16T09:00:00.000Z",
+        },
+      },
+      {
+        clientOpId: operationId("push-return"),
+        kind: "return.create" as const,
+        payload: {
+          orderId,
+          visitId,
+          reason: "WRONG_ITEM",
+          lines: [{ orderLineId, quantity: 1 }],
+        },
+      },
+      {
+        clientOpId: operationId("push-reward"),
+        kind: "reward.claim" as const,
+        payload: { rewardItemId, quantity: 1, note: "Mobile reward" },
+      },
+    ]
+    const first = await pushOperations(prisma, organizationId, userId, deviceId, operations)
+    expect(first).toHaveLength(5)
+    expect(first.every((result) => result.status === "applied")).toBe(true)
+
+    const replay = await pushOperations(prisma, organizationId, userId, deviceId, operations)
+    expect(replay).toEqual(first)
+    expect(await prisma.outboxOperation.count({
+      where: { deviceId, clientOpId: { in: operations.map((operation) => operation.clientOpId) } },
+    })).toBe(5)
+  })
+
   test("reserves reward points and stock once", async () => {
     const first = await createRewardClaim(prisma, organizationId, userId, {
       rewardItemId,
-      quantity: 2,
+      quantity: 1,
       note: "Team reward",
       clientDeviceId: deviceId,
       clientOpId: operationId("reward-claim-1"),
     })
-    expect(first).toMatchObject({ rewardItemId, quantity: 2, pointsCost: 60, status: "SUBMITTED" })
+    expect(first).toMatchObject({ rewardItemId, quantity: 1, pointsCost: 30, status: "SUBMITTED" })
 
     const replay = await createRewardClaim(prisma, organizationId, userId, {
       rewardItemId,
-      quantity: 2,
+      quantity: 1,
       clientDeviceId: deviceId,
       clientOpId: operationId("reward-claim-1"),
     })
@@ -306,7 +368,7 @@ describe("commercial execution repo", () => {
     const item = await prisma.rewardCatalogItem.findFirstOrThrow({ where: { id: rewardItemId } })
     expect(account.pointsBalance).toBe(40)
     expect(item.stockQuantity).toBe(0)
-    expect(await prisma.rewardLedgerEntry.count({ where: { organizationId } })).toBe(1)
+    expect(await prisma.rewardLedgerEntry.count({ where: { organizationId } })).toBe(2)
 
     await expect(createRewardClaim(prisma, organizationId, userId, {
       rewardItemId,
@@ -327,18 +389,19 @@ describe("commercial execution repo", () => {
     )
     expect(snapshot.version).toBe(1)
     expect(snapshot.promotions).toEqual([expect.objectContaining({ id: promotionId })])
-    expect(snapshot.promotionExecutions).toEqual([
+    expect(snapshot.promotionExecutions).toEqual(expect.arrayContaining([
       expect.objectContaining({ clientExecutionId: promotionExecutionClientId, status: "SUBMITTED" }),
-    ])
+      expect.objectContaining({ clientExecutionId: `${promotionExecutionClientId}-push`, status: "SUBMITTED" }),
+    ]))
     expect(snapshot.inventory.items).toEqual([
-      expect.objectContaining({ id: inventoryItemId, balance: 5 }),
+      expect.objectContaining({ id: inventoryItemId, balance: 6 }),
     ])
     expect(snapshot.orders).toEqual([
       expect.objectContaining({ id: orderId, status: "SUBMITTED", storeId }),
     ])
-    expect(snapshot.returns).toEqual([
+    expect(snapshot.returns).toEqual(expect.arrayContaining([
       expect.objectContaining({ orderId, status: "SUBMITTED" }),
-    ])
+    ]))
     expect(snapshot.rewards).toMatchObject({ balance: 40 })
   })
 })

@@ -51,6 +51,7 @@ export {
   createSalesReturn,
   createRewardClaim,
   getAgentCommercialSnapshot,
+  emptyAgentCommercialSnapshot,
   type PromotionEnrollInput,
   type PromotionSubmitInput,
   type PromoInventoryRecordInput,
