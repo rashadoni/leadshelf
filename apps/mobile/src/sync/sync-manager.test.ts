@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
 import { AuthLostError, HttpError } from "./ports-error"
+import { EMPTY_MOBILE_COMMERCIAL_SNAPSHOT } from "@leadshelf/api-contracts/mobile/v1"
 import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi, SyncCursors } from "./ports"
 
 function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
@@ -96,6 +97,7 @@ const EMPTY_PULL: PullResponse = {
   visits: [],
   photoSubmissions: [],
   planogramBundles: [],
+  commercial: EMPTY_MOBILE_COMMERCIAL_SNAPSHOT,
   cursors: { tasks: "c1", planogramBundles: "c2", routes: "c3", visits: "c4", photoSubmissions: "c5" },
 }
 

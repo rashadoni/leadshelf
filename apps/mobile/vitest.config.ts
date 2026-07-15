@@ -9,6 +9,7 @@ export default defineConfig({
       "src/photos/**/*.test.ts",
       "src/tasks/**/*.test.ts",
       "src/orders/**/*.test.ts",
+      "src/commercial/**/*.test.ts",
       "src/location/**/*.test.ts",
       "src/navigation/**/*.test.ts",
       "src/i18n/**/*.test.ts",

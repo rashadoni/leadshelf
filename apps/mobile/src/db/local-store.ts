@@ -7,12 +7,25 @@ import * as Crypto from "expo-crypto"
 import {
   mobilePhotoSubmitPayloadSchema,
   mobileLocationUpdatePayloadSchema,
+  mobileCommercialSnapshotSchema,
+  mobilePromoInventoryRecordPayloadSchema,
+  mobilePromotionEnrollPayloadSchema,
+  mobilePromotionSubmitPayloadSchema,
   mobileProofExceptionPayloadSchema,
+  mobileRewardClaimPayloadSchema,
+  mobileSalesReturnCreatePayloadSchema,
   mobileTaskCommentPayloadSchema,
   mobileTaskStatusPayloadSchema,
   mobileVisitCheckInPayloadSchema,
   mobileVisitCheckOutPayloadSchema,
   type MobileProofExceptionPayload,
+  type MobileCommercialSnapshot,
+  type MobilePromoInventoryRecordPayload,
+  type MobilePromotionEnrollPayload,
+  type MobilePromotionSubmitPayload,
+  type MobilePushOperation,
+  type MobileRewardClaimPayload,
+  type MobileSalesReturnCreatePayload,
   type MobileTaskStatus,
 } from "@leadshelf/api-contracts/mobile/v1"
 import { orderCreateRequestSchema, type OrderCreateRequest } from "@leadshelf/api-contracts/orders/v1"
@@ -79,6 +92,7 @@ import {
 } from "../field/task-cache"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
+export const COMMERCIAL_CACHE_KEY = "shelf.commercial.snapshot.v1"
 
 function resetRecoverablePhotoSubmit(clientPhotoId: string): void {
   const rows = db.getAllSync<{ clientOpId: string }>(
@@ -314,6 +328,11 @@ export function readFieldCache<T>(key: string): { value: T; updatedAt: string } 
 export const localStore: LocalStore = {
   async applyPull(data: PullResponse) {
     db.withTransactionSync(() => {
+      db.runSync(
+        `INSERT INTO field_cache (k, json, updatedAt) VALUES (?,?,?)
+         ON CONFLICT(k) DO UPDATE SET json=excluded.json, updatedAt=excluded.updatedAt`,
+        [COMMERCIAL_CACHE_KEY, JSON.stringify(data.commercial), data.commercial.generatedAt],
+      )
       for (const t of data.tasks) {
         db.runSync(
           `INSERT INTO tasks (id, title, status, dueAt, storeId, planogramVersionId, locationHint, captureTemplate, captureRetakes, updatedAt)
@@ -673,6 +692,56 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "order.create",
             payload: orderCreateRequestSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "promotion.enroll") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "promotion.enroll",
+            payload: mobilePromotionEnrollPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "promotion.submit") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "promotion.submit",
+            payload: mobilePromotionSubmitPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "inventory.record") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "inventory.record",
+            payload: mobilePromoInventoryRecordPayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "return.create") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "return.create",
+            payload: mobileSalesReturnCreatePayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "reward.claim") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "reward.claim",
+            payload: mobileRewardClaimPayloadSchema.parse(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -1715,6 +1784,125 @@ export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: str
       new Date().toISOString(),
     ],
   )
+}
+
+export type CommercialOperationKind =
+  | "promotion.enroll"
+  | "promotion.submit"
+  | "inventory.record"
+  | "return.create"
+  | "reward.claim"
+
+export interface LocalCommercialOperation {
+  clientOpId: string
+  kind: CommercialOperationKind
+  payload: MobilePushOperation["payload"]
+  clientCreatedAt: string
+  status: "pending" | "applied" | "conflict" | "rejected"
+  attempts: number
+  detailCode: string | null
+  detail: unknown
+}
+
+function detailCode(raw: string | null): { code: string | null; detail: unknown } {
+  if (!raw) return { code: null, detail: null }
+  try {
+    const detail = JSON.parse(raw) as unknown
+    if (!detail || typeof detail !== "object" || Array.isArray(detail)) return { code: null, detail }
+    const code = (detail as Record<string, unknown>).code
+    return { code: typeof code === "string" ? code : null, detail }
+  } catch {
+    return { code: null, detail: raw }
+  }
+}
+
+export function listCommercialOperations(): LocalCommercialOperation[] {
+  const rows = db.getAllSync<{
+    clientOpId: string
+    kind: CommercialOperationKind
+    payload: string
+    clientCreatedAt: string
+    status: LocalCommercialOperation["status"]
+    attempts: number
+    detail: string | null
+  }>(`SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+      FROM outbox_ops
+      WHERE kind IN ('promotion.enroll','promotion.submit','inventory.record','return.create','reward.claim')
+      ORDER BY clientCreatedAt DESC`)
+  return rows.flatMap((row) => {
+    const rawPayload = parseJsonOrNull<unknown>(row.payload)
+    const operation = rawPayload == null
+      ? null
+      : ({ clientOpId: row.clientOpId, kind: row.kind, payload: rawPayload } as const)
+    const parsed = operation == null
+      ? null
+      : (() => {
+          switch (row.kind) {
+            case "promotion.enroll": return mobilePromotionEnrollPayloadSchema.safeParse(rawPayload)
+            case "promotion.submit": return mobilePromotionSubmitPayloadSchema.safeParse(rawPayload)
+            case "inventory.record": return mobilePromoInventoryRecordPayloadSchema.safeParse(rawPayload)
+            case "return.create": return mobileSalesReturnCreatePayloadSchema.safeParse(rawPayload)
+            case "reward.claim": return mobileRewardClaimPayloadSchema.safeParse(rawPayload)
+          }
+        })()
+    if (!parsed?.success) return []
+    const result = detailCode(row.detail)
+    return [{
+      clientOpId: row.clientOpId,
+      kind: row.kind,
+      payload: parsed.data,
+      clientCreatedAt: row.clientCreatedAt,
+      status: row.status,
+      attempts: row.attempts,
+      detailCode: result.code,
+      detail: result.detail,
+    }]
+  })
+}
+
+export function readCommercialSnapshot(): { value: MobileCommercialSnapshot; updatedAt: string } | null {
+  const cached = readFieldCache<unknown>(COMMERCIAL_CACHE_KEY)
+  if (!cached) return null
+  const parsed = mobileCommercialSnapshotSchema.safeParse(cached.value)
+  if (!parsed.success) return null
+  return { value: parsed.data, updatedAt: cached.updatedAt }
+}
+
+function enqueueCommercial(
+  kind: CommercialOperationKind,
+  payload: MobilePushOperation["payload"],
+): { clientOpId: string; clientCreatedAt: string } {
+  const clientOpId = `op-${Crypto.randomUUID()}`
+  const clientCreatedAt = new Date().toISOString()
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, kind, JSON.stringify(payload), clientCreatedAt],
+  )
+  return { clientOpId, clientCreatedAt }
+}
+
+export function enqueuePromotionEnroll(
+  input: Omit<MobilePromotionEnrollPayload, "clientExecutionId"> & { clientExecutionId?: string },
+): { clientOpId: string; clientExecutionId: string } {
+  const clientExecutionId = input.clientExecutionId ?? `promotion-${Crypto.randomUUID()}`
+  const payload = mobilePromotionEnrollPayloadSchema.parse({ ...input, clientExecutionId })
+  return { ...enqueueCommercial("promotion.enroll", payload), clientExecutionId }
+}
+
+export function enqueuePromotionSubmit(input: MobilePromotionSubmitPayload) {
+  return enqueueCommercial("promotion.submit", mobilePromotionSubmitPayloadSchema.parse(input))
+}
+
+export function enqueuePromoInventoryRecord(input: MobilePromoInventoryRecordPayload) {
+  return enqueueCommercial("inventory.record", mobilePromoInventoryRecordPayloadSchema.parse(input))
+}
+
+export function enqueueSalesReturn(input: MobileSalesReturnCreatePayload) {
+  return enqueueCommercial("return.create", mobileSalesReturnCreatePayloadSchema.parse(input))
+}
+
+export function enqueueRewardClaim(input: MobileRewardClaimPayload) {
+  return enqueueCommercial("reward.claim", mobileRewardClaimPayloadSchema.parse(input))
 }
 
 export function enqueueFieldRouteCreate(
