@@ -17,10 +17,23 @@ import { prepareMobileSessionScope } from "../db/local-store"
 import {
   parseFieldProfile,
   parseFieldNotifications,
+  parseFieldContactDetail,
+  parseFieldContacts,
+  parseFieldCustomerRequest,
+  parseFieldCustomerRequests,
+  parseFieldOrganizationDetail,
+  parseFieldOrganizations,
   parseFieldWeek,
+  type CreateFieldCustomerRequest,
+  type FieldContactDetailData,
+  type FieldContactListData,
+  type FieldCustomerRequest,
+  type FieldCustomerRequestsData,
   type FieldAgentProfile,
   type FieldProfileData,
   type FieldNotificationsData,
+  type FieldOrganizationDetailData,
+  type FieldOrganizationListData,
   type FieldWeekData,
 } from "../field/contracts"
 
@@ -175,6 +188,24 @@ export const fieldApi = {
   }) => {
     await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}/change-requests`, json(input))
   },
+  organizations: (search = "") =>
+    request<unknown>(`/api/v1/mtm/organizations?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}`)
+      .then(parseFieldOrganizations),
+  organization: (id: string) =>
+    request<unknown>(`/api/v1/mtm/organizations/${encodeURIComponent(id)}`)
+      .then(parseFieldOrganizationDetail),
+  contacts: (search = "") =>
+    request<unknown>(`/api/v1/mtm/contacts?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}`)
+      .then(parseFieldContacts),
+  contact: (id: string) =>
+    request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}`)
+      .then(parseFieldContactDetail),
+  customerRequests: () =>
+    request<unknown>("/api/v1/mtm/customer-create-requests?mine=1")
+      .then(parseFieldCustomerRequests),
+  createCustomerRequest: (input: CreateFieldCustomerRequest) =>
+    request<unknown>("/api/v1/mtm/customer-create-requests", json(input))
+      .then(parseFieldCustomerRequest),
 } satisfies {
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
@@ -192,6 +223,12 @@ export const fieldApi = {
     reason: string
     payload?: Record<string, unknown>
   }): Promise<void>
+  organizations(search?: string): Promise<FieldOrganizationListData>
+  organization(id: string): Promise<FieldOrganizationDetailData>
+  contacts(search?: string): Promise<FieldContactListData>
+  contact(id: string): Promise<FieldContactDetailData>
+  customerRequests(): Promise<FieldCustomerRequestsData>
+  createCustomerRequest(input: CreateFieldCustomerRequest): Promise<FieldCustomerRequest>
 }
 
 export const syncApi: SyncApi = {

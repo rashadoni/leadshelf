@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
   FieldContractError,
+  parseFieldContactDetail,
+  parseFieldContacts,
+  parseFieldCustomerRequest,
+  parseFieldCustomerRequests,
   parseFieldNotifications,
+  parseFieldOrganizationDetail,
+  parseFieldOrganizations,
   parseFieldProfile,
   parseFieldWeek,
 } from "./contracts"
@@ -126,5 +132,119 @@ describe("LeadDrive field contracts", () => {
       },
     })
     expect(inbox.unread).toBe(1)
+  })
+
+  it("accepts scoped organization list and detail envelopes", () => {
+    const organization = {
+      id: "customer-1",
+      code: "C-1",
+      name: "Demo Clinic",
+      objectType: "CLINIC",
+      category: "A",
+      status: "ACTIVE",
+      address: "Nizami 1",
+      city: "Baku",
+      district: null,
+      phone: null,
+      contactPerson: null,
+      latitude: null,
+      longitude: null,
+    }
+    const envelope = {
+      success: true,
+      data: {
+        organizations: [organization],
+        total: 1,
+        page: 1,
+        limit: 100,
+        asOf: "2026-07-15",
+        timezone: "Asia/Baku",
+        capabilities: { canManage: false, canRequestChanges: true },
+      },
+    }
+    expect(parseFieldOrganizations(envelope).organizations[0]?.name).toBe("Demo Clinic")
+    expect(parseFieldOrganizationDetail({
+      success: true,
+      data: {
+        organization,
+        asOf: "2026-07-15",
+        timezone: "Asia/Baku",
+        capabilities: { canManage: false, canRequestChanges: true },
+      },
+    }).organization.id).toBe("customer-1")
+  })
+
+  it("accepts scoped contact list and detail envelopes", () => {
+    const contact = {
+      id: "contact-1",
+      externalCode: null,
+      firstName: "Aygun",
+      lastName: "Aliyeva",
+      middleName: null,
+      displayName: "Aygun Aliyeva",
+      type: "DOCTOR",
+      specialtyCode: "PE",
+      specialtyName: "Pediatrician",
+      qualificationCategory: null,
+      profile: null,
+      category: "B",
+      status: "ACTIVE",
+      birthDate: null,
+      gender: null,
+      email: null,
+      phone: "+994500000000",
+      messengerPhone: null,
+      notes: null,
+    }
+    expect(parseFieldContacts({
+      success: true,
+      data: {
+        contacts: [contact],
+        total: 1,
+        page: 1,
+        limit: 100,
+        asOf: "2026-07-15",
+        timezone: "Asia/Baku",
+        capabilities: { canManage: false, canRequestChanges: true },
+      },
+    }).contacts[0]?.specialtyCode).toBe("PE")
+    expect(parseFieldContactDetail({
+      success: true,
+      data: {
+        contact,
+        activeAssignments: [],
+        asOf: "2026-07-15",
+        timezone: "Asia/Baku",
+        capabilities: { canManage: false, canRequestChanges: true },
+      },
+    }).contact.displayName).toBe("Aygun Aliyeva")
+  })
+
+  it("accepts customer request queue and duplicate candidates", () => {
+    const request = {
+      id: "request-1",
+      status: "SUBMITTED",
+      objectType: "CLINIC",
+      name: "New Clinic",
+      address: null,
+      city: "Baku",
+      phone: "+994500000001",
+      potential: "HIGH",
+      reason: "New territory",
+      agentComment: null,
+      submittedAt: "2026-07-15T08:00:00.000Z",
+      updatedAt: "2026-07-15T08:00:00.000Z",
+      route: null,
+      approvedCustomer: null,
+      duplicateCandidates: [{ id: "customer-1", name: "Clinic", score: 92, reasons: ["SIMILAR_NAME"] }],
+    }
+    expect(parseFieldCustomerRequests({ success: true, data: { requests: [request] } }).requests).toHaveLength(1)
+    expect(parseFieldCustomerRequest({ success: true, data: request }).duplicateCandidates[0]?.score).toBe(92)
+  })
+
+  it("rejects malformed master data and request envelopes", () => {
+    expect(() => parseFieldOrganizations({ success: true, data: { organizations: [{}] } })).toThrow(FieldContractError)
+    expect(() => parseFieldContacts({ success: true, data: { contacts: [{ id: "c" }] } })).toThrow(FieldContractError)
+    expect(() => parseFieldCustomerRequests({ success: true, data: { requests: [{ status: "SUBMITTED" }] } })).toThrow(FieldContractError)
   })
 })

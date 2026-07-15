@@ -22,6 +22,9 @@ export default function WorkTab() {
   const openTasks = countOpenTasks()
   const modules: Module[] = [
     { label: t("tabRoute"), hint: t("todayRoute"), glyph: "↗", href: "/(app)/routes", background: colors.infoBg, color: colors.info },
+    { label: t("moduleOrganizations"), hint: t("organizationsSearch"), glyph: "⌂", href: "/(app)/organizations", background: colors.primarySoft, color: colors.primary },
+    { label: t("moduleContacts"), hint: t("contactsSearch"), glyph: "◎", href: "/(app)/contacts", background: colors.holidayBg, color: colors.holiday },
+    { label: t("myCustomerRequests"), hint: t("newCustomerHint"), glyph: "+", href: "/(app)/customer-requests", background: colors.warningBg, color: colors.warning },
     { label: t("tabTasks"), hint: t("allTasks"), glyph: "✓", href: "/(app)/(tabs)/tasks", background: colors.warningBg, color: colors.warning, badge: openTasks },
     { label: t("tabOrders"), hint: t("selectedOrderSummary"), glyph: "▤", href: "/(app)/(tabs)/orders", background: colors.successBg, color: colors.successDark },
     { label: t("tabShelves"), hint: t("shelvesSectionSubtitle"), glyph: "▦", href: "/(app)/(tabs)/shelves", background: colors.holidayBg, color: colors.holiday },

@@ -170,6 +170,155 @@ export interface FieldNotificationsData {
   unread: number
 }
 
+export interface FieldOrganization {
+  id: string
+  code: string | null
+  name: string
+  objectType: string
+  category: string
+  status: string
+  address: string | null
+  city: string | null
+  district: string | null
+  phone: string | null
+  contactPerson: string | null
+  latitude: number | null
+  longitude: number | null
+  notes?: string | null
+  agentAssignments?: Array<{ role: string; agent: { id: string; name: string; role: string } }>
+  contactWorkplaces?: Array<{ id: string; isPrimary: boolean; contact: FieldContact }>
+  fieldPotentials?: FieldPotential[]
+  visits?: Array<Record<string, unknown>>
+  _count?: { contactWorkplaces: number; visits: number }
+}
+
+export interface FieldOrganizationListData {
+  organizations: FieldOrganization[]
+  total: number
+  page: number
+  limit: number
+  asOf: string
+  timezone: string
+  capabilities: { canManage: boolean; canRequestChanges: boolean }
+}
+
+export interface FieldOrganizationDetailData {
+  organization: FieldOrganization
+  asOf: string
+  timezone: string
+  capabilities: { canManage: boolean; canRequestChanges: boolean }
+}
+
+export interface FieldContact {
+  id: string
+  externalCode: string | null
+  firstName: string
+  lastName: string
+  middleName: string | null
+  displayName: string
+  type: string
+  specialtyCode: string | null
+  specialtyName: string | null
+  qualificationCategory: string | null
+  profile: string | null
+  category: string
+  status: string
+  birthDate: string | null
+  gender: string | null
+  email: string | null
+  phone: string | null
+  messengerPhone: string | null
+  notes: string | null
+  workplaces?: Array<{
+    id: string
+    isPrimary: boolean
+    position: string | null
+    department: string | null
+    customer: { id: string; name: string; objectType: string; address: string | null; city: string | null }
+  }>
+  agentAssignments?: Array<{ role: string; agent: { id: string; name: string; role: string } }>
+  fieldPotentials?: FieldPotential[]
+}
+
+export interface FieldPotential {
+  id: string
+  brandExternalId: string | null
+  productExternalId: string | null
+  category: string | null
+  potentialValue: string | number
+  coverageValue: string | number
+  periodStart: string | null
+  periodEnd: string | null
+  source: string
+}
+
+export interface FieldContactListData {
+  contacts: FieldContact[]
+  total: number
+  page: number
+  limit: number
+  asOf: string
+  timezone: string
+  capabilities: { canManage: boolean; canRequestChanges: boolean }
+}
+
+export interface FieldContactDetailData {
+  contact: FieldContact
+  activeAssignments: Array<Record<string, unknown>>
+  asOf: string
+  timezone: string
+  capabilities: { canManage: boolean; canRequestChanges: boolean }
+}
+
+export interface FieldCustomerRequest {
+  id: string
+  status: string
+  objectType: string
+  name: string
+  address: string | null
+  city: string | null
+  phone: string | null
+  potential: string
+  reason: string
+  agentComment: string | null
+  submittedAt: string | null
+  updatedAt: string
+  route: { id: string; name: string | null; status: string } | null
+  approvedCustomer: { id: string; code: string | null; name: string } | null
+  duplicateCandidates: Array<{
+    id: string
+    name: string
+    address?: string | null
+    score: number
+    reasons: string[]
+    exact?: boolean
+    distanceMeters?: number | null
+  }>
+}
+
+export interface FieldCustomerRequestsData {
+  requests: FieldCustomerRequest[]
+}
+
+export interface CreateFieldCustomerRequest {
+  routeId?: string | null
+  objectType: "PHARMACY" | "CLINIC" | "DOCTOR" | "STORE" | "OTHER"
+  externalCode?: string | null
+  name: string
+  address?: string | null
+  city?: string | null
+  district?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  contactPerson?: string | null
+  phone?: string | null
+  category?: "A" | "B" | "C" | "D" | null
+  potential: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
+  territoryCode?: string | null
+  reason: string
+  agentComment?: string | null
+}
+
 export class FieldContractError extends Error {
   constructor(contract: string) {
     super(`Invalid ${contract} response`)
@@ -319,4 +468,99 @@ export function parseFieldNotifications(value: unknown): FieldNotificationsData 
     }
   }
   return data as unknown as FieldNotificationsData
+}
+
+function validOrganization(value: unknown): boolean {
+  const organization = record(value)
+  return Boolean(
+    organization &&
+      string(organization.id) &&
+      string(organization.name) &&
+      string(organization.objectType) &&
+      string(organization.category) &&
+      string(organization.status),
+  )
+}
+
+export function parseFieldOrganizations(value: unknown): FieldOrganizationListData {
+  const data = validEnvelope(value)
+  if (
+    !data ||
+    !Array.isArray(data.organizations) ||
+    !data.organizations.every(validOrganization) ||
+    !number(data.total) ||
+    !number(data.page) ||
+    !number(data.limit) ||
+    !dateKey(data.asOf)
+  ) {
+    throw new FieldContractError("organizations")
+  }
+  return data as unknown as FieldOrganizationListData
+}
+
+export function parseFieldOrganizationDetail(value: unknown): FieldOrganizationDetailData {
+  const data = validEnvelope(value)
+  if (!data || !validOrganization(data.organization) || !dateKey(data.asOf)) {
+    throw new FieldContractError("organization detail")
+  }
+  return data as unknown as FieldOrganizationDetailData
+}
+
+function validContact(value: unknown): boolean {
+  const contact = record(value)
+  return Boolean(
+    contact &&
+      string(contact.id) &&
+      string(contact.displayName) &&
+      string(contact.firstName) &&
+      string(contact.lastName) &&
+      string(contact.type) &&
+      string(contact.status),
+  )
+}
+
+export function parseFieldContacts(value: unknown): FieldContactListData {
+  const data = validEnvelope(value)
+  if (
+    !data ||
+    !Array.isArray(data.contacts) ||
+    !data.contacts.every(validContact) ||
+    !number(data.total) ||
+    !number(data.page) ||
+    !number(data.limit) ||
+    !dateKey(data.asOf)
+  ) {
+    throw new FieldContractError("contacts")
+  }
+  return data as unknown as FieldContactListData
+}
+
+export function parseFieldContactDetail(value: unknown): FieldContactDetailData {
+  const data = validEnvelope(value)
+  if (!data || !validContact(data.contact) || !dateKey(data.asOf)) {
+    throw new FieldContractError("contact detail")
+  }
+  return data as unknown as FieldContactDetailData
+}
+
+export function parseFieldCustomerRequests(value: unknown): FieldCustomerRequestsData {
+  const data = validEnvelope(value)
+  if (!data || !Array.isArray(data.requests)) throw new FieldContractError("customer requests")
+  for (const requestValue of data.requests) {
+    if (!validCustomerRequest(requestValue)) {
+      throw new FieldContractError("customer requests")
+    }
+  }
+  return data as unknown as FieldCustomerRequestsData
+}
+
+function validCustomerRequest(value: unknown): boolean {
+  const request = record(value)
+  return Boolean(request && string(request.id) && string(request.status) && string(request.name))
+}
+
+export function parseFieldCustomerRequest(value: unknown): FieldCustomerRequest {
+  const data = validEnvelope(value)
+  if (!data || !validCustomerRequest(data)) throw new FieldContractError("customer request")
+  return data as unknown as FieldCustomerRequest
 }
