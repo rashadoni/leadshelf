@@ -39,6 +39,12 @@ import {
   type LocalPlanogramBundleRow,
   type LocalPlanogramLibrary,
 } from "../planogram/local-library"
+import {
+  parseFieldRouteCreatePayload,
+  parseFieldRouteUpdatePayload,
+  type FieldRouteCreatePayload,
+  type FieldRouteUpdatePayload,
+} from "../field/route-outbox"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -495,6 +501,26 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "location.update",
             payload: mobileLocationUpdatePayloadSchema.parse(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.route.create") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.route.create",
+            payload: parseFieldRouteCreatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.route.update") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.route.update",
+            payload: parseFieldRouteUpdatePayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -987,6 +1013,44 @@ function applyOutboxResultSideEffects(
   status: "pending" | "applied" | "conflict" | "rejected",
   detail: unknown,
 ): void {
+  if (kind === "field.route.create" || kind === "field.route.update") {
+    try {
+      const routeId = kind === "field.route.create"
+        ? parseFieldRouteCreatePayload(JSON.parse(rawPayload) as unknown).localRouteId
+        : parseFieldRouteUpdatePayload(JSON.parse(rawPayload) as unknown).routeId
+      const serverRouteId = stringValue(unknownRecord(detail)?.routeId)
+      const rows = db.getAllSync<{ k: string; json: string }>("SELECT k, json FROM field_cache")
+      for (const row of rows) {
+        const cached = unknownRecord(JSON.parse(row.json) as unknown)
+        if (!cached || !Array.isArray(cached.days)) continue
+        let changed = false
+        const days = cached.days.map((rawDay) => {
+          const day = unknownRecord(rawDay)
+          if (!day || !Array.isArray(day.routes)) return rawDay
+          const routes = day.routes.map((rawRoute) => {
+            const route = unknownRecord(rawRoute)
+            if (!route || route.id !== routeId) return rawRoute
+            changed = true
+            const next = { ...route }
+            if (status === "applied" && serverRouteId) next.id = serverRouteId
+            if (status === "applied") delete next.syncState
+            if (status === "conflict") next.syncState = "CONFLICT"
+            if (status === "rejected") next.syncState = "REJECTED"
+            return next
+          })
+          return routes === day.routes ? rawDay : { ...day, routes }
+        })
+        if (!changed) continue
+        db.runSync(
+          "UPDATE field_cache SET json=?, updatedAt=? WHERE k=?",
+          [JSON.stringify({ ...cached, days }), new Date().toISOString(), row.k],
+        )
+      }
+    } catch {
+      // A malformed legacy cache must not block the remaining sync queue.
+    }
+    return
+  }
   if (kind !== "visit.checkin") return
 
   const payload = parseJsonObject(rawPayload)
@@ -1291,4 +1355,88 @@ export function enqueueOrderCreate(input: OrderCreateRequest & { clientOpId: str
       new Date().toISOString(),
     ],
   )
+}
+
+export function enqueueFieldRouteCreate(
+  input: Omit<FieldRouteCreatePayload, "localRouteId">,
+): { clientOpId: string; localRouteId: string } {
+  const clientOpId = `field-route-${Crypto.randomUUID()}`
+  const localRouteId = `local-route-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [
+      clientOpId,
+      "field.route.create",
+      JSON.stringify({ ...input, localRouteId }),
+      new Date().toISOString(),
+    ],
+  )
+  return { clientOpId, localRouteId }
+}
+
+export function enqueueFieldRouteUpdate(input: FieldRouteUpdatePayload): { clientOpId: string } {
+  if (input.routeId.startsWith("local-route-")) {
+    const queuedCreate = db.getFirstSync<{ clientOpId: string; payload: string }>(
+      `SELECT clientOpId, payload FROM outbox_ops
+       WHERE kind='field.route.create'
+         AND status='pending'
+         AND json_extract(payload, '$.localRouteId')=?
+       ORDER BY clientCreatedAt DESC LIMIT 1`,
+      [input.routeId],
+    )
+    if (queuedCreate) {
+      const createPayload = parseFieldRouteCreatePayload(JSON.parse(queuedCreate.payload) as unknown)
+      db.runSync("UPDATE outbox_ops SET payload=? WHERE clientOpId=?", [
+        JSON.stringify({
+          ...createPayload,
+          name: input.name ?? null,
+          notes: input.notes ?? null,
+          points: input.points,
+        }),
+        queuedCreate.clientOpId,
+      ])
+      return { clientOpId: queuedCreate.clientOpId }
+    }
+  }
+
+  const clientOpId = `field-route-${Crypto.randomUUID()}`
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.route.update", JSON.stringify(input), new Date().toISOString()],
+  )
+  return { clientOpId }
+}
+
+export function fieldRouteOutboxResult(clientOpId: string): {
+  status: "pending" | "applied" | "conflict" | "rejected"
+  routeId: string | null
+} | null {
+  const row = db.getFirstSync<{ status: string; detail: string | null }>(
+    "SELECT status, detail FROM outbox_ops WHERE clientOpId=?",
+    [clientOpId],
+  )
+  if (!row) return null
+  const detail = row.detail ? unknownRecord(JSON.parse(row.detail) as unknown) : null
+  return {
+    status: row.status as "pending" | "applied" | "conflict" | "rejected",
+    routeId: stringValue(detail?.routeId),
+  }
+}
+
+export function fieldRouteServerId(localRouteId: string): string | null {
+  const row = db.getFirstSync<{ detail: string | null }>(
+    `SELECT detail FROM outbox_ops
+     WHERE kind='field.route.create'
+       AND status='applied'
+       AND json_extract(payload, '$.localRouteId')=?
+     ORDER BY clientCreatedAt DESC LIMIT 1`,
+    [localRouteId],
+  )
+  if (!row?.detail) return null
+  try {
+    const detail = unknownRecord(JSON.parse(row.detail) as unknown)
+    return stringValue(detail?.routeId)
+  } catch {
+    return null
+  }
 }

@@ -14,6 +14,7 @@ import { File } from "expo-file-system"
 import { Platform } from "react-native"
 import { tokenStore } from "../auth/token-store"
 import { prepareMobileSessionScope } from "../db/local-store"
+import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
 import {
   parseFieldProfile,
   parseFieldNotifications,
@@ -77,7 +78,7 @@ async function request<T>(
     const body = await res.json().catch(() => ({}))
     const message = (body as { message?: string; error?: string }).message ??
       (body as { error?: string }).error
-    throw new HttpError(res.status, message)
+    throw new HttpError(res.status, message, body)
   }
   return (await res.json()) as T
 }
@@ -111,7 +112,7 @@ export async function mobileLogin(input: {
   if (res.status === 401 || res.status === 404) return null
   if (!res.ok) {
     const error = await res.json().catch(() => ({}))
-    throw new HttpError(res.status, (error as { error?: string }).error)
+    throw new HttpError(res.status, (error as { error?: string }).error, error)
   }
   const body = await res.json() as {
     success?: boolean
@@ -263,11 +264,26 @@ export const syncApi: SyncApi = {
       "/api/v1/mtm/mobile/shelf/sync/pull",
       json({ protocolVersion: PROTOCOL_VERSION, cursors }),
     ).then((body) => mobileSyncPullResponseSchema.parse(body)),
-  push: (operations: PushOperation[]) =>
-    request<{ results: PushResult[] }>(
-      "/api/v1/mtm/mobile/shelf/sync/push",
-      json({ protocolVersion: PROTOCOL_VERSION, operations }),
-    ).then((body) => mobileSyncPushResponseSchema.parse(body)),
+  push: async (operations: PushOperation[]) => {
+    const results: PushResult[] = []
+    for (const operation of operations) {
+      if (!isFieldRoutePushOperation(operation)) continue
+      results.push(await sendFieldRouteOperation(operation, fieldApi))
+    }
+    const shelfOperations = operations.filter((operation) => !isFieldRoutePushOperation(operation))
+    if (shelfOperations.length > 0) {
+      const shelf = await request<{ results: PushResult[] }>(
+        "/api/v1/mtm/mobile/shelf/sync/push",
+        json({ protocolVersion: PROTOCOL_VERSION, operations: shelfOperations }),
+      ).then((body) => mobileSyncPushResponseSchema.parse(body))
+      results.push(...shelf.results)
+    }
+    const byId = new Map(results.map((result) => [result.clientOpId, result]))
+    return { results: operations.flatMap((operation) => {
+      const result = byId.get(operation.clientOpId)
+      return result ? [result] : []
+    }) }
+  },
   ack: async (appliedCursors) => {
     await request(
       "/api/v1/mtm/mobile/shelf/sync/ack",

@@ -25,6 +25,7 @@ type FieldContextValue = {
   lastUpdatedAt: string | null
   refresh: () => Promise<void>
   loadWeek: (start: string) => Promise<void>
+  applyLocalWeek: (week: FieldWeekData) => void
   markAllNotificationsRead: () => Promise<void>
 }
 
@@ -154,6 +155,15 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     writeFieldCache(NOTIFICATIONS_KEY, next)
   }, [notifications])
 
+  const applyLocalWeek = useCallback((next: FieldWeekData) => {
+    setWeek(next)
+    requestedWeek.current = next.weekStart
+    writeFieldCache(CURRENT_WEEK_KEY, next)
+    writeFieldCache(weekKey(next.weekStart), next)
+    setLastUpdatedAt(new Date().toISOString())
+    setPhase("stale")
+  }, [])
+
   useEffect(() => {
     const profileCache = readFieldCache<FieldProfileData>(PROFILE_KEY)
     const weekCache = readFieldCache<FieldWeekData>(CURRENT_WEEK_KEY)
@@ -185,6 +195,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       lastUpdatedAt,
       refresh,
       loadWeek,
+      applyLocalWeek,
       markAllNotificationsRead,
     }}>
       {children}

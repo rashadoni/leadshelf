@@ -94,6 +94,7 @@ export interface FieldWeekRoute {
   canExecute: boolean
   canEdit: boolean
   canPublish: boolean
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
   points: FieldRoutePoint[]
 }
 

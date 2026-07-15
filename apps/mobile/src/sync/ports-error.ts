@@ -19,6 +19,7 @@ export class HttpError extends Error {
   constructor(
     public status: number,
     message?: string,
+    public detail?: unknown,
   ) {
     super(message ?? `HTTP ${status}`)
   }

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { fieldApi } from "../../../src/api/mobile-client"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, type RouteTarget } from "../../../src/field/route-target-picker"
 import {
@@ -13,6 +12,9 @@ import {
   shiftDateKey,
 } from "../../../src/field/route-time"
 import type { FieldWeekRoute } from "../../../src/field/contracts"
+import { addOptimisticRoute } from "../../../src/field/route-cache"
+import { enqueueFieldRouteCreate, fieldRouteOutboxResult } from "../../../src/db/local-store"
+import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
@@ -31,6 +33,7 @@ export default function NewRouteScreen() {
   useLocale()
   const { copyFrom } = useLocalSearchParams<{ copyFrom?: string }>()
   const field = useField()
+  const { sync } = useSync()
   const availableDays = field.week?.days ?? []
   const initialDate = availableDays.find((day) => day.isToday && day.routePlanningAllowed)?.date ?? availableDays.find((day) => day.routePlanningAllowed)?.date ?? null
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate)
@@ -87,19 +90,22 @@ export default function NewRouteScreen() {
     const plannedTimes = targets.map((target) => (
       target.time ? routePlannedTime(selectedDate ?? "", target.time, timezone) : null
     ))
+    const invalidTime = targets.some((target, index) => (
+      !isValidRouteTime(target.time) || Boolean(target.time && !plannedTimes[index])
+    ))
     if (
       !agentId ||
       !selectedDate ||
       targets.length === 0 ||
-      targets.some((target, index) => !isValidRouteTime(target.time) || (target.time && !plannedTimes[index]))
+      invalidTime
     ) {
-      setError(t("routeCreateRequired"))
+      setError(invalidTime ? t("invalidRouteTime") : t("routeCreateRequired"))
       return
     }
     setSaving(true)
     setError(null)
     try {
-      const route = await fieldApi.createRoute({
+      const input = {
         agentId,
         date: `${selectedDate}T00:00:00.000Z`,
         name: name.trim() || null,
@@ -109,9 +115,38 @@ export default function NewRouteScreen() {
           contactId: target.contact?.id ?? null,
           plannedTime: plannedTimes[index] ?? null,
         })),
-      })
-      if (field.week) await field.loadWeek(field.week.weekStart)
-      router.replace(`/(app)/routes/${route.id}` as never)
+      }
+      const queued = enqueueFieldRouteCreate(input)
+      const week = field.week!
+      field.applyLocalWeek(addOptimisticRoute(week, {
+        id: queued.localRouteId,
+        agentId,
+        date: selectedDate,
+        name: input.name,
+        notes: input.notes,
+        points: targets.map((target, index) => ({
+          id: `${queued.localRouteId}-point-${index}`,
+          customerId: target.customer.id,
+          contactId: target.contact?.id ?? null,
+          orderIndex: index,
+          status: "PENDING",
+          effectiveStatus: "PENDING",
+          plannedTime: plannedTimes[index] ?? null,
+          visitedAt: null,
+          notes: null,
+          customer: target.customer,
+          contact: target.contact,
+        })),
+      }))
+      await sync()
+      const result = fieldRouteOutboxResult(queued.clientOpId)
+      if (result?.status === "applied" && result.routeId) {
+        await field.loadWeek(week.weekStart)
+        router.replace(`/(app)/routes/${result.routeId}` as never)
+      } else {
+        Alert.alert(t("routeQueued"))
+        router.replace("/(app)/routes" as never)
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("fieldDataError"))
     } finally {

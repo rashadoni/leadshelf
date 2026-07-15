@@ -15,6 +15,9 @@ import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../src/field/route-target-picker"
 import { addMinutesToRouteTime, formatRouteTime, isValidRouteTime, routePlannedTime } from "../../../src/field/route-time"
+import { updateOptimisticRoute } from "../../../src/field/route-cache"
+import { enqueueFieldRouteUpdate, fieldRouteOutboxResult, fieldRouteServerId } from "../../../src/db/local-store"
+import { useSync } from "../../../src/sync/sync-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -41,6 +44,7 @@ export default function FieldRouteDetailScreen() {
   useLocale()
   const { routeId } = useLocalSearchParams<{ routeId: string }>()
   const field = useField()
+  const { sync, status: syncStatus } = useSync()
   const routeData = useMemo(
     () => field.week?.days.flatMap((day) => day.routes).find((route) => route.id === routeId) ?? null,
     [field.week, routeId],
@@ -66,6 +70,17 @@ export default function FieldRouteDetailScreen() {
       formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC"),
     ])))
   }, [field.week?.timezone, routeData])
+
+  useEffect(() => {
+    if (!routeId?.startsWith("local-route-") || !syncStatus.lastSyncAt || !field.week) return
+    const serverRouteId = fieldRouteServerId(routeId)
+    if (!serverRouteId) return
+    void field.loadWeek(field.week.weekStart).then(() => {
+      router.replace(`/(app)/routes/${serverRouteId}` as never)
+    })
+  // Server-id reconciliation is keyed by the completed sync timestamp.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, syncStatus.lastSyncAt])
 
   if (!routeData) {
     return (
@@ -102,7 +117,8 @@ export default function FieldRouteDetailScreen() {
     }
     setSaving(true)
     try {
-      await fieldApi.updateRoute(routeData!.id, {
+      const input = {
+        routeId: routeData!.id,
         name: name.trim() || null,
         notes: notes.trim() || null,
         points: mappedPoints.map((point) => ({
@@ -110,9 +126,31 @@ export default function FieldRouteDetailScreen() {
           contactId: point.contactId,
           plannedTime: point.plannedTime,
         })),
-      })
-      if (field.week) await field.loadWeek(field.week.weekStart)
-      Alert.alert(t("changesSaved"))
+      }
+      const queued = enqueueFieldRouteUpdate(input)
+      const week = field.week!
+      field.applyLocalWeek(updateOptimisticRoute(week, routeData!.id, {
+        name: input.name,
+        notes: input.notes,
+        points: points.map((point, index) => ({
+          ...point,
+          orderIndex: index,
+          plannedTime: mappedPoints[index]?.plannedTime ?? null,
+        })),
+      }))
+      await sync()
+      const result = fieldRouteOutboxResult(queued.clientOpId)
+      if (result?.status === "applied") {
+        await field.loadWeek(week.weekStart)
+        Alert.alert(t("changesSaved"))
+        if (routeData!.id.startsWith("local-route-") && result.routeId) {
+          router.replace(`/(app)/routes/${result.routeId}` as never)
+        }
+      } else if (result?.status === "conflict" || result?.status === "rejected") {
+        Alert.alert(t("syncNeedsAttention"))
+      } else {
+        Alert.alert(t("routeQueued"))
+      }
     } catch (error) {
       Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
