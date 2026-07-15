@@ -44,6 +44,20 @@ export {
 } from "./repos/mobile-sync.ts"
 export { createOrder, OrderRepoError, type CreateOrderInput, type OrderSummary } from "./repos/orders.ts"
 export {
+  CommercialRepoError,
+  enrollPromotion,
+  submitPromotionExecution,
+  recordPromoInventoryEvent,
+  createSalesReturn,
+  createRewardClaim,
+  getAgentCommercialSnapshot,
+  type PromotionEnrollInput,
+  type PromotionSubmitInput,
+  type PromoInventoryRecordInput,
+  type SalesReturnCreateInput,
+  type RewardClaimCreateInput,
+} from "./repos/commercial.ts"
+export {
   getMobileExecutionHealth,
   buildMobileExecutionHealth,
   type MobileExecutionHealth,
