@@ -4,6 +4,8 @@
 import type {
   MobilePushOperation,
   MobilePushResult,
+  MobileCommercialMediaPurpose,
+  MobileCommercialMediaUploadResponse,
   MobilePhotoUploadResponse,
   MobileRouteRow,
   MobileRouteStopRow,
@@ -53,6 +55,8 @@ export interface SyncApi {
     captureFlagsJson?: string | null
     captureTelemetryJson?: string | null
   }): Promise<MobilePhotoUploadResponse>
+  uploadCommercialMedia(media: CommercialMediaQueueRow): Promise<MobileCommercialMediaUploadResponse>
+  cleanupCommercialMedia(media: CommercialMediaQueueRow): Promise<void>
 }
 
 export type OutboxRow = PushOperation & {
@@ -75,6 +79,16 @@ export interface PhotoQueueRow {
   uploaded: boolean
 }
 
+export interface CommercialMediaQueueRow {
+  clientMediaId: string
+  clientOpId: string
+  purpose: MobileCommercialMediaPurpose
+  fileUri: string
+  takenAt: string
+  attempts: number
+  uploaded: boolean
+}
+
 /** Локальное хранилище (реализация: db/local-store на expo-sqlite). */
 export interface LocalStore {
   applyPull(data: PullResponse): Promise<void>
@@ -90,6 +104,13 @@ export interface LocalStore {
   bumpPhotoAttempts(clientPhotoIds: string[], reason?: string): Promise<void>
   quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
   quarantinedPhotoCount(): Promise<number>
+  pendingCommercialMedia(): Promise<CommercialMediaQueueRow[]>
+  markCommercialMediaUploaded(
+    clientMediaId: string,
+    result: MobileCommercialMediaUploadResponse,
+  ): Promise<void>
+  bumpCommercialMediaAttempts(clientMediaIds: string[], reason?: string): Promise<void>
+  quarantineCommercialMedia(clientMediaId: string, reason: string): Promise<void>
 }
 
 export interface OutboxDiagnostics {

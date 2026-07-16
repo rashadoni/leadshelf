@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Alert,
-  Pressable,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -26,6 +26,8 @@ import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, radii } from "../../../src/theme"
+import { captureCommercialPhoto, type CommercialPhotoCapture } from "../../../src/commercial/capture-photo"
+import { discardCommercialMedia, persistCommercialMedia } from "../../../src/commercial/media-store"
 
 type Promotion = CommercialMobileState["snapshot"]["promotions"][number]
 type Execution = CommercialMobileState["snapshot"]["promotionExecutions"][number]
@@ -52,6 +54,7 @@ export default function PromotionsScreen() {
   const { status, sync } = useSync()
   const [state, setState] = useState<CommercialMobileState>(() => readCommercialMobileState())
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const [photos, setPhotos] = useState<Record<string, CommercialPhotoCapture>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const reload = useCallback(() => setState(readCommercialMobileState()), [])
@@ -107,13 +110,41 @@ export default function PromotionsScreen() {
     const note = notes[execution.clientExecutionId]?.trim() ?? ""
     if (note.length < 2 || busyId) return
     setBusyId(execution.clientExecutionId)
+    let media: Awaited<ReturnType<typeof persistCommercialMedia>> | undefined
     try {
-      enqueuePromotionSubmit({ clientExecutionId: execution.clientExecutionId, note })
+      const photo = photos[execution.clientExecutionId]
+      if (photo) {
+        media = await persistCommercialMedia({
+          sourceUri: photo.uri,
+          purpose: "PROMOTION_PROOF",
+          takenAt: photo.takenAt,
+        })
+      }
+      enqueuePromotionSubmit({ clientExecutionId: execution.clientExecutionId, note }, media)
       setNotes((current) => ({ ...current, [execution.clientExecutionId]: "" }))
+      setPhotos((current) => {
+        const next = { ...current }
+        delete next[execution.clientExecutionId]
+        return next
+      })
       Alert.alert(t("commercialSavedOffline"))
       await flush()
+    } catch (error) {
+      if (media) await discardCommercialMedia(media)
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function capture(execution: Execution) {
+    const result = await captureCommercialPhoto()
+    if (result === "denied") {
+      Alert.alert(t("cameraPermissionDenied"))
+      return
+    }
+    if (result) {
+      setPhotos((current) => ({ ...current, [execution.clientExecutionId]: result }))
     }
   }
 
@@ -157,6 +188,7 @@ export default function PromotionsScreen() {
               const active = isPromotionActive(promotion)
               const execution = executionFor(promotion.id)
               const note = execution ? notes[execution.clientExecutionId] ?? "" : ""
+              const photo = execution ? photos[execution.clientExecutionId] : undefined
               const canSubmit = Boolean(execution && execution.status === "ENROLLED" && note.trim().length >= 2)
               return (
                 <View key={promotion.id} style={styles.card}>
@@ -198,7 +230,20 @@ export default function PromotionsScreen() {
                         maxLength={1000}
                         style={styles.textarea}
                       />
-                      <Text style={styles.proofHint}>{t("commercialPromotionProofHint")}</Text>
+                      <View style={styles.photoRow}>
+                        {photo ? <Image source={{ uri: photo.uri }} style={styles.photoPreview} /> : <View style={styles.photoPlaceholder}><Text style={styles.photoGlyph}>⌾</Text></View>}
+                        <View style={styles.photoBody}>
+                          <Text style={styles.photoTitle}>{photo ? t("commercialPhotoReady") : t("commercialPromotionProofHint")}</Text>
+                          <View style={styles.photoButton}>
+                            <CommercialButton
+                              label={photo ? t("commercialRetakePhoto") : t("commercialAddPhoto")}
+                              tone="secondary"
+                              disabled={busyId !== null}
+                              onPress={() => void capture(execution)}
+                            />
+                          </View>
+                        </View>
+                      </View>
                       <CommercialButton
                         label={t("commercialPromotionSubmit")}
                         disabled={!canSubmit || busyId !== null}
@@ -242,7 +287,13 @@ const styles = StyleSheet.create({
   actionHint: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   inputLabel: { color: colors.text, fontSize: 12, fontWeight: "900" },
   textarea: { minHeight: 88, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, borderRadius: radii.inner, paddingHorizontal: 12, paddingVertical: 11, color: colors.text, fontSize: 13, lineHeight: 18 },
-  proofHint: { color: colors.faint, fontSize: 10, lineHeight: 14 },
+  photoRow: { minHeight: 72, borderRadius: radii.inner, backgroundColor: colors.bg, padding: 9, flexDirection: "row", alignItems: "center", gap: 10 },
+  photoPreview: { width: 54, height: 54, borderRadius: 12, backgroundColor: colors.skeleton },
+  photoPlaceholder: { width: 54, height: 54, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  photoGlyph: { color: colors.primary, fontSize: 22, fontWeight: "900" },
+  photoBody: { flex: 1, minWidth: 0 },
+  photoTitle: { color: colors.muted, fontSize: 10, lineHeight: 14 },
+  photoButton: { marginTop: 6 },
   resultBlock: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 12 },
   resultLabel: { color: colors.faint, fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
   resultText: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 4 },

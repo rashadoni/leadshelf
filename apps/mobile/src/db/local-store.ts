@@ -20,6 +20,7 @@ import {
   mobileVisitCheckOutPayloadSchema,
   type MobileProofExceptionPayload,
   type MobileCommercialSnapshot,
+  type MobileCommercialMediaPurpose,
   type MobilePromoInventoryRecordPayload,
   type MobilePromotionEnrollPayload,
   type MobilePromotionSubmitPayload,
@@ -42,6 +43,11 @@ import type {
 } from "../sync/ports"
 import type { MobilePhotoUploadResponse, MobileShelfComparisonResult } from "@leadshelf/api-contracts/mobile/v1"
 import { OPEN_TASK_STATUSES } from "../tasks/status"
+import {
+  attachCommercialMediaToOperation,
+  detachCommercialMediaFromOperation,
+  type CommercialMediaOperationKind,
+} from "../commercial/media-outbox"
 import {
   parseQueuedOrderDetailCode,
   parseQueuedOrderPayload,
@@ -159,6 +165,19 @@ export function initDb(): void {
       uploadedAt TEXT, serverPhotoId TEXT, objectKey TEXT, qualityScore REAL,
       qualityCheck TEXT, visionReviewId TEXT, visionStatus TEXT, visionReason TEXT
     );
+    CREATE TABLE IF NOT EXISTS commercial_media_queue (
+      clientMediaId TEXT PRIMARY KEY,
+      clientOpId TEXT NOT NULL UNIQUE,
+      purpose TEXT NOT NULL,
+      fileUri TEXT NOT NULL,
+      takenAt TEXT NOT NULL,
+      uploaded INTEGER DEFAULT 0,
+      uploadedAt TEXT,
+      objectKey TEXT,
+      attempts INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
+      lastError TEXT
+    );
     CREATE TABLE IF NOT EXISTS server_photo_submissions (
       id TEXT PRIMARY KEY,
       clientPhotoId TEXT,
@@ -271,7 +290,9 @@ export function prepareMobileSessionScope(
     "SELECT COUNT(*) AS n FROM outbox_ops WHERE status IN ('pending','conflict','rejected')",
   )?.n ?? 0
   const pendingPhotos = db.getFirstSync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM photo_queue WHERE uploaded=0",
+    `SELECT
+      (SELECT COUNT(*) FROM photo_queue WHERE uploaded=0) +
+      (SELECT COUNT(*) FROM commercial_media_queue WHERE uploaded=0) AS n`,
   )?.n ?? 0
   if ((current || pendingOps > 0 || pendingPhotos > 0) && (pendingOps > 0 || pendingPhotos > 0)) {
     return { ok: false, pendingOps, pendingPhotos }
@@ -288,6 +309,7 @@ export function prepareMobileSessionScope(
       "cursors",
       "outbox_ops",
       "photo_queue",
+      "commercial_media_queue",
       "server_photo_submissions",
       "field_cache",
     ]) {
@@ -501,8 +523,12 @@ export const localStore: LocalStore = {
         attempts: number
       }>(
         `SELECT * FROM outbox_ops
-         WHERE status='pending'
-            OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"')
+         WHERE (status='pending'
+            OR (status='rejected' AND kind='photo.submit' AND detail='"photo_not_uploaded_yet"'))
+           AND NOT EXISTS (
+             SELECT 1 FROM commercial_media_queue media
+             WHERE media.clientOpId=outbox_ops.clientOpId AND media.uploaded=0
+           )
          ORDER BY clientCreatedAt, rowid LIMIT ?`,
         [limit],
       )
@@ -882,10 +908,188 @@ export const localStore: LocalStore = {
 
   async quarantinedPhotoCount() {
     const row = db.getFirstSync<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM photo_queue WHERE uploaded=0 AND status='quarantined'",
+      `SELECT
+        (SELECT COUNT(*) FROM photo_queue WHERE uploaded=0 AND status='quarantined') +
+        (SELECT COUNT(*) FROM commercial_media_queue WHERE uploaded=0 AND status='quarantined') AS n`,
     )
     return row?.n ?? 0
   },
+
+  async pendingCommercialMedia() {
+    return db.getAllSync<{
+      clientMediaId: string
+      clientOpId: string
+      purpose: MobileCommercialMediaPurpose
+      fileUri: string
+      takenAt: string
+      attempts: number | null
+      uploaded: number
+    }>(
+      `SELECT clientMediaId, clientOpId, purpose, fileUri, takenAt, attempts, uploaded
+       FROM commercial_media_queue
+       WHERE uploaded=0 AND (status IS NULL OR status='pending')
+       ORDER BY takenAt, rowid`,
+    ).map((row) => ({ ...row, attempts: row.attempts ?? 0, uploaded: Boolean(row.uploaded) }))
+  },
+
+  async markCommercialMediaUploaded(clientMediaId, result) {
+    const media = db.getFirstSync<{
+      clientOpId: string
+      purpose: MobileCommercialMediaPurpose
+    }>("SELECT clientOpId, purpose FROM commercial_media_queue WHERE clientMediaId=?", [clientMediaId])
+    if (!media) throw new Error("Commercial media queue row not found")
+    if (media.purpose !== result.purpose) throw new Error("Commercial media purpose mismatch")
+    const operation = db.getFirstSync<{ kind: string; payload: string }>(
+      "SELECT kind, payload FROM outbox_ops WHERE clientOpId=?",
+      [media.clientOpId],
+    )
+    if (!operation) throw new Error("Commercial media operation not found")
+    const rawPayload = parseJsonOrNull<Record<string, unknown>>(operation.payload)
+    if (!rawPayload) throw new Error("Commercial media operation payload is invalid")
+    if (operation.kind !== "promotion.submit" && operation.kind !== "return.create") {
+      throw new Error("Commercial media operation kind mismatch")
+    }
+    const nextPayload = attachCommercialMediaToOperation({
+      kind: operation.kind,
+      payload: rawPayload,
+      purpose: media.purpose,
+      key: result.key,
+    })
+
+    db.withTransactionSync(() => {
+      db.runSync(
+        "UPDATE outbox_ops SET payload=?, status='pending', detail=NULL WHERE clientOpId=?",
+        [JSON.stringify(nextPayload), media.clientOpId],
+      )
+      db.runSync(
+        `UPDATE commercial_media_queue
+         SET uploaded=1, uploadedAt=?, objectKey=?, lastError=NULL
+         WHERE clientMediaId=?`,
+        [new Date().toISOString(), result.key, clientMediaId],
+      )
+    })
+  },
+
+  async bumpCommercialMediaAttempts(clientMediaIds, reason) {
+    db.withTransactionSync(() => {
+      for (const clientMediaId of clientMediaIds) {
+        db.runSync(
+          `UPDATE commercial_media_queue
+           SET attempts=COALESCE(attempts,0)+1, lastError=?
+           WHERE clientMediaId=?`,
+          [reason?.slice(0, 500) ?? null, clientMediaId],
+        )
+      }
+    })
+  },
+
+  async quarantineCommercialMedia(clientMediaId, reason) {
+    db.runSync(
+      `UPDATE commercial_media_queue
+       SET status='quarantined', attempts=COALESCE(attempts,0)+1, lastError=?
+       WHERE clientMediaId=?`,
+      [reason.slice(0, 500), clientMediaId],
+    )
+  },
+}
+
+export interface CommercialMediaRecoveryRow {
+  clientMediaId: string
+  clientOpId: string
+  purpose: MobileCommercialMediaPurpose
+  operationKind: CommercialMediaOperationKind
+  fileUri: string
+  takenAt: string
+  attempts: number
+  status: "pending" | "quarantined"
+  lastError: string | null
+}
+
+export function listCommercialMediaRecoveryQueue(): CommercialMediaRecoveryRow[] {
+  return db.getAllSync<{
+    clientMediaId: string
+    clientOpId: string
+    purpose: MobileCommercialMediaPurpose
+    operationKind: CommercialMediaOperationKind
+    fileUri: string
+    takenAt: string
+    attempts: number | null
+    status: string | null
+    lastError: string | null
+  }>(
+    `SELECT media.clientMediaId, media.clientOpId, media.purpose,
+            ops.kind AS operationKind, media.fileUri, media.takenAt,
+            media.attempts, media.status, media.lastError
+     FROM commercial_media_queue media
+     JOIN outbox_ops ops ON ops.clientOpId=media.clientOpId
+     WHERE media.uploaded=0
+     ORDER BY CASE WHEN media.status='quarantined' THEN 0 ELSE 1 END,
+              media.takenAt, media.rowid`,
+  ).flatMap((row) => {
+    if (row.operationKind !== "promotion.submit" && row.operationKind !== "return.create") return []
+    return [{
+      ...row,
+      attempts: row.attempts ?? 0,
+      status: row.status === "quarantined" ? "quarantined" as const : "pending" as const,
+    }]
+  })
+}
+
+export function retryCommercialMedia(clientMediaId: string): boolean {
+  const media = db.getFirstSync<{ clientOpId: string }>(
+    "SELECT clientOpId FROM commercial_media_queue WHERE clientMediaId=? AND uploaded=0",
+    [clientMediaId],
+  )
+  if (!media) return false
+  db.withTransactionSync(() => {
+    db.runSync(
+      `UPDATE commercial_media_queue
+       SET status='pending', attempts=0, lastError=NULL
+       WHERE clientMediaId=? AND uploaded=0`,
+      [clientMediaId],
+    )
+    db.runSync(
+      "UPDATE outbox_ops SET status='pending', detail=NULL WHERE clientOpId=?",
+      [media.clientOpId],
+    )
+  })
+  return true
+}
+
+export function detachCommercialMedia(clientMediaId: string): { fileUri: string; clientOpId: string } | null {
+  const row = db.getFirstSync<{
+    clientOpId: string
+    purpose: MobileCommercialMediaPurpose
+    fileUri: string
+    operationKind: string
+    payload: string
+  }>(
+    `SELECT media.clientOpId, media.purpose, media.fileUri,
+            ops.kind AS operationKind, ops.payload
+     FROM commercial_media_queue media
+     JOIN outbox_ops ops ON ops.clientOpId=media.clientOpId
+     WHERE media.clientMediaId=? AND media.uploaded=0`,
+    [clientMediaId],
+  )
+  if (!row) return null
+  if (row.operationKind !== "promotion.submit" && row.operationKind !== "return.create") {
+    throw new Error("Commercial media operation kind mismatch")
+  }
+  const payload = parseJsonOrNull<Record<string, unknown>>(row.payload)
+  if (!payload) throw new Error("Commercial media operation payload is invalid")
+  const nextPayload = detachCommercialMediaFromOperation({
+    kind: row.operationKind,
+    payload,
+    purpose: row.purpose,
+  })
+  db.withTransactionSync(() => {
+    db.runSync("DELETE FROM commercial_media_queue WHERE clientMediaId=? AND uploaded=0", [clientMediaId])
+    db.runSync(
+      "UPDATE outbox_ops SET payload=?, status='pending', detail=NULL WHERE clientOpId=?",
+      [JSON.stringify(nextPayload), row.clientOpId],
+    )
+  })
+  return { fileUri: row.fileUri, clientOpId: row.clientOpId }
 }
 
 // --- локальные чтения/записи для UI ---
@@ -1883,14 +2087,32 @@ export function readCommercialSnapshot(): { value: MobileCommercialSnapshot; upd
 function enqueueCommercial(
   kind: CommercialOperationKind,
   payload: MobilePushOperation["payload"],
+  media?: CommercialMediaAttachment,
 ): { clientOpId: string; clientCreatedAt: string } {
   const clientOpId = `op-${Crypto.randomUUID()}`
   const clientCreatedAt = new Date().toISOString()
-  db.runSync(
-    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
-    [clientOpId, kind, JSON.stringify(payload), clientCreatedAt],
-  )
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, kind, JSON.stringify(payload), clientCreatedAt],
+    )
+    if (media) {
+      db.runSync(
+        `INSERT INTO commercial_media_queue
+          (clientMediaId, clientOpId, purpose, fileUri, takenAt)
+         VALUES (?,?,?,?,?)`,
+        [media.clientMediaId, clientOpId, media.purpose, media.fileUri, media.takenAt],
+      )
+    }
+  })
   return { clientOpId, clientCreatedAt }
+}
+
+export interface CommercialMediaAttachment {
+  clientMediaId: string
+  purpose: MobileCommercialMediaPurpose
+  fileUri: string
+  takenAt: string
 }
 
 export function enqueuePromotionEnroll(
@@ -1901,16 +2123,24 @@ export function enqueuePromotionEnroll(
   return { ...enqueueCommercial("promotion.enroll", payload), clientExecutionId }
 }
 
-export function enqueuePromotionSubmit(input: MobilePromotionSubmitPayload) {
-  return enqueueCommercial("promotion.submit", mobilePromotionSubmitPayloadSchema.parse(input))
+export function enqueuePromotionSubmit(
+  input: MobilePromotionSubmitPayload,
+  media?: CommercialMediaAttachment,
+) {
+  if (media && media.purpose !== "PROMOTION_PROOF") throw new Error("Promotion proof purpose mismatch")
+  return enqueueCommercial("promotion.submit", mobilePromotionSubmitPayloadSchema.parse(input), media)
 }
 
 export function enqueuePromoInventoryRecord(input: MobilePromoInventoryRecordPayload) {
   return enqueueCommercial("inventory.record", mobilePromoInventoryRecordPayloadSchema.parse(input))
 }
 
-export function enqueueSalesReturn(input: MobileSalesReturnCreatePayload) {
-  return enqueueCommercial("return.create", mobileSalesReturnCreatePayloadSchema.parse(input))
+export function enqueueSalesReturn(
+  input: MobileSalesReturnCreatePayload,
+  media?: CommercialMediaAttachment,
+) {
+  if (media && media.purpose !== "RETURN_EVIDENCE") throw new Error("Return evidence purpose mismatch")
+  return enqueueCommercial("return.create", mobileSalesReturnCreatePayloadSchema.parse(input), media)
 }
 
 export function enqueueRewardClaim(input: MobileRewardClaimPayload) {

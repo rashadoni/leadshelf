@@ -6,6 +6,7 @@ import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-er
 import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
 import {
   MOBILE_PROTOCOL_VERSION,
+  mobileCommercialMediaUploadResponseSchema,
   mobilePhotoUploadResponseSchema,
   mobileSyncPullResponseSchema,
   mobileSyncPushResponseSchema,
@@ -427,5 +428,19 @@ export const syncApi: SyncApi = {
       method: "POST",
       body: form,
     }).then((body) => mobilePhotoUploadResponseSchema.parse(body))
+  },
+  uploadCommercialMedia: async (media) => {
+    const form = new FormData()
+    form.append("file", new File(media.fileUri), `${media.clientMediaId}.jpg`)
+    form.append("clientMediaId", media.clientMediaId)
+    form.append("purpose", media.purpose)
+    form.append("takenAt", media.takenAt)
+    return request("/api/v1/mtm/mobile/shelf/commercial-media/upload", {
+      method: "POST",
+      body: form,
+    }).then((body) => mobileCommercialMediaUploadResponseSchema.parse(body))
+  },
+  cleanupCommercialMedia: async (media) => {
+    await FileSystem.deleteAsync(media.fileUri, { idempotent: true }).catch(() => {})
   },
 }

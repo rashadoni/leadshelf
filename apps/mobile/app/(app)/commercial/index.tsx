@@ -4,6 +4,10 @@ import { router, useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { SyncBar } from "../../../src/components/SyncBar"
 import {
+  listCommercialMediaRecoveryQueue,
+  type CommercialMediaRecoveryRow,
+} from "../../../src/db/local-store"
+import {
   activePromotionCount,
   commercialOrderTotal,
   readCommercialMobileState,
@@ -32,8 +36,12 @@ export default function CommercialHomeScreen() {
   useLocale()
   const { status, sync } = useSync()
   const [state, setState] = useState<CommercialMobileState>(() => readCommercialMobileState())
+  const [mediaQueue, setMediaQueue] = useState<CommercialMediaRecoveryRow[]>(() => listCommercialMediaRecoveryQueue())
   const [refreshing, setRefreshing] = useState(false)
-  const reload = useCallback(() => setState(readCommercialMobileState()), [])
+  const reload = useCallback(() => {
+    setState(readCommercialMobileState())
+    setMediaQueue(listCommercialMediaRecoveryQueue())
+  }, [])
 
   useFocusEffect(reload)
   useEffect(() => {
@@ -149,6 +157,28 @@ export default function CommercialHomeScreen() {
           </View>
         ) : null}
 
+        {mediaQueue.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/commercial/media-queue" as never)}
+            style={({ pressed }) => [
+              styles.mediaQueueCard,
+              mediaQueue.some((row) => row.status === "quarantined") && styles.mediaQueueAttention,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.mediaQueueGlyph}><Text style={styles.mediaQueueGlyphText}>⌾</Text></View>
+            <View style={styles.mediaQueueBody}>
+              <Text style={styles.mediaQueueTitle}>{t("commercialMediaQueueTitle")}</Text>
+              <Text style={styles.mediaQueueHint}>{t("commercialMediaQueueHint", { count: mediaQueue.length })}</Text>
+            </View>
+            <View style={styles.mediaQueueMeta}>
+              <Text style={styles.mediaQueueCount}>{mediaQueue.length}</Text>
+              <Text style={styles.mediaQueueArrow}>›</Text>
+            </View>
+          </Pressable>
+        ) : null}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t("commercialActionsTitle")}</Text>
           <Text style={styles.sectionHint}>{t("commercialActionsHint")}</Text>
@@ -205,6 +235,16 @@ const styles = StyleSheet.create({
   attentionValue: { color: colors.danger },
   queueLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", textAlign: "center", marginTop: 2 },
   queueDivider: { width: 1, backgroundColor: colors.border },
+  mediaQueueCard: { marginHorizontal: 14, marginTop: 10, minHeight: 78, padding: 13, borderRadius: radii.card, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 11 },
+  mediaQueueAttention: { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
+  mediaQueueGlyph: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  mediaQueueGlyphText: { color: colors.warning, fontSize: 22, fontWeight: "900" },
+  mediaQueueBody: { flex: 1, minWidth: 0 },
+  mediaQueueTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  mediaQueueHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  mediaQueueMeta: { flexDirection: "row", alignItems: "center", gap: 4 },
+  mediaQueueCount: { color: colors.warning, fontSize: 18, fontWeight: "900" },
+  mediaQueueArrow: { color: colors.warning, fontSize: 25, fontWeight: "700" },
   sectionHeader: { paddingHorizontal: 18, marginTop: 24, marginBottom: 10 },
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   sectionHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },

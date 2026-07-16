@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Alert,
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -27,6 +28,8 @@ import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, radii } from "../../../src/theme"
+import { captureCommercialPhoto, type CommercialPhotoCapture } from "../../../src/commercial/capture-photo"
+import { discardCommercialMedia, persistCommercialMedia } from "../../../src/commercial/media-store"
 
 type CommercialOrder = CommercialMobileState["snapshot"]["orders"][number]
 type CommercialReturn = CommercialMobileState["snapshot"]["returns"][number]
@@ -62,6 +65,7 @@ export default function ReturnsScreen() {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [reason, setReason] = useState<ReturnReason>("DAMAGED")
   const [note, setNote] = useState("")
+  const [photo, setPhoto] = useState<CommercialPhotoCapture | null>(null)
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const reload = useCallback(() => setState(readCommercialMobileState()), [])
@@ -93,6 +97,7 @@ export default function ReturnsScreen() {
     setQuantities({})
     setReason("DAMAGED")
     setNote("")
+    setPhoto(null)
   }
 
   function changeQuantity(line: CommercialOrder["lines"][number], delta: number) {
@@ -108,22 +113,34 @@ export default function ReturnsScreen() {
   const selectedUnits = selectedLines.reduce((sum, line) => sum + line.quantity, 0)
 
   function close() {
-    if (!busy) setSelected(null)
+    if (!busy) {
+      setSelected(null)
+      setPhoto(null)
+    }
   }
 
   async function save() {
     if (!selected || selectedLines.length === 0 || busy) return
     setBusy(true)
+    let media: Awaited<ReturnType<typeof persistCommercialMedia>> | undefined
     try {
       const attachedVisit = state.activeVisit?.storeId === selected.storeId ? state.activeVisit : null
+      if (photo) {
+        media = await persistCommercialMedia({
+          sourceUri: photo.uri,
+          purpose: "RETURN_EVIDENCE",
+          takenAt: photo.takenAt,
+        })
+      }
       enqueueSalesReturn({
         orderId: selected.id,
         visitId: attachedVisit?.id ?? null,
         reason,
         note: note.trim() || null,
         lines: selectedLines,
-      })
+      }, media)
       setSelected(null)
+      setPhoto(null)
       Alert.alert(t("commercialSavedOffline"))
       reload()
       try {
@@ -132,9 +149,21 @@ export default function ReturnsScreen() {
         // The request remains visible in the local projection.
       }
       reload()
+    } catch (error) {
+      if (media) await discardCommercialMedia(media)
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
+  }
+
+  async function capture() {
+    const result = await captureCommercialPhoto()
+    if (result === "denied") {
+      Alert.alert(t("cameraPermissionDenied"))
+      return
+    }
+    if (result) setPhoto(result)
   }
 
   async function refresh() {
@@ -262,7 +291,14 @@ export default function ReturnsScreen() {
                 placeholderTextColor={colors.faint}
                 style={styles.textarea}
               />
-              <Text style={styles.photoHint}>{t("commercialReturnPhotoHint")}</Text>
+              <Text style={styles.formTitle}>{t("commercialReturnPhotoTitle")}</Text>
+              <View style={styles.photoRow}>
+                {photo ? <Image source={{ uri: photo.uri }} style={styles.photoPreview} /> : <View style={styles.photoPlaceholder}><Text style={styles.photoGlyph}>⌾</Text></View>}
+                <View style={styles.photoBody}>
+                  <Text style={styles.photoHint}>{photo ? t("commercialPhotoReady") : t("commercialReturnPhotoHint")}</Text>
+                  <View style={styles.photoButton}><CommercialButton label={photo ? t("commercialRetakePhoto") : t("commercialAddPhoto")} tone="secondary" onPress={() => void capture()} /></View>
+                </View>
+              </View>
             </ScrollView>
             <View style={styles.sheetFooter}>
               <View style={styles.footerButton}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={close} /></View>
@@ -322,7 +358,13 @@ const styles = StyleSheet.create({
   reasonText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
   reasonTextSelected: { color: colors.primary },
   textarea: { minHeight: 82, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, padding: 11, color: colors.text, fontSize: 12, lineHeight: 17 },
-  photoHint: { color: colors.faint, fontSize: 10, lineHeight: 14, marginTop: 7 },
+  photoRow: { minHeight: 76, borderRadius: radii.inner, backgroundColor: colors.bg, padding: 9, flexDirection: "row", alignItems: "center", gap: 10 },
+  photoPreview: { width: 58, height: 58, borderRadius: 12, backgroundColor: colors.skeleton },
+  photoPlaceholder: { width: 58, height: 58, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  photoGlyph: { color: colors.primary, fontSize: 22, fontWeight: "900" },
+  photoBody: { flex: 1, minWidth: 0 },
+  photoHint: { color: colors.muted, fontSize: 10, lineHeight: 14 },
+  photoButton: { marginTop: 7 },
   sheetFooter: { flexDirection: "row", gap: 9, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 28, borderTopWidth: 1, borderTopColor: colors.border },
   footerButton: { flex: 1 },
 })
