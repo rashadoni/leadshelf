@@ -16,6 +16,7 @@ import type {
 } from "@leadshelf/api-contracts/mobile/v1"
 import type { FieldRoutePushOperation } from "../field/route-outbox"
 import type {
+  FieldDocumentUploadPushOperation,
   FieldExecutionPushOperation,
   FieldLocationPushOperation,
   FieldVisitPhotoPushOperation,
@@ -27,7 +28,7 @@ export type RouteRow = MobileRouteRow
 export type RouteStopRow = MobileRouteStopRow
 export type VisitRow = MobileVisitRow
 export type PullResponse = MobileSyncPullResponse
-export type PushOperation = MobilePushOperation | FieldRoutePushOperation | FieldExecutionPushOperation | FieldVisitPhotoPushOperation | FieldLocationPushOperation
+export type PushOperation = MobilePushOperation | FieldRoutePushOperation | FieldExecutionPushOperation | FieldVisitPhotoPushOperation | FieldLocationPushOperation | FieldDocumentUploadPushOperation
 export type PushResult = MobilePushResult
 
 export type SyncCursors = {

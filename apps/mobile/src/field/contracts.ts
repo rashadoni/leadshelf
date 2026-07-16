@@ -546,6 +546,169 @@ export interface FieldNotificationsData {
   unread: number
 }
 
+export type FieldMessageThreadType = "DIRECT" | "BROADCAST" | "SYSTEM"
+export type FieldMessageReceiptType = "READ" | "ACKNOWLEDGED"
+
+export interface FieldMessagePerson {
+  id: string
+  name: string
+  role: string
+  avatar: string | null
+  teamId?: string | null
+  participantRole?: string
+}
+
+export interface FieldMessageAttachment {
+  id: string
+  title?: string | null
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+  checksumSha256?: string | null
+  downloadUrl?: string
+  localUri?: string | null
+}
+
+export interface FieldMessage {
+  id: string
+  senderAgentId: string | null
+  senderUserId?: string | null
+  senderName: string
+  clientMessageId: string | null
+  body: string | null
+  sentAt: string
+  acknowledgementRequired: boolean
+  attachmentDocument: FieldMessageAttachment | null
+  read: boolean
+  acknowledged: boolean
+  receipts?: Array<{ id?: string; type: FieldMessageReceiptType; occurredAt: string }>
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldMessageThreadSummary {
+  id: string
+  type: FieldMessageThreadType
+  subject: string | null
+  title: string
+  lastMessageAt: string
+  participants: FieldMessagePerson[]
+  lastMessage: Omit<FieldMessage, "clientMessageId" | "read"> | null
+  unread: boolean
+  needsAcknowledgement: boolean
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldMessagesData {
+  threads: FieldMessageThreadSummary[]
+  unread: number
+  availableRecipients: FieldMessagePerson[]
+  capabilities: {
+    startDirectConversation: boolean
+    sendAttachments: boolean
+    acknowledgeBroadcasts: boolean
+  }
+}
+
+export interface FieldMessageThreadData {
+  thread: {
+    id: string
+    type: FieldMessageThreadType
+    subject: string | null
+    lastMessageAt: string
+    participants: FieldMessagePerson[]
+    messages: FieldMessage[]
+  }
+  capabilities: { reply: boolean; sendAttachments: boolean; acknowledge: boolean }
+}
+
+export interface FieldDocument {
+  id: string
+  clientDocumentId: string | null
+  title: string | null
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+  checksumSha256: string | null
+  uploadedByAgentId: string | null
+  visitId: string | null
+  taskId: string | null
+  createdAt: string
+  visit?: { id: string; customer: { id: string; name: string } } | null
+  task?: { id: string; title: string } | null
+  assignment: {
+    id: string
+    required: boolean
+    assignedAt: string
+    expiresAt: string | null
+    readAt: string | null
+    downloadedAt: string | null
+  }
+  expired: boolean
+  downloadUrl: string
+  localUri?: string | null
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldDocumentsData {
+  documents: FieldDocument[]
+  capabilities: { upload: boolean; offlineDownload: boolean; maxUploadBytes: number }
+}
+
+export type FieldHrmRequestType = "LEAVE" | "ABSENCE" | "TIME_CORRECTION"
+export type FieldHrmRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"
+
+export interface FieldHrmRequest {
+  id: string
+  clientRequestId: string
+  type: FieldHrmRequestType
+  status: FieldHrmRequestStatus
+  startDate: string
+  endDate: string
+  correctionWorkdayId: string | null
+  requestedStartAt: string | null
+  requestedEndAt: string | null
+  reason: string
+  decisionNote: string | null
+  submittedAt: string
+  decidedAt: string | null
+  cancelledAt: string | null
+  updatedAt: string
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldHrmData {
+  timezone: string
+  start: string
+  end: string
+  days: Array<{
+    date: string
+    calendar: {
+      isWorkingDay: boolean
+      kind: string
+      source: string
+      name: string | null
+      routePlanningAllowed: boolean
+    }
+    workday: {
+      id: string
+      workDate: string
+      status: string
+      startedAt: string
+      pausedAt: string | null
+      completedAt: string | null
+      totalPausedSeconds: number
+    } | null
+    requests: Array<{ id: string; type: FieldHrmRequestType; status: FieldHrmRequestStatus }>
+  }>
+  requests: FieldHrmRequest[]
+  capabilities: {
+    requestLeave: boolean
+    requestAbsence: boolean
+    requestTimeCorrection: boolean
+    cancelPending: boolean
+  }
+}
+
 export interface FieldOrganization {
   id: string
   code: string | null
@@ -1311,6 +1474,178 @@ export function parseFieldNotifications(value: unknown): FieldNotificationsData 
     }
   }
   return data as unknown as FieldNotificationsData
+}
+
+const messageThreadTypes = new Set<FieldMessageThreadType>(["DIRECT", "BROADCAST", "SYSTEM"])
+const messageReceiptTypes = new Set<FieldMessageReceiptType>(["READ", "ACKNOWLEDGED"])
+const hrmRequestTypes = new Set<FieldHrmRequestType>(["LEAVE", "ABSENCE", "TIME_CORRECTION"])
+const hrmRequestStatuses = new Set<FieldHrmRequestStatus>(["PENDING", "APPROVED", "REJECTED", "CANCELLED"])
+
+function validMessagePerson(value: unknown): boolean {
+  const person = record(value)
+  return Boolean(
+    person && string(person.id) && string(person.name) && string(person.role) &&
+      (person.avatar == null || typeof person.avatar === "string") &&
+      (person.teamId == null || typeof person.teamId === "string") &&
+      (person.participantRole == null || typeof person.participantRole === "string"),
+  )
+}
+
+function validMessageAttachment(value: unknown): boolean {
+  if (value == null) return true
+  const attachment = record(value)
+  return Boolean(
+    attachment && string(attachment.id) && string(attachment.fileName) &&
+      string(attachment.mimeType) && number(attachment.sizeBytes) && attachment.sizeBytes >= 0 &&
+      (attachment.title == null || typeof attachment.title === "string") &&
+      (attachment.checksumSha256 == null || typeof attachment.checksumSha256 === "string") &&
+      (attachment.downloadUrl == null || typeof attachment.downloadUrl === "string"),
+  )
+}
+
+function validMessage(value: unknown, summary = false): boolean {
+  const message = record(value)
+  if (!message) return false
+  const receipts = message.receipts
+  return Boolean(
+    string(message.id) &&
+      (message.senderAgentId == null || typeof message.senderAgentId === "string") &&
+      (message.senderUserId == null || typeof message.senderUserId === "string") &&
+      string(message.senderName) &&
+      (summary || message.clientMessageId == null || typeof message.clientMessageId === "string") &&
+      (message.body == null || typeof message.body === "string") &&
+      timestamp(message.sentAt) && boolean(message.acknowledgementRequired) &&
+      validMessageAttachment(message.attachmentDocument) &&
+      (summary || boolean(message.read)) && boolean(message.acknowledged) &&
+      (receipts == null || (Array.isArray(receipts) && receipts.every((receiptValue) => {
+        const receipt = record(receiptValue)
+        return Boolean(
+          receipt && string(receipt.type) && messageReceiptTypes.has(receipt.type as FieldMessageReceiptType) &&
+            timestamp(receipt.occurredAt),
+        )
+      }))),
+  )
+}
+
+export function parseFieldMessages(value: unknown): FieldMessagesData {
+  const data = validEnvelope(value)
+  const capabilities = record(data?.capabilities)
+  if (
+    !data || !Array.isArray(data.threads) || !number(data.unread) ||
+    !Array.isArray(data.availableRecipients) || !data.availableRecipients.every(validMessagePerson) ||
+    !capabilities || !boolean(capabilities.startDirectConversation) ||
+    !boolean(capabilities.sendAttachments) || !boolean(capabilities.acknowledgeBroadcasts)
+  ) throw new FieldContractError("mobile messages")
+  for (const threadValue of data.threads) {
+    const thread = record(threadValue)
+    if (
+      !thread || !string(thread.id) || !string(thread.type) ||
+      !messageThreadTypes.has(thread.type as FieldMessageThreadType) ||
+      (thread.subject == null ? false : typeof thread.subject !== "string") ||
+      !string(thread.title) || !timestamp(thread.lastMessageAt) ||
+      !Array.isArray(thread.participants) || !thread.participants.every(validMessagePerson) ||
+      !(thread.lastMessage == null || validMessage(thread.lastMessage, true)) ||
+      !boolean(thread.unread) || !boolean(thread.needsAcknowledgement)
+    ) throw new FieldContractError("mobile messages")
+  }
+  return data as unknown as FieldMessagesData
+}
+
+export function parseFieldMessageThread(value: unknown): FieldMessageThreadData {
+  const data = validEnvelope(value)
+  const thread = record(data?.thread)
+  const capabilities = record(data?.capabilities)
+  if (
+    !data || !thread || !string(thread.id) || !string(thread.type) ||
+    !messageThreadTypes.has(thread.type as FieldMessageThreadType) ||
+    (thread.subject == null ? false : typeof thread.subject !== "string") ||
+    !timestamp(thread.lastMessageAt) ||
+    !Array.isArray(thread.participants) || !thread.participants.every(validMessagePerson) ||
+    !Array.isArray(thread.messages) || !thread.messages.every((message) => validMessage(message)) ||
+    !capabilities || !boolean(capabilities.reply) || !boolean(capabilities.sendAttachments) ||
+    !boolean(capabilities.acknowledge)
+  ) throw new FieldContractError("mobile conversation")
+  return data as unknown as FieldMessageThreadData
+}
+
+function validDocument(value: unknown): boolean {
+  const document = record(value)
+  const assignment = record(document?.assignment)
+  return Boolean(
+    document && string(document.id) &&
+      (document.clientDocumentId == null || typeof document.clientDocumentId === "string") &&
+      (document.title == null || typeof document.title === "string") &&
+      string(document.fileName) && string(document.mimeType) &&
+      number(document.sizeBytes) && document.sizeBytes >= 0 &&
+      (document.checksumSha256 == null || typeof document.checksumSha256 === "string") &&
+      (document.uploadedByAgentId == null || typeof document.uploadedByAgentId === "string") &&
+      (document.visitId == null || typeof document.visitId === "string") &&
+      (document.taskId == null || typeof document.taskId === "string") &&
+      timestamp(document.createdAt) && assignment && string(assignment.id) &&
+      boolean(assignment.required) && timestamp(assignment.assignedAt) &&
+      nullableTimestamp(assignment.expiresAt) && nullableTimestamp(assignment.readAt) &&
+      nullableTimestamp(assignment.downloadedAt) && boolean(document.expired) && string(document.downloadUrl),
+  )
+}
+
+export function parseFieldDocuments(value: unknown): FieldDocumentsData {
+  const data = validEnvelope(value)
+  const capabilities = record(data?.capabilities)
+  if (
+    !data || !Array.isArray(data.documents) || !data.documents.every(validDocument) ||
+    !capabilities || !boolean(capabilities.upload) || !boolean(capabilities.offlineDownload) ||
+    !number(capabilities.maxUploadBytes) || capabilities.maxUploadBytes < 1
+  ) throw new FieldContractError("mobile documents")
+  return data as unknown as FieldDocumentsData
+}
+
+function validHrmRequest(value: unknown): boolean {
+  const request = record(value)
+  return Boolean(
+    request && string(request.id) && string(request.clientRequestId) &&
+      string(request.type) && hrmRequestTypes.has(request.type as FieldHrmRequestType) &&
+      string(request.status) && hrmRequestStatuses.has(request.status as FieldHrmRequestStatus) &&
+      timestamp(request.startDate) && timestamp(request.endDate) &&
+      (request.correctionWorkdayId == null || typeof request.correctionWorkdayId === "string") &&
+      nullableTimestamp(request.requestedStartAt) && nullableTimestamp(request.requestedEndAt) &&
+      string(request.reason) && (request.decisionNote == null || typeof request.decisionNote === "string") &&
+      timestamp(request.submittedAt) && nullableTimestamp(request.decidedAt) &&
+      nullableTimestamp(request.cancelledAt) && timestamp(request.updatedAt),
+  )
+}
+
+export function parseFieldHrm(value: unknown): FieldHrmData {
+  const data = validEnvelope(value)
+  const capabilities = record(data?.capabilities)
+  if (
+    !data || !string(data.timezone) || !dateKey(data.start) || !dateKey(data.end) ||
+    !Array.isArray(data.days) || !Array.isArray(data.requests) || !data.requests.every(validHrmRequest) ||
+    !capabilities || !boolean(capabilities.requestLeave) || !boolean(capabilities.requestAbsence) ||
+    !boolean(capabilities.requestTimeCorrection) || !boolean(capabilities.cancelPending)
+  ) throw new FieldContractError("mobile HRM")
+  for (const dayValue of data.days) {
+    const day = record(dayValue)
+    const calendar = record(day?.calendar)
+    const workday = day?.workday == null ? null : record(day.workday)
+    if (
+      !day || !dateKey(day.date) || !calendar || !boolean(calendar.isWorkingDay) ||
+      !string(calendar.kind) || !string(calendar.source) ||
+      (calendar.name == null ? false : typeof calendar.name !== "string") ||
+      !boolean(calendar.routePlanningAllowed) ||
+      (workday && (!string(workday.id) || !timestamp(workday.workDate) || !string(workday.status) ||
+        !timestamp(workday.startedAt) || !nullableTimestamp(workday.pausedAt) ||
+        !nullableTimestamp(workday.completedAt) || !number(workday.totalPausedSeconds))) ||
+      !Array.isArray(day.requests) || !day.requests.every((requestValue) => {
+        const request = record(requestValue)
+        return Boolean(
+          request && string(request.id) && string(request.type) &&
+            hrmRequestTypes.has(request.type as FieldHrmRequestType) && string(request.status) &&
+            hrmRequestStatuses.has(request.status as FieldHrmRequestStatus),
+        )
+      })
+    ) throw new FieldContractError("mobile HRM")
+  }
+  return data as unknown as FieldHrmData
 }
 
 function validOrganization(value: unknown): boolean {

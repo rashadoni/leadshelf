@@ -148,6 +148,58 @@ export type FieldCommitmentFulfillPayload = {
   evidenceClientPhotoId: string | null
 }
 
+export type FieldMessageCreatePayload = {
+  threadId: string | null
+  recipientAgentId: string | null
+  clientMessageId: string
+  body: string | null
+  attachmentClientDocumentId: string | null
+  sentAt: string
+}
+
+export type FieldMessageReceiptPayload = {
+  messageId: string
+  type: "READ" | "ACKNOWLEDGED"
+  clientReceiptId: string
+  occurredAt: string
+}
+
+export type FieldDocumentStatePayload = {
+  documentId: string
+  state: "READ" | "DOWNLOADED"
+  occurredAt: string
+}
+
+export type FieldDocumentUploadPayload = {
+  clientDocumentId: string
+  title: string | null
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+  fileUri: string
+  visitId: string | null
+  taskId: string | null
+  createdAt: string
+}
+
+export type FieldHrmRequestCreatePayload = {
+  id: string
+  clientRequestId: string
+  type: "LEAVE" | "ABSENCE" | "TIME_CORRECTION"
+  startDate: string
+  endDate: string
+  correctionWorkdayId: string | null
+  requestedStartAt: string | null
+  requestedEndAt: string | null
+  reason: string
+  submittedAt: string
+}
+
+export type FieldHrmRequestCancelPayload = {
+  id: string
+  cancelledAt: string
+}
+
 export type FieldExecutionPushOperation = {
   clientOpId: string
   clientCreatedAt?: string
@@ -161,6 +213,11 @@ export type FieldExecutionPushOperation = {
   | { kind: "field.task.event"; payload: FieldTaskEventPayload }
   | { kind: "field.commitment.create"; payload: FieldCommitmentCreatePayload }
   | { kind: "field.commitment.fulfill"; payload: FieldCommitmentFulfillPayload }
+  | { kind: "field.message.send"; payload: FieldMessageCreatePayload }
+  | { kind: "field.message.receipt"; payload: FieldMessageReceiptPayload }
+  | { kind: "field.document.state"; payload: FieldDocumentStatePayload }
+  | { kind: "field.hrm.create"; payload: FieldHrmRequestCreatePayload }
+  | { kind: "field.hrm.cancel"; payload: FieldHrmRequestCancelPayload }
 )
 
 export type FieldVisitPhotoPushOperation = {
@@ -177,10 +234,17 @@ export type FieldLocationPushOperation = {
   payload: FieldLocationPayload
 }
 
+export type FieldDocumentUploadPushOperation = {
+  clientOpId: string
+  clientCreatedAt?: string
+  kind: "field.document.upload"
+  payload: FieldDocumentUploadPayload
+}
+
 export type FieldServerOperation = {
   operationId: string
   op: "create" | "update"
-  entity: "visits" | "visitActions" | "workdays" | "tasks" | "taskEvents" | "commitments" | "commitmentFulfillments"
+  entity: "visits" | "visitActions" | "workdays" | "tasks" | "taskEvents" | "commitments" | "commitmentFulfillments" | "messages" | "messageReceipts" | "documentStates" | "hrmRequests"
   data: Record<string, unknown>
   clientTimestamp: number
 }
@@ -449,6 +513,109 @@ export function parseFieldCommitmentFulfillPayload(value: unknown): FieldCommitm
   return payload as unknown as FieldCommitmentFulfillPayload
 }
 
+export function parseFieldMessageCreatePayload(value: unknown): FieldMessageCreatePayload {
+  const payload = record(value)
+  const threadId = payload?.threadId
+  const recipientAgentId = payload?.recipientAgentId
+  const hasThread = threadId != null
+  const hasRecipient = recipientAgentId != null
+  if (
+    !payload || hasThread === hasRecipient ||
+    !(threadId == null || safeId(threadId)) ||
+    !(recipientAgentId == null || safeId(recipientAgentId)) ||
+    !safeId(payload.clientMessageId) || payload.clientMessageId.length < 8 ||
+    !(payload.body == null || (typeof payload.body === "string" && payload.body.trim().length <= 4_000)) ||
+    !(payload.attachmentClientDocumentId == null || safeId(payload.attachmentClientDocumentId)) ||
+    (!(typeof payload.body === "string" && payload.body.trim()) && payload.attachmentClientDocumentId == null) ||
+    !parseDate(payload.sentAt)
+  ) throw new Error("Invalid field message payload")
+  return payload as unknown as FieldMessageCreatePayload
+}
+
+export function parseFieldMessageReceiptPayload(value: unknown): FieldMessageReceiptPayload {
+  const payload = record(value)
+  if (
+    !payload || !safeId(payload.messageId) ||
+    !["READ", "ACKNOWLEDGED"].includes(String(payload.type)) ||
+    !safeId(payload.clientReceiptId) || payload.clientReceiptId.length < 8 ||
+    !parseDate(payload.occurredAt)
+  ) throw new Error("Invalid field message receipt payload")
+  return payload as unknown as FieldMessageReceiptPayload
+}
+
+export function parseFieldDocumentStatePayload(value: unknown): FieldDocumentStatePayload {
+  const payload = record(value)
+  if (
+    !payload || !safeId(payload.documentId) ||
+    !["READ", "DOWNLOADED"].includes(String(payload.state)) ||
+    !parseDate(payload.occurredAt)
+  ) throw new Error("Invalid field document state payload")
+  return payload as unknown as FieldDocumentStatePayload
+}
+
+const documentMimeTypes = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/zip",
+])
+
+export function parseFieldDocumentUploadPayload(value: unknown): FieldDocumentUploadPayload {
+  const payload = record(value)
+  if (
+    !payload || !safeId(payload.clientDocumentId) || payload.clientDocumentId.length < 8 ||
+    !(payload.title == null || (typeof payload.title === "string" && payload.title.trim().length <= 200)) ||
+    !string(payload.fileName) || payload.fileName.length > 240 || /[\\/\u0000-\u001f\u007f]/.test(payload.fileName) ||
+    !string(payload.mimeType) || !documentMimeTypes.has(payload.mimeType) ||
+    !finite(payload.sizeBytes) || !Number.isInteger(payload.sizeBytes) || payload.sizeBytes < 1 || payload.sizeBytes > 25 * 1024 * 1024 ||
+    !string(payload.fileUri) ||
+    !(payload.visitId == null || safeId(payload.visitId)) ||
+    !(payload.taskId == null || safeId(payload.taskId)) ||
+    !parseDate(payload.createdAt)
+  ) throw new Error("Invalid field document upload payload")
+  return payload as unknown as FieldDocumentUploadPayload
+}
+
+function dateKey(value: unknown): value is string {
+  return string(value) && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`))
+}
+
+export function parseFieldHrmRequestCreatePayload(value: unknown): FieldHrmRequestCreatePayload {
+  const payload = record(value)
+  const isCorrection = payload?.type === "TIME_CORRECTION"
+  if (
+    !payload || !safeId(payload.id) || !safeId(payload.clientRequestId) || payload.clientRequestId.length < 8 ||
+    !["LEAVE", "ABSENCE", "TIME_CORRECTION"].includes(String(payload.type)) ||
+    !dateKey(payload.startDate) || !dateKey(payload.endDate) || payload.endDate < payload.startDate ||
+    !(payload.correctionWorkdayId == null || safeId(payload.correctionWorkdayId)) ||
+    !(payload.requestedStartAt == null || parseDate(payload.requestedStartAt)) ||
+    !(payload.requestedEndAt == null || parseDate(payload.requestedEndAt)) ||
+    !string(payload.reason) || payload.reason.trim().length < 3 || payload.reason.trim().length > 1_000 ||
+    !parseDate(payload.submittedAt) ||
+    (isCorrection && !payload.correctionWorkdayId) ||
+    (isCorrection && !payload.requestedStartAt && !payload.requestedEndAt) ||
+    (!isCorrection && (payload.correctionWorkdayId != null || payload.requestedStartAt != null || payload.requestedEndAt != null))
+  ) throw new Error("Invalid field HRM request payload")
+  return payload as unknown as FieldHrmRequestCreatePayload
+}
+
+export function parseFieldHrmRequestCancelPayload(value: unknown): FieldHrmRequestCancelPayload {
+  const payload = record(value)
+  if (!payload || !safeId(payload.id) || !parseDate(payload.cancelledAt)) {
+    throw new Error("Invalid field HRM cancellation payload")
+  }
+  return payload as unknown as FieldHrmRequestCancelPayload
+}
+
 export function isFieldExecutionPushOperation(
   operation: { kind: string },
 ): operation is FieldExecutionPushOperation {
@@ -460,7 +627,12 @@ export function isFieldExecutionPushOperation(
     operation.kind === "field.task.update" ||
     operation.kind === "field.task.event" ||
     operation.kind === "field.commitment.create" ||
-    operation.kind === "field.commitment.fulfill"
+    operation.kind === "field.commitment.fulfill" ||
+    operation.kind === "field.message.send" ||
+    operation.kind === "field.message.receipt" ||
+    operation.kind === "field.document.state" ||
+    operation.kind === "field.hrm.create" ||
+    operation.kind === "field.hrm.cancel"
 }
 
 export function isFieldVisitPhotoPushOperation(
@@ -473,6 +645,12 @@ export function isFieldLocationPushOperation(
   operation: { kind: string },
 ): operation is FieldLocationPushOperation {
   return operation.kind === "field.location"
+}
+
+export function isFieldDocumentUploadPushOperation(
+  operation: { kind: string },
+): operation is FieldDocumentUploadPushOperation {
+  return operation.kind === "field.document.upload"
 }
 
 export function toFieldServerOperation(operation: FieldExecutionPushOperation): FieldServerOperation {
@@ -547,6 +725,51 @@ export function toFieldServerOperation(operation: FieldExecutionPushOperation): 
       operationId: operation.clientOpId,
       op: "create",
       entity: "commitmentFulfillments",
+      clientTimestamp,
+      data: operation.payload,
+    }
+  }
+  if (operation.kind === "field.message.send") {
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "messages",
+      clientTimestamp,
+      data: operation.payload,
+    }
+  }
+  if (operation.kind === "field.message.receipt") {
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "messageReceipts",
+      clientTimestamp,
+      data: operation.payload,
+    }
+  }
+  if (operation.kind === "field.document.state") {
+    return {
+      operationId: operation.clientOpId,
+      op: "update",
+      entity: "documentStates",
+      clientTimestamp,
+      data: operation.payload,
+    }
+  }
+  if (operation.kind === "field.hrm.create") {
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "hrmRequests",
+      clientTimestamp,
+      data: operation.payload,
+    }
+  }
+  if (operation.kind === "field.hrm.cancel") {
+    return {
+      operationId: operation.clientOpId,
+      op: "update",
+      entity: "hrmRequests",
       clientTimestamp,
       data: operation.payload,
     }
@@ -650,6 +873,24 @@ export async function sendFieldLocationOperation(
     return {
       clientOpId: operation.clientOpId,
       status: [403, 404, 409, 422].includes(error.status) ? "conflict" : "rejected",
+      detail: error.detail ?? { error: error.message, status: error.status },
+    }
+  }
+}
+
+export async function sendFieldDocumentUploadOperation(
+  operation: FieldDocumentUploadPushOperation,
+  api: { upload(payload: FieldDocumentUploadPayload): Promise<Record<string, unknown>> },
+): Promise<FieldExecutionPushResult> {
+  try {
+    const document = await api.upload(operation.payload)
+    return { clientOpId: operation.clientOpId, status: "applied", detail: { document } }
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error
+    if (error.status === 408 || error.status === 429 || error.status >= 500) throw error
+    return {
+      clientOpId: operation.clientOpId,
+      status: [403, 404, 409, 410, 422].includes(error.status) ? "conflict" : "rejected",
       detail: error.detail ?? { error: error.message, status: error.status },
     }
   }

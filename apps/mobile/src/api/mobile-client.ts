@@ -19,12 +19,15 @@ import { prepareMobileSessionScope } from "../db/local-store"
 import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
 import {
   isFieldExecutionPushOperation,
+  isFieldDocumentUploadPushOperation,
   isFieldLocationPushOperation,
   isFieldVisitPhotoPushOperation,
   sendFieldExecutionOperations,
+  sendFieldDocumentUploadOperation,
   sendFieldLocationOperation,
   sendFieldVisitPhotoOperation,
   type FieldExecutionPushOperation,
+  type FieldDocumentUploadPayload,
   type FieldLocationPayload,
   type FieldServerOperation,
   type FieldServerPushResponse,
@@ -36,6 +39,10 @@ import {
   parseFieldAgentTasks,
   parseFieldPersonalKpi,
   parseFieldNotifications,
+  parseFieldMessages,
+  parseFieldMessageThread,
+  parseFieldDocuments,
+  parseFieldHrm,
   parseFieldLocationHistory,
   parseFieldContactDetail,
   parseFieldContacts,
@@ -57,6 +64,10 @@ import {
   type FieldAgentTasksData,
   type FieldPersonalKpiData,
   type FieldNotificationsData,
+  type FieldMessagesData,
+  type FieldMessageThreadData,
+  type FieldDocumentsData,
+  type FieldHrmData,
   type FieldLocationHistoryData,
   type FieldOrganizationDetailData,
   type FieldOrganizationListData,
@@ -201,6 +212,21 @@ export const fieldApi = {
   },
   notifications: () =>
     request<unknown>("/api/v1/mtm/mobile/notifications").then(parseFieldNotifications),
+  messages: () =>
+    request<unknown>("/api/v1/mtm/mobile/messages").then(parseFieldMessages),
+  messageThread: (threadId: string) =>
+    request<unknown>(`/api/v1/mtm/mobile/messages/${encodeURIComponent(threadId)}`)
+      .then(parseFieldMessageThread),
+  documents: (scope: "active" | "all" = "active") =>
+    request<unknown>(`/api/v1/mtm/mobile/documents${scope === "all" ? "?scope=all" : ""}`)
+      .then(parseFieldDocuments),
+  hrm: (start?: string, end?: string) => {
+    const query = new URLSearchParams()
+    if (start) query.set("start", start)
+    if (end) query.set("end", end)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ""
+    return request<unknown>(`/api/v1/mtm/mobile/hrm${suffix}`).then(parseFieldHrm)
+  },
   workday: (date?: string) =>
     request<unknown>(`/api/v1/mtm/mobile/workday${date ? `?date=${encodeURIComponent(date)}` : ""}`)
       .then(parseFieldWorkday),
@@ -245,6 +271,56 @@ export const fieldApi = {
       throw new Error("Invalid visit photo response")
     }
     return photo
+  },
+  uploadDocument: async (input: FieldDocumentUploadPayload) => {
+    const form = new FormData()
+    form.append("file", new File(input.fileUri), input.fileName)
+    form.append("clientDocumentId", input.clientDocumentId)
+    if (input.title) form.append("title", input.title)
+    if (input.visitId) form.append("visitId", input.visitId)
+    if (input.taskId) form.append("taskId", input.taskId)
+    const body = await request<{ success?: boolean; data?: unknown }>(
+      "/api/v1/mtm/mobile/documents/upload",
+      { method: "POST", body: form },
+    )
+    const document = body.data && typeof body.data === "object" && !Array.isArray(body.data)
+      ? body.data as Record<string, unknown>
+      : null
+    if (body.success !== true || !document || typeof document.id !== "string") {
+      throw new Error("Invalid mobile document upload response")
+    }
+    return document
+  },
+  downloadDocument: async (input: { documentId: string; fileName: string; downloadUrl?: string }) => {
+    const [access, deviceId, organizationSlug, agentId] = await Promise.all([
+      tokenStore.getAccess(),
+      tokenStore.getDeviceId(),
+      tokenStore.getOrgSlug(),
+      tokenStore.getUserId(),
+    ])
+    const safeName = input.fileName.replace(/[^A-Za-z0-9._ -]+/g, "_").slice(0, 180) || "document"
+    const scope = `${organizationSlug ?? "unknown"}-${agentId ?? "unknown"}`.replace(/[^A-Za-z0-9._-]+/g, "_")
+    const directory = `${FileSystem.documentDirectory ?? ""}mtm-documents/${scope}/`
+    if (!FileSystem.documentDirectory) throw new Error("Device document storage is unavailable")
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true })
+    const destination = `${directory}${input.documentId}-${safeName}`
+    const result = await FileSystem.downloadAsync(
+      `${API_URL}${input.downloadUrl ?? `/api/v1/mtm/mobile/documents/${encodeURIComponent(input.documentId)}/download`}`,
+      destination,
+      {
+        headers: {
+          "x-leadshelf-protocol": String(PROTOCOL_VERSION),
+          ...(deviceId ? { "x-field-device-id": deviceId } : {}),
+          "x-field-device-platform": Platform.OS,
+          ...(access ? { Authorization: `Bearer ${access}` } : {}),
+        },
+      },
+    )
+    if (result.status === 401) throw new AuthLostError()
+    if (result.status < 200 || result.status >= 300) {
+      throw new HttpError(result.status, "Document download failed")
+    }
+    return result.uri
   },
   markNotificationsRead: async (input: { ids?: string[]; all?: boolean; isRead: boolean }) => {
     await request("/api/v1/mtm/mobile/notifications", {
@@ -317,11 +393,17 @@ export const fieldApi = {
   commitments(scope?: "open" | "all"): Promise<FieldCommitmentsData>
   personalKpi(period: "week" | "month", anchor?: string): Promise<FieldPersonalKpiData>
   notifications(): Promise<FieldNotificationsData>
+  messages(): Promise<FieldMessagesData>
+  messageThread(threadId: string): Promise<FieldMessageThreadData>
+  documents(scope?: "active" | "all"): Promise<FieldDocumentsData>
+  hrm(start?: string, end?: string): Promise<FieldHrmData>
   workday(date?: string): Promise<FieldWorkdayData>
   locations(date?: string): Promise<FieldLocationHistoryData>
   uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
   uploadVisitPhoto(input: FieldVisitPhotoPayload): Promise<Record<string, unknown>>
+  uploadDocument(input: FieldDocumentUploadPayload): Promise<Record<string, unknown>>
+  downloadDocument(input: { documentId: string; fileName: string; downloadUrl?: string }): Promise<string>
   markNotificationsRead(input: { ids?: string[]; all?: boolean; isRead: boolean }): Promise<void>
   createRoute(input: {
     agentId: string
@@ -392,6 +474,18 @@ export const syncApi: SyncApi = {
         // or explicitly detach it from the still-unapplied business event.
         if (result.status === "applied") {
           await FileSystem.deleteAsync(operation.payload.fileUri, { idempotent: true }).catch(() => {})
+        }
+      } else if (isFieldDocumentUploadPushOperation(operation)) {
+        const result = await sendFieldDocumentUploadOperation(operation, { upload: fieldApi.uploadDocument })
+        results.push(result)
+        // The following message may reference this clientDocumentId. Leave all
+        // later operations pending until the private upload is actually present.
+        if (result.status !== "applied") {
+          const byId = new Map(results.map((item) => [item.clientOpId, item]))
+          return { results: operations.flatMap((item) => {
+            const applied = byId.get(item.clientOpId)
+            return applied ? [applied] : []
+          }) }
         }
       } else {
         shelfOperations.push(operation)

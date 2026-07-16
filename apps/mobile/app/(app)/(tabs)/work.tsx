@@ -2,7 +2,7 @@ import { useCallback, useState } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router, useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { countOpenTasks, readFieldCommitments } from "../../../src/db/local-store"
+import { countOpenTasks, readFieldCommitments, readFieldDocuments, readFieldHrm } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -18,20 +18,30 @@ type Module = {
 }
 
 export default function WorkTab() {
-  useLocale()
+  const locale = useLocale()
   const field = useField()
   const shelfOpenTasks = countOpenTasks()
   const [openCommitments, setOpenCommitments] = useState(() => (
     readFieldCommitments().commitments.filter((item) => !item.fulfillment).length
   ))
+  const [requiredDocuments, setRequiredDocuments] = useState(() => (
+    readFieldDocuments().documents.filter((item) => item.assignment.required && !item.assignment.readAt).length
+  ))
+  const [pendingHrm, setPendingHrm] = useState(() => (
+    readFieldHrm()?.requests.filter((item) => item.status === "PENDING").length ?? 0
+  ))
   useFocusEffect(useCallback(() => {
     setOpenCommitments(readFieldCommitments().commitments.filter((item) => !item.fulfillment).length)
+    setRequiredDocuments(readFieldDocuments().documents.filter((item) => item.assignment.required && !item.assignment.readAt).length)
+    setPendingHrm(readFieldHrm()?.requests.filter((item) => item.status === "PENDING").length ?? 0)
   }, []))
   const agentOpenTasks = field.agentTasks?.tasks.filter((task) => (
     task.status !== "COMPLETED" && task.status !== "CANCELLED"
   )).length ?? 0
   const modules: Module[] = [
     { label: t("workdayTitle"), hint: t("workdayHint"), glyph: "◷", href: "/(app)/workday", background: colors.successBg, color: colors.successDark },
+    { label: locale === "az" ? "Sənədlər" : "Документы", hint: locale === "az" ? "Vacib və oflayn fayllar" : "Обязательные и офлайн-файлы", glyph: "□", href: "/(app)/documents", background: colors.infoBg, color: colors.info, badge: requiredDocuments },
+    { label: locale === "az" ? "Qrafik və HRM" : "График и HRM", hint: locale === "az" ? "İş günləri və müraciətlər" : "Рабочие дни и заявки", glyph: "◫", href: "/(app)/hrm", background: colors.holidayBg, color: colors.holiday, badge: pendingHrm },
     { label: t("tabRoute"), hint: t("todayRoute"), glyph: "↗", href: "/(app)/routes", background: colors.infoBg, color: colors.info },
     { label: t("moduleOrganizations"), hint: t("organizationsSearch"), glyph: "⌂", href: "/(app)/organizations", background: colors.primarySoft, color: colors.primary },
     { label: t("moduleContacts"), hint: t("contactsSearch"), glyph: "◎", href: "/(app)/contacts", background: colors.holidayBg, color: colors.holiday },

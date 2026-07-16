@@ -1,0 +1,203 @@
+import { useCallback, useMemo, useState } from "react"
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
+import { router, useFocusEffect } from "expo-router"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { fieldApi } from "../../../src/api/mobile-client"
+import {
+  cacheFieldDocuments,
+  enqueueFieldDocumentState,
+  enqueueFieldDocumentUpload,
+  readFieldDocuments,
+  setFieldDocumentLocalUri,
+} from "../../../src/db/local-store"
+import { formatFileSize, openLocalDocument, pickFieldDocument } from "../../../src/field/document-files"
+import type { FieldDocument } from "../../../src/field/contracts"
+import { useField } from "../../../src/field/field-context"
+import { useLocale } from "../../../src/i18n"
+import { useSync } from "../../../src/sync/sync-context"
+import { colors, cardShadow, radii } from "../../../src/theme"
+
+type DocumentFilter = "all" | "required" | "offline"
+type UploadScope = { kind: "general"; id: null; label: string } | { kind: "visit" | "task"; id: string; label: string }
+
+export default function DocumentsScreen() {
+  const locale = useLocale()
+  const field = useField()
+  const { sync } = useSync()
+  const [data, setData] = useState(readFieldDocuments)
+  const [filter, setFilter] = useState<DocumentFilter>("all")
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [selectedScope, setSelectedScope] = useState<UploadScope | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
+  const copy = locale === "az" ? {
+    eyebrow: "İŞ MƏRKƏZİ", title: "Sənədlər", hint: "Tapşırıq faylları, vizit materialları və ofisdən göndərilən sənədlər.",
+    add: "Fayl əlavə et", all: "Hamısı", required: "Vacib", offline: "Telefonda", empty: "Bu bölmədə sənəd yoxdur",
+    emptyHint: "Filtri dəyişin və ya yeni fayl əlavə edin.", requiredBadge: "Mütləq", unread: "Yeni", downloaded: "Telefonda",
+    queued: "Növbədə", failed: "Diqqət lazımdır", download: "Yüklə", open: "Aç", cloudOff: "Bulud diski istifadə edilmir",
+    uploadTitle: "Faylı hara bağlayaq?", general: "Ümumi sənəd", visit: "Aktiv vizit", task: "Tapşırıq",
+    choose: "Fayl seç", cancel: "Ləğv et", saved: "Fayl saxlanıldı", savedHint: "Göndərmə növbəsinə əlavə edildi.",
+    refreshError: "Sənədlər yenilənmədi — telefondakı nüsxə göstərilir.", noScope: "Əvvəlcə faylın kontekstini seçin.",
+  } : {
+    eyebrow: "РАБОЧИЙ ЦЕНТР", title: "Документы", hint: "Файлы задач, материалы визитов и документы, назначенные офисом.",
+    add: "Добавить файл", all: "Все", required: "Обязательные", offline: "На телефоне", empty: "Здесь пока нет документов",
+    emptyHint: "Смените фильтр или добавьте новый файл.", requiredBadge: "Обязательный", unread: "Новый", downloaded: "На телефоне",
+    queued: "В очереди", failed: "Нужно внимание", download: "Скачать", open: "Открыть", cloudOff: "Облачный диск не используется",
+    uploadTitle: "К чему привязать файл?", general: "Общий документ", visit: "Активный визит", task: "Задача",
+    choose: "Выбрать файл", cancel: "Отмена", saved: "Файл сохранён", savedHint: "Он добавлен в очередь на отправку.",
+    refreshError: "Документы не обновились — показана копия с телефона.", noScope: "Сначала выберите контекст файла.",
+  }
+
+  const activeVisit = useMemo(() => field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null, [field.week])
+  const scopes = useMemo<UploadScope[]>(() => [
+    { kind: "general", id: null, label: copy.general },
+    ...(activeVisit ? [{ kind: "visit" as const, id: activeVisit.id, label: `${copy.visit}: ${activeVisit.customer.name}` }] : []),
+    ...(field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").slice(0, 8).map((task) => ({ kind: "task" as const, id: task.id, label: `${copy.task}: ${task.title}` })) ?? []),
+  ], [activeVisit, copy.general, copy.task, copy.visit, field.agentTasks?.tasks])
+
+  const visible = useMemo(() => data.documents.filter((document) => {
+    if (filter === "required") return document.assignment.required && !document.assignment.readAt
+    if (filter === "offline") return Boolean(document.localUri)
+    return true
+  }), [data.documents, filter])
+
+  const load = useCallback(async (showWarning = false) => {
+    try {
+      setData(cacheFieldDocuments(await fieldApi.documents("all")))
+      setWarning(null)
+    } catch {
+      setData(readFieldDocuments())
+      if (showWarning) setWarning(copy.refreshError)
+    }
+  }, [copy.refreshError])
+
+  useFocusEffect(useCallback(() => {
+    setData(readFieldDocuments())
+    void load(false)
+  }, [load]))
+
+  async function refresh() {
+    setRefreshing(true)
+    await load(true)
+    setRefreshing(false)
+  }
+
+  async function pickAndQueue() {
+    if (!selectedScope) {
+      setWarning(copy.noScope)
+      return
+    }
+    try {
+      const draft = await pickFieldDocument({
+        visitId: selectedScope.kind === "visit" ? selectedScope.id : null,
+        taskId: selectedScope.kind === "task" ? selectedScope.id : null,
+      })
+      if (!draft) return
+      enqueueFieldDocumentUpload(draft)
+      setData(readFieldDocuments())
+      setUploadOpen(false)
+      setSelectedScope(null)
+      Alert.alert(copy.saved, copy.savedHint)
+      void sync().then(() => load(false)).catch(() => {})
+    } catch (cause) {
+      setWarning(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  async function openDocument(document: FieldDocument) {
+    setBusyId(document.id)
+    try {
+      const localUri = document.localUri ?? await fieldApi.downloadDocument({
+        documentId: document.id,
+        fileName: document.fileName,
+        downloadUrl: document.downloadUrl || undefined,
+      })
+      setData(setFieldDocumentLocalUri(document.id, localUri))
+      if (!document.assignment.readAt) enqueueFieldDocumentState(document.id, "READ")
+      if (!document.assignment.downloadedAt) enqueueFieldDocumentState(document.id, "DOWNLOADED")
+      void sync().catch(() => {})
+      await openLocalDocument(localUri, document.mimeType)
+    } catch (cause) {
+      Alert.alert(copy.title, cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
+          <Pressable onPress={() => setUploadOpen((value) => !value)} style={styles.add}><Text style={styles.addPlus}>＋</Text><Text style={styles.addText}>{copy.add}</Text></Pressable>
+        </View>
+        <Text style={styles.intro}>{copy.hint}</Text>
+
+        <View style={styles.stats}>
+          <Stat value={data.documents.length} label={copy.all} tone="info" />
+          <Stat value={data.documents.filter((document) => document.assignment.required && !document.assignment.readAt).length} label={copy.required} tone="warning" />
+          <Stat value={data.documents.filter((document) => document.localUri).length} label={copy.offline} tone="success" />
+        </View>
+
+        {uploadOpen ? (
+          <View style={styles.uploadCard}>
+            <View style={styles.uploadTitleRow}><Text style={styles.uploadTitle}>{copy.uploadTitle}</Text><View style={styles.localPill}><Text style={styles.localPillText}>⌁ {copy.cloudOff}</Text></View></View>
+            <View style={styles.scopeList}>
+              {scopes.map((scope) => {
+                const selected = selectedScope?.kind === scope.kind && selectedScope?.id === scope.id
+                return <Pressable key={`${scope.kind}-${scope.id}`} onPress={() => setSelectedScope(scope)} style={[styles.scope, selected && styles.scopeSelected]}><Text style={[styles.scopeIcon, selected && styles.scopeTextSelected]}>{scope.kind === "general" ? "□" : scope.kind === "visit" ? "⌖" : "✓"}</Text><Text style={[styles.scopeText, selected && styles.scopeTextSelected]} numberOfLines={2}>{scope.label}</Text>{selected ? <Text style={styles.scopeCheck}>✓</Text> : null}</Pressable>
+              })}
+            </View>
+            <View style={styles.uploadActions}><Pressable onPress={() => { setUploadOpen(false); setSelectedScope(null) }} style={styles.cancel}><Text style={styles.cancelText}>{copy.cancel}</Text></Pressable><Pressable onPress={() => void pickAndQueue()} style={styles.choose}><Text style={styles.chooseText}>{copy.choose}</Text></Pressable></View>
+          </View>
+        ) : null}
+
+        {warning ? <View style={styles.warning}><Text style={styles.warningText}>{warning}</Text></View> : null}
+
+        <View style={styles.filters}>
+          <Filter selected={filter === "all"} label={copy.all} onPress={() => setFilter("all")} />
+          <Filter selected={filter === "required"} label={copy.required} onPress={() => setFilter("required")} />
+          <Filter selected={filter === "offline"} label={copy.offline} onPress={() => setFilter("offline")} />
+        </View>
+
+        {visible.length === 0 ? (
+          <View style={styles.empty}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>DOC</Text></View><Text style={styles.emptyTitle}>{copy.empty}</Text><Text style={styles.emptyHint}>{copy.emptyHint}</Text></View>
+        ) : visible.map((document) => (
+          <View key={document.id} style={[styles.card, document.assignment.required && !document.assignment.readAt && styles.cardRequired]}>
+            <View style={styles.fileTop}>
+              <View style={[styles.fileIcon, document.assignment.required && !document.assignment.readAt && styles.fileIconRequired]}><Text style={[styles.fileIconText, document.assignment.required && !document.assignment.readAt && styles.fileIconTextRequired]}>{document.fileName.split(".").at(-1)?.toUpperCase().slice(0, 4) || "DOC"}</Text></View>
+              <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={2}>{document.title || document.fileName}</Text><Text style={styles.fileMeta}>{document.fileName} · {formatFileSize(document.sizeBytes)}</Text></View>
+            </View>
+            {document.visit ? <Text style={styles.context}>⌖ {document.visit.customer.name}</Text> : null}
+            {document.task ? <Text style={styles.context}>✓ {document.task.title}</Text> : null}
+            <View style={styles.badges}>
+              {document.assignment.required ? <Badge label={copy.requiredBadge} tone="warning" /> : null}
+              {!document.assignment.readAt ? <Badge label={copy.unread} tone="info" /> : null}
+              {document.localUri ? <Badge label={copy.downloaded} tone="success" /> : null}
+              {document.syncState === "PENDING" ? <Badge label={copy.queued} tone="info" /> : null}
+              {document.syncState === "CONFLICT" || document.syncState === "REJECTED" ? <Badge label={copy.failed} tone="danger" /> : null}
+            </View>
+            <Pressable disabled={busyId === document.id} onPress={() => void openDocument(document)} style={({ pressed }) => [styles.open, pressed && styles.pressed]}><Text style={styles.openText}>{busyId === document.id ? "…" : document.localUri ? copy.open : copy.download}</Text><Text style={styles.openArrow}>{document.localUri ? "↗" : "↓"}</Text></Pressable>
+          </View>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
+  )
+}
+
+function Stat({ value, label, tone }: { value: number; label: string; tone: "info" | "warning" | "success" }) { const palette = tone === "warning" ? { bg: colors.warningBg, color: colors.warning } : tone === "success" ? { bg: colors.successBg, color: colors.successDark } : { bg: colors.infoBg, color: colors.info }; return <View style={[styles.stat, { backgroundColor: palette.bg }]}><Text style={[styles.statValue, { color: palette.color }]}>{value}</Text><Text style={[styles.statLabel, { color: palette.color }]} numberOfLines={1}>{label}</Text></View> }
+function Filter({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.filter, selected && styles.filterSelected]}><Text style={[styles.filterText, selected && styles.filterTextSelected]}>{label}</Text></Pressable> }
+function Badge({ label, tone }: { label: string; tone: "warning" | "info" | "success" | "danger" }) { const palette = tone === "warning" ? { bg: colors.warningBg, color: colors.warning } : tone === "success" ? { bg: colors.successBg, color: colors.successDark } : tone === "danger" ? { bg: colors.dangerBg, color: colors.missed } : { bg: colors.infoBg, color: colors.info }; return <View style={[styles.badge, { backgroundColor: palette.bg }]}><Text style={[styles.badgeText, { color: palette.color }]}>{label}</Text></View> }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg }, scroll: { paddingBottom: 36 },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 }, add: { minHeight: 46, borderRadius: 15, paddingHorizontal: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, addPlus: { color: colors.headerText, fontSize: 17, lineHeight: 16 }, addText: { color: colors.headerText, fontSize: 8, fontWeight: "900", marginTop: 2 }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
+  stats: { flexDirection: "row", gap: 8, paddingHorizontal: 14, marginTop: 17 }, stat: { flex: 1, minWidth: 0, height: 67, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, statValue: { fontSize: 20, fontWeight: "900" }, statLabel: { fontSize: 8, fontWeight: "900", marginTop: 3 },
+  uploadCard: { marginHorizontal: 14, marginTop: 14, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, uploadTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 }, uploadTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" }, localPill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, localPillText: { color: colors.successDark, fontSize: 7, fontWeight: "900" }, scopeList: { gap: 7, marginTop: 12, maxHeight: 300 }, scope: { minHeight: 49, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, scopeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, scopeIcon: { color: colors.primary, fontSize: 14, fontWeight: "900" }, scopeText: { flex: 1, color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "800" }, scopeTextSelected: { color: colors.headerText }, scopeCheck: { color: colors.headerText, fontSize: 15, fontWeight: "900" }, uploadActions: { flexDirection: "row", gap: 8, marginTop: 12 }, cancel: { flex: 1, minHeight: 45, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, cancelText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, choose: { flex: 2, minHeight: 45, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, chooseText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  warning: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, warningText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" },
+  filters: { flexDirection: "row", gap: 7, paddingHorizontal: 14, marginTop: 16, marginBottom: 2 }, filter: { flex: 1, minHeight: 40, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }, filterSelected: { backgroundColor: colors.text, borderColor: colors.text }, filterText: { color: colors.muted, fontSize: 9, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
+  card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow }, cardRequired: { borderColor: "#F4D37A" }, fileTop: { flexDirection: "row", alignItems: "center", gap: 11 }, fileIcon: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, fileIconRequired: { backgroundColor: colors.warningBg }, fileIconText: { color: colors.info, fontSize: 9, fontWeight: "900" }, fileIconTextRequired: { color: colors.warning }, fileBody: { flex: 1, minWidth: 0 }, fileName: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "900" }, fileMeta: { color: colors.muted, fontSize: 9, marginTop: 4 }, context: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 9 }, badges: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 }, badge: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, badgeText: { fontSize: 8, fontWeight: "900" }, open: { minHeight: 44, borderRadius: 14, marginTop: 12, paddingHorizontal: 14, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, openText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, openArrow: { color: colors.primary, fontSize: 17, fontWeight: "900" },
+  empty: { margin: 14, minHeight: 260, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow }, emptyMark: { width: 66, height: 66, borderRadius: 22, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, emptyMarkText: { color: colors.info, fontSize: 10, fontWeight: "900" }, emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "900", textAlign: "center", marginTop: 15 }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6 }, pressed: { opacity: 0.7 },
+})

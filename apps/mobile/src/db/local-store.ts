@@ -80,8 +80,20 @@ import {
   parseFieldTaskUpdatePayload,
   parseFieldCommitmentCreatePayload,
   parseFieldCommitmentFulfillPayload,
+  parseFieldMessageCreatePayload,
+  parseFieldMessageReceiptPayload,
+  parseFieldDocumentStatePayload,
+  parseFieldDocumentUploadPayload,
+  parseFieldHrmRequestCreatePayload,
+  parseFieldHrmRequestCancelPayload,
   type FieldCommitmentCreatePayload,
   type FieldCommitmentFulfillPayload,
+  type FieldMessageCreatePayload,
+  type FieldMessageReceiptPayload,
+  type FieldDocumentStatePayload,
+  type FieldDocumentUploadPayload,
+  type FieldHrmRequestCreatePayload,
+  type FieldHrmRequestCancelPayload,
   type FieldLocationPayload,
   type FieldTaskCreatePayload,
   type FieldTaskEventPayload,
@@ -92,7 +104,18 @@ import {
   type FieldVisitUpdatePayload,
   type FieldWorkdayEventPayload,
 } from "../field/execution-outbox"
-import type { FieldAgentTasksData, FieldCommitmentsData, FieldWorkdayData } from "../field/contracts"
+import type {
+  FieldAgentTasksData,
+  FieldCommitmentsData,
+  FieldDocument,
+  FieldDocumentsData,
+  FieldHrmData,
+  FieldHrmRequest,
+  FieldMessage,
+  FieldMessagesData,
+  FieldMessageThreadData,
+  FieldWorkdayData,
+} from "../field/contracts"
 import {
   FIELD_COMMITMENTS_CACHE_KEY,
   projectFieldCommitments,
@@ -355,6 +378,132 @@ export function readFieldCache<T>(key: string): { value: T; updatedAt: string } 
     db.runSync("DELETE FROM field_cache WHERE k=?", [key])
     return null
   }
+}
+
+export const FIELD_MESSAGES_CACHE_KEY = "field.messages.current"
+export const FIELD_DOCUMENTS_CACHE_KEY = "field.documents.current"
+export const FIELD_HRM_CACHE_KEY = "field.hrm.current"
+
+function fieldMessageThreadCacheKey(threadId: string): string {
+  return `field.messages.thread.${threadId}`
+}
+
+export function readFieldMessages(): FieldMessagesData {
+  return readFieldCache<FieldMessagesData>(FIELD_MESSAGES_CACHE_KEY)?.value ?? {
+    threads: [],
+    unread: 0,
+    availableRecipients: [],
+    capabilities: {
+      startDirectConversation: false,
+      sendAttachments: true,
+      acknowledgeBroadcasts: true,
+    },
+  }
+}
+
+export function cacheFieldMessages(next: FieldMessagesData): FieldMessagesData {
+  const previous = readFieldMessages()
+  const serverIds = new Set(next.threads.map((thread) => thread.id))
+  const optimistic = previous.threads.filter((thread) => thread.syncState && !serverIds.has(thread.id))
+  const merged = { ...next, threads: [...optimistic, ...next.threads] }
+  writeFieldCache(FIELD_MESSAGES_CACHE_KEY, merged)
+  return merged
+}
+
+export function readFieldMessageThread(threadId: string): FieldMessageThreadData | null {
+  return readFieldCache<FieldMessageThreadData>(fieldMessageThreadCacheKey(threadId))?.value ?? null
+}
+
+export function cacheFieldMessageThread(next: FieldMessageThreadData): FieldMessageThreadData {
+  const previous = readFieldMessageThread(next.thread.id)
+  const serverClientIds = new Set(next.thread.messages.map((message) => message.clientMessageId).filter(Boolean))
+  const optimistic = previous?.thread.messages.filter((message) => (
+    message.syncState && message.clientMessageId && !serverClientIds.has(message.clientMessageId)
+  )) ?? []
+  const localUriByDocument = new Map<string, string>()
+  for (const message of previous?.thread.messages ?? []) {
+    if (message.attachmentDocument?.localUri) {
+      localUriByDocument.set(message.attachmentDocument.id, message.attachmentDocument.localUri)
+    }
+  }
+  const merged: FieldMessageThreadData = {
+    ...next,
+    thread: {
+      ...next.thread,
+      messages: [
+        ...next.thread.messages.map((message) => message.attachmentDocument ? {
+          ...message,
+          attachmentDocument: {
+            ...message.attachmentDocument,
+            localUri: localUriByDocument.get(message.attachmentDocument.id) ?? null,
+          },
+        } : message),
+        ...optimistic,
+      ].sort((a, b) => a.sentAt.localeCompare(b.sentAt)),
+    },
+  }
+  writeFieldCache(fieldMessageThreadCacheKey(next.thread.id), merged)
+  return merged
+}
+
+export function readFieldDocuments(): FieldDocumentsData {
+  return readFieldCache<FieldDocumentsData>(FIELD_DOCUMENTS_CACHE_KEY)?.value ?? {
+    documents: [],
+    capabilities: { upload: true, offlineDownload: true, maxUploadBytes: 25 * 1024 * 1024 },
+  }
+}
+
+export function cacheFieldDocuments(next: FieldDocumentsData): FieldDocumentsData {
+  const previous = readFieldDocuments()
+  const localUri = new Map<string, string>()
+  for (const document of previous.documents) {
+    if (!document.localUri) continue
+    localUri.set(document.id, document.localUri)
+    if (document.clientDocumentId) localUri.set(document.clientDocumentId, document.localUri)
+  }
+  const serverKeys = new Set(next.documents.flatMap((document) => [document.id, document.clientDocumentId].filter(Boolean)))
+  const optimistic = previous.documents.filter((document) => (
+    document.syncState && !serverKeys.has(document.id) && !serverKeys.has(document.clientDocumentId)
+  ))
+  const merged: FieldDocumentsData = {
+    ...next,
+    documents: [
+      ...optimistic,
+      ...next.documents.map((document) => ({
+        ...document,
+        localUri: localUri.get(document.id) ?? (document.clientDocumentId ? localUri.get(document.clientDocumentId) : null) ?? null,
+      })),
+    ],
+  }
+  writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, merged)
+  return merged
+}
+
+export function setFieldDocumentLocalUri(documentId: string, localUri: string): FieldDocumentsData {
+  const current = readFieldDocuments()
+  const next = {
+    ...current,
+    documents: current.documents.map((document) => (
+      document.id === documentId || document.clientDocumentId === documentId
+        ? { ...document, localUri, assignment: { ...document.assignment, downloadedAt: new Date().toISOString() } }
+        : document
+    )),
+  }
+  writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, next)
+  return next
+}
+
+export function readFieldHrm(): FieldHrmData | null {
+  return readFieldCache<FieldHrmData>(FIELD_HRM_CACHE_KEY)?.value ?? null
+}
+
+export function cacheFieldHrm(next: FieldHrmData): FieldHrmData {
+  const previous = readFieldHrm()
+  const serverClientIds = new Set(next.requests.map((request) => request.clientRequestId))
+  const optimistic = previous?.requests.filter((request) => request.syncState && !serverClientIds.has(request.clientRequestId)) ?? []
+  const merged = { ...next, requests: [...optimistic, ...next.requests] }
+  writeFieldCache(FIELD_HRM_CACHE_KEY, merged)
+  return merged
 }
 
 export const localStore: LocalStore = {
@@ -738,6 +887,66 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.commitment.fulfill",
             payload: parseFieldCommitmentFulfillPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.message.send") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.message.send",
+            payload: parseFieldMessageCreatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.message.receipt") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.message.receipt",
+            payload: parseFieldMessageReceiptPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.document.upload") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.document.upload",
+            payload: parseFieldDocumentUploadPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.document.state") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.document.state",
+            payload: parseFieldDocumentStatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.hrm.create") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.hrm.create",
+            payload: parseFieldHrmRequestCreatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.hrm.cancel") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.hrm.cancel",
+            payload: parseFieldHrmRequestCancelPayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -1556,6 +1765,122 @@ function applyOutboxResultSideEffects(
       writeFieldCache("field.locations.current", { ...cached.value, locations })
     } catch {
       // A corrupt cache must never wedge the durable outbox.
+    }
+    return
+  }
+
+  if (kind === "field.message.send") {
+    try {
+      const payload = parseFieldMessageCreatePayload(JSON.parse(rawPayload) as unknown)
+      const server = unknownRecord(detail)
+      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
+      const rows = db.getAllSync<{ k: string; json: string }>(
+        "SELECT k, json FROM field_cache WHERE k LIKE 'field.messages.thread.%'",
+      )
+      for (const row of rows) {
+        const cached = unknownRecord(JSON.parse(row.json) as unknown)
+        const thread = unknownRecord(cached?.thread)
+        if (!cached || !thread || !Array.isArray(thread.messages)) continue
+        let changed = false
+        const messages = thread.messages.map((rawMessage) => {
+          const message = unknownRecord(rawMessage)
+          if (!message || message.clientMessageId !== payload.clientMessageId) return rawMessage
+          changed = true
+          const next = { ...message, ...(status === "applied" && server ? server : {}) }
+          if (status === "applied") delete next.syncState
+          else if (syncState) next.syncState = syncState
+          return next
+        })
+        if (changed) writeFieldCache(row.k, { ...cached, thread: { ...thread, messages } })
+      }
+      const inbox = readFieldMessages()
+      writeFieldCache(FIELD_MESSAGES_CACHE_KEY, {
+        ...inbox,
+        threads: inbox.threads.map((thread) => {
+          if (thread.lastMessage?.id !== payload.clientMessageId) return thread
+          const lastMessage = { ...thread.lastMessage }
+          if (status === "applied") delete lastMessage.syncState
+          else if (syncState) lastMessage.syncState = syncState
+          const next = { ...thread, lastMessage }
+          if (status === "applied") delete next.syncState
+          else if (syncState) next.syncState = syncState
+          return next
+        }),
+      })
+    } catch {
+      // Messaging cache is a projection; the durable operation remains authoritative.
+    }
+    return
+  }
+
+  if (kind === "field.document.upload") {
+    try {
+      const payload = parseFieldDocumentUploadPayload(JSON.parse(rawPayload) as unknown)
+      const serverDocument = unknownRecord(unknownRecord(detail)?.document)
+      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
+      const current = readFieldDocuments()
+      writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, {
+        ...current,
+        documents: current.documents.map((document) => {
+          if (document.clientDocumentId !== payload.clientDocumentId) return document
+          const next: FieldDocument = {
+            ...document,
+            ...(status === "applied" && serverDocument ? serverDocument : {}),
+            localUri: document.localUri,
+          } as FieldDocument
+          if (status === "applied") delete next.syncState
+          else if (syncState) next.syncState = syncState
+          return next
+        }),
+      })
+    } catch {
+      // Document bytes stay on-device for retry even if the projection is corrupt.
+    }
+    return
+  }
+
+  if (kind === "field.document.state") {
+    try {
+      const payload = parseFieldDocumentStatePayload(JSON.parse(rawPayload) as unknown)
+      if (status === "applied") return
+      const current = readFieldDocuments()
+      writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, {
+        ...current,
+        documents: current.documents.map((document) => document.id !== payload.documentId ? document : {
+          ...document,
+          syncState: status === "conflict" ? "CONFLICT" as const : "REJECTED" as const,
+        }),
+      })
+    } catch {
+      // The state event itself remains recoverable in outbox.
+    }
+    return
+  }
+
+  if (kind === "field.hrm.create" || kind === "field.hrm.cancel") {
+    try {
+      const current = readFieldHrm()
+      if (!current) return
+      const server = unknownRecord(detail)
+      const requestId = kind === "field.hrm.create"
+        ? parseFieldHrmRequestCreatePayload(JSON.parse(rawPayload) as unknown).id
+        : parseFieldHrmRequestCancelPayload(JSON.parse(rawPayload) as unknown).id
+      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
+      writeFieldCache(FIELD_HRM_CACHE_KEY, {
+        ...current,
+        requests: current.requests.map((request) => {
+          if (request.id !== requestId) return request
+          const next: FieldHrmRequest = {
+            ...request,
+            ...(status === "applied" && server ? server : {}),
+          } as FieldHrmRequest
+          if (status === "applied") delete next.syncState
+          else if (syncState) next.syncState = syncState
+          return next
+        }),
+      })
+    } catch {
+      // Keep durable HRM operation visible in recovery even if cache is stale.
     }
     return
   }
@@ -2449,6 +2774,340 @@ export function enqueueFieldCommitmentFulfill(
   return { clientOpId, clientFulfillmentId, photoClientOpId }
 }
 
+export type FieldDocumentDraft = Omit<
+  FieldDocumentUploadPayload,
+  "clientDocumentId" | "createdAt"
+>
+
+function agentIdentity(): { id: string | null; name: string } {
+  const profile = readFieldCache<Record<string, unknown>>("field.profile")?.value
+  const agent = unknownRecord(profile?.agent)
+  return { id: stringValue(agent?.id), name: stringValue(agent?.name) ?? "Вы" }
+}
+
+function createDocumentUploadPayload(
+  input: FieldDocumentDraft,
+  createdAt = new Date().toISOString(),
+): FieldDocumentUploadPayload {
+  return parseFieldDocumentUploadPayload({
+    ...input,
+    clientDocumentId: `document-${Crypto.randomUUID()}`,
+    createdAt,
+  })
+}
+
+function insertDocumentUpload(payload: FieldDocumentUploadPayload, clientOpId: string): void {
+  db.runSync(
+    "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+    [clientOpId, "field.document.upload", JSON.stringify(payload), payload.createdAt],
+  )
+}
+
+function optimisticDocument(payload: FieldDocumentUploadPayload): FieldDocument {
+  const identity = agentIdentity()
+  return {
+    id: payload.clientDocumentId,
+    clientDocumentId: payload.clientDocumentId,
+    title: payload.title,
+    fileName: payload.fileName,
+    mimeType: payload.mimeType,
+    sizeBytes: payload.sizeBytes,
+    checksumSha256: null,
+    uploadedByAgentId: identity.id,
+    visitId: payload.visitId,
+    taskId: payload.taskId,
+    createdAt: payload.createdAt,
+    assignment: {
+      id: `local-assignment-${payload.clientDocumentId}`,
+      required: false,
+      assignedAt: payload.createdAt,
+      expiresAt: null,
+      readAt: payload.createdAt,
+      downloadedAt: payload.createdAt,
+    },
+    expired: false,
+    downloadUrl: "",
+    localUri: payload.fileUri,
+    syncState: "PENDING",
+  }
+}
+
+function addOptimisticDocument(payload: FieldDocumentUploadPayload): void {
+  const current = readFieldDocuments()
+  if (current.documents.some((document) => document.clientDocumentId === payload.clientDocumentId)) return
+  writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, {
+    ...current,
+    documents: [optimisticDocument(payload), ...current.documents],
+  })
+}
+
+export function enqueueFieldDocumentUpload(input: FieldDocumentDraft): {
+  clientOpId: string
+  clientDocumentId: string
+} {
+  const payload = createDocumentUploadPayload(input)
+  const clientOpId = `field-document-${Crypto.randomUUID()}`
+  db.withTransactionSync(() => {
+    insertDocumentUpload(payload, clientOpId)
+    addOptimisticDocument(payload)
+  })
+  return { clientOpId, clientDocumentId: payload.clientDocumentId }
+}
+
+export function enqueueFieldMessage(
+  input: {
+    threadId: string | null
+    recipientAgentId: string | null
+    body: string | null
+  },
+  attachment?: FieldDocumentDraft | null,
+): {
+  clientOpId: string
+  clientMessageId: string
+  attachmentClientDocumentId: string | null
+} {
+  const sentAt = new Date().toISOString()
+  const attachmentPayload = attachment ? createDocumentUploadPayload(attachment, sentAt) : null
+  const attachmentClientOpId = attachmentPayload ? `field-document-${Crypto.randomUUID()}` : null
+  const clientMessageId = `message-${Crypto.randomUUID()}`
+  const clientOpId = `field-message-${Crypto.randomUUID()}`
+  const payload = parseFieldMessageCreatePayload({
+    ...input,
+    clientMessageId,
+    body: input.body?.trim() || null,
+    attachmentClientDocumentId: attachmentPayload?.clientDocumentId ?? null,
+    sentAt,
+  })
+  const identity = agentIdentity()
+  const attachmentDocument = attachmentPayload ? {
+    id: attachmentPayload.clientDocumentId,
+    title: attachmentPayload.title,
+    fileName: attachmentPayload.fileName,
+    mimeType: attachmentPayload.mimeType,
+    sizeBytes: attachmentPayload.sizeBytes,
+    checksumSha256: null,
+    downloadUrl: "",
+    localUri: attachmentPayload.fileUri,
+  } : null
+  const optimisticMessage: FieldMessage = {
+    id: clientMessageId,
+    senderAgentId: identity.id,
+    senderUserId: null,
+    senderName: identity.name,
+    clientMessageId,
+    body: payload.body,
+    sentAt,
+    acknowledgementRequired: false,
+    attachmentDocument,
+    read: true,
+    acknowledged: false,
+    receipts: [],
+    syncState: "PENDING",
+  }
+
+  db.withTransactionSync(() => {
+    if (attachmentPayload && attachmentClientOpId) {
+      insertDocumentUpload(attachmentPayload, attachmentClientOpId)
+      addOptimisticDocument(attachmentPayload)
+    }
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.message.send", JSON.stringify(payload), sentAt],
+    )
+
+    if (payload.threadId) {
+      const cachedThread = readFieldMessageThread(payload.threadId)
+      if (cachedThread) {
+        writeFieldCache(fieldMessageThreadCacheKey(payload.threadId), {
+          ...cachedThread,
+          thread: {
+            ...cachedThread.thread,
+            lastMessageAt: sentAt,
+            messages: [...cachedThread.thread.messages, optimisticMessage],
+          },
+        })
+      }
+    }
+
+    const inbox = readFieldMessages()
+    const existing = payload.threadId
+      ? inbox.threads.find((thread) => thread.id === payload.threadId)
+      : null
+    const recipient = payload.recipientAgentId
+      ? inbox.availableRecipients.find((person) => person.id === payload.recipientAgentId)
+      : null
+    const { clientMessageId: _clientMessageId, read: _read, receipts: _receipts, ...summaryMessage } = optimisticMessage
+    const threadId = payload.threadId ?? `local-direct-${payload.recipientAgentId}`
+    const summary = {
+      id: threadId,
+      type: "DIRECT" as const,
+      subject: existing?.subject ?? null,
+      title: existing?.title ?? recipient?.name ?? "Новый диалог",
+      lastMessageAt: sentAt,
+      participants: existing?.participants ?? (recipient ? [recipient] : []),
+      lastMessage: summaryMessage,
+      unread: false,
+      needsAcknowledgement: false,
+      syncState: "PENDING" as const,
+    }
+    writeFieldCache(FIELD_MESSAGES_CACHE_KEY, {
+      ...inbox,
+      threads: [summary, ...inbox.threads.filter((thread) => thread.id !== threadId && thread.id !== payload.threadId)],
+    })
+  })
+  return { clientOpId, clientMessageId, attachmentClientDocumentId: attachmentPayload?.clientDocumentId ?? null }
+}
+
+export function enqueueFieldMessageReceipt(input: {
+  threadId: string
+  messageId: string
+  type: "READ" | "ACKNOWLEDGED"
+}): { clientOpId: string; clientReceiptId: string } {
+  const occurredAt = new Date().toISOString()
+  const clientReceiptId = `receipt-${Crypto.randomUUID()}`
+  const clientOpId = `field-receipt-${Crypto.randomUUID()}`
+  const payload = parseFieldMessageReceiptPayload({ ...input, clientReceiptId, occurredAt })
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.message.receipt", JSON.stringify(payload), occurredAt],
+    )
+    const cachedThread = readFieldMessageThread(input.threadId)
+    if (cachedThread) {
+      writeFieldCache(fieldMessageThreadCacheKey(input.threadId), {
+        ...cachedThread,
+        thread: {
+          ...cachedThread.thread,
+          messages: cachedThread.thread.messages.map((message) => message.id !== input.messageId ? message : {
+            ...message,
+            read: input.type === "READ" ? true : message.read,
+            acknowledged: input.type === "ACKNOWLEDGED" ? true : message.acknowledged,
+          }),
+        },
+      })
+    }
+    const inbox = readFieldMessages()
+    writeFieldCache(FIELD_MESSAGES_CACHE_KEY, {
+      ...inbox,
+      unread: input.type === "READ" ? Math.max(0, inbox.unread - 1) : inbox.unread,
+      threads: inbox.threads.map((thread) => thread.id !== input.threadId ? thread : {
+        ...thread,
+        unread: input.type === "READ" ? false : thread.unread,
+        needsAcknowledgement: input.type === "ACKNOWLEDGED" ? false : thread.needsAcknowledgement,
+        lastMessage: thread.lastMessage?.id === input.messageId
+          ? { ...thread.lastMessage, acknowledged: input.type === "ACKNOWLEDGED" ? true : thread.lastMessage.acknowledged }
+          : thread.lastMessage,
+      }),
+    })
+  })
+  return { clientOpId, clientReceiptId }
+}
+
+export function enqueueFieldDocumentState(
+  documentId: string,
+  state: "READ" | "DOWNLOADED",
+): { clientOpId: string } {
+  const occurredAt = new Date().toISOString()
+  const payload = parseFieldDocumentStatePayload({ documentId, state, occurredAt })
+  const clientOpId = `field-document-state-${Crypto.randomUUID()}`
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.document.state", JSON.stringify(payload), occurredAt],
+    )
+    const current = readFieldDocuments()
+    writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, {
+      ...current,
+      documents: current.documents.map((document) => document.id !== documentId ? document : {
+        ...document,
+        assignment: {
+          ...document.assignment,
+          ...(state === "READ" ? { readAt: occurredAt } : { downloadedAt: occurredAt }),
+        },
+      }),
+    })
+  })
+  return { clientOpId }
+}
+
+export function enqueueFieldHrmRequest(
+  input: Omit<FieldHrmRequestCreatePayload, "id" | "clientRequestId" | "submittedAt">,
+): { clientOpId: string; requestId: string; clientRequestId: string } {
+  const submittedAt = new Date().toISOString()
+  const requestId = `hrm-${Crypto.randomUUID()}`
+  const clientRequestId = `hrm-client-${Crypto.randomUUID()}`
+  const clientOpId = `field-hrm-${Crypto.randomUUID()}`
+  const payload = parseFieldHrmRequestCreatePayload({
+    ...input,
+    id: requestId,
+    clientRequestId,
+    submittedAt,
+  })
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.hrm.create", JSON.stringify(payload), submittedAt],
+    )
+    const current = readFieldHrm()
+    if (current) {
+      const optimistic: FieldHrmRequest = {
+        ...payload,
+        status: "PENDING",
+        startDate: `${payload.startDate}T00:00:00.000Z`,
+        endDate: `${payload.endDate}T00:00:00.000Z`,
+        decisionNote: null,
+        decidedAt: null,
+        cancelledAt: null,
+        updatedAt: submittedAt,
+        syncState: "PENDING",
+      }
+      writeFieldCache(FIELD_HRM_CACHE_KEY, {
+        ...current,
+        requests: [optimistic, ...current.requests],
+        days: current.days.map((day) => (
+          day.date >= payload.startDate && day.date <= payload.endDate
+            ? { ...day, requests: [...day.requests, { id: requestId, type: payload.type, status: "PENDING" as const }] }
+            : day
+        )),
+      })
+    }
+  })
+  return { clientOpId, requestId, clientRequestId }
+}
+
+export function enqueueFieldHrmCancel(requestId: string): { clientOpId: string } {
+  const cancelledAt = new Date().toISOString()
+  const payload = parseFieldHrmRequestCancelPayload({ id: requestId, cancelledAt })
+  const clientOpId = `field-hrm-${Crypto.randomUUID()}`
+  db.withTransactionSync(() => {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.hrm.cancel", JSON.stringify(payload), cancelledAt],
+    )
+    const current = readFieldHrm()
+    if (current) {
+      writeFieldCache(FIELD_HRM_CACHE_KEY, {
+        ...current,
+        requests: current.requests.map((request) => request.id !== requestId ? request : {
+          ...request,
+          status: "CANCELLED" as const,
+          cancelledAt,
+          updatedAt: cancelledAt,
+          syncState: "PENDING" as const,
+        }),
+        days: current.days.map((day) => ({
+          ...day,
+          requests: day.requests.map((request) => request.id !== requestId ? request : {
+            ...request,
+            status: "CANCELLED" as const,
+          }),
+        })),
+      })
+    }
+  })
+  return { clientOpId }
+}
+
 export function enqueueFieldWorkdayEvent(
   input: FieldWorkdayEventPayload,
 ): { clientOpId: string } {
@@ -2530,6 +3189,7 @@ export interface FieldSyncRecoveryRow {
   detail: unknown
   evidence: FieldSyncRecoveryEvidence | null
   canContinueWithoutEvidence: boolean
+  canDetachAttachment: boolean
 }
 
 type FieldRecoveryDbRow = {
@@ -2628,6 +3288,11 @@ export function listFieldSyncRecoveryQueue(): FieldSyncRecoveryRow[] {
         evidenceClientPhotoId &&
         (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill"),
       ),
+      canDetachAttachment: Boolean(
+        row.kind === "field.message.send" &&
+        stringValue(payload.attachmentClientDocumentId) &&
+        stringValue(payload.body),
+      ),
     }]
   })
 }
@@ -2703,9 +3368,88 @@ export function retryFieldSyncOperation(clientOpId: string): { clientOpId: strin
         }
       }
     }
+    if (row.kind === "field.message.send") {
+      const payload = parseJsonObject(row.payload)
+      const clientDocumentId = stringValue(payload.attachmentClientDocumentId)
+      if (clientDocumentId) {
+        const upload = db.getFirstSync<{ clientOpId: string; status: string }>(
+          `SELECT clientOpId, status FROM outbox_ops
+           WHERE kind='field.document.upload'
+             AND json_extract(payload, '$.clientDocumentId')=?
+           ORDER BY rowid DESC LIMIT 1`,
+          [clientDocumentId],
+        )
+        if (upload && (upload.status === "conflict" || upload.status === "rejected")) {
+          renewFieldOutboxOperation(upload.clientOpId, "field.document.upload")
+        }
+      }
+    }
     nextId = renewFieldOutboxOperation(row.clientOpId, row.kind)
   })
   return { clientOpId: nextId }
+}
+
+export function detachFieldMessageAttachment(clientOpId: string): {
+  clientOpId: string
+  fileUri: string | null
+} | null {
+  const row = db.getFirstSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops WHERE clientOpId=? AND kind='field.message.send'
+       AND status IN ('conflict','rejected')`,
+    [clientOpId],
+  )
+  if (!row) return null
+  const payload = parseFieldMessageCreatePayload(JSON.parse(row.payload) as unknown)
+  if (!payload.attachmentClientDocumentId || !payload.body?.trim()) return null
+  const upload = db.getFirstSync<{ clientOpId: string; payload: string; status: string }>(
+    `SELECT clientOpId, payload, status FROM outbox_ops
+     WHERE kind='field.document.upload'
+       AND json_extract(payload, '$.clientDocumentId')=?
+     ORDER BY rowid DESC LIMIT 1`,
+    [payload.attachmentClientDocumentId],
+  )
+  let fileUri: string | null = null
+  let nextId = clientOpId
+  db.withTransactionSync(() => {
+    if (upload && upload.status !== "applied") {
+      try {
+        fileUri = parseFieldDocumentUploadPayload(JSON.parse(upload.payload) as unknown).fileUri
+      } catch {
+        fileUri = null
+      }
+      db.runSync("DELETE FROM outbox_ops WHERE clientOpId=?", [upload.clientOpId])
+      const documents = readFieldDocuments()
+      writeFieldCache(FIELD_DOCUMENTS_CACHE_KEY, {
+        ...documents,
+        documents: documents.documents.filter((document) => document.clientDocumentId !== payload.attachmentClientDocumentId),
+      })
+    }
+    nextId = `field-retry-${Crypto.randomUUID()}`
+    db.runSync(
+      `UPDATE outbox_ops
+       SET clientOpId=?, payload=?, status='pending', attempts=0, detail=NULL
+       WHERE clientOpId=?`,
+      [nextId, JSON.stringify({ ...payload, attachmentClientDocumentId: null }), row.clientOpId],
+    )
+    const rows = db.getAllSync<{ k: string; json: string }>(
+      "SELECT k, json FROM field_cache WHERE k LIKE 'field.messages.thread.%'",
+    )
+    for (const cacheRow of rows) {
+      const cached = unknownRecord(JSON.parse(cacheRow.json) as unknown)
+      const thread = unknownRecord(cached?.thread)
+      if (!cached || !thread || !Array.isArray(thread.messages)) continue
+      let changed = false
+      const messages = thread.messages.map((rawMessage) => {
+        const message = unknownRecord(rawMessage)
+        if (!message || message.clientMessageId !== payload.clientMessageId) return rawMessage
+        changed = true
+        return { ...message, attachmentDocument: null, syncState: "PENDING" }
+      })
+      if (changed) writeFieldCache(cacheRow.k, { ...cached, thread: { ...thread, messages } })
+    }
+  })
+  return { clientOpId: nextId, fileUri }
 }
 
 export function detachFieldCommitmentEvidence(clientOpId: string): {

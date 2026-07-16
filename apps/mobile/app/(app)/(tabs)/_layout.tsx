@@ -11,8 +11,9 @@ import { useField } from "../../../src/field/field-context"
 export default function TabsLayout() {
   useLocale() // ре-рендер подписей вкладок при смене языка в профиле
   const insets = useSafeAreaInsets()
-  const { notifications } = useField()
-  const inboxBadge = notifications.unread > 99 ? "99+" : notifications.unread || undefined
+  const { notifications, messages } = useField()
+  const inboxUnread = notifications.unread + messages.unread
+  const inboxBadge = inboxUnread > 99 ? "99+" : inboxUnread || undefined
   const tabBarMetrics = getBottomTabBarMetrics(insets.bottom)
 
   return (

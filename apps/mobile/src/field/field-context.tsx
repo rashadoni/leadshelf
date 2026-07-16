@@ -10,7 +10,7 @@ import {
 import { router } from "expo-router"
 import { fieldApi } from "../api/mobile-client"
 import { tokenStore } from "../auth/token-store"
-import { readFieldCache, writeFieldCache } from "../db/local-store"
+import { cacheFieldMessages, readFieldCache, readFieldMessages, writeFieldCache } from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
@@ -18,6 +18,7 @@ import type {
   FieldAgentTasksData,
   FieldLocationHistoryData,
   FieldNotificationsData,
+  FieldMessagesData,
   FieldProfileData,
   FieldWeekData,
   FieldWorkdayData,
@@ -29,6 +30,7 @@ type FieldContextValue = {
   profile: FieldProfileData | null
   week: FieldWeekData | null
   notifications: FieldNotificationsData
+  messages: FieldMessagesData
   workday: FieldWorkdayData | null
   locations: FieldLocationHistoryData | null
   agentTasks: FieldAgentTasksData | null
@@ -65,6 +67,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<FieldProfileData | null>(null)
   const [week, setWeek] = useState<FieldWeekData | null>(null)
   const [notifications, setNotifications] = useState<FieldNotificationsData>({ items: [], unread: 0 })
+  const [messages, setMessages] = useState<FieldMessagesData>(readFieldMessages)
   const [workday, setWorkday] = useState<FieldWorkdayData | null>(null)
   const [locations, setLocations] = useState<FieldLocationHistoryData | null>(null)
   const [agentTasks, setAgentTasks] = useState<FieldAgentTasksData | null>(null)
@@ -187,14 +190,15 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     setPhase((current) => current === "loading" ? "loading" : "refreshing")
     setError(null)
     const start = requestedWeek.current ?? undefined
-    const [profileResult, weekResult, notificationsResult] = await Promise.allSettled([
+    const [profileResult, weekResult, notificationsResult, messagesResult] = await Promise.allSettled([
       fieldApi.profile(),
       fieldApi.week(start),
       fieldApi.notifications(),
+      fieldApi.messages(),
     ])
     if (sequence !== requestSequence.current) return
 
-    const authLost = [profileResult, weekResult, notificationsResult].some(
+    const authLost = [profileResult, weekResult, notificationsResult, messagesResult].some(
       (result) => result.status === "rejected" && result.reason instanceof AuthLostError,
     )
     if (authLost) {
@@ -220,12 +224,17 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       writeFieldCache(NOTIFICATIONS_KEY, notificationsResult.value)
       updated = true
     }
+    if (messagesResult.status === "fulfilled") {
+      setMessages(cacheFieldMessages(messagesResult.value))
+      updated = true
+    }
     if (updated) {
       setLastUpdatedAt(new Date().toISOString())
       setPhase(
         profileResult.status === "fulfilled" &&
         weekResult.status === "fulfilled" &&
-        notificationsResult.status === "fulfilled"
+        notificationsResult.status === "fulfilled" &&
+        messagesResult.status === "fulfilled"
           ? "ready"
           : "stale",
       )
@@ -236,6 +245,8 @@ export function FieldProvider({ children }: { children: ReactNode }) {
           ? weekResult.reason
           : notificationsResult.status === "rejected"
             ? notificationsResult.reason
+            : messagesResult.status === "rejected"
+              ? messagesResult.reason
             : null
       setError(firstError instanceof Error ? firstError.message : String(firstError ?? "Field data unavailable"))
       setPhase(profile || week ? "stale" : "error")
@@ -287,6 +298,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     const workdayCache = readFieldCache<FieldWorkdayData>(WORKDAY_KEY)
     const locationsCache = readFieldCache<FieldLocationHistoryData>(LOCATIONS_KEY)
     const agentTasksCache = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
+    const messagesCache = readFieldMessages()
     if (profileCache) setProfile(profileCache.value)
     if (weekCache) {
       setWeek(weekCache.value)
@@ -296,6 +308,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     if (workdayCache) setWorkday(workdayCache.value)
     if (locationsCache) setLocations(locationsCache.value)
     if (agentTasksCache) setAgentTasks(agentTasksCache.value)
+    setMessages(messagesCache)
     const cachedAt = [profileCache?.updatedAt, weekCache?.updatedAt, notificationsCache?.updatedAt]
       .filter((value): value is string => Boolean(value))
       .sort()
@@ -316,6 +329,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       profile,
       week,
       notifications,
+      messages,
       workday,
       locations,
       agentTasks,

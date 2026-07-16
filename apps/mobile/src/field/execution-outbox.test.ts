@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from "vitest"
 import {
   parseFieldCommitmentCreatePayload,
   parseFieldCommitmentFulfillPayload,
+  parseFieldDocumentStatePayload,
+  parseFieldDocumentUploadPayload,
+  parseFieldHrmRequestCancelPayload,
+  parseFieldHrmRequestCreatePayload,
   parseFieldLocationPayload,
+  parseFieldMessageCreatePayload,
+  parseFieldMessageReceiptPayload,
   parseFieldTaskCreatePayload,
   parseFieldTaskEventPayload,
   parseFieldTaskUpdatePayload,
@@ -11,6 +17,7 @@ import {
   parseFieldVisitPhotoPayload,
   parseFieldWorkdayEventPayload,
   sendFieldLocationOperation,
+  sendFieldDocumentUploadOperation,
   sendFieldVisitPhotoOperation,
   sendFieldExecutionOperations,
   toFieldServerOperation,
@@ -225,6 +232,93 @@ describe("field execution outbox", () => {
       entity: "commitmentFulfillments",
       data: { commitmentId: "commitment-server-1", clientFulfillmentId: "fulfillment-client-1" },
     })
+  })
+
+  it("maps offline messages, receipts, document state and HRM requests", () => {
+    const message: FieldExecutionPushOperation = {
+      clientOpId: "field-message-op-0001",
+      clientCreatedAt: "2026-07-16T08:00:00.000Z",
+      kind: "field.message.send",
+      payload: parseFieldMessageCreatePayload({
+        threadId: "thread-1",
+        recipientAgentId: null,
+        clientMessageId: "message-client-0001",
+        body: "Маршрут подтвержден",
+        attachmentClientDocumentId: "document-client-0001",
+        sentAt: "2026-07-16T08:00:00.000Z",
+      }),
+    }
+    const receipt: FieldExecutionPushOperation = {
+      clientOpId: "field-receipt-op-0001",
+      kind: "field.message.receipt",
+      payload: parseFieldMessageReceiptPayload({
+        messageId: "message-1",
+        type: "ACKNOWLEDGED",
+        clientReceiptId: "receipt-client-0001",
+        occurredAt: "2026-07-16T08:01:00.000Z",
+      }),
+    }
+    const documentState: FieldExecutionPushOperation = {
+      clientOpId: "field-document-state-0001",
+      kind: "field.document.state",
+      payload: parseFieldDocumentStatePayload({
+        documentId: "document-1",
+        state: "DOWNLOADED",
+        occurredAt: "2026-07-16T08:02:00.000Z",
+      }),
+    }
+    const hrm: FieldExecutionPushOperation = {
+      clientOpId: "field-hrm-op-0001",
+      kind: "field.hrm.create",
+      payload: parseFieldHrmRequestCreatePayload({
+        id: "hrm-mobile-1",
+        clientRequestId: "hrm-client-0001",
+        type: "LEAVE",
+        startDate: "2026-07-20",
+        endDate: "2026-07-22",
+        correctionWorkdayId: null,
+        requestedStartAt: null,
+        requestedEndAt: null,
+        reason: "Family leave",
+        submittedAt: "2026-07-16T08:03:00.000Z",
+      }),
+    }
+    const cancel: FieldExecutionPushOperation = {
+      clientOpId: "field-hrm-cancel-0001",
+      kind: "field.hrm.cancel",
+      payload: parseFieldHrmRequestCancelPayload({
+        id: "hrm-mobile-1",
+        cancelledAt: "2026-07-16T08:04:00.000Z",
+      }),
+    }
+
+    expect(toFieldServerOperation(message)).toMatchObject({ entity: "messages", op: "create" })
+    expect(toFieldServerOperation(receipt)).toMatchObject({ entity: "messageReceipts", op: "create" })
+    expect(toFieldServerOperation(documentState)).toMatchObject({ entity: "documentStates", op: "update" })
+    expect(toFieldServerOperation(hrm)).toMatchObject({ entity: "hrmRequests", op: "create" })
+    expect(toFieldServerOperation(cancel)).toMatchObject({ entity: "hrmRequests", op: "update" })
+  })
+
+  it("validates and classifies durable private document uploads", async () => {
+    const payload = parseFieldDocumentUploadPayload({
+      clientDocumentId: "document-client-0001",
+      title: "Route evidence",
+      fileName: "route.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+      fileUri: "file:///documents/route.pdf",
+      visitId: "visit-1",
+      taskId: null,
+      createdAt: "2026-07-16T08:00:00.000Z",
+    })
+    const operation = { clientOpId: "field-document-upload-1", kind: "field.document.upload" as const, payload }
+    await expect(sendFieldDocumentUploadOperation(operation, {
+      upload: vi.fn().mockResolvedValue({ id: "document-1", clientDocumentId: payload.clientDocumentId }),
+    })).resolves.toMatchObject({ status: "applied", detail: { document: { id: "document-1" } } })
+    await expect(sendFieldDocumentUploadOperation(operation, {
+      upload: vi.fn().mockRejectedValue(new (await import("../sync/ports-error")).HttpError(409, "visit closed")),
+    })).resolves.toMatchObject({ status: "conflict" })
+    expect(() => parseFieldDocumentUploadPayload({ ...payload, mimeType: "application/x-executable" })).toThrow()
   })
 
   it("validates replay-safe locations and classifies deterministic GPS conflicts", async () => {

@@ -21,6 +21,7 @@ import {
 import { SyncBar } from "../../src/components/SyncBar"
 import {
   detachFieldCommitmentEvidence,
+  detachFieldMessageAttachment,
   listFieldSyncRecoveryQueue,
   retryFieldSyncOperation,
   type FieldSyncRecoveryRow,
@@ -46,6 +47,16 @@ function kindKey(kind: string): MessageKey {
   return "syncKindOther"
 }
 
+function kindLabel(kind: string, locale: "az" | "ru"): string {
+  if (kind === "field.message.send") return locale === "az" ? "Mesajın göndərilməsi" : "Отправка сообщения"
+  if (kind === "field.message.receipt") return locale === "az" ? "Mesajın təsdiqi" : "Подтверждение сообщения"
+  if (kind === "field.document.upload") return locale === "az" ? "Sənədin göndərilməsi" : "Отправка документа"
+  if (kind === "field.document.state") return locale === "az" ? "Sənəd statusu" : "Статус документа"
+  if (kind === "field.hrm.create") return locale === "az" ? "HRM müraciəti" : "HRM-заявка"
+  if (kind === "field.hrm.cancel") return locale === "az" ? "HRM müraciətinin ləğvi" : "Отмена HRM-заявки"
+  return t(kindKey(kind))
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -60,6 +71,9 @@ function rowContext(row: FieldSyncRecoveryRow): string | null {
   return string(row.payload.productName) ??
     string(row.payload.customerName) ??
     string(row.payload.title) ??
+    string(row.payload.fileName) ??
+    string(row.payload.body) ??
+    string(row.payload.reason) ??
     string(row.payload.actionKey) ??
     string(row.payload.visitId) ??
     string(row.payload.routeId) ??
@@ -129,11 +143,38 @@ export default function SyncCenterScreen() {
     }
   }
 
+  async function continueWithoutAttachment(row: FieldSyncRecoveryRow) {
+    if (busyId || syncBusy) return
+    setBusyId(row.clientOpId)
+    try {
+      const result = detachFieldMessageAttachment(row.clientOpId)
+      if (!result) return
+      if (result.fileUri) await discardFieldVisitPhotoFile(result.fileUri)
+      Alert.alert(locale === "az" ? "Fayl ayrıldı" : "Файл откреплён")
+      await flush()
+    } catch (error) {
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   function confirmWithoutPhoto(row: FieldSyncRecoveryRow) {
     Alert.alert(t("syncCenterWithoutPhotoTitle"), t("syncCenterWithoutPhotoBody"), [
       { text: t("cancel"), style: "cancel" },
       { text: t("syncCenterWithoutPhotoConfirm"), style: "destructive", onPress: () => void continueWithoutPhoto(row) },
     ])
+  }
+
+  function confirmWithoutAttachment(row: FieldSyncRecoveryRow) {
+    Alert.alert(
+      locale === "az" ? "Mesajı faylsız göndərək?" : "Отправить сообщение без файла?",
+      locale === "az" ? "Lokal fayl silinəcək, mesaj mətni isə növbədə qalacaq." : "Локальная копия файла будет удалена, а текст сообщения останется в очереди.",
+      [
+        { text: t("cancel"), style: "cancel" },
+        { text: locale === "az" ? "Faylsız davam et" : "Продолжить без файла", style: "destructive", onPress: () => void continueWithoutAttachment(row) },
+      ],
+    )
   }
 
   async function refresh() {
@@ -173,7 +214,7 @@ export default function SyncCenterScreen() {
               <View style={styles.cardTop}>
                 {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} /> : <View style={styles.kindMark}><Text style={styles.kindMarkText}>↻</Text></View>}
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{t(kindKey(row.kind))}</Text>
+                  <Text style={styles.cardTitle}>{kindLabel(row.kind, locale)}</Text>
                   {rowContext(row) ? <Text style={styles.cardContext} numberOfLines={2}>{rowContext(row)}</Text> : null}
                   <View style={styles.metaRow}>
                     <CommercialPill label={row.status === "conflict" ? t("syncCenterConflict") : t("syncCenterRejected")} tone="danger" />
@@ -187,6 +228,7 @@ export default function SyncCenterScreen() {
               <View style={styles.actions}>
                 <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View>
                 {row.canContinueWithoutEvidence ? <View style={styles.action}><CommercialButton label={t("syncCenterWithoutPhoto")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
+                {row.canDetachAttachment ? <View style={styles.action}><CommercialButton label={locale === "az" ? "Faylsız" : "Без файла"} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
               </View>
             </View>
           )

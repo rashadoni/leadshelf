@@ -8,6 +8,10 @@ import {
   parseFieldCustomerRequest,
   parseFieldCustomerRequests,
   parseFieldNotifications,
+  parseFieldMessages,
+  parseFieldMessageThread,
+  parseFieldDocuments,
+  parseFieldHrm,
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
   parseFieldPersonalKpi,
@@ -321,6 +325,128 @@ describe("LeadDrive field contracts", () => {
       },
     })
     expect(inbox.unread).toBe(1)
+  })
+
+  it("accepts direct conversations, private documents and HRM schedule", () => {
+    const attachment = {
+      id: "document-1",
+      title: "Brief",
+      fileName: "brief.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+      checksumSha256: null,
+      downloadUrl: "/api/v1/mtm/mobile/documents/document-1/download",
+    }
+    const person = { id: "agent-2", name: "Manager", role: "MANAGER", avatar: null }
+    const lastMessage = {
+      id: "message-1",
+      senderAgentId: "agent-2",
+      senderName: "Manager",
+      body: "Please confirm",
+      sentAt: "2026-07-16T08:00:00.000Z",
+      acknowledgementRequired: true,
+      attachmentDocument: attachment,
+      acknowledged: false,
+    }
+    expect(parseFieldMessages({
+      success: true,
+      data: {
+        threads: [{
+          id: "thread-1",
+          type: "DIRECT",
+          subject: null,
+          title: "Manager",
+          lastMessageAt: lastMessage.sentAt,
+          participants: [person],
+          lastMessage,
+          unread: true,
+          needsAcknowledgement: true,
+        }],
+        unread: 1,
+        availableRecipients: [person],
+        capabilities: { startDirectConversation: true, sendAttachments: true, acknowledgeBroadcasts: true },
+      },
+    }).threads[0]?.needsAcknowledgement).toBe(true)
+
+    expect(parseFieldMessageThread({
+      success: true,
+      data: {
+        thread: {
+          id: "thread-1",
+          type: "DIRECT",
+          subject: null,
+          lastMessageAt: lastMessage.sentAt,
+          participants: [{ ...person, participantRole: "MEMBER" }],
+          messages: [{
+            ...lastMessage,
+            clientMessageId: null,
+            senderUserId: null,
+            read: false,
+            receipts: [],
+          }],
+        },
+        capabilities: { reply: true, sendAttachments: true, acknowledge: true },
+      },
+    }).thread.messages[0]?.body).toBe("Please confirm")
+
+    const document = {
+      ...attachment,
+      clientDocumentId: null,
+      uploadedByAgentId: null,
+      visitId: null,
+      taskId: null,
+      createdAt: "2026-07-16T07:00:00.000Z",
+      assignment: {
+        id: "assignment-1",
+        required: true,
+        assignedAt: "2026-07-16T07:00:00.000Z",
+        expiresAt: null,
+        readAt: null,
+        downloadedAt: null,
+      },
+      expired: false,
+    }
+    expect(parseFieldDocuments({
+      success: true,
+      data: {
+        documents: [document],
+        capabilities: { upload: true, offlineDownload: true, maxUploadBytes: 26_214_400 },
+      },
+    }).documents[0]?.assignment.required).toBe(true)
+
+    const request = {
+      id: "hrm-1",
+      clientRequestId: "hrm-client-1",
+      type: "LEAVE",
+      status: "PENDING",
+      startDate: "2026-07-20T00:00:00.000Z",
+      endDate: "2026-07-22T00:00:00.000Z",
+      correctionWorkdayId: null,
+      requestedStartAt: null,
+      requestedEndAt: null,
+      reason: "Family leave",
+      decisionNote: null,
+      submittedAt: "2026-07-16T08:00:00.000Z",
+      decidedAt: null,
+      cancelledAt: null,
+      updatedAt: "2026-07-16T08:00:00.000Z",
+    }
+    expect(parseFieldHrm({
+      success: true,
+      data: {
+        timezone: "Asia/Baku",
+        start: "2026-07-16",
+        end: "2026-07-31",
+        days: [{
+          date: "2026-07-16",
+          calendar: { isWorkingDay: true, kind: "WORKING_DAY", source: "DEFAULT", name: null, routePlanningAllowed: true },
+          workday: null,
+          requests: [],
+        }],
+        requests: [request],
+        capabilities: { requestLeave: true, requestAbsence: true, requestTimeCorrection: true, cancelPending: true },
+      },
+    }).requests[0]?.status).toBe("PENDING")
   })
 
   it("accepts an active workday and zero-valued GPS telemetry", () => {
