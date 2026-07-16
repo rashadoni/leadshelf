@@ -204,6 +204,58 @@ export interface FieldAgentTasksData {
   }
 }
 
+export type FieldCommitmentStatus = "OPEN" | "OVERDUE" | "FULFILLED" | "PARTIAL" | "NOT_FULFILLED"
+export type FieldCommitmentOutcome = "FULFILLED" | "PARTIAL" | "NOT_FULFILLED"
+
+export interface FieldCommitmentEvidence {
+  id: string
+  url: string
+  thumbnailUrl: string | null
+  status: string
+}
+
+export interface FieldCommitmentFulfillment {
+  id: string
+  clientFulfillmentId: string
+  outcome: FieldCommitmentOutcome
+  actualQuantity: number
+  varianceQuantity: number
+  note: string | null
+  fulfilledAt: string
+  evidencePhoto: FieldCommitmentEvidence | null
+  evidenceClientPhotoId?: string | null
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldCommitment {
+  id: string
+  clientCommitmentId: string
+  visitId: string | null
+  customerId: string
+  contactId: string | null
+  productExternalId: string | null
+  productName: string
+  brandExternalId: string | null
+  brandName: string | null
+  promisedQuantity: number
+  unit: string
+  dueAt: string
+  note: string | null
+  submittedAt: string
+  status: FieldCommitmentStatus
+  customer: { id: string; name: string; objectType: string; address: string | null; city: string | null }
+  contact: { id: string; displayName: string; type: string; specialtyName: string | null } | null
+  evidencePhoto: FieldCommitmentEvidence | null
+  evidenceClientPhotoId?: string | null
+  fulfillment: FieldCommitmentFulfillment | null
+  syncState?: "PENDING" | "CONFLICT" | "REJECTED"
+}
+
+export interface FieldCommitmentsData {
+  commitments: FieldCommitment[]
+  capabilities: { create: boolean; fulfillOwn: boolean }
+}
+
 export interface FieldKpiRatio {
   numerator: number
   denominator: number
@@ -934,6 +986,70 @@ export function parseFieldAgentTasks(value: unknown): FieldAgentTasksData {
     throw new FieldContractError("mobile agent tasks")
   }
   return data as unknown as FieldAgentTasksData
+}
+
+function validCommitmentEvidence(value: unknown): boolean {
+  const evidence = value == null ? null : record(value)
+  return evidence == null || Boolean(
+    string(evidence.id) &&
+    string(evidence.url) &&
+    (evidence.thumbnailUrl == null || string(evidence.thumbnailUrl)) &&
+    string(evidence.status),
+  )
+}
+
+function validCommitment(value: unknown): boolean {
+  const item = record(value)
+  const customer = record(item?.customer)
+  const contact = item?.contact == null ? null : record(item.contact)
+  const fulfillment = item?.fulfillment == null ? null : record(item.fulfillment)
+  return Boolean(
+    item &&
+      string(item.id) &&
+      string(item.clientCommitmentId) &&
+      (item.visitId == null || string(item.visitId)) &&
+      string(item.customerId) &&
+      (item.contactId == null || string(item.contactId)) &&
+      (item.productExternalId == null || string(item.productExternalId)) &&
+      string(item.productName) &&
+      (item.brandExternalId == null || string(item.brandExternalId)) &&
+      (item.brandName == null || string(item.brandName)) &&
+      number(item.promisedQuantity) && item.promisedQuantity > 0 &&
+      string(item.unit) &&
+      timestamp(item.dueAt) &&
+      (item.note == null || typeof item.note === "string") &&
+      timestamp(item.submittedAt) &&
+      ["OPEN", "OVERDUE", "FULFILLED", "PARTIAL", "NOT_FULFILLED"].includes(String(item.status)) &&
+      customer && string(customer.id) && string(customer.name) && string(customer.objectType) &&
+      (!contact || (string(contact.id) && string(contact.displayName) && string(contact.type))) &&
+      validCommitmentEvidence(item.evidencePhoto) &&
+      (!fulfillment || (
+        string(fulfillment.id) &&
+        string(fulfillment.clientFulfillmentId) &&
+        ["FULFILLED", "PARTIAL", "NOT_FULFILLED"].includes(String(fulfillment.outcome)) &&
+        number(fulfillment.actualQuantity) && fulfillment.actualQuantity >= 0 &&
+        number(fulfillment.varianceQuantity) &&
+        (fulfillment.note == null || typeof fulfillment.note === "string") &&
+        timestamp(fulfillment.fulfilledAt) &&
+        validCommitmentEvidence(fulfillment.evidencePhoto)
+      )),
+  )
+}
+
+export function parseFieldCommitments(value: unknown): FieldCommitmentsData {
+  const data = validEnvelope(value)
+  const capabilities = record(data?.capabilities)
+  if (
+    !data ||
+    !Array.isArray(data.commitments) ||
+    !data.commitments.every(validCommitment) ||
+    !capabilities ||
+    !boolean(capabilities.create) ||
+    !boolean(capabilities.fulfillOwn)
+  ) {
+    throw new FieldContractError("mobile commitments")
+  }
+  return data as unknown as FieldCommitmentsData
 }
 
 function validKpiRatio(value: unknown): boolean {

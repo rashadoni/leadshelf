@@ -146,6 +146,17 @@ export default function ProfileTab() {
               </View>
             ))}
           </View>
+          {issueCount > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(app)/sync-center" as never)}
+              style={styles.recoveryButton}
+            >
+              <View style={styles.recoveryMark}><Text style={styles.recoveryMarkText}>!</Text></View>
+              <Text style={styles.recoveryText}>{t("syncCenterOpen")}</Text>
+              <Text style={styles.recoveryArrow}>›</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             disabled={running || syncing}
             onPress={() => void onSyncNow()}
@@ -244,6 +255,11 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 11, color: colors.muted },
   metricValue: { marginTop: 5, fontSize: 13, fontWeight: "800", color: colors.text },
   metricWarning: { color: colors.warning },
+  recoveryButton: { minHeight: 50, marginTop: 12, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, flexDirection: "row", alignItems: "center", gap: 9 },
+  recoveryMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  recoveryMarkText: { color: colors.dangerPressed, fontSize: 14, fontWeight: "900" },
+  recoveryText: { flex: 1, color: colors.dangerPressed, fontSize: 11, fontWeight: "900" },
+  recoveryArrow: { color: colors.dangerPressed, fontSize: 22 },
   syncPressed: { backgroundColor: colors.primaryPressed },
   syncDisabled: { backgroundColor: colors.disabled },
   syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },

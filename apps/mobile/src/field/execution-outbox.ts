@@ -120,6 +120,34 @@ export type FieldTaskEventPayload = {
   evidence?: Record<string, unknown> | null
 }
 
+export type FieldCommitmentCreatePayload = {
+  clientCommitmentId: string
+  visitId: string
+  customerId: string
+  customerName: string
+  customerType: string
+  contactId: string | null
+  contactName: string | null
+  productExternalId: string | null
+  productName: string
+  brandExternalId: string | null
+  brandName: string | null
+  promisedQuantity: number
+  unit: string
+  dueAt: string
+  note: string | null
+  evidenceClientPhotoId: string | null
+}
+
+export type FieldCommitmentFulfillPayload = {
+  commitmentId: string
+  clientFulfillmentId: string
+  outcome: "FULFILLED" | "PARTIAL" | "NOT_FULFILLED"
+  actualQuantity: number
+  note: string | null
+  evidenceClientPhotoId: string | null
+}
+
 export type FieldExecutionPushOperation = {
   clientOpId: string
   clientCreatedAt?: string
@@ -131,6 +159,8 @@ export type FieldExecutionPushOperation = {
   | { kind: "field.task.create"; payload: FieldTaskCreatePayload }
   | { kind: "field.task.update"; payload: FieldTaskUpdatePayload }
   | { kind: "field.task.event"; payload: FieldTaskEventPayload }
+  | { kind: "field.commitment.create"; payload: FieldCommitmentCreatePayload }
+  | { kind: "field.commitment.fulfill"; payload: FieldCommitmentFulfillPayload }
 )
 
 export type FieldVisitPhotoPushOperation = {
@@ -150,7 +180,7 @@ export type FieldLocationPushOperation = {
 export type FieldServerOperation = {
   operationId: string
   op: "create" | "update"
-  entity: "visits" | "visitActions" | "workdays" | "tasks" | "taskEvents"
+  entity: "visits" | "visitActions" | "workdays" | "tasks" | "taskEvents" | "commitments" | "commitmentFulfillments"
   data: Record<string, unknown>
   clientTimestamp: number
 }
@@ -370,6 +400,55 @@ export function parseFieldTaskEventPayload(value: unknown): FieldTaskEventPayloa
   return payload as unknown as FieldTaskEventPayload
 }
 
+function quantity(value: unknown, allowZero: boolean): value is number {
+  return finite(value) &&
+    (allowZero ? value >= 0 : value > 0) &&
+    value <= 1_000_000_000 &&
+    Math.abs(value * 100 - Math.round(value * 100)) <= 1e-7
+}
+
+function optionalText(value: unknown, max: number): boolean {
+  return value == null || (typeof value === "string" && value.trim().length <= max)
+}
+
+export function parseFieldCommitmentCreatePayload(value: unknown): FieldCommitmentCreatePayload {
+  const payload = record(value)
+  if (
+    !payload ||
+    !safeId(payload.clientCommitmentId) ||
+    !safeId(payload.visitId) ||
+    !safeId(payload.customerId) ||
+    !string(payload.customerName) || payload.customerName.trim().length > 200 ||
+    !string(payload.customerType) || payload.customerType.length > 40 ||
+    !(payload.contactId == null || safeId(payload.contactId)) ||
+    !optionalText(payload.contactName, 200) ||
+    !optionalText(payload.productExternalId, 128) ||
+    !string(payload.productName) || payload.productName.trim().length > 200 ||
+    !optionalText(payload.brandExternalId, 128) ||
+    !optionalText(payload.brandName, 200) ||
+    !quantity(payload.promisedQuantity, false) ||
+    !string(payload.unit) || payload.unit.trim().length > 40 ||
+    !parseDate(payload.dueAt) ||
+    !optionalText(payload.note, 2_000) ||
+    !(payload.evidenceClientPhotoId == null || safeId(payload.evidenceClientPhotoId))
+  ) throw new Error("Invalid field commitment create payload")
+  return payload as unknown as FieldCommitmentCreatePayload
+}
+
+export function parseFieldCommitmentFulfillPayload(value: unknown): FieldCommitmentFulfillPayload {
+  const payload = record(value)
+  if (
+    !payload ||
+    !safeId(payload.commitmentId) ||
+    !safeId(payload.clientFulfillmentId) ||
+    !["FULFILLED", "PARTIAL", "NOT_FULFILLED"].includes(String(payload.outcome)) ||
+    !quantity(payload.actualQuantity, true) ||
+    !optionalText(payload.note, 2_000) ||
+    !(payload.evidenceClientPhotoId == null || safeId(payload.evidenceClientPhotoId))
+  ) throw new Error("Invalid field commitment fulfillment payload")
+  return payload as unknown as FieldCommitmentFulfillPayload
+}
+
 export function isFieldExecutionPushOperation(
   operation: { kind: string },
 ): operation is FieldExecutionPushOperation {
@@ -379,7 +458,9 @@ export function isFieldExecutionPushOperation(
     operation.kind === "field.workday.event" ||
     operation.kind === "field.task.create" ||
     operation.kind === "field.task.update" ||
-    operation.kind === "field.task.event"
+    operation.kind === "field.task.event" ||
+    operation.kind === "field.commitment.create" ||
+    operation.kind === "field.commitment.fulfill"
 }
 
 export function isFieldVisitPhotoPushOperation(
@@ -435,6 +516,37 @@ export function toFieldServerOperation(operation: FieldExecutionPushOperation): 
       operationId: operation.clientOpId,
       op: "create",
       entity: "taskEvents",
+      clientTimestamp,
+      data: operation.payload,
+    }
+  }
+  if (operation.kind === "field.commitment.create") {
+    const payload = operation.payload
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "commitments",
+      clientTimestamp,
+      data: {
+        clientCommitmentId: payload.clientCommitmentId,
+        visitId: payload.visitId,
+        productExternalId: payload.productExternalId,
+        productName: payload.productName,
+        brandExternalId: payload.brandExternalId,
+        brandName: payload.brandName,
+        promisedQuantity: payload.promisedQuantity,
+        unit: payload.unit,
+        dueAt: payload.dueAt,
+        note: payload.note,
+        evidenceClientPhotoId: payload.evidenceClientPhotoId,
+      },
+    }
+  }
+  if (operation.kind === "field.commitment.fulfill") {
+    return {
+      operationId: operation.clientOpId,
+      op: "create",
+      entity: "commitmentFulfillments",
       clientTimestamp,
       data: operation.payload,
     }

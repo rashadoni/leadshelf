@@ -78,6 +78,10 @@ import {
   parseFieldTaskCreatePayload,
   parseFieldTaskEventPayload,
   parseFieldTaskUpdatePayload,
+  parseFieldCommitmentCreatePayload,
+  parseFieldCommitmentFulfillPayload,
+  type FieldCommitmentCreatePayload,
+  type FieldCommitmentFulfillPayload,
   type FieldLocationPayload,
   type FieldTaskCreatePayload,
   type FieldTaskEventPayload,
@@ -88,7 +92,12 @@ import {
   type FieldVisitUpdatePayload,
   type FieldWorkdayEventPayload,
 } from "../field/execution-outbox"
-import type { FieldAgentTasksData } from "../field/contracts"
+import type { FieldAgentTasksData, FieldCommitmentsData, FieldWorkdayData } from "../field/contracts"
+import {
+  FIELD_COMMITMENTS_CACHE_KEY,
+  projectFieldCommitments,
+  type FieldCommitmentProjectionOperation,
+} from "../field/commitment-cache"
 import {
   FIELD_AGENT_TASKS_CACHE_KEY,
   addOptimisticAgentTask,
@@ -709,6 +718,26 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.task.event",
             payload: parseFieldTaskEventPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.commitment.create") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.commitment.create",
+            payload: parseFieldCommitmentCreatePayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.commitment.fulfill") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.commitment.fulfill",
+            payload: parseFieldCommitmentFulfillPayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,
@@ -2319,11 +2348,105 @@ export function enqueueFieldVisitPhoto(
   input: FieldVisitPhotoPayload,
 ): { clientOpId: string } {
   const clientOpId = `field-photo-${Crypto.randomUUID()}`
+  insertFieldVisitPhotoOutbox(input, clientOpId)
+  return { clientOpId }
+}
+
+function insertFieldVisitPhotoOutbox(input: FieldVisitPhotoPayload, clientOpId: string): void {
+  const payload = parseFieldVisitPhotoPayload(input)
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
-    [clientOpId, "field.visit.photo", JSON.stringify(input), input.takenAt],
+    [clientOpId, "field.visit.photo", JSON.stringify(payload), payload.takenAt],
   )
-  return { clientOpId }
+}
+
+function fieldCommitmentOperations(): FieldCommitmentProjectionOperation[] {
+  const rows = db.getAllSync<{
+    clientOpId: string
+    kind: "field.commitment.create" | "field.commitment.fulfill"
+    payload: string
+    clientCreatedAt: string | null
+    status: "pending" | "applied" | "conflict" | "rejected"
+    detail: string | null
+  }>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, detail
+     FROM outbox_ops
+     WHERE kind IN ('field.commitment.create','field.commitment.fulfill')
+     ORDER BY clientCreatedAt, rowid`,
+  )
+  return rows.flatMap((row): FieldCommitmentProjectionOperation[] => {
+    try {
+      const rawPayload = JSON.parse(row.payload) as unknown
+      const base = {
+        clientOpId: row.clientOpId,
+        clientCreatedAt: row.clientCreatedAt ?? new Date(0).toISOString(),
+        status: row.status,
+        detail: row.detail ? JSON.parse(row.detail) as unknown : null,
+      }
+      return row.kind === "field.commitment.create"
+        ? [{ ...base, kind: row.kind, payload: parseFieldCommitmentCreatePayload(rawPayload) }]
+        : [{ ...base, kind: row.kind, payload: parseFieldCommitmentFulfillPayload(rawPayload) }]
+    } catch {
+      return []
+    }
+  })
+}
+
+export function readFieldCommitments(): FieldCommitmentsData {
+  const cached = readFieldCache<FieldCommitmentsData>(FIELD_COMMITMENTS_CACHE_KEY)?.value ?? null
+  return projectFieldCommitments(cached, fieldCommitmentOperations())
+}
+
+export function enqueueFieldCommitmentCreate(
+  input: Omit<FieldCommitmentCreatePayload, "clientCommitmentId" | "evidenceClientPhotoId">,
+  photo?: FieldVisitPhotoPayload | null,
+): { clientOpId: string; clientCommitmentId: string; photoClientOpId: string | null } {
+  if (photo && (photo.visitId !== input.visitId || photo.category !== "commitment-promise")) {
+    throw new Error("Commitment promise photo must belong to the active visit")
+  }
+  const clientCommitmentId = `commitment-${Crypto.randomUUID()}`
+  const clientOpId = `field-commitment-${Crypto.randomUUID()}`
+  const photoClientOpId = photo ? `field-photo-${Crypto.randomUUID()}` : null
+  const occurredAt = new Date().toISOString()
+  const payload = parseFieldCommitmentCreatePayload({
+    ...input,
+    clientCommitmentId,
+    evidenceClientPhotoId: photo?.clientPhotoId ?? null,
+  })
+  db.withTransactionSync(() => {
+    if (photo && photoClientOpId) insertFieldVisitPhotoOutbox(photo, photoClientOpId)
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.commitment.create", JSON.stringify(payload), occurredAt],
+    )
+  })
+  return { clientOpId, clientCommitmentId, photoClientOpId }
+}
+
+export function enqueueFieldCommitmentFulfill(
+  input: Omit<FieldCommitmentFulfillPayload, "clientFulfillmentId" | "evidenceClientPhotoId">,
+  photo?: FieldVisitPhotoPayload | null,
+): { clientOpId: string; clientFulfillmentId: string; photoClientOpId: string | null } {
+  if (photo?.category !== "commitment-fulfillment") {
+    if (photo) throw new Error("Commitment fact photo must use the fulfillment category")
+  }
+  const clientFulfillmentId = `fulfillment-${Crypto.randomUUID()}`
+  const clientOpId = `field-commitment-${Crypto.randomUUID()}`
+  const photoClientOpId = photo ? `field-photo-${Crypto.randomUUID()}` : null
+  const occurredAt = new Date().toISOString()
+  const payload = parseFieldCommitmentFulfillPayload({
+    ...input,
+    clientFulfillmentId,
+    evidenceClientPhotoId: photo?.clientPhotoId ?? null,
+  })
+  db.withTransactionSync(() => {
+    if (photo && photoClientOpId) insertFieldVisitPhotoOutbox(photo, photoClientOpId)
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.commitment.fulfill", JSON.stringify(payload), occurredAt],
+    )
+  })
+  return { clientOpId, clientFulfillmentId, photoClientOpId }
 }
 
 export function enqueueFieldWorkdayEvent(
@@ -2388,6 +2511,245 @@ export function fieldOutboxResult(clientOpId: string): {
     status: row.status as "pending" | "applied" | "conflict" | "rejected",
     detail: row.detail ? JSON.parse(row.detail) as unknown : null,
   }
+}
+
+export interface FieldSyncRecoveryEvidence {
+  clientPhotoId: string
+  fileUri: string
+  status: "pending" | "applied" | "conflict" | "rejected"
+  detail: unknown
+}
+
+export interface FieldSyncRecoveryRow {
+  clientOpId: string
+  kind: string
+  payload: Record<string, unknown>
+  clientCreatedAt: string
+  status: "conflict" | "rejected"
+  attempts: number
+  detail: unknown
+  evidence: FieldSyncRecoveryEvidence | null
+  canContinueWithoutEvidence: boolean
+}
+
+type FieldRecoveryDbRow = {
+  clientOpId: string
+  kind: string
+  payload: string
+  clientCreatedAt: string | null
+  status: "pending" | "applied" | "conflict" | "rejected"
+  attempts: number | null
+  detail: string | null
+}
+
+function parsedDetail(raw: string | null): unknown {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Failed field operations remain durable until the user explicitly retries.
+ * Evidence photo rows attached to a failed commitment are folded into that
+ * commitment card to avoid two recovery actions for one job.
+ */
+export function listFieldSyncRecoveryQueue(): FieldSyncRecoveryRow[] {
+  const failed = db.getAllSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops
+     WHERE kind LIKE 'field.%' AND status IN ('conflict','rejected')
+     ORDER BY clientCreatedAt, rowid`,
+  )
+  const photos = db.getAllSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops WHERE kind='field.visit.photo'`,
+  )
+  const photoById = new Map<string, FieldRecoveryDbRow>()
+  for (const photo of photos) {
+    try {
+      const payload = parseFieldVisitPhotoPayload(JSON.parse(photo.payload) as unknown)
+      photoById.set(payload.clientPhotoId, photo)
+    } catch {
+      // Keep malformed legacy operations visible as standalone rows below.
+    }
+  }
+  const attachedPhotoIds = new Set<string>()
+  for (const row of failed) {
+    if (row.kind !== "field.commitment.create" && row.kind !== "field.commitment.fulfill") continue
+    try {
+      const raw = parseJsonObject(row.payload)
+      const photoId = stringValue(raw.evidenceClientPhotoId)
+      if (photoId) attachedPhotoIds.add(photoId)
+    } catch {
+      // The malformed commitment itself remains in the recovery list.
+    }
+  }
+
+  return failed.flatMap((row): FieldSyncRecoveryRow[] => {
+    let payload: Record<string, unknown>
+    try {
+      payload = parseJsonObject(row.payload)
+    } catch {
+      payload = {}
+    }
+    if (row.kind === "field.visit.photo") {
+      const photoId = stringValue(payload.clientPhotoId)
+      if (photoId && attachedPhotoIds.has(photoId)) return []
+    }
+    const evidenceClientPhotoId = stringValue(payload.evidenceClientPhotoId)
+    const evidenceRow = evidenceClientPhotoId ? photoById.get(evidenceClientPhotoId) : null
+    let evidence: FieldSyncRecoveryEvidence | null = null
+    if (evidenceRow) {
+      try {
+        const photo = parseFieldVisitPhotoPayload(JSON.parse(evidenceRow.payload) as unknown)
+        evidence = {
+          clientPhotoId: photo.clientPhotoId,
+          fileUri: photo.fileUri,
+          status: evidenceRow.status,
+          detail: parsedDetail(evidenceRow.detail),
+        }
+      } catch {
+        evidence = null
+      }
+    }
+    return [{
+      clientOpId: row.clientOpId,
+      kind: row.kind,
+      payload,
+      clientCreatedAt: row.clientCreatedAt ?? new Date(0).toISOString(),
+      status: row.status === "conflict" ? "conflict" : "rejected",
+      attempts: row.attempts ?? 0,
+      detail: parsedDetail(row.detail),
+      evidence,
+      canContinueWithoutEvidence: Boolean(
+        evidenceClientPhotoId &&
+        (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill"),
+      ),
+    }]
+  })
+}
+
+function replaceOptimisticClientOpId(kind: string, previousId: string, nextId: string): void {
+  if (kind.startsWith("field.task.")) {
+    const cached = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
+    if (cached) {
+      writeFieldCache(FIELD_AGENT_TASKS_CACHE_KEY, {
+        ...cached.value,
+        tasks: cached.value.tasks.map((task) => ({
+          ...task,
+          events: task.events.map((event) => event.clientEventId !== previousId ? event : {
+            ...event,
+            id: event.id === previousId ? nextId : event.id,
+            clientEventId: nextId,
+          }),
+        })),
+      })
+    }
+  }
+  if (kind === "field.workday.event") {
+    const cached = readFieldCache<FieldWorkdayData>("field.workday.current")
+    if (cached?.value.workday) {
+      const events = cached.value.workday.events.map((event) => event.clientEventId !== previousId ? event : {
+        ...event,
+        id: event.id === previousId ? nextId : event.id,
+        clientEventId: nextId,
+      })
+      writeFieldCache("field.workday.current", {
+        ...cached.value,
+        workday: { ...cached.value.workday, events },
+      })
+    }
+  }
+}
+
+function renewFieldOutboxOperation(clientOpId: string, kind: string): string {
+  const nextId = `field-retry-${Crypto.randomUUID()}`
+  db.runSync(
+    `UPDATE outbox_ops
+     SET clientOpId=?, status='pending', attempts=0, detail=NULL
+     WHERE clientOpId=?`,
+    [nextId, clientOpId],
+  )
+  replaceOptimisticClientOpId(kind, clientOpId, nextId)
+  return nextId
+}
+
+export function retryFieldSyncOperation(clientOpId: string): { clientOpId: string } | null {
+  const row = db.getFirstSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops WHERE clientOpId=? AND kind LIKE 'field.%'
+       AND status IN ('conflict','rejected')`,
+    [clientOpId],
+  )
+  if (!row) return null
+  let nextId = clientOpId
+  db.withTransactionSync(() => {
+    if (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill") {
+      const payload = parseJsonObject(row.payload)
+      const evidenceClientPhotoId = stringValue(payload.evidenceClientPhotoId)
+      if (evidenceClientPhotoId) {
+        const photo = db.getFirstSync<{ clientOpId: string; status: string }>(
+          `SELECT clientOpId, status FROM outbox_ops
+           WHERE kind='field.visit.photo'
+             AND json_extract(payload, '$.clientPhotoId')=?
+           ORDER BY rowid DESC LIMIT 1`,
+          [evidenceClientPhotoId],
+        )
+        if (photo && (photo.status === "conflict" || photo.status === "rejected")) {
+          renewFieldOutboxOperation(photo.clientOpId, "field.visit.photo")
+        }
+      }
+    }
+    nextId = renewFieldOutboxOperation(row.clientOpId, row.kind)
+  })
+  return { clientOpId: nextId }
+}
+
+export function detachFieldCommitmentEvidence(clientOpId: string): {
+  clientOpId: string
+  fileUri: string | null
+} | null {
+  const row = db.getFirstSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops WHERE clientOpId=?
+       AND kind IN ('field.commitment.create','field.commitment.fulfill')
+       AND status IN ('conflict','rejected')`,
+    [clientOpId],
+  )
+  if (!row) return null
+  const payload = parseJsonObject(row.payload)
+  const evidenceClientPhotoId = stringValue(payload.evidenceClientPhotoId)
+  if (!evidenceClientPhotoId) return null
+  const photo = db.getFirstSync<{ clientOpId: string; payload: string; status: string }>(
+    `SELECT clientOpId, payload, status FROM outbox_ops
+     WHERE kind='field.visit.photo'
+       AND json_extract(payload, '$.clientPhotoId')=?
+     ORDER BY rowid DESC LIMIT 1`,
+    [evidenceClientPhotoId],
+  )
+  let fileUri: string | null = null
+  let nextId = clientOpId
+  db.withTransactionSync(() => {
+    if (photo && photo.status !== "applied") {
+      try {
+        fileUri = parseFieldVisitPhotoPayload(JSON.parse(photo.payload) as unknown).fileUri
+      } catch {
+        fileUri = null
+      }
+      db.runSync("DELETE FROM outbox_ops WHERE clientOpId=?", [photo.clientOpId])
+    }
+    nextId = `field-retry-${Crypto.randomUUID()}`
+    db.runSync(
+      `UPDATE outbox_ops
+       SET clientOpId=?, payload=?, status='pending', attempts=0, detail=NULL
+       WHERE clientOpId=?`,
+      [nextId, JSON.stringify({ ...payload, evidenceClientPhotoId: null }), row.clientOpId],
+    )
+  })
+  return { clientOpId: nextId, fileUri }
 }
 
 export function fieldRouteOutboxResult(clientOpId: string): {

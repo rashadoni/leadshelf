@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  parseFieldCommitmentCreatePayload,
+  parseFieldCommitmentFulfillPayload,
   parseFieldLocationPayload,
   parseFieldTaskCreatePayload,
   parseFieldTaskEventPayload,
@@ -125,6 +127,104 @@ describe("field execution outbox", () => {
     expect(toFieldServerOperation(create)).toMatchObject({ op: "create", entity: "tasks", data: { id: "field-task-1", title: "Call clinic" } })
     expect(toFieldServerOperation(update)).toMatchObject({ op: "update", entity: "tasks", data: { id: "field-task-1", expectedVersion: 1, status: "IN_PROGRESS" } })
     expect(toFieldServerOperation(comment)).toMatchObject({ op: "create", entity: "taskEvents", data: { taskId: "field-task-1", type: "COMMENTED" } })
+  })
+
+  it("validates promise and fact quantities with at most two decimals", () => {
+    const promise = parseFieldCommitmentCreatePayload({
+      clientCommitmentId: "commitment-client-1",
+      visitId: "field-visit-1",
+      customerId: "clinic-1",
+      customerName: "New Clinic",
+      customerType: "CLINIC",
+      contactId: "doctor-1",
+      contactName: "Dr Aliyev",
+      productExternalId: "sku-acc-200",
+      productName: "ACC 200 mg",
+      brandExternalId: "brand-acc",
+      brandName: "ACC",
+      promisedQuantity: 10.25,
+      unit: "packs",
+      dueAt: "2026-07-20T18:00:00.000Z",
+      note: "Promise captured during the visit",
+      evidenceClientPhotoId: "commitment-photo-1",
+    })
+    const fact = parseFieldCommitmentFulfillPayload({
+      commitmentId: "commitment-server-1",
+      clientFulfillmentId: "fulfillment-client-1",
+      outcome: "PARTIAL",
+      actualQuantity: 4.5,
+      note: null,
+      evidenceClientPhotoId: null,
+    })
+
+    expect(promise.promisedQuantity).toBe(10.25)
+    expect(fact).toMatchObject({ outcome: "PARTIAL", actualQuantity: 4.5 })
+    expect(() => parseFieldCommitmentCreatePayload({ ...promise, promisedQuantity: 10.125 })).toThrow()
+    expect(() => parseFieldCommitmentFulfillPayload({ ...fact, actualQuantity: -1 })).toThrow()
+  })
+
+  it("maps immutable commitment promise and fact events without local display context", () => {
+    const promise: FieldExecutionPushOperation = {
+      clientOpId: "field-commitment-create-1",
+      clientCreatedAt: "2026-07-16T08:00:00.000Z",
+      kind: "field.commitment.create",
+      payload: parseFieldCommitmentCreatePayload({
+        clientCommitmentId: "commitment-client-1",
+        visitId: "field-visit-1",
+        customerId: "clinic-1",
+        customerName: "New Clinic",
+        customerType: "CLINIC",
+        contactId: "doctor-1",
+        contactName: "Dr Aliyev",
+        productExternalId: "sku-acc-200",
+        productName: "ACC 200 mg",
+        brandExternalId: "brand-acc",
+        brandName: "ACC",
+        promisedQuantity: 10,
+        unit: "packs",
+        dueAt: "2026-07-20T18:00:00.000Z",
+        note: null,
+        evidenceClientPhotoId: null,
+      }),
+    }
+    const fact: FieldExecutionPushOperation = {
+      clientOpId: "field-commitment-fulfill-1",
+      clientCreatedAt: "2026-07-20T09:00:00.000Z",
+      kind: "field.commitment.fulfill",
+      payload: parseFieldCommitmentFulfillPayload({
+        commitmentId: "commitment-server-1",
+        clientFulfillmentId: "fulfillment-client-1",
+        outcome: "FULFILLED",
+        actualQuantity: 10,
+        note: "Delivered",
+        evidenceClientPhotoId: null,
+      }),
+    }
+
+    expect(toFieldServerOperation(promise)).toEqual({
+      operationId: "field-commitment-create-1",
+      op: "create",
+      entity: "commitments",
+      clientTimestamp: new Date("2026-07-16T08:00:00.000Z").getTime(),
+      data: {
+        clientCommitmentId: "commitment-client-1",
+        visitId: "field-visit-1",
+        productExternalId: "sku-acc-200",
+        productName: "ACC 200 mg",
+        brandExternalId: "brand-acc",
+        brandName: "ACC",
+        promisedQuantity: 10,
+        unit: "packs",
+        dueAt: "2026-07-20T18:00:00.000Z",
+        note: null,
+        evidenceClientPhotoId: null,
+      },
+    })
+    expect(toFieldServerOperation(fact)).toMatchObject({
+      op: "create",
+      entity: "commitmentFulfillments",
+      data: { commitmentId: "commitment-server-1", clientFulfillmentId: "fulfillment-client-1" },
+    })
   })
 
   it("validates replay-safe locations and classifies deterministic GPS conflicts", async () => {

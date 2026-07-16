@@ -18,6 +18,19 @@ export async function persistAndQueueFieldVisitPhoto(input: {
   longitude: number | null
   takenAt: string
 }): Promise<{ clientOpId: string; payload: FieldVisitPhotoPayload }> {
+  const payload = await persistFieldVisitPhoto(input)
+  return { ...enqueueFieldVisitPhoto(payload), payload }
+}
+
+export async function persistFieldVisitPhoto(input: {
+  visitId: string
+  agentId: string
+  sourceUri: string
+  category?: string | null
+  latitude: number | null
+  longitude: number | null
+  takenAt: string
+}): Promise<FieldVisitPhotoPayload> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {})
   const clientPhotoId = `mobile-photo-${Crypto.randomUUID()}`
   const fileUri = `${DIR}${clientPhotoId}.jpg`
@@ -32,5 +45,9 @@ export async function persistAndQueueFieldVisitPhoto(input: {
     longitude: input.longitude,
     takenAt: input.takenAt,
   }
-  return { ...enqueueFieldVisitPhoto(payload), payload }
+  return payload
+}
+
+export async function discardFieldVisitPhotoFile(fileUri: string): Promise<void> {
+  await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {})
 }

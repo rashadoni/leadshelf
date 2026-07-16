@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   FieldContractError,
   parseFieldContactDetail,
+  parseFieldCommitments,
   parseFieldAgentTasks,
   parseFieldContacts,
   parseFieldCustomerRequest,
@@ -36,6 +37,49 @@ function day(date: string) {
 }
 
 describe("LeadDrive field contracts", () => {
+  it("accepts immutable commitment promise-vs-fact rows", () => {
+    const data = parseFieldCommitments({
+      success: true,
+      data: {
+        capabilities: { create: true, fulfillOwn: true },
+        commitments: [{
+          id: "commitment-1",
+          clientCommitmentId: "client-commitment-1",
+          visitId: "visit-1",
+          customerId: "customer-1",
+          contactId: null,
+          productExternalId: "sku-1",
+          productName: "ACC 200 mg",
+          brandExternalId: null,
+          brandName: "ACC",
+          promisedQuantity: 10,
+          unit: "packs",
+          dueAt: "2026-07-20T18:00:00.000Z",
+          note: null,
+          submittedAt: "2026-07-16T08:00:00.000Z",
+          status: "PARTIAL",
+          customer: { id: "customer-1", name: "Clinic", objectType: "CLINIC", address: null, city: "Baku" },
+          contact: null,
+          evidencePhoto: null,
+          fulfillment: {
+            id: "fact-1",
+            clientFulfillmentId: "client-fact-1",
+            outcome: "PARTIAL",
+            actualQuantity: 4,
+            varianceQuantity: -6,
+            note: "Four packs",
+            fulfilledAt: "2026-07-20T10:00:00.000Z",
+            evidencePhoto: null,
+          },
+        }],
+      },
+    })
+    expect(data.commitments[0]).toMatchObject({
+      status: "PARTIAL",
+      fulfillment: { varianceQuantity: -6 },
+    })
+  })
+
   it("accepts auditable personal KPI and commercial source metrics", () => {
     const metric = { numerator: 1, denominator: 2, percentage: 50 }
     const coverage = { ...metric, uncovered: [{

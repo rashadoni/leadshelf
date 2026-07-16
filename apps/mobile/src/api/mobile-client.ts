@@ -32,6 +32,7 @@ import {
 } from "../field/execution-outbox"
 import {
   parseFieldProfile,
+  parseFieldCommitments,
   parseFieldAgentTasks,
   parseFieldPersonalKpi,
   parseFieldNotifications,
@@ -52,6 +53,7 @@ import {
   type FieldCustomerRequestsData,
   type FieldAgentProfile,
   type FieldProfileData,
+  type FieldCommitmentsData,
   type FieldAgentTasksData,
   type FieldPersonalKpiData,
   type FieldNotificationsData,
@@ -188,6 +190,9 @@ export const fieldApi = {
   agentTasks: (query = "") =>
     request<unknown>(`/api/v1/mtm/mobile/tasks${query ? `?${query}` : ""}`)
       .then(parseFieldAgentTasks),
+  commitments: (scope: "open" | "all" = "all") =>
+    request<unknown>(`/api/v1/mtm/mobile/commitments?scope=${scope}`)
+      .then(parseFieldCommitments),
   personalKpi: (period: "week" | "month", anchor?: string) => {
     const query = new URLSearchParams({ period })
     if (anchor) query.set("anchor", anchor)
@@ -309,6 +314,7 @@ export const fieldApi = {
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
   agentTasks(query?: string): Promise<FieldAgentTasksData>
+  commitments(scope?: "open" | "all"): Promise<FieldCommitmentsData>
   personalKpi(period: "week" | "month", anchor?: string): Promise<FieldPersonalKpiData>
   notifications(): Promise<FieldNotificationsData>
   workday(date?: string): Promise<FieldWorkdayData>
@@ -382,7 +388,11 @@ export const syncApi: SyncApi = {
       } else if (isFieldVisitPhotoPushOperation(operation)) {
         const result = await sendFieldVisitPhotoOperation(operation, { upload: fieldApi.uploadVisitPhoto })
         results.push(result)
-        await FileSystem.deleteAsync(operation.payload.fileUri, { idempotent: true }).catch(() => {})
+        // Keep failed evidence on-device so the recovery center can retry it
+        // or explicitly detach it from the still-unapplied business event.
+        if (result.status === "applied") {
+          await FileSystem.deleteAsync(operation.payload.fileUri, { idempotent: true }).catch(() => {})
+        }
       } else {
         shelfOperations.push(operation)
       }

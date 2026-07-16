@@ -1,7 +1,8 @@
+import { useCallback, useState } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router } from "expo-router"
+import { router, useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { countOpenTasks } from "../../../src/db/local-store"
+import { countOpenTasks, readFieldCommitments } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -20,6 +21,12 @@ export default function WorkTab() {
   useLocale()
   const field = useField()
   const shelfOpenTasks = countOpenTasks()
+  const [openCommitments, setOpenCommitments] = useState(() => (
+    readFieldCommitments().commitments.filter((item) => !item.fulfillment).length
+  ))
+  useFocusEffect(useCallback(() => {
+    setOpenCommitments(readFieldCommitments().commitments.filter((item) => !item.fulfillment).length)
+  }, []))
   const agentOpenTasks = field.agentTasks?.tasks.filter((task) => (
     task.status !== "COMPLETED" && task.status !== "CANCELLED"
   )).length ?? 0
@@ -30,6 +37,7 @@ export default function WorkTab() {
     { label: t("moduleContacts"), hint: t("contactsSearch"), glyph: "◎", href: "/(app)/contacts", background: colors.holidayBg, color: colors.holiday },
     { label: t("myCustomerRequests"), hint: t("newCustomerHint"), glyph: "+", href: "/(app)/customer-requests", background: colors.warningBg, color: colors.warning },
     { label: t("agentTasksTitle"), hint: t("agentTasksHint"), glyph: "✓", href: "/(app)/field-tasks", background: colors.warningBg, color: colors.warning, badge: agentOpenTasks },
+    { label: t("commitmentsTitle"), hint: t("commitmentsHint"), glyph: "◇", href: "/(app)/commitments", background: colors.holidayBg, color: colors.holiday, badge: openCommitments },
     { label: t("shelfTasksTitle"), hint: t("shelfTasksHint"), glyph: "▦", href: "/(app)/(tabs)/tasks", background: colors.infoBg, color: colors.info, badge: shelfOpenTasks },
     { label: t("commercialCenterTitle"), hint: t("commercialCenterHint"), glyph: "₼", href: "/(app)/commercial", background: colors.successBg, color: colors.successDark },
     { label: t("tabOrders"), hint: t("selectedOrderSummary"), glyph: "▤", href: "/(app)/(tabs)/orders", background: colors.successBg, color: colors.successDark },
