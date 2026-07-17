@@ -1,6 +1,6 @@
 # Agent Mobile v2 — LeadShelf integration boundary
 
-Status: confirmed owner scope, implementation in progress  
+Status: confirmed owner scope, implementation in progress
 Date: 2026-07-15
 
 ## Decision
