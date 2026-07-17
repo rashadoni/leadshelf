@@ -1,329 +1,161 @@
-// Главная вкладка «Маршрут»: приветствие, маршрут на сегодня, активный визит.
-// Дизайн — по образцу владельца (индиго-хедер, карточки, зелёная карточка визита).
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, Vibration, View } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import * as Crypto from "expo-crypto"
-import { router, useFocusEffect } from "expo-router"
-import Svg, { Circle, Path } from "react-native-svg"
-import { SyncBar } from "../../../src/components/SyncBar"
-import { SectionHint } from "../../../src/components/SectionHint"
+import { useCallback, useMemo, useState } from "react"
 import {
-  enqueueVisitCheckIn,
-  enqueueVisitCheckOut,
-  getStore,
-  listRoutes,
-  listTasks,
-  listVisits,
-} from "../../../src/db/local-store"
-import { getCurrentDeviceLocation } from "../../../src/location/device-location"
-import type { RouteRow, TaskRow, VisitRow } from "../../../src/sync/ports"
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native"
+import { router, useFocusEffect } from "expo-router"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { countOpenTasks, listVisits } from "../../../src/db/local-store"
+import { useField } from "../../../src/field/field-context"
+import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
+import { formatLongDate } from "../../../src/i18n/date-format"
+import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
-import { t, type MessageKey, useLocale } from "../../../src/i18n"
-import { formatLongDate, minutesBetween } from "../../../src/i18n/date-format"
-import { tokenStore } from "../../../src/auth/token-store"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
-function isLocalVisit(visit: VisitRow | undefined): boolean {
-  return Boolean(visit?.id.startsWith("local-"))
+const toneStyles: Record<RouteStatusTone, { bg: string; border: string; text: string }> = {
+  draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
+  planned: { bg: colors.infoBg, border: colors.infoBorder, text: colors.info },
+  inProgress: { bg: colors.warningBg, border: "#F6D788", text: colors.warning },
+  completed: { bg: colors.successBg, border: colors.successBorder, text: colors.successDark },
+  cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
+  missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed },
 }
 
-function EmptyPin() {
-  return (
-    <Svg width={72} height={72} viewBox="0 0 72 72" fill="none">
-      <Circle cx={36} cy={36} r={34} fill={colors.primarySoft} />
-      <Path
-        d="M36 22c-5 0-9 4-9 9 0 6.4 9 17 9 17s9-10.6 9-17c0-5-4-9-9-9Z"
-        fill={colors.danger}
-      />
-      <Circle cx={36} cy={31} r={3.4} fill={colors.headerText} />
-    </Svg>
-  )
-}
-
-function RouteCardSkeleton() {
-  return (
-    <View style={[styles.card, styles.skeletonCard]}>
-      <View style={[styles.skeletonLine, styles.skeletonTitle]} />
-      {[0, 1, 2].map((row) => (
-        <View key={row} style={styles.skeletonRow}>
-          <View style={styles.skeletonDot} />
-          <View style={styles.skeletonBody}>
-            <View style={[styles.skeletonLine, styles.skeletonStore]} />
-            <View style={[styles.skeletonLine, styles.skeletonMeta]} />
-          </View>
-          <View style={styles.skeletonButton} />
-        </View>
-      ))}
-    </View>
-  )
-}
-
-export default function RouteTab() {
+export default function TodayTab() {
   const locale = useLocale()
-  const { status, sync } = useSync()
-  const [userName, setUserName] = useState<string | null>(null)
-  const [routes, setRoutes] = useState<RouteRow[]>([])
-  const [visits, setVisits] = useState<VisitRow[]>([])
-  const [tasks, setTasks] = useState<TaskRow[]>([])
-  const [refreshing, setRefreshing] = useState(false)
-  const [now, setNow] = useState(() => new Date())
+  const field = useField()
+  const shelf = useSync()
+  const [localOpenTasks, setLocalOpenTasks] = useState(0)
+  const [localVisits, setLocalVisits] = useState(0)
 
-  const reload = useCallback(() => {
-    setRoutes(listRoutes())
-    setVisits(listVisits())
-    setTasks(listTasks())
-    setNow(new Date())
+  const reloadLocal = useCallback(() => {
+    setLocalOpenTasks(countOpenTasks())
+    setLocalVisits(listVisits().length)
   }, [])
-  useFocusEffect(reload)
+  useFocusEffect(reloadLocal)
 
-  useEffect(() => {
-    void tokenStore.getUserName().then((name) => setUserName(name))
-  }, [])
-
-  useEffect(() => {
-    if (status.phase !== "idle") return
-    reload()
-  }, [reload, status.lastSyncAt, status.phase])
-
-  // «N мин прошло» у активного визита тикает раз в минуту
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  const tasksByStore = useMemo(() => {
-    const map = new Map<string, TaskRow[]>()
-    for (const task of tasks) {
-      const storeTasks = map.get(task.storeId) ?? []
-      storeTasks.push(task)
-      map.set(task.storeId, storeTasks)
-    }
-    return map
-  }, [tasks])
-
-  const activeVisit = useMemo(
-    () => visits.find((visit) => visit.status === "IN_PROGRESS"),
-    [visits],
+  const today = useMemo(
+    () => field.week?.days.find((day) => day.isToday) ?? null,
+    [field.week],
   )
-  const activeVisitStore = activeVisit ? getStore(activeVisit.storeId) : null
+  const summary = field.profile?.todaySummary
+  const shelfRunning = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(shelf.status.phase)
+  const refreshing = field.phase === "refreshing" || shelfRunning
 
   async function onRefresh() {
-    setRefreshing(true)
-    await sync()
-    reload()
-    setRefreshing(false)
+    await Promise.all([field.refresh(), shelf.sync()])
+    reloadLocal()
   }
 
-  async function checkIn(route: RouteRow, stopId: string, storeId: string) {
-    if (!route.agentId) return
-    const store = getStore(storeId)
-    if (store?.latitude == null || store.longitude == null) return
-    let deviceLocation
-    try {
-      deviceLocation = await getCurrentDeviceLocation()
-    } catch {
-      Alert.alert(t("locationUnavailable"))
-      return
-    }
-    if (!deviceLocation) {
-      Alert.alert(t("locationPermissionDenied"))
-      return
-    }
-    enqueueVisitCheckIn({
-      clientOpId: `op-${Crypto.randomUUID()}`,
-      agentId: route.agentId,
-      storeId,
-      routeStopId: stopId,
-      latitude: deviceLocation.latitude,
-      longitude: deviceLocation.longitude,
-    })
-    Vibration.vibrate(40)
-    reload()
-    void sync()
-  }
-
-  function checkOut(visit: VisitRow) {
-    enqueueVisitCheckOut({
-      clientOpId: `op-${Crypto.randomUUID()}`,
-      visitId: visit.id,
-    })
-    Vibration.vibrate(60)
-    reload()
-    void sync()
-  }
-
-  const activeVisitIsLocal = isLocalVisit(activeVisit)
-  const firstSyncLoading =
-    status.lastSyncAt === null &&
-    status.phase !== "offline" &&
-    status.phase !== "error" &&
-    status.phase !== "upgradeRequired"
-  const showRouteSkeleton = routes.length === 0 && (refreshing || firstSyncLoading)
+  const routePoints = summary?.routePoints ?? today?.routes.reduce((sum, route) => sum + route.totalPoints, 0) ?? 0
+  const visitedPoints = summary?.routeVisited ?? today?.routes.reduce((sum, route) => sum + route.visitedPoints, 0) ?? 0
+  const progress = routePoints > 0 ? Math.min(100, Math.round((visitedPoints / routePoints) * 100)) : 0
+  const metrics = [
+    { value: String(summary?.visits ?? localVisits), label: t("statVisitsToday") },
+    { value: String(summary?.tasksCompleted ?? 0), label: t("statDoneTasks") },
+    { value: String(localOpenTasks), label: t("statOpenTasks") },
+    { value: String(shelf.status.pendingOps + shelf.status.pendingPhotos), label: t("statPendingSync") },
+  ]
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.headerText} />}
       >
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>
-            {t("greeting")}{userName ? `, ${userName}` : ""}!
-          </Text>
-          <Text style={styles.heroDate}>{formatLongDate(now, locale)}</Text>
+          <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
+          <Text style={styles.heroTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
+          <Text style={styles.heroDate}>{formatLongDate(new Date(), locale)}</Text>
         </View>
 
-        <SyncBar />
-        <SectionHint section="route" icon="route" titleKey="routeHintTitle" bodyKey="routeHintBody" />
+        {field.phase === "stale" || field.phase === "error" ? (
+          <View style={[styles.notice, field.phase === "error" && styles.noticeError]}>
+            <View style={styles.noticeBody}>
+              <Text style={styles.noticeTitle}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
+              {field.lastUpdatedAt ? <Text style={styles.noticeMeta}>{new Date(field.lastUpdatedAt).toLocaleTimeString()}</Text> : null}
+            </View>
+            <Pressable onPress={() => void field.refresh()} style={styles.noticeAction}>
+              <Text style={styles.noticeActionText}>{t("refresh")}</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-        {showRouteSkeleton ? (
-          <View style={styles.skeletonList}>
-            <RouteCardSkeleton />
-            <RouteCardSkeleton />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t("todayOverview")}</Text>
+        </View>
+        <View style={styles.metrics}>
+          {metrics.map((metric) => (
+            <View key={metric.label} style={styles.metricCard}>
+              <Text style={styles.metricValue}>{metric.value}</Text>
+              <Text style={styles.metricLabel}>{metric.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.progressHeader}>
+            <View>
+              <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
+              <Text style={styles.cardMeta}>{visitedPoints} / {routePoints} {t("routeVisitedLabel")}</Text>
+            </View>
+            <Text style={styles.progressValue}>{progress}%</Text>
           </View>
-        ) : routes.length === 0 ? (
-          <View style={[styles.card, styles.emptyCard]}>
-            <EmptyPin />
-            <Text style={styles.emptyTitle}>{t("noRouteToday")}</Text>
-            <Text style={styles.emptyHint}>{t("noRouteTodayHint")}</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
-        ) : (
-          routes.map((route) => (
-            <View key={route.id} style={styles.card}>
-              <View style={styles.routeHeader}>
-                <Text style={styles.routeTitle}>{route.name}</Text>
-                <Text style={styles.routeMeta}>
-                  {route.stops.length} {t("routeStops")}
-                </Text>
-              </View>
-              {route.stops.length === 0 ? (
-                <Text style={styles.emptyStop}>{t("noRouteStops")}</Text>
-              ) : null}
-              {route.stops.map((stop) => {
-                const store = getStore(stop.storeId)
-                const stopTasks = tasksByStore.get(stop.storeId) ?? []
-                const stopVisits = visits.filter((visit) => visit.routeStopId === stop.id)
-                const stopActive = stopVisits.find((visit) => visit.status === "IN_PROGRESS")
-                const completedVisit = stopVisits.find((visit) => visit.status === "COMPLETED")
-                const stopActiveIsLocal = isLocalVisit(stopActive)
-                const canCheckIn = Boolean(route.agentId && store?.latitude != null && store.longitude != null)
-                const disabled = stopActive
-                  ? stopActiveIsLocal
-                  : !canCheckIn || Boolean(completedVisit)
-                const disabledReason = !route.agentId
-                  ? t("missingRouteAgent")
-                  : store?.latitude == null || store.longitude == null
-                    ? t("missingStoreGeo")
-                    : null
-                const plannedAt = stop.plannedAt ? stop.plannedAt.slice(11, 16) : null
+
+          {today?.routes.length ? (
+            <View style={styles.routeList}>
+              {today.routes.map((route) => {
+                const meta = routeStatusMeta(route.effectiveStatus)
+                const tone = toneStyles[meta.tone]
                 return (
-                  <View key={stop.id} style={styles.stop}>
-                    <View style={styles.stopBody}>
-                      <Text style={styles.stopTitle}>
-                        {stop.sortOrder}. {store?.name ?? stop.storeId}
-                      </Text>
-                      <Text style={styles.meta}>
-                        {stopTasks.length} {t("tasksAtStore")}
-                        {plannedAt ? ` · ${plannedAt}` : ""}
-                        {store?.address ? ` · ${store.address}` : ""}
-                      </Text>
-                      {stopActiveIsLocal ? (
-                        <Text style={styles.visitMeta}>{t("visitWaitingSync")}</Text>
-                      ) : stopActive ? (
-                        <Text style={styles.visitMeta}>{t("visitInProgress")}</Text>
-                      ) : completedVisit ? (
-                        <Text style={styles.visitMeta}>{t("visitCompleted")}</Text>
-                      ) : disabledReason ? (
-                        <Text style={styles.warningMeta}>{disabledReason}</Text>
-                      ) : null}
-                      {stopTasks.length > 0 ? (
-                        <View style={styles.stopTasks}>
-                          {stopTasks.slice(0, 4).map((task) => (
-                            <Pressable
-                              key={task.id}
-                              onPress={() => router.push(`/(app)/tasks/${task.id}` as never)}
-                              style={styles.stopTask}
-                            >
-                              <View style={styles.stopTaskBody}>
-                                <Text style={styles.stopTaskTitle} numberOfLines={1}>
-                                  {task.title}
-                                </Text>
-                                <Text style={styles.stopTaskMeta}>
-                                  {t("agentTask")} · {t(`status_${task.status}` as MessageKey)}
-                                </Text>
-                              </View>
-                              <Text style={styles.openTask}>{t("openTask")}</Text>
-                            </Pressable>
-                          ))}
-                          {stopTasks.length > 4 ? (
-                            <Text style={styles.moreTasks}>
-                              +{stopTasks.length - 4} {t("moreTasks")}
-                            </Text>
-                          ) : null}
-                        </View>
-                      ) : (
-                        <Text style={styles.noTasksAtStop}>{t("noTasksAtStop")}</Text>
-                      )}
+                  <View key={route.id} style={styles.routeRow}>
+                    <View style={styles.routeBody}>
+                      <Text style={styles.routeName}>{route.name ?? t("tabRoute")}</Text>
+                      <Text style={styles.routeMeta}>{route.totalPoints} {t("routePointsLabel")} · {route.visitedPoints} {t("routeVisitedLabel")}</Text>
                     </View>
-                    <Pressable
-                      disabled={disabled}
-                      onPress={() => (stopActive ? checkOut(stopActive) : checkIn(route, stop.id, stop.storeId))}
-                      style={[styles.button, stopActive && styles.checkoutButton, disabled && styles.buttonDisabled]}
-                    >
-                      <Text style={styles.buttonText}>
-                        {stopActiveIsLocal
-                          ? t("queued")
-                          : stopActive
-                            ? t("checkOut")
-                            : completedVisit
-                              ? t("visitCompletedShort")
-                              : t("checkIn")}
-                      </Text>
-                    </Pressable>
+                    <View style={[styles.statusPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+                      <Text style={[styles.statusText, { color: tone.text }]}>{t(meta.labelKey)}</Text>
+                    </View>
                   </View>
                 )
               })}
             </View>
-          ))
-        )}
+          ) : (
+            <Text style={styles.emptyText}>{t("noRouteToday")}</Text>
+          )}
+          <Pressable onPress={() => router.push("/(app)/(tabs)/week" as never)} style={styles.primaryAction}>
+            <Text style={styles.primaryActionText}>{t("openRoute")}</Text>
+          </Pressable>
+        </View>
 
-        {activeVisit && activeVisitStore ? (
-          <View style={styles.activeVisitCard}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
+        </View>
+        <View style={styles.quickGrid}>
+          {[
+            [t("tabRoute"), "/(app)/routes", colors.infoBg, colors.info],
+            [t("tabTasks"), "/(app)/(tabs)/tasks", colors.warningBg, colors.warning],
+            [t("tabOrders"), "/(app)/(tabs)/orders", colors.successBg, colors.successDark],
+            [t("tabPlanograms"), "/(app)/(tabs)/planograms", colors.holidayBg, colors.holiday],
+          ].map(([label, href, backgroundColor, color]) => (
             <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/(app)/(tabs)/visit" as never)}
-              style={({ pressed }) => [styles.activeVisitBody, pressed && styles.activeVisitBodyPressed]}
+              key={label}
+              onPress={() => router.push(href as never)}
+              style={({ pressed }) => [styles.quickCard, { backgroundColor }, pressed && styles.pressed]}
             >
-              <View style={styles.activeVisitLabelRow}>
-                <View style={styles.activeDot} />
-                <Text style={styles.activeVisitLabel}>{t("nowAt")}</Text>
-              </View>
-              <Text style={styles.activeVisitStore} numberOfLines={1}>
-                {activeVisitStore.name}
-              </Text>
-              <Text style={styles.activeVisitMeta}>
-                {activeVisit.checkInAt
-                  ? `${minutesBetween(activeVisit.checkInAt, now)} ${t("minutesElapsed")}`
-                  : t("visitInProgress")}
-              </Text>
-              <Text style={styles.openVisit}>{t("openVisit")}</Text>
+              <Text style={[styles.quickText, { color }]}>{label}</Text>
+              <Text style={[styles.quickArrow, { color }]}>→</Text>
             </Pressable>
-            <Pressable
-              disabled={activeVisitIsLocal}
-              onPress={() => checkOut(activeVisit)}
-              style={({ pressed }) => [
-                styles.finishButton,
-                pressed && styles.finishButtonPressed,
-                activeVisitIsLocal && styles.buttonDisabled,
-              ]}
-            >
-              <Text style={styles.finishButtonText}>
-                {activeVisitIsLocal ? t("queued") : t("finishVisit")}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -331,109 +163,44 @@ export default function RouteTab() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary },
-  scroll: { backgroundColor: colors.bg, minHeight: "100%", paddingBottom: 24 },
-  hero: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 26,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-  },
-  heroTitle: { color: colors.headerText, fontSize: 26, fontWeight: "800" },
+  scroll: { minHeight: "100%", backgroundColor: colors.bg, paddingBottom: 28 },
+  hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 28, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  eyebrow: { color: colors.headerSubtext, fontSize: 11, fontWeight: "800", letterSpacing: 1.1 },
+  heroTitle: { color: colors.headerText, fontSize: 28, fontWeight: "900", marginTop: 5, letterSpacing: -0.6 },
   heroDate: { color: colors.headerSubtext, fontSize: 14, marginTop: 4 },
-  card: {
-    backgroundColor: colors.card,
-    marginHorizontal: 14,
-    marginTop: 14,
-    padding: 16,
-    borderRadius: radii.card,
-    ...cardShadow,
-  },
-  emptyCard: { alignItems: "center", paddingVertical: 44, gap: 6 },
-  skeletonList: { paddingTop: 2 },
-  skeletonCard: { gap: 8 },
-  skeletonLine: { height: 10, borderRadius: radii.pill, backgroundColor: colors.skeleton },
-  skeletonTitle: { width: "48%", height: 14, backgroundColor: colors.skeletonStrong },
-  skeletonRow: {
-    minHeight: 54,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 10,
-  },
-  skeletonDot: { width: 10, height: 10, borderRadius: radii.pill, backgroundColor: colors.skeletonStrong },
-  skeletonBody: { flex: 1, gap: 7 },
-  skeletonStore: { width: "66%" },
-  skeletonMeta: { width: "82%", height: 8 },
-  skeletonButton: { width: 54, height: 28, borderRadius: radii.inner, backgroundColor: colors.skeletonStrong },
-  emptyTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginTop: 14 },
-  emptyHint: { fontSize: 13, color: colors.faint, textAlign: "center", paddingHorizontal: 24 },
-  routeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
-  routeTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-  routeMeta: { color: colors.muted, fontSize: 12, fontWeight: "600" },
-  emptyStop: { color: colors.faint, fontSize: 12 },
-  stop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingVertical: 10,
-  },
-  stopBody: { flex: 1 },
-  stopTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
-  meta: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  visitMeta: { fontSize: 12, color: colors.successDark, fontWeight: "600", marginTop: 4 },
-  warningMeta: { fontSize: 12, color: colors.warning, fontWeight: "600", marginTop: 4 },
-  noTasksAtStop: { marginTop: 8, fontSize: 11, color: colors.faint },
-  stopTasks: { gap: 6, marginTop: 8 },
-  stopTask: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: radii.inner,
-    backgroundColor: colors.bg,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-  },
-  stopTaskBody: { flex: 1 },
-  stopTaskTitle: { fontSize: 12, fontWeight: "700", color: colors.text },
-  stopTaskMeta: { marginTop: 1, fontSize: 10, color: colors.muted },
-  openTask: { fontSize: 11, fontWeight: "800", color: colors.primary },
-  moreTasks: { fontSize: 11, color: colors.muted, fontWeight: "600" },
-  button: { borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 8 },
-  checkoutButton: { backgroundColor: colors.success },
-  buttonDisabled: { backgroundColor: colors.disabled },
-  buttonText: { color: colors.headerText, fontSize: 12, fontWeight: "700" },
-  activeVisitCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.successBg,
-    borderColor: colors.successBorder,
-    borderWidth: 1,
-    marginHorizontal: 14,
-    marginTop: 14,
-    padding: 16,
-    borderRadius: radii.card,
-  },
-  activeVisitBody: { flex: 1, minWidth: 0 },
-  activeVisitBodyPressed: { opacity: 0.7 },
-  activeVisitLabelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
-  activeVisitLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.6, color: colors.successDark },
-  activeVisitStore: { fontSize: 17, fontWeight: "800", color: colors.text, marginTop: 3 },
-  activeVisitMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  openVisit: { fontSize: 12, color: colors.successDark, fontWeight: "800", marginTop: 6 },
-  finishButton: {
-    backgroundColor: colors.danger,
-    borderRadius: radii.pill,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  finishButtonPressed: { backgroundColor: colors.dangerPressed },
-  finishButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
+  notice: { marginHorizontal: 14, marginTop: 14, padding: 12, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.warning, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 10 },
+  noticeError: { borderColor: colors.missedBorder, backgroundColor: colors.missedBg },
+  noticeBody: { flex: 1 },
+  noticeTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  noticeAction: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.card },
+  noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
+  sectionHeader: { marginHorizontal: 16, marginTop: 22, marginBottom: 9 },
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900", letterSpacing: -0.2 },
+  metrics: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: 10 },
+  metricCard: { width: "46%", marginHorizontal: "2%", marginBottom: 10, backgroundColor: colors.card, padding: 15, borderRadius: radii.card, ...cardShadow },
+  metricValue: { color: colors.text, fontSize: 25, fontWeight: "900" },
+  metricLabel: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  card: { marginHorizontal: 14, backgroundColor: colors.card, borderRadius: radii.card, padding: 16, ...cardShadow },
+  progressHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  cardMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  progressValue: { color: colors.primary, fontSize: 22, fontWeight: "900" },
+  progressTrack: { height: 8, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 13 },
+  progressFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
+  routeList: { marginTop: 14, gap: 9 },
+  routeRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 11 },
+  routeBody: { flex: 1 },
+  routeName: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  routeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  statusPill: { borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 5 },
+  statusText: { fontSize: 10, fontWeight: "800" },
+  emptyText: { color: colors.muted, fontSize: 13, marginTop: 14 },
+  primaryAction: { marginTop: 15, minHeight: 48, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  primaryActionText: { color: colors.headerText, fontSize: 14, fontWeight: "800" },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: 10 },
+  quickCard: { width: "46%", minHeight: 84, marginHorizontal: "2%", marginBottom: 10, borderRadius: radii.card, padding: 15, justifyContent: "space-between" },
+  quickText: { fontSize: 14, fontWeight: "900" },
+  quickArrow: { alignSelf: "flex-end", fontSize: 20, fontWeight: "500" },
+  pressed: { opacity: 0.72 },
 })

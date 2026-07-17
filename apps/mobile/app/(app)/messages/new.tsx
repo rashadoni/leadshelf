@@ -1,0 +1,143 @@
+import { useState } from "react"
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { router } from "expo-router"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { enqueueFieldMessage, readFieldMessages, type FieldDocumentDraft } from "../../../src/db/local-store"
+import { formatFileSize, pickFieldDocument } from "../../../src/field/document-files"
+import { useLocale } from "../../../src/i18n"
+import { useSync } from "../../../src/sync/sync-context"
+import { colors, cardShadow, radii } from "../../../src/theme"
+
+export default function NewMessageScreen() {
+  const locale = useLocale()
+  const { sync } = useSync()
+  const inbox = readFieldMessages()
+  const [recipientId, setRecipientId] = useState<string | null>(null)
+  const [body, setBody] = useState("")
+  const [attachment, setAttachment] = useState<FieldDocumentDraft | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const copy = locale === "az" ? {
+    eyebrow: "MESAJLAR",
+    title: "Yeni dialoq",
+    hint: "Menecer və ya komanda üzvünü seçin. Mesaj internet olmasa da saxlanılacaq.",
+    recipient: "Kimə",
+    message: "Mesaj",
+    placeholder: "Qısa və aydın yazın…",
+    attach: "Fayl əlavə et",
+    local: "Fayl yalnız cihazda saxlanılır və şirkət serverinə göndərilir. Bulud diski istifadə edilmir.",
+    send: "Göndər",
+    required: "Əməkdaş seçin və mesaj və ya fayl əlavə edin.",
+    queuedTitle: "Mesaj saxlanıldı",
+    queuedBody: "Göndərmə növbəsinə əlavə edildi.",
+  } : {
+    eyebrow: "СООБЩЕНИЯ",
+    title: "Новый диалог",
+    hint: "Выберите руководителя или коллегу. Сообщение сохранится даже без интернета.",
+    recipient: "Кому",
+    message: "Сообщение",
+    placeholder: "Напишите коротко и понятно…",
+    attach: "Прикрепить файл",
+    local: "Файл хранится на устройстве и отправляется только на сервер компании. Облачный диск не используется.",
+    send: "Отправить",
+    required: "Выберите получателя и добавьте сообщение или файл.",
+    queuedTitle: "Сообщение сохранено",
+    queuedBody: "Оно добавлено в очередь на отправку.",
+  }
+
+  async function chooseFile() {
+    setError(null)
+    try {
+      const file = await pickFieldDocument()
+      if (file) setAttachment(file)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  async function send() {
+    if (!recipientId || (!body.trim() && !attachment) || busy) {
+      setError(copy.required)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      enqueueFieldMessage({ threadId: null, recipientAgentId: recipientId, body: body.trim() || null }, attachment)
+      Alert.alert(copy.queuedTitle, copy.queuedBody, [{ text: "OK", onPress: () => router.back() }])
+      void sync().catch(() => {})
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+            <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
+          </View>
+          <Text style={styles.intro}>{copy.hint}</Text>
+
+          <Text style={styles.sectionTitle}>{copy.recipient}</Text>
+          <View style={styles.recipients}>
+            {inbox.availableRecipients.map((person) => (
+              <Pressable key={person.id} onPress={() => setRecipientId(person.id)} style={[styles.recipient, recipientId === person.id && styles.recipientSelected]}>
+                <View style={[styles.avatar, recipientId === person.id && styles.avatarSelected]}><Text style={[styles.avatarText, recipientId === person.id && styles.avatarTextSelected]}>{person.name.charAt(0).toUpperCase()}</Text></View>
+                <View style={styles.recipientBody}><Text style={[styles.recipientName, recipientId === person.id && styles.recipientNameSelected]} numberOfLines={1}>{person.name}</Text><Text style={[styles.recipientRole, recipientId === person.id && styles.recipientRoleSelected]}>{person.role}</Text></View>
+                {recipientId === person.id ? <Text style={styles.check}>✓</Text> : null}
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.sectionTitle}>{copy.message}</Text>
+          <View style={styles.composer}>
+            <TextInput value={body} onChangeText={setBody} multiline maxLength={4000} placeholder={copy.placeholder} placeholderTextColor={colors.faint} textAlignVertical="top" style={styles.input} />
+            {attachment ? (
+              <View style={styles.fileCard}>
+                <View style={styles.fileIcon}><Text style={styles.fileIconText}>DOC</Text></View>
+                <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName}</Text><Text style={styles.fileMeta}>{formatFileSize(attachment.sizeBytes)}</Text></View>
+                <Pressable onPress={() => setAttachment(null)} style={styles.remove}><Text style={styles.removeText}>×</Text></Pressable>
+              </View>
+            ) : (
+              <Pressable onPress={() => void chooseFile()} style={styles.attach}><Text style={styles.attachIcon}>＋</Text><Text style={styles.attachText}>{copy.attach}</Text></Pressable>
+            )}
+          </View>
+
+          <View style={styles.privacy}><Text style={styles.privacyIcon}>⌁</Text><Text style={styles.privacyText}>{copy.local}</Text></View>
+          {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+          <Pressable disabled={busy} onPress={() => void send()} style={({ pressed }) => [styles.send, (pressed || busy) && styles.pressed]}><Text style={styles.sendText}>{busy ? "…" : copy.send}</Text><Text style={styles.sendArrow}>→</Text></Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 }, scroll: { paddingBottom: 34 },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1 },
+  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
+  intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
+  sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginHorizontal: 16, marginTop: 22, marginBottom: 9 },
+  recipients: { gap: 8, paddingHorizontal: 14 },
+  recipient: { minHeight: 64, borderRadius: 17, padding: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 },
+  recipientSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, avatarSelected: { backgroundColor: "rgba(255,255,255,0.18)" },
+  avatarText: { color: colors.primary, fontSize: 15, fontWeight: "900" }, avatarTextSelected: { color: colors.headerText },
+  recipientBody: { flex: 1 }, recipientName: { color: colors.text, fontSize: 13, fontWeight: "900" }, recipientNameSelected: { color: colors.headerText }, recipientRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 }, recipientRoleSelected: { color: colors.headerSubtext }, check: { color: colors.headerText, fontSize: 18, fontWeight: "900", marginRight: 4 },
+  composer: { marginHorizontal: 14, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, ...cardShadow },
+  input: { minHeight: 130, color: colors.text, fontSize: 14, lineHeight: 21, padding: 2 },
+  attach: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: "#DFDDF7", borderStyle: "dashed", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  attachIcon: { color: colors.primary, fontSize: 18, fontWeight: "700" }, attachText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  fileCard: { minHeight: 58, borderRadius: 14, padding: 9, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 9 },
+  fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, fileIconText: { color: colors.info, fontSize: 8, fontWeight: "900" }, fileBody: { flex: 1 }, fileName: { color: colors.text, fontSize: 11, fontWeight: "900" }, fileMeta: { color: colors.info, fontSize: 9, fontWeight: "700", marginTop: 3 }, remove: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" }, removeText: { color: colors.muted, fontSize: 24, lineHeight: 25 },
+  privacy: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "flex-start", gap: 8 }, privacyIcon: { color: colors.successDark, fontSize: 16, fontWeight: "900" }, privacyText: { flex: 1, color: colors.successDark, fontSize: 9, lineHeight: 14, fontWeight: "700" },
+  error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  send: { minHeight: 54, marginHorizontal: 14, marginTop: 18, borderRadius: 17, backgroundColor: colors.primary, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 }, sendText: { color: colors.headerText, fontSize: 14, fontWeight: "900" }, sendArrow: { color: colors.headerText, fontSize: 20 }, pressed: { opacity: 0.7 },
+})

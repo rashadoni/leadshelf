@@ -1,9 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { mobileSyncAckRequestSchema } from "@leadshelf/api-contracts/mobile/v1"
-import { ackCursors } from "@leadshelf/db"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
-import { protocolMismatch } from "@/server/mobile/protocol"
-import { workerDb } from "@/server/db/client"
+import { handleMobileAck } from "@/server/mobile/sync-handlers"
 
 export const runtime = "nodejs"
 
@@ -12,11 +9,6 @@ export async function POST(req: NextRequest) {
   if (!session?.did) return unauthorized()
 
   const body = await req.json().catch(() => null)
-  const parsed = mobileSyncAckRequestSchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 })
-  const mismatch = protocolMismatch(parsed.data.protocolVersion)
-  if (mismatch) return mismatch
-
-  await ackCursors(workerDb, session.did, parsed.data.appliedCursors)
-  return NextResponse.json({ ok: true })
+  if (body == null) return NextResponse.json({ error: "invalid_request" }, { status: 400 })
+  return handleMobileAck(body, session as { org: string; sub: string; did: string; role: string })
 }

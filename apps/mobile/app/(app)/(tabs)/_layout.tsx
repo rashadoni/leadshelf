@@ -1,27 +1,19 @@
-// Основная shelf-навигация: маршрут, задачи, оборудование, планограммы и профиль.
-import { useCallback, useEffect, useState } from "react"
-import { Tabs, useFocusEffect } from "expo-router"
+// Пять устойчивых разделов единого Agent Mobile: сегодня, неделя, работа,
+// входящие и профиль. Вложенные операционные экраны скрыты из tab bar.
+import { Tabs } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { TabIcon } from "../../../src/components/TabIcon"
-import { countOpenTasks } from "../../../src/db/local-store"
 import { getBottomTabBarMetrics } from "../../../src/navigation/tab-bar"
 import { colors } from "../../../src/theme"
 import { t, useLocale } from "../../../src/i18n"
-import { useSync } from "../../../src/sync/sync-context"
+import { useField } from "../../../src/field/field-context"
 
 export default function TabsLayout() {
   useLocale() // ре-рендер подписей вкладок при смене языка в профиле
   const insets = useSafeAreaInsets()
-  const { status } = useSync()
-  const [openTaskCount, setOpenTaskCount] = useState(0)
-  const reloadBadge = useCallback(() => setOpenTaskCount(countOpenTasks()), [])
-  useFocusEffect(reloadBadge)
-
-  useEffect(() => {
-    if (status.phase === "idle") reloadBadge()
-  }, [reloadBadge, status.lastSyncAt, status.phase])
-
-  const taskBadge = openTaskCount > 99 ? "99+" : openTaskCount || undefined
+  const { notifications, messages } = useField()
+  const inboxUnread = notifications.unread + messages.unread
+  const inboxBadge = inboxUnread > 99 ? "99+" : inboxUnread || undefined
   const tabBarMetrics = getBottomTabBarMetrics(insets.bottom)
 
   return (
@@ -49,27 +41,30 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t("tabRoute"),
-          tabBarIcon: ({ color }) => <TabIcon name="route" color={color} />,
+          title: t("tabToday"),
+          tabBarIcon: ({ color }) => <TabIcon name="today" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="tasks"
+        name="week"
         options={{
-          title: t("tabTasks"),
-          tabBarIcon: ({ color }) => <TabIcon name="tasks" color={color} />,
-          tabBarBadge: taskBadge,
+          title: t("tabWeek"),
+          tabBarIcon: ({ color }) => <TabIcon name="week" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="shelves"
-        options={{ href: null }}
+        name="work"
+        options={{
+          title: t("tabWork"),
+          tabBarIcon: ({ color }) => <TabIcon name="work" color={color} />,
+        }}
       />
       <Tabs.Screen
-        name="planograms"
+        name="inbox"
         options={{
-          title: t("tabPlanograms"),
-          tabBarIcon: ({ color }) => <TabIcon name="planograms" color={color} />,
+          title: t("tabInbox"),
+          tabBarIcon: ({ color }) => <TabIcon name="inbox" color={color} />,
+          tabBarBadge: inboxBadge,
         }}
       />
       <Tabs.Screen
@@ -79,6 +74,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <TabIcon name="profile" color={color} />,
         }}
       />
+      <Tabs.Screen name="tasks" options={{ href: null }} />
+      <Tabs.Screen name="shelves" options={{ href: null }} />
+      <Tabs.Screen name="planograms" options={{ href: null }} />
       <Tabs.Screen name="visit" options={{ href: null }} />
       <Tabs.Screen name="orders" options={{ href: null }} />
       <Tabs.Screen name="dashboard" options={{ href: null }} />

@@ -85,16 +85,17 @@ export class SyncManager {
   }
 
   private async refreshCounters() {
-    const [outbox, photos, quarantined] = await Promise.all([
+    const [outbox, photos, commercialMedia, quarantined] = await Promise.all([
       this.deps.store.outboxDiagnostics(),
       this.deps.store.pendingPhotos(),
+      this.deps.store.pendingCommercialMedia(),
       this.deps.store.quarantinedPhotoCount(),
     ])
     const oldestPendingAt = outbox.oldestPendingAt ? new Date(outbox.oldestPendingAt).getTime() : Number.NaN
     const now = (this.deps.now?.() ?? new Date()).getTime()
     this.patch({
       pendingOps: outbox.pendingOps,
-      pendingPhotos: photos.length,
+      pendingPhotos: photos.length + commercialMedia.length,
       quarantinedPhotos: quarantined,
       conflictOps: outbox.conflictOps,
       rejectedOps: outbox.rejectedOps,
@@ -155,6 +156,26 @@ export class SyncManager {
           // не прерываем цикл — остальные фото и push должны пройти
         }
       }
+      for (const media of await this.deps.store.pendingCommercialMedia()) {
+        try {
+          const result = await this.deps.api.uploadCommercialMedia(media)
+          await this.deps.store.markCommercialMediaUploaded(media.clientMediaId, result)
+          await this.deps.api.cleanupCommercialMedia(media).catch(() => {})
+        } catch (e) {
+          if (e instanceof UpgradeRequiredError || e instanceof AuthLostError) throw e
+          if (isPermanentUploadError(e)) {
+            await this.deps.store.quarantineCommercialMedia(
+              media.clientMediaId,
+              e instanceof Error ? e.message : String(e),
+            )
+          } else {
+            await this.deps.store.bumpCommercialMediaAttempts(
+              [media.clientMediaId],
+              e instanceof Error ? e.message : String(e),
+            )
+          }
+        }
+      }
 
       // 4. PUSH outbox
       this.patch({ phase: "pushing" })
@@ -189,6 +210,8 @@ export class SyncManager {
     } catch (e) {
       if (e instanceof UpgradeRequiredError) {
         this.patch({ phase: "upgradeRequired", error: null, lastDurationMs: Date.now() - startedAt })
+      } else if (e instanceof AuthLostError) {
+        this.patch({ phase: "authLost", error: null, lastDurationMs: Date.now() - startedAt })
       } else {
         this.patch({ phase: "error", error: e instanceof Error ? e.message : String(e), lastDurationMs: Date.now() - startedAt })
       }

@@ -1,14 +1,16 @@
 import * as SecureStore from "expo-secure-store"
 
 const KEYS = {
-  access: "ls.access",
-  refresh: "ls.refresh",
+  access: "field.access",
+  legacyAccess: "ls.access",
+  legacyRefresh: "ls.refresh",
   deviceId: "ls.deviceId",
-  userId: "ls.userId",
-  orgSlug: "ls.orgSlug",
-  userName: "ls.userName",
+  userId: "field.userId",
+  orgSlug: "field.orgSlug",
+  legacyOrgSlug: "ls.orgSlug",
+  userName: "field.userName",
   locale: "ls.locale",
-  lastEmployeeCode: "ls.lastEmployeeCode",
+  lastEmail: "field.lastEmail",
 } as const
 
 const ONBOARDING_KEYS = {
@@ -31,22 +33,22 @@ async function set(key: string, value: string | null): Promise<void> {
 
 export const tokenStore = {
   getAccess: () => get(KEYS.access),
-  getRefresh: () => get(KEYS.refresh),
   getDeviceId: () => get(KEYS.deviceId),
   getUserId: () => get(KEYS.userId),
-  getOrgSlug: () => get(KEYS.orgSlug),
+  getOrgSlug: async () => (await get(KEYS.orgSlug)) ?? get(KEYS.legacyOrgSlug),
   getUserName: () => get(KEYS.userName),
   getLocale: () => get(KEYS.locale),
-  // Запоминаем код сотрудника для быстрого повторного входа (не секрет,
-  // не чистится при выходе) — docs/28 «запомнить меня».
-  getLastEmployeeCode: () => get(KEYS.lastEmployeeCode),
-  setLastEmployeeCode: (v: string) => set(KEYS.lastEmployeeCode, v),
+  // Email не является секретом и сохраняется для быстрого повторного входа.
+  getLastEmail: () => get(KEYS.lastEmail),
+  setLastEmail: (v: string) => set(KEYS.lastEmail, v),
   // Контекстные подсказки показываются один раз на каждом основном разделе.
   getOnboarded: (section: OnboardingSection) => get(ONBOARDING_KEYS[section]),
   setOnboarded: (section: OnboardingSection) => set(ONBOARDING_KEYS[section], "1"),
-  async setTokens(access: string, refresh: string) {
+  async setAccess(access: string) {
     await set(KEYS.access, access)
-    await set(KEYS.refresh, refresh)
+    // Старый LeadShelf refresh больше не является мобильной сессией.
+    await set(KEYS.legacyAccess, null)
+    await set(KEYS.legacyRefresh, null)
   },
   setDeviceId: (v: string) => set(KEYS.deviceId, v),
   setUserId: (v: string | null) => set(KEYS.userId, v),
@@ -55,7 +57,8 @@ export const tokenStore = {
   setLocale: (v: string) => set(KEYS.locale, v),
   async clearSession() {
     await set(KEYS.access, null)
-    await set(KEYS.refresh, null)
+    await set(KEYS.legacyAccess, null)
+    await set(KEYS.legacyRefresh, null)
     await set(KEYS.userId, null)
     await set(KEYS.userName, null)
   },

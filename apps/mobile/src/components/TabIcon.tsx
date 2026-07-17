@@ -4,6 +4,10 @@ import type { ColorValue } from "react-native"
 import Svg, { Circle, Path, Rect } from "react-native-svg"
 
 export type TabIconName =
+  | "today"
+  | "week"
+  | "work"
+  | "inbox"
   | "route"
   | "visit"
   | "tasks"
@@ -16,6 +20,36 @@ export type TabIconName =
 export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: ColorValue; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24" }
   switch (name) {
+    case "today":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M4.5 10.5 12 4l7.5 6.5v8a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5v-8Z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+          <Path d="M9.5 20v-5.8h5V20" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+        </Svg>
+      )
+    case "week":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={3.5} y={5.2} width={17} height={15} rx={2.2} stroke={color} strokeWidth={1.8} />
+          <Path d="M7.5 3.5v3.4M16.5 3.5v3.4M3.8 9.4h16.4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+          <Circle cx={8} cy={13.2} r={1.1} fill={color} /><Circle cx={12} cy={13.2} r={1.1} fill={color} /><Circle cx={16} cy={13.2} r={1.1} fill={color} />
+        </Svg>
+      )
+    case "work":
+      return (
+        <Svg {...common} fill="none">
+          {[4, 10.3, 16.6].flatMap((x) => [4, 10.3, 16.6].map((y) => (
+            <Rect key={`${x}-${y}`} x={x} y={y} width={3.4} height={3.4} rx={0.8} stroke={color} strokeWidth={1.5} />
+          )))}
+        </Svg>
+      )
+    case "inbox":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={3.5} y={5} width={17} height={14} rx={2.2} stroke={color} strokeWidth={1.8} />
+          <Path d="m5 7 7 5.3L19 7" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
     case "route":
       // Стрелка-навигация (как на образце)
       return (

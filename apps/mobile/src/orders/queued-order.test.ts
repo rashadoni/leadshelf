@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { parseQueuedOrderDetailCode, parseQueuedOrderPayload } from "./queued-order"
+import {
+  parseQueuedOrderDetailCode,
+  parseQueuedOrderPayload,
+  parseQueuedOrderServerId,
+} from "./queued-order"
 
 describe("queued order presentation data", () => {
   it("parses valid lines and totals units", () => {
@@ -34,5 +38,11 @@ describe("queued order presentation data", () => {
     expect(parseQueuedOrderDetailCode('{"code":"product_price_missing","detail":{"private":"value"}}'))
       .toBe("product_price_missing")
     expect(parseQueuedOrderDetailCode('{"other":"value"}')).toBeNull()
+  })
+
+  it("links an applied local operation to the server order", () => {
+    expect(parseQueuedOrderServerId('{"order":{"id":"order-42","totalAmount":"10.00"}}'))
+      .toBe("order-42")
+    expect(parseQueuedOrderServerId('{"code":"order_failed"}')).toBeNull()
   })
 })
