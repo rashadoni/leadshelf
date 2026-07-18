@@ -16,6 +16,7 @@ evidence. Отсутствующее внешнее доказательство
 | Unit/integration | PASS | 478 tests; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, worker, mobile, web |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
+| Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
@@ -163,3 +164,6 @@ production-like load/soak и infrastructure/mobile/privacy/pilot evidence.
 `codex/production-readiness`; push/remote CI не выполнен, потому что внешний
 экспорт требует отдельного явного разрешения. Полный минимально-привилегированный
 handoff по отсутствующим placeholders: `deploy/EXTERNAL_READINESS_HANDOFF.md`.
+Публичный read-only smoke дополнительно подтвердил, что текущий runtime старее
+этого commit; deploy не выполнялся и без явного `Production deployment
+разрешён: ДА` выполняться не будет.

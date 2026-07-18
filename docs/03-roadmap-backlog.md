@@ -712,7 +712,10 @@ web-раздел синхронизированных заказов без из
 - [ ] Разделить liveness процесса и readiness PostgreSQL/критических сервисов.
   `[реализовано/проверено тестами 2026-07-18: /api/ready fail-closed для DB+S3,
   Compose healthchecks web/workers/vision и readiness DB+external S3. BLOCKED —
-  production runtime/storage access]`
+  production rollout/storage access. Read-only smoke 2026-07-18 22:56 UTC:
+  текущий https://hermescrm.xyz/api/health=200, но /api/ready=404 и
+  /api/metrics=404; direct endpoint /api/ready также 404. Это доказывает, что
+  hardening build ещё не развёрнут и production readiness сейчас FAIL]`
 - [ ] Runbook: pre-migration backup, deploy, migrate, smoke, rollback/forward-fix
   схемы и disaster recovery.
   `[реализовано/локально проверено 2026-07-18: operations runbook,
@@ -814,7 +817,10 @@ Definition of Done: двухнедельный прогон не теряет д
   Archived MinIO удалён из production. Локальный hardening commit `6e7eb17`
   создан на `codex/production-readiness`; три пользовательских удаления video
   исключены. BLOCKED — remote GitHub CI run: защитный слой требует отдельного
-  явного подтверждения push именно этого commit в origin]`
+  явного подтверждения push именно этого commit в origin. Read-only production
+  login headers 2026-07-18 не содержат CSP/HSTS/frame/nosniff и всё ещё имеют
+  `x-powered-by: Next.js`; это старый runtime, а не опровержение локального
+  config test, и отдельная причина сохранять NO-GO до rollout]`
 - [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
   `[частично реализовано/проверено mobile 91/91 + typecheck 2026-07-18: logout
   предупреждает о pending работе и очищает media+operational SQLite до
