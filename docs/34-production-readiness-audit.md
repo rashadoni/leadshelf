@@ -12,13 +12,14 @@ evidence. Отсутствующее внешнее доказательство
 | Gate | Результат | Evidence |
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
-| Миграции | PASS local | 28/28; deploy/status и rehearsal на отдельной PostgreSQL 16 |
-| Unit/integration | PASS | 478 tests; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, worker, mobile, web |
+| Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
+| Unit/integration | PASS local + CI | 570 tests; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, worker, mobile, web |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
+| Remote CI | PASS | PR #19, exact SHA `bae29c8c629eb1b0788b81b578ef1d94185481e9`: `ci` SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
@@ -46,7 +47,8 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
 - durable PostgreSQL-backed atomic rate limiting для login/sync/upload/import
   и внешнего OpenAI/Gemini proof budget; AI over-limit до media/AI call уходит
   в persisted human-review fallback;
-- fail-closed inventory всех 56 v1 route files и representative dynamic
+- fail-closed inventory всех 63 v1 route files, включая отдельную
+  `requireFieldBffSession` boundary для internal Field BFF, и representative dynamic
   cross-tenant import/media tests; 33-case PostgreSQL IDOR matrix охватывает
   read/write/delete во всех 29 текущих ID-bearing route-файлах и проверяет
   отсутствие target mutations; worker matrix fail-closed quarantines corrupt
@@ -87,7 +89,7 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   files/bytes в профиле с near-limit warning; device-shift evidence pending;
 - remote mobile revocation: failed refresh becomes terminal `authLost`, stops
   retry, single-flight wipes media/operational SQLite/SecureStore and returns
-  to login; all backends are attempted on partial failure. Mobile 91/91 PASS;
+  to login; all backends are attempted on partial failure. Mobile 163/163 PASS;
   signed Android/iOS device evidence remains external;
 - authenticated API boundary emits privacy-safe allowlisted structured JSON
   with method/path/correlation/organization/user/device/task context; query,
@@ -130,16 +132,15 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
    не проверены.
 3. Подключить production S3/R2 с versioning/lifecycle/least privilege и
    выполнить реальный encrypted backup + restore drill.
-4. Запустить remote CI на точном commit SHA; сохранить scan/build artifacts.
-5. Настроить external metrics scraper, alerts, log collector/retention,
+4. Настроить external metrics scraper, alerts, log collector/retention,
    Sentry DSN/test events и named on-call owners.
-6. Выполнить независимый pentest точного deployed image/environment. Локально
+5. Выполнить независимый pentest точного deployed image/environment. Локально
    все 29 ID-bearing HTTP route-файлов покрыты 33 read/write/delete cases,
    все 40 office mutations — denied-role matrix, durable/scheduled jobs —
    PostgreSQL tenant-boundary tests.
-7. Утвердить и реализовать tenant-safe retention purge; решить face/privacy
+6. Утвердить и реализовать tenant-safe retention purge; решить face/privacy
    режим до persistence.
-8. Выпустить подписанные APK/AAB/IPA и пройти physical-device, offline/kill,
+7. Выпустить подписанные APK/AAB/IPA и пройти physical-device, offline/kill,
    permission, disk-full, battery/memory/SQLite shift matrix.
 
 ## Внешние доказательства до pilot/GA
@@ -160,9 +161,10 @@ production-like load/soak и infrastructure/mobile/privacy/pilot evidence.
 Канонический порядок и владельцы: `docs/03-roadmap-backlog.md` и
 `deploy/PILOT_GA_RUNBOOK.md`.
 
-Локальный production-readiness commit `6e7eb17` создан в ветке
-`codex/production-readiness`; push/remote CI не выполнен, потому что внешний
-экспорт требует отдельного явного разрешения. Полный минимально-привилегированный
+Интегрированная инженерная база ветки `codex/production-readiness` на exact
+code SHA `bae29c8c629eb1b0788b81b578ef1d94185481e9` прошла draft PR #19: remote
+`ci` и secret/four-image vulnerability gate завершились SUCCESS, production
+deploy закономерно SKIPPED для pull request. Полный минимально-привилегированный
 handoff по отсутствующим placeholders: `deploy/EXTERNAL_READINESS_HANDOFF.md`.
 Публичный read-only smoke дополнительно подтвердил, что текущий runtime старее
 этого commit; deploy не выполнялся и без явного `Production deployment

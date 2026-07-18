@@ -4,15 +4,17 @@
 Секретные значения нельзя добавлять в этот файл, Git, issue, PR или чат:
 передавать их через runtime secret manager/защищённый CI environment.
 
-Локальная база evidence: ветка `codex/production-readiness`, commit `6e7eb17`.
-Push этого commit не выполнен: внешняя защита требует отдельного явного
-подтверждения пользователя именно на экспорт commit в `origin`.
+Проверенная инженерная база evidence: ветка `codex/production-readiness`,
+exact code SHA `bae29c8c629eb1b0788b81b578ef1d94185481e9`, draft PR #19. Для
+последующих docs/CI-pin commits authoritative SHA и checks берутся из PR.
+Push, draft PR и read-only Actions checks выполнены; это не предоставляет
+staging/production, S3, monitoring, mobile signing или client-data access.
 
 ## Доступы и минимальные права
 
 | Gate | Что требуется | Минимальные права | Безопасная проверка предоставления |
 | --- | --- | --- | --- |
-| GitHub/CI | Явное разрешение push `6e7eb17` в `origin` | push только ветки `codex/production-readiness`, read Actions/checks | `git ls-remote origin` без вывода credentials; после push — checks точного SHA |
+| GitHub/CI | **ПРЕДОСТАВЛЕНО/ПРОВЕРЕНО**: ветка, PR и Actions доступны | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 CLEAN; exact SHA `bae29c8c...`; `ci` и secret/four-image scans SUCCESS; deploy SKIPPED |
 | Staging | HTTPS URL и deploy target | deploy только staging namespace/service; read logs/health | `/api/ready`, TLS и immutable image SHA; никаких client production данных |
 | Production deploy | Явное `Production deployment разрешён: ДА` | только release owner/CI environment после backup gate | verified backup+restore receipt, approved SHA, change window и rollback owner |
 | PostgreSQL | Обезличенный production-like dump/staging DB | schema migrate/read/write только staging; production read запрещён до GO | restore в изоляции, `prisma migrate deploy/status`, row/checksum report |
@@ -61,4 +63,4 @@ Push этого commit не выполнен: внешняя защита тре
 Read-only runtime evidence 2026-07-18 22:56 UTC: публичный `/api/health`
 отвечает 200, но `/api/ready` и `/api/metrics` отвечают 404; direct readiness
 тоже 404. Login не отдаёт новый security-header baseline. Следовательно,
-текущий production работает не на `6e7eb17`; это **не** разрешение deploy.
+текущий production работает не на `bae29c8`; это **не** разрешение deploy.

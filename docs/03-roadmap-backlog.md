@@ -788,7 +788,7 @@ Definition of Done: двухнедельный прогон не теряет д
   Account lockout `[BLOCKED — business decision]`: нужны утверждённые порог,
   длительность, способ разблокировки и support policy]`
 - [x] Негативные RBAC/cross-tenant тесты всех API, jobs, exports и media.
-  `[реализовано/проверено 2026-07-18 на текущем surface: fail-closed inventory всех 56
+  `[реализовано/проверено 2026-07-18 на текущем surface: fail-closed inventory всех 63
   v1 route files + mutation/RBAC/workerDb/media fences; динамическая PostgreSQL
   матрица вызывает 33 read/write/delete операции во всех 29 текущих
   ID-bearing route-файлах от tenant A к существующим объектам tenant B,
@@ -814,15 +814,18 @@ Definition of Done: двухнедельный прогон не теряет д
   `[реализовано/локально проверено 2026-07-18: CSP/anti-frame/nosniff,
   origin guard, production audit=0; CI actions pinned SHA, TruffleHog tracked-source
   scan=0, Grype web/worker/custom Caddy/custom PostgreSQL High/Critical=0.
-  Archived MinIO удалён из production. Локальный hardening commit `6e7eb17`
-  создан на `codex/production-readiness`; три пользовательских удаления video
-  исключены. BLOCKED — remote GitHub CI run: защитный слой требует отдельного
-  явного подтверждения push именно этого commit в origin. Read-only production
+  Archived MinIO удалён из production. Интегрированная code baseline ветки
+  `codex/production-readiness` на exact SHA
+  `bae29c8c629eb1b0788b81b578ef1d94185481e9` прошла remote checks;
+  draft PR #19 CLEAN, remote `ci` SUCCESS, TruffleHog и High/Critical scans
+  web/worker/Caddy/PostgreSQL SUCCESS, deploy SKIPPED; три пользовательских
+  удаления video исключены. BLOCKED — rollout/deployed-environment evidence.
+  Read-only production
   login headers 2026-07-18 не содержат CSP/HSTS/frame/nosniff и всё ещё имеют
   `x-powered-by: Next.js`; это старый runtime, а не опровержение локального
   config test, и отдельная причина сохранять NO-GO до rollout]`
 - [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
-  `[частично реализовано/проверено mobile 91/91 + typecheck 2026-07-18: logout
+  `[частично реализовано/проверено mobile 163/163 + typecheck 2026-07-18: logout
   предупреждает о pending работе и очищает media+operational SQLite до
   очистки session; remote 401/refresh revocation переводит sync в terminal
   authLost без retry, single-flight очищает media/SQLite/SecureStore и выходит
@@ -862,7 +865,7 @@ Definition of Done: нет открытых critical/high; доказано, ч�
   три worker runner и shutdown lifecycle пишут JSON через allowlist полей,
   тесты доказывают отбрасывание token/email. Authenticated API boundary теперь
   централизованно пишет allowlisted method/path/correlationId/organizationId/
-  userId/deviceId/taskId без query/token/session/header leakage; web 112/112
+  userId/deviceId/taskId без query/token/session/header leakage; web 126/126
   PASS. BLOCKED — production log collector/retention/owner; opId для body-only
   операций добавляется только в соответствующем domain event, не из raw body]`
 - [ ] Метрики: availability/latency/errors, sync/outbox, import freshness,
@@ -988,7 +991,7 @@ Definition of Done: 14 последовательных обменов без н
   instead of the rejected full-array 454 MB->3.258 GB baseline. Sales/stock
   loaders больше не имеют silent 5k–15k truncation: все пять путей dashboard/
   ABC/like-for-like/stock coverage используют deterministic keyset pages по
-  2k; regression 2001 rows и web 110/110 PASS 2026-07-18. Production-like
+  2k; regression 2001 rows и web 126/126 PASS 2026-07-18. Production-like
   sales/stock volume, proxy timeout и multi-replica exports BLOCKED — нужны
   production-like dataset/network/storage/replicas и 8h execution window]`
 
@@ -1047,8 +1050,8 @@ P95/P99 и error rate соответствуют SLO на soak test.
   deploy/PILOT_GA_RUNBOOK.md. BLOCKED — named client users и training window]`
 - [ ] Web QA: Chromium/WebKit/Firefox, desktop/tablet, accessibility keyboard/
   focus/contrast и полная проверка RU/AZ локализации без demo-заглушек.
-  `[частично реализовано/проверено Playwright 2026-07-18: fresh production
-  standalone, 21/21 Chromium+Firefox+WebKit tests; responsive 390/768/1440,
+  `[частично реализовано/проверено Playwright 2026-07-18: exact-SHA remote CI
+  production standalone, 15/15 Chromium+Firefox+WebKit tests; responsive 390/768/1440,
   RU/AZ lang/accessible names/Tab/focus, безопасная support-error выдача и
   axe WCAG 2 A/AA + 2.1 A/AA audit login/catalog/tasks/analytics без rule
   exclusions. Audit выявил и исправил constrained zoom, 5 unnamed selects,
