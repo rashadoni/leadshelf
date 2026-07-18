@@ -12,6 +12,8 @@ export default defineConfig({
       "src/location/**/*.test.ts",
       "src/navigation/**/*.test.ts",
       "src/i18n/**/*.test.ts",
+      "src/db/**/*.test.ts",
+      "src/auth/**/*.test.ts",
       "src/observability/**/*.test.ts",
     ],
     environment: "node",

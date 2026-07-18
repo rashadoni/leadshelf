@@ -10,6 +10,7 @@ import {
   getObsoletePlanogramRows,
   getPhase8MetricRows,
   getPlanogramProductRows,
+  iteratePlanogramProductRows,
   getTaskKpiReport,
   getShelfShareGroups,
   getSpaceProductivityRows,
@@ -131,6 +132,68 @@ describe("analytics planogram product helpers", () => {
         linearMm: 135,
       }),
     ])
+  })
+
+  it("keeps UI bounded but allows export to request the full tenant dataset", async () => {
+    const calls: unknown[] = []
+    const db = asPlacementDb({
+      planogramPlacement: {
+        findMany: async (args: unknown) => {
+          calls.push(args)
+          return []
+        },
+      },
+    })
+
+    await getPlanogramProductRows(db, "org-a")
+    await getPlanogramProductRows(db, "org-a", { limit: null })
+    expect(calls[0]).toMatchObject({ take: 2000 })
+    expect(calls[1]).not.toHaveProperty("take")
+    expectOrganizationScope(calls[1])
+  })
+
+  it("paginates full exports and aggregates a product across the page boundary", async () => {
+    const placements = Array.from({ length: 101 }, (_, index) => ({
+      id: `placement-${index.toString().padStart(3, "0")}`,
+      planogramVersionId: "version-a",
+      productId: "product-a",
+      facingsX: 1,
+      facingsY: 1,
+      facingsZ: 1,
+      widthMm: 50,
+      heightMm: 100,
+      depthMm: 40,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      compressionX: 1,
+      sortOrder: index,
+      planogramVersion: {
+        id: "version-a", versionNumber: 1, state: "PUBLISHED",
+        planogram: { id: "planogram-a", name: "Planogram A" },
+      },
+      product: {
+        id: "product-a", sku: "SKU-A", name: "Product A",
+        category: null, brand: null, supplier: null,
+      },
+    }))
+    const calls: unknown[] = []
+    const db = asPlacementDb({
+      planogramPlacement: {
+        findMany: async (args: { take: number; cursor?: { id: string }; skip?: number }) => {
+          calls.push(args)
+          const start = args.cursor ? placements.findIndex((row) => row.id === args.cursor!.id) + (args.skip ?? 0) : 0
+          return placements.slice(start, start + args.take)
+        },
+      },
+    })
+
+    const rows: ProductRow[] = []
+    for await (const row of iteratePlanogramProductRows(db, "org-a", { batchSize: 100 })) rows.push(row)
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]).toMatchObject({ cursor: { id: "placement-099" }, skip: 1 })
+    expect(rows).toEqual([expect.objectContaining({ sku: "SKU-A", placements: 101, units: 101, linearMm: 5050 })])
   })
 
   it("counts active dashboard assignments through direct stores and formats", async () => {
@@ -605,6 +668,36 @@ describe("analytics planogram product helpers", () => {
         { metric: "quantity", current: 10, previous: 4, delta: 6, deltaPct: 1.5 },
       ],
     })
+  })
+
+  it("paginates like-for-like sales past the former fixed row limit", async () => {
+    const now = new Date("2026-07-04T10:00:00.000Z")
+    const allRows = Array.from({ length: 2_001 }, (_, index) => ({
+      id: `sale-${index.toString().padStart(4, "0")}`,
+      date: new Date("2026-07-01T00:00:00.000Z"),
+      quantity: 1,
+      revenue: 2,
+      profit: 1,
+    }))
+    const calls: unknown[] = []
+    const db = asDb({
+      salesSnapshot: {
+        findMany: async (args: unknown) => {
+          calls.push(args)
+          const query = args as { cursor?: { id: string }; take: number }
+          const start = query.cursor ? allRows.findIndex((row) => row.id === query.cursor!.id) + 1 : 0
+          return allRows.slice(start, start + query.take)
+        },
+      },
+    })
+
+    const summary = await getLikeForLikeSummary(db, now, 30)
+    expect(calls).toHaveLength(2)
+    expect(summary.rows).toEqual([
+      { metric: "turnover", current: 4_002, previous: 0, delta: 4_002, deltaPct: null },
+      { metric: "profit", current: 2_001, previous: 0, delta: 2_001, deltaPct: null },
+      { metric: "quantity", current: 2_001, previous: 0, delta: 2_001, deltaPct: null },
+    ])
   })
 
   it("breaks like-for-like turnover down by store, format, and active planogram", async () => {

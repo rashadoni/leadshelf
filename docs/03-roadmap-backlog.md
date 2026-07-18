@@ -685,3 +685,410 @@ field-force/mobile walkthrough.
 web-раздел синхронизированных заказов без изменения mobile sync/API-
 контрактов. Native preview baseline выполнен частично: зависимости
 выровнены, свежая EAS preview/dev-client APK ещё нужна для device smoke.
+
+## Production-readiness roadmap — полноценная рабочая версия
+
+Добавлено 2026-07-18 после повторного аудита. Наличие функции само по себе не
+означает production-ready. `[сделано]` ставится только при наличии теста,
+релизного артефакта или зафиксированного полевого прогона; иначе статус —
+`[реализовано, не проверено]`.
+
+### Phase 14 — P0: сохранность данных и управляемый релиз
+
+- [ ] Разделить demo и client production: `seed-demo` не запускается в
+  клиентском deploy-профиле, demo tenant не является зависимостью приложения.
+  `[реализовано/проверено статически 2026-07-18: DEPLOY_MODE=client по умолчанию,
+  seed только при явном demo. BLOCKED — production deploy access/release owner]`
+- [ ] Ночной backup PostgreSQL и external S3 во внешнее хранилище: шифрование,
+  ротация минимум 14 дней и алерт на пропуск.
+  `[реализовано/локально проверено 2026-07-18: pg_dump + media mirror + encrypted
+  restic retention. BLOCKED — external repository credentials, production
+  scheduler/alert endpoint и infrastructure owner]`
+- [ ] Автоматическая проверка backup и ежемесячный restore drill в изоляции;
+  зафиксировать RPO/RTO.
+  `[реализовано/локально проверено 2026-07-18: backup -> 100% restic check ->
+  restore PostgreSQL (23 migrations) + media checksum/bytes. BLOCKED —
+  production backup repository и monthly drill owner/window]`
+- [ ] Разделить liveness процесса и readiness PostgreSQL/критических сервисов.
+  `[реализовано/проверено тестами 2026-07-18: /api/ready fail-closed для DB+S3,
+  Compose healthchecks web/workers/vision и readiness DB+external S3. BLOCKED —
+  production runtime/storage access]`
+- [ ] Runbook: pre-migration backup, deploy, migrate, smoke, rollback/forward-fix
+  схемы и disaster recovery.
+  `[реализовано/локально проверено 2026-07-18: operations runbook,
+  production-safe migrate deploy, rollback/forward-fix и DR; production
+  release/rollback BLOCKED — release access/window/owner]`
+- [ ] Проверять миграции на обезличенной production-подобной БД.
+  `[реализовано/локально проверено 2026-07-18: изолированный PostgreSQL 16,
+  restore local demo копии и migrate deploy, 23 migrations; свежий обезличенный
+  production dump клиента BLOCKED — client data owner/access]`
+- [ ] Post-deploy smoke: web, auth, import, publish, mobile sync, media и workers.
+  `[частично реализовано/проверено local 2026-07-18: health/readiness и mobile
+  login/pull/logout прошли; opt-in task.comment создал ровно 1 row и cleanup
+  оставил 0 artifacts. BLOCKED — deployed production environment/access для
+  import/publish/media/workers smoke]`
+
+Definition of Done: БД и медиа восстановлены в чистом окружении; отказ
+зависимостей вызывает алерт; неудачный релиз откатывается без потери данных.
+
+### Phase 15 — P0/P1: мобильный field-ready релиз
+
+- [ ] Подписанные preview/production APK/AAB и IPA; build/runtime/protocol
+  compatibility, internal distribution, обязательное обновление и rollback.
+  `[BLOCKED — external signing/distribution access и release owner: кодовый
+  protocol/426 guard покрыт, но подписанные artifacts ещё не выпущены]`
+- [ ] Device matrix: iOS, актуальный Android и low-end Android.
+  `[BLOCKED — physical devices и signed build]`
+- [ ] Сквозной smoke: login/refresh -> route -> check-in -> planogram -> barcode
+  -> guided photo/burst/video -> comment -> checkout -> review/retake.
+  `[BLOCKED — physical devices, signed build и client-like environment;
+  DB-level core workflow отдельно проверен и не подменяет этот smoke]`
+- [ ] Offline matrix: потеря сети на каждом шаге, kill/restart между
+  save/enqueue/upload/push, повтор без дублей.
+  `[BLOCKED — physical device process lifecycle и signed build; pure sync
+  retry/idempotency paths покрыты unit/integration, но kill/restart не заявлен]`
+- [ ] Camera-ready, частичный отказ burst, EXIF/orientation, отзыв permissions,
+  media limits и очистка временных файлов.
+  `[реализовано/проверено unit+typecheck 2026-07-18: camera-ready gate,
+  mount error, burst partial failure/fallback, temp cleanup и server media
+  limits. BLOCKED — EXIF/orientation/permission revoke требуют device matrix]`
+
+- [ ] Лимит очереди/диска; quarantine/conflict/rejected с понятным recovery.
+  `[реализовано/проверено тестами 2026-07-18: 100 media/512 MiB fail-closed,
+  RU/AZ recovery, quarantine/retry counters, удаление media только после
+  upload+applied+server pull. BLOCKED — physical device disk-full smoke]`
+- [ ] Контракт-тесты old app <-> new server и new app <-> old server.
+  `[частично проверено: server protocol mismatch=426 и mobile
+  upgradeRequired покрыты unit-тестами; реальные пары release artifacts
+  BLOCKED — signed old/new release artifacts и distribution access]`
+- [ ] Профиль батареи, памяти и SQLite за полевую смену.
+  `[частично реализовано/проверено mobile tests 2026-07-18: профиль показывает
+  allocated SQLite bytes и files/bytes offline media; media warning срабатывает
+  на 80% существующего hard limit 100 files/512 MiB, расчёт PRAGMA pages и
+  уровни покрыты unit. BLOCKED — battery/RSS/SQLite growth за реальную смену
+  требуют signed build, low-end/Android/iOS devices и 8h field run]`
+
+Definition of Done: двухнедельный прогон не теряет данные; после offline/kill
+операции сходятся автоматически и без дублей.
+
+### Phase 16 — P1: security и privacy hardening
+
+- [ ] Rate limiting login/PIN, sync, uploads, imports и AI; lockout/backoff и
+  аудит неуспешной аутентификации.
+  `[частично реализовано/проверено unit+PostgreSQL integration 2026-07-18:
+  web/mobile login, sync, upload и import используют общий durable fixed-window
+  limiter с atomic upsert, hashed keys и Retry-After; 12 concurrent consumers
+  доказали 5 allow/7 deny. Общий limiter вынесен в db package; внешний
+  OpenAI/Gemini proof worker использует durable per-tenant budget (default
+  100/час, bounded env), а over-limit до чтения media/AI call сохраняет
+  human-review fallback; PostgreSQL test доказал 1 allow/1 deny при max=1.
+  Account lockout `[BLOCKED — business decision]`: нужны утверждённые порог,
+  длительность, способ разблокировки и support policy]`
+- [x] Негативные RBAC/cross-tenant тесты всех API, jobs, exports и media.
+  `[реализовано/проверено 2026-07-18 на текущем surface: fail-closed inventory всех 56
+  v1 route files + mutation/RBAC/workerDb/media fences; динамическая PostgreSQL
+  матрица вызывает 33 read/write/delete операции во всех 29 текущих
+  ID-bearing route-файлах от tenant A к существующим объектам tenant B,
+  получает только 403/404 и сверяет отсутствие мутаций/fixtures. Worker
+  PostgreSQL matrix дополнительно подменяет import job -> foreign batch,
+  notification -> foreign device и proof -> foreign user/store: все три
+  quarantine/fail-closed без изменения batch, sender/storage call или review;
+  scheduled overdue/stock-gap/digest игнорируют foreign rows. Полная
+  динамическая RBAC-матрица вызывает все 40 office mutation handlers с
+  запрещённой их policy ролью и получает точный 403 до payload parsing.
+  Независимый pentest deployed environment остаётся внешним GA evidence]`
+- [ ] Upload guard: size, MIME, magic bytes, path safety, quarantine и HEIC/video.
+  `[реализовано/проверено тестами 2026-07-18: size+MIME+magic bytes для
+  JPEG/PNG/WebP/MP4/MOV/WebM, tenant-owned S3 key; HEIC отклоняется 415 и
+  mobile quarantines файл. BLOCKED — HEIC native/server codec choice, rebuild
+  и real-device fixtures; конвертация не реализована]`
+- [ ] Ротация JWT/S3/vision/deploy secrets; секреты не попадают в client bundle,
+  логи, backup и CI artifacts.
+  `[runbook реализован 2026-07-18: inventory, least-privilege storage,
+  staged rotation и smoke/revoke для JWT/DB/S3/vision/deploy/backup/metrics;
+  BLOCKED — production secret-manager access/owners и фактическая ротация]`
+- [ ] Security headers, CORS/CSRF policy, dependency/container scanning.
+  `[реализовано/локально проверено 2026-07-18: CSP/anti-frame/nosniff,
+  origin guard, production audit=0; CI actions pinned SHA, TruffleHog tracked-source
+  scan=0, Grype web/worker/custom Caddy/custom PostgreSQL High/Critical=0.
+  Archived MinIO удалён из production. BLOCKED — remote GitHub CI run/commit SHA
+  evidence требует repository access и разрешения push]`
+- [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
+  `[частично реализовано/проверено mobile 91/91 + typecheck 2026-07-18: logout
+  предупреждает о pending работе и очищает media+operational SQLite до
+  очистки session; remote 401/refresh revocation переводит sync в terminal
+  authLost без retry, single-flight очищает media/SQLite/SecureStore и выходит
+  на login, при частичном storage failure всё равно пытается очистить остальные
+  backends. BLOCKED — app-level encryption и physical Android/iOS revocation
+  smoke требуют native dependency/security choice, rebuild и devices]`
+
+- [ ] Retention/deletion фото, GPS и audit data; consent/legal basis.
+  `[частично реализовано/проверено PostgreSQL integration 2026-07-18: policy
+  template и controlled tenant DB delete CLI с exact ID+slug confirmation,
+  двумя разными approvals, обязательными backup/media receipts, legal-hold
+  clearance, dry-run row/media inventory, FK-safe serializable transaction и
+  zero-residue check. Тест удалил только target tenant и сохранил neighbor;
+  DB suite 72/72 PASS, fixtures residue=0. BLOCKED — сроки/legal basis,
+  автоматический policy purge и фактическое удаление external S3/backups
+  требуют client privacy/legal/business и infrastructure owners]`
+- [ ] Face blur до персистентности либо согласованный режим без покупателей.
+  `[не реализовано: runbook требует организационно исключать покупателей до
+  появления проверенного pre-persistence blur либо письменного legal режима;
+  AI flag сам по себе этот privacy-риск не закрывает. BLOCKED — privacy/legal
+  решение о режиме либо утверждённый CV provider/dataset для pre-store blur]`
+
+Definition of Done: нет открытых critical/high; доказано, что tenant A не
+читает и не изменяет данные или медиа tenant B.
+
+### Phase 17 — P1: observability и эксплуатация
+
+- [ ] Error/crash reporting для web, workers и native mobile.
+  `[реализовано в коде/проверено unit 2026-07-18: Sentry-compatible handlers
+  gated by DSN. BLOCKED — production DSN/projects/owner и real test event]`
+
+- [ ] Структурные логи с correlationId/organizationId/deviceId/taskId/opId без
+  токенов, PIN и персональных данных.
+  `[частично реализовано/проверено тестами 2026-07-18: API middleware
+  принимает только безопасный caller trace либо генерирует UUID, возвращает
+  x-correlation-id и прокидывает его route handler; Caddy пишет JSON access-log,
+  три worker runner и shutdown lifecycle пишут JSON через allowlist полей,
+  тесты доказывают отбрасывание token/email. Authenticated API boundary теперь
+  централизованно пишет allowlisted method/path/correlationId/organizationId/
+  userId/deviceId/taskId без query/token/session/header leakage; web 112/112
+  PASS. BLOCKED — production log collector/retention/owner; opId для body-only
+  операций добавляется только в соответствующем domain event, не из raw body]`
+- [ ] Метрики: availability/latency/errors, sync/outbox, import freshness,
+  worker lag, media errors, DB и storage capacity.
+  `[частично реализовано/проверено config 2026-07-18: закрытый /api/metrics
+  для DB/queues/S3 и localhost-only Caddy Prometheus histograms для request
+  latency/TTFB/codes/sizes; P95/P99 PromQL зафиксирован в runbook. Actual S3
+  objects/bytes inventory использует полную ListObjectsV2 pagination,
+  single-flight cache 15 минут, отдельные ready/age metrics и fail-closed
+  cursor test. Runtime smoke с текущим local apps/web/.env получил S3 403
+  InvalidAccessKeyId из-за рассинхрона credentials с Compose, поэтому exact
+  live values не заявляются. BLOCKED — production scraper/alerts/storage
+  credentials и infrastructure owner]`
+
+- [ ] Алерты с владельцем/runbook: web/DB/storage down, missed backup, stuck
+  queue, stale import, sync/vision spike, disk/certificate expiry.
+  `[частично реализовано 2026-07-18: backup/verify systemd OnFailure -> external
+  webhook и operations runbook. BLOCKED — production webhook/monitor rules,
+  notification channel и named owner contacts]`
+
+- [x] Понятные ошибки пользователю с support correlationId.
+  `[реализовано/проверено unit+E2E 2026-07-18: каждый API response содержит
+  x-correlation-id; единый client error contract безопасно показывает RU/AZ
+  support ID для всех текущих client fetch load/mutation/poll errors и
+  нормализует network failure в retryable 503 без вывода внутреннего body.
+  Статический inventory-test запрещает незащищённый client fetch; 3-browser
+  E2E доказывает показ support ID и отсутствие private response body]`
+- [ ] Incident response, escalation и postmortem-процесс.
+  `[процесс и шаблон реализованы 2026-07-18: severity/escalation/SLA baseline,
+  incident log и postmortem в deploy/PILOT_GA_RUNBOOK.md и deploy/templates;
+  BLOCKED — named production on-call и согласованное incident drill window]`
+Definition of Done: тестовые отказы вызывают ожидаемый алерт, типовой инцидент
+локализуется без доступа разработчика к данным клиента.
+
+### Phase 18 — P1: реальный ERP/1C и сверка данных
+
+- [ ] Клиентский контракт SKU/barcode/category/brand/dimensions,
+  price/stock/sales/assortment, currency/VAT/timezone/units.
+  `[шаблон контракта реализован 2026-07-18: deploy/ERP_IMPORT_RUNBOOK.md;
+  BLOCKED — mapping sheet конкретного клиента, VAT/timezone и data owners]`
+
+- [ ] Staging -> validation -> import -> reconciliation: idempotent replay,
+  partial errors, quarantine и операторское исправление.
+  `[частично реализовано/проверено worker+DB tests 2026-07-18: API принимает
+  строгий optional ERP manifest, persisted row counts/SHA-256/totals
+  reconciliation, partial errors, durable queue polling и
+  operator error list; import queue имеет capped exponential retry,
+  availableAt, stale PROCESSING recovery, terminal max-attempt failure и
+  atomic concurrent claim. Manifest mismatch сохраняется и завершает batch как
+  COMPLETED_WITH_ERRORS. BLOCKED — manifest/client ERP access для реальной сверки]`
+
+- [ ] Delta/full sync, freshness monitoring и алерт на расхождение.
+  `[частично: staging v1 идемпотентно upsert-ит delta/full payload и metrics
+  отдаёт freshness. BLOCKED — destructive absence semantics/confirmation и
+  production alert требуют client data/business/infrastructure owners]`
+
+- [ ] Контрольные суммы и сверка количества/сумм с ERP.
+  `[локальная механика реализована/проверена 2026-07-18: optional multipart
+  expectedRows/expectedChecksum/expectedTotals проходят strict entity-specific
+  validation, сохраняются для durable queue и сверяются с deterministic
+  row-set SHA-256 и точными BigInt decimal sums price/costPrice/quantity/
+  revenue/profit; результат и field-level mismatch сохраняются в ImportBatch.
+  BLOCKED — реальные ERP manifest/access и 14 последовательных обменов]`
+
+- [x] Guard от массового удаления/обнуления без подтверждения.
+  `[guard реализован/проверен unit: zero и drop >10% блокируются без
+  подтверждения; destructive full-sync сейчас отсутствует и ничего не удаляет]`
+
+- [x] Runbook повторного импорта и восстановления ошибочной загрузки.
+  `[runbook реализован. BLOCKED — клиентский ERP fixture/operator и staging
+  access для evidence повторного импорта]`
+
+
+Definition of Done: 14 последовательных обменов без необъяснённых расхождений;
+повтор входного набора не создаёт дублей и не меняет итоговые суммы.
+
+### Phase 19 — P1: производительность и масштабирование
+
+- [x] Зафиксировать capacity target: tenants, stores, SKU, users, tasks/photos
+  per day, import rows и retention.
+  `[target зафиксирован в deploy/CAPACITY_SLO.md; это проектный baseline,
+  production-like load/soak проверяется отдельными пунктами ниже]`
+
+- [ ] Load tests: import, mass publish/task fan-out, mobile pull/push/upload,
+  analytics/export и worker queues.
+  `[частично реализовано/проверено local k6 2026-07-18: pull tiers 1/10/50
+  PASS; после cursor/index/single-flight оптимизации два 200-VU pool=50 run
+  PASS (3250/3250 и 3251/3251, 0% errors, overall P95 0.69/0.59 s);
+  replay 20 VU/100 repeats PASS: 304/304, P95 177.92 ms, row delta=1.
+  200 VU = разные devices одного demo-user/один instance, поэтому distinct-user
+  production-like test pending. Дополнительный local distinct-user run на
+  200 users/devices/tasks PASS: 3002 pulls/0 errors за 20 s, overall P95
+  1.142 s, initial P95 1.191 s, delta P95 0.691 s; readiness 82/82,
+  P95 0.194 s, post-run RSS ≈205 MiB. Это one-instance/non-soak evidence;
+  local two-instance retest тоже PASS: 3348 pulls/0 errors, overall P95
+  1.004 s, initial 1.063 s, delta 0.519 s, readiness 86/86 P95 0.148 s,
+  post-run RSS 206/188 MiB, DB connections snapshot 19. Production
+  load-balancer/history volume и 8h soak pending. Sales snapshot import+replay 100k/500k PASS
+  local isolated executor (12.292/56.425 s first) и full CSV queue
+  (12.035/60.440 s first; MATCH; row counts stable; 500k max RSS 1.18 GiB), но
+  product+barcode 100k executor/CSV queue PASS (105.946/147.065 s first,
+  MATCH, products/barcodes=100k). Assortment 100k executor/CSV/XLSX PASS
+  (31.777/37.986/31.459 s first; MATCH; 50k matrix + 50k store); streaming
+  XLSX заменил 499.620 s baseline. Complex refs/client workbooks,
+  mass publish FORMAT->500 stores PASS local (175 ms; 500 tasks/histories;
+  replay без дублей). Media 8x10 MiB PASS local (P95 704.77 ms, DB/S3=8/8);
+  bounded overload при capacity=2 дал 2x201 + 6x503/Retry-After без artifacts.
+  Реальный local MinIO stop/start upload drill PASS: outage вернул retryable
+  503+Retry-After+correlationId и оставил DB/S3=0/0; после recovery тот же
+  clientPhotoId получил 201, затем fixture полностью очищен.
+  Standalone production build принял предельный synthetic MP4 35 MiB за
+  715.65 ms: HTTP 201, DB/S3 bytes=36,700,160/36,700,160, post-run RSS
+  311,380 KiB, cleanup=0. Это transport/storage limit proof, не camera codec
+  или worker video-analysis proof.
+  Concurrent multi-tenant publish 4x100 stores PASS local (131 ms; per tenant
+  100 tasks/histories, one assignment, zero foreign tasks; replay rejected).
+  Reference-network/real camera video+analysis/production-S3, broader analytics,
+  multi-replica publish
+  и soak pending. Analytics XML serialization 100k PASS (58.31 MB,
+  728 ms, max RSS 275 MiB), silent export take=2000 устранён. Real DB fixture
+  100k placements + two concurrent full exports PASS after keyset pagination:
+  single 10.959 s, concurrent pair 10.969 s, 55.29 MB each, RSS 438->554 MB
+  instead of the rejected full-array 454 MB->3.258 GB baseline. Sales/stock
+  loaders больше не имеют silent 5k–15k truncation: все пять путей dashboard/
+  ABC/like-for-like/stock coverage используют deterministic keyset pages по
+  2k; regression 2001 rows и web 110/110 PASS 2026-07-18. Production-like
+  sales/stock volume, proxy timeout и multi-replica exports BLOCKED — нужны
+  production-like dataset/network/storage/replicas и 8h execution window]`
+
+- [ ] SQL plans/indexes, pagination/batching, pools, memory, backpressure,
+  timeouts и graceful shutdown.
+  `[частично реализовано/проверено worker tests 2026-07-18: poll intervals
+  fail-safe, SIGTERM/SIGINT прерывают idle wait, текущий tick дренируется,
+  затем все три worker runner отключают Prisma; для pull добавлены четыре
+  cursor-sort индекса, устранены повторные cursor/task reads и bounded
+  tenant/user/cursor single-flight; product import получил bounded concurrency=16,
+  Promise single-flight для общих brand/supplier/manufacturer/category refs
+  и детерминированный barcode first-row-wins. Регрессия на 64 параллельных
+  строках и три последовательных полных worker-suite run прошли 2026-07-18;
+  assortment import получил
+  key-ordered bounded concurrency=16 и streaming XLSX reader. Distinct-user
+  SQL/pool и production-like complex import refs pending. Import и notification
+  queues получили bounded exponential retry, due-time индексы, stale lease
+  recovery и terminal attempt limit; proof-analysis stale/retry path подтверждён
+  интеграционным тестом. Guarded local import backlog 500 jobs/4 concurrent
+  worker loops PASS (2.970 s, 168 jobs/s; 500 completed, 0 failed,
+  attempts=1, products=500, input artifacts=0). Это in-process loopback,
+  не multi-container/production capacity proof. Общий runner lifecycle теперь
+  переживает tick failure через capped exponential backoff+jitter; реальный
+  local PostgreSQL stop/start drill прошёл два цикла, процесс не завершился,
+  после recovery backoff сбросился до attempt=1. Local MinIO upload outage
+  также PASS без artifacts; production DB/S3 outage и
+  multi-replica recovery BLOCKED — production infrastructure/access. Media permit берётся
+  до multipart parsing, default capacity=8, DB failure compensating-delete
+  использует уникальный per-attempt object key]`
+- [ ] Рост PostgreSQL/object storage/mobile SQLite; retention/archive/alerts.
+  `[частично реализовано/проверено 2026-07-18: Prometheus экспортирует
+  PostgreSQL database bytes и paginated/cached S3 objects/bytes/age/ready;
+  mobile profile показывает SQLite allocated bytes и offline media files/bytes
+  с near-limit warning; pure capacity tests PASS. BLOCKED — production alert
+  thresholds/owners требуют infrastructure owner, retention/archive/delete
+  policy требует client privacy/legal/business решения, а сменный SQLite
+  baseline требует physical devices]`
+- [ ] Зафиксировать SLO и baseline/soak/failure-test результаты.
+  `[initial SLO, pull 1/10/50/200 same-user, replay, import и local publish-500
+  baselines зафиксированы; distinct-user/production-like data,
+  reference-network media/video/S3 failure, analytics/failure и 8h soak
+  отсутствуют. BLOCKED — production-like dataset/infrastructure, reference
+  network/devices и согласованное 8h execution window]`
+
+Definition of Done: целевой объём выдерживается с запасом без потери данных;
+P95/P99 и error rate соответствуют SLO на soak test.
+
+### Phase 20 — pilot -> GA
+
+- [ ] Пилот: 1 клиент, 3–5 магазинов, 10–20 пользователей, реальные SKU и
+  физические устройства, 2–4 недели.
+  `[BLOCKED — client agreement/data, 3–5 stores, signed mobile artifacts,
+  physical devices, trained users и 2–4 week pilot window]`
+- [ ] Инструкции и обучение администратора, менеджера, супервайзера и магазина.
+  `[материалы реализованы: role-based training и acceptance practice в
+  deploy/PILOT_GA_RUNBOOK.md. BLOCKED — named client users и training window]`
+- [ ] Web QA: Chromium/WebKit/Firefox, desktop/tablet, accessibility keyboard/
+  focus/contrast и полная проверка RU/AZ локализации без demo-заглушек.
+  `[частично реализовано/проверено Playwright 2026-07-18: fresh production
+  standalone, 21/21 Chromium+Firefox+WebKit tests; responsive 390/768/1440,
+  RU/AZ lang/accessible names/Tab/focus, безопасная support-error выдача и
+  axe WCAG 2 A/AA + 2.1 A/AA audit login/catalog/tasks/analytics без rule
+  exclusions. Audit выявил и исправил constrained zoom, 5 unnamed selects,
+  nested interactive и 12 keyboard-inaccessible scroll regions. Ручной full
+  copy audit и прогон без demo fixture BLOCKED — client data/copy owner]`
+- [ ] Onboarding/offboarding tenant, экспорт/удаление данных, support SLA,
+  каналы эскалации и ответственные за ERP, mobile release и инфраструктуру.
+  `[процессы реализованы в pilot/security runbooks: onboarding/offboarding,
+  export/delete controls, severity/SLA baseline и owner matrix; tenant DB
+  delete CLI локально проверен с dry-run/dual approval/external receipts и
+  cross-tenant preservation. BLOCKED — production owners, договорный SLA,
+  реальный export/media/backups delete и подписанные approvals]`
+- [ ] Журнал инцидентов, обратной связи и принятых решений.
+  `[шаблоны реализованы: pilot event CSV и incident postmortem; реальный
+  журнал BLOCKED — pilot/client/users ещё не стартовали]`
+- [ ] Import -> planogram -> publish -> execution -> proof -> review/retake ->
+  analytics выполняется без участия разработчика.
+  `[частично реализовано/проверено PostgreSQL integration 2026-07-18:
+  изолированный tenant проходит product ERP import с count/checksum ->
+  equipment/template -> planogram/placement -> publish/store task -> execution
+  transitions -> persisted photo proof -> human approve -> COMPLETED -> sales
+  ERP import с count/checksum/totals -> analytics aggregate; проверены assignment,
+  четыре history records и полная очистка fixture (residue=0). Proof создаётся
+  на DB-level: фактический HTTP multipart/S3/native user walkthrough и прогон
+  без разработчика BLOCKED — deployed environment, client operator и physical
+  mobile device]`
+- [x] AI остаётся feature flag/stub до валидации на 20–50+ реальных размеченных
+  proof и измерения precision/recall/cost/latency с human review.
+  `[зафиксировано в GA gates: только disabled/stub+human review до evidence;
+  реальная выборка и метрики отсутствуют, поэтому автоматическое решение не
+  включается]`
+- [ ] GA review закрывает backup/restore, security, SLO, support,
+  contracts/privacy, capacity и все P0/P1 доказательствами.
+  `[исполняемый GO/NO-GO checklist реализован в deploy/PILOT_GA_RUNBOOK.md;
+  GA review BLOCKED и остаётся NO-GO до перечисленных external/device/legal/
+  business и production-like technical evidence]`
+
+Definition of Done: в пилоте нет потери данных и открытых P0; основной сценарий
+стабилен без помощи разработки; владелец принимает GA-гейты и P2-ограничения.
+
+## Порядок начала production-разработки
+
+1. Phase 14: health/readiness, backup/restore, deploy/rollback и отделение demo.
+2. Phase 15–16: field-ready mobile и security/privacy.
+3. Phase 17–18: observability и реальная ERP-интеграция.
+4. Phase 19: capacity/load/soak на реалистичных данных.
+5. Phase 20: пилот, исправления и только затем GA.
+
+Не блокируют первый не-AI production: OCR ценников, автоматическое CV-решение,
+3D-расширения, AR, голосовые подсказки и собственная модель. Они остаются
+feature-flagged/P2 и не подменяют надёжность core workflow.

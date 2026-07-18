@@ -4,6 +4,7 @@
 
 import * as SQLite from "expo-sqlite"
 import * as Crypto from "expo-crypto"
+import * as FileSystem from "expo-file-system/legacy"
 import {
   mobilePhotoSubmitPayloadSchema,
   mobileLocationUpdatePayloadSchema,
@@ -39,6 +40,7 @@ import {
   type LocalPlanogramBundleRow,
   type LocalPlanogramLibrary,
 } from "../planogram/local-library"
+import { calculateLocalDatabaseCapacity, type LocalDatabaseCapacity } from "./capacity"
 
 const db = SQLite.openDatabaseSync("leadshelf.db")
 
@@ -561,9 +563,73 @@ export const localStore: LocalStore = {
     )
     return row?.n ?? 0
   },
+
+  async cleanupUploadedPhotoFiles() {
+    const rows = db.getAllSync<{ clientPhotoId: string; fileUri: string }>(
+      `SELECT DISTINCT p.clientPhotoId, p.fileUri
+       FROM photo_queue p
+       JOIN outbox_ops o
+         ON o.kind='photo.submit'
+        AND o.status='applied'
+        AND json_extract(o.payload, '$.clientPhotoId')=p.clientPhotoId
+       JOIN server_photo_submissions s ON s.clientPhotoId=p.clientPhotoId
+       WHERE p.uploaded=1 AND p.fileUri IS NOT NULL`,
+    )
+    let removed = 0
+    for (const row of rows) {
+      try {
+        await FileSystem.deleteAsync(row.fileUri, { idempotent: true })
+        db.runSync("UPDATE photo_queue SET fileUri=NULL WHERE clientPhotoId=?", [row.clientPhotoId])
+        removed++
+      } catch {
+        // Оставляем URI: очистка повторится после следующей синхронизации.
+      }
+    }
+    return removed
+  },
 }
 
 // --- локальные чтения/записи для UI ---
+
+export function getLogoutDataSummary(): {
+  unsyncedOperations: number
+  unsyncedPhotos: number
+} {
+  const operations = db.getFirstSync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM outbox_ops WHERE status IS NULL OR status!='applied'",
+  )
+  const photos = db.getFirstSync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM photo_queue WHERE uploaded=0",
+  )
+  return {
+    unsyncedOperations: operations?.n ?? 0,
+    unsyncedPhotos: photos?.n ?? 0,
+  }
+}
+
+export function purgeLocalOperationalData(): void {
+  db.withTransactionSync(() => {
+    db.execSync(`
+      DELETE FROM outbox_ops;
+      DELETE FROM photo_queue;
+      DELETE FROM server_photo_submissions;
+      DELETE FROM visits;
+      DELETE FROM route_stops;
+      DELETE FROM routes;
+      DELETE FROM planogram_bundles;
+      DELETE FROM tasks;
+      DELETE FROM stores;
+      DELETE FROM cursors;
+    `)
+  })
+}
+
+export function getLocalDatabaseCapacity(): LocalDatabaseCapacity {
+  const pageCount = db.getFirstSync<{ page_count: number }>("PRAGMA page_count")?.page_count ?? 0
+  const pageSize = db.getFirstSync<{ page_size: number }>("PRAGMA page_size")?.page_size ?? 0
+  const freePageCount = db.getFirstSync<{ freelist_count: number }>("PRAGMA freelist_count")?.freelist_count ?? 0
+  return calculateLocalDatabaseCapacity({ pageCount, pageSize, freePageCount })
+}
 
 type TaskDbRow = Omit<TaskRow, "locationHint" | "captureTemplate" | "captureRetakes"> & {
   locationHint?: string | null

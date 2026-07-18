@@ -14,11 +14,26 @@
 В production compose они запущены отдельными сервисами:
 `worker-import`, `worker-notifications` и `worker-proof-analysis`.
 
+Все три очереди используют атомарный claim и ограниченные повторы. Import и
+push delivery хранят следующее разрешенное время попытки; зависшие
+`PROCESSING`/`SENDING` lease возвращаются в очередь, а после лимита становятся
+`FAILED`. Proof analysis применяет ту же модель через поля `PhotoSubmission`.
+Значения retry/lease настраиваются в `.env.example`; input import-файла после
+terminal failure сохраняется для расследования и ручного решения оператора.
+Ошибки polling tick (включая временную недоступность PostgreSQL) не завершают
+долгоживущий runner: общий lifecycle использует capped exponential backoff с
+jitter до 60 секунд, пишет только безопасный код ошибки и сбрасывает backoff
+после первого успешного tick. Режим `--once` по-прежнему fail-fast для cron/CI.
+
 AI provider:
 
 - По умолчанию используется честный `leadshelf-stub`: кадры извлекаются и
   сохраняются, но реального vision inference нет.
 - Для OpenAI/GPT нужно задать `VISION_PROVIDER=openai`,
   `OPENAI_API_KEY` и при необходимости `OPENAI_VISION_MODEL`
+- Внешние OpenAI/Gemini proof-вызовы имеют durable tenant ceiling:
+  `LEADSHELF_PROOF_AI_MAX_PER_WINDOW` (default 100) за
+  `LEADSHELF_PROOF_AI_WINDOW_MS` (default 1 час). Over-limit не читает media и
+  уходит в сохранённый human-review fallback.
   (default: `gpt-4o-mini`). Видео целиком в OpenAI не отправляется, только
   выбранные JPEG frames.

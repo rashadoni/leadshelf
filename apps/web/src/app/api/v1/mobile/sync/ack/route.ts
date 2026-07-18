@@ -5,11 +5,20 @@ import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { protocolMismatch } from "@/server/mobile/protocol"
 import { workerDb } from "@/server/db/client"
 
+import { consumeRateLimit } from "@/server/security/rate-limit"
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
   const session = await requireApiSession(req)
   if (!session?.did) return unauthorized()
+
+  const limit = await consumeRateLimit("mobile-sync", session.did, { max: 240, windowMs: 60_000 })
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    )
+  }
 
   const body = await req.json().catch(() => null)
   const parsed = mobileSyncAckRequestSchema.safeParse(body)

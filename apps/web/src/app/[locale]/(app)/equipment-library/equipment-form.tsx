@@ -9,6 +9,7 @@ import {
   type ShelfAutoLayoutInput,
 } from "@leadshelf/core"
 import { EquipmentPreviewSvg } from "./equipment-preview-svg"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 interface TypeOption {
   id: string
@@ -43,6 +44,7 @@ export function EquipmentForm({
 }) {
   const t = useTranslations("equipment.form")
   const tErr = useTranslations("equipment.errors")
+  const tc = useTranslations("common")
   const locale = useLocale()
   const router = useRouter()
 
@@ -119,7 +121,7 @@ export function EquipmentForm({
     setMessage(null)
     const shelves = layout.shelves
     const res = initial
-      ? await fetch(`/api/v1/equipment/templates/${initial.templateId}/version`, {
+      ? await fetchApiResponse(`/api/v1/equipment/templates/${initial.templateId}/version`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -130,7 +132,7 @@ export function EquipmentForm({
             hooks: generatedHooks,
           }),
         })
-      : await fetch("/api/v1/equipment/templates", {
+      : await fetchApiResponse("/api/v1/equipment/templates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, typeId, ...geom, shelves, cells: generatedCells, hooks: generatedHooks }),
@@ -148,14 +150,18 @@ export function EquipmentForm({
       setMessage(t("conflict"))
     } else {
       const body = await res.json().catch(() => ({}))
-      setMessage(body.error ?? `HTTP ${res.status}`)
+      setMessage(formatResponseError(
+        res,
+        body.error ?? `HTTP ${res.status}`,
+        (value) => tc("supportCode", { value }),
+      ))
     }
   }
 
   async function copy() {
     if (!initial) return
     setPending(true)
-    const res = await fetch(`/api/v1/equipment/templates/${initial.templateId}/copy`, {
+    const res = await fetchApiResponse(`/api/v1/equipment/templates/${initial.templateId}/copy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: `${initial.name} copy` }),
@@ -164,6 +170,8 @@ export function EquipmentForm({
     if (res.ok) {
       const body = await res.json()
       window.location.assign(`/${locale}/equipment-library/${body.templateId}`)
+    } else {
+      setMessage(formatResponseError(res, tc("actionFailed"), (value) => tc("supportCode", { value })))
     }
   }
 

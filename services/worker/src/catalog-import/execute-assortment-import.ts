@@ -3,6 +3,8 @@ import { parseAssortmentRow, type RawCsvRow, type RowIssue } from "@leadshelf/co
 import { emitProductEvent } from "@leadshelf/db"
 import { loadRefMaps, resolveProductId } from "./resolve-refs"
 import type { ImportSummary } from "./execute-products-import"
+import { buildImportReconciliation } from "./reconciliation"
+import { mapWithConcurrency } from "../concurrency/map-with-concurrency"
 
 // Ассортимент: scope=format -> AssortmentMatrix (упр. всей сетью формата),
 // scope=store -> StoreAssortment (точечные исключения поверх матрицы).
@@ -11,12 +13,19 @@ import type { ImportSummary } from "./execute-products-import"
 
 const CHUNK_SIZE = 500
 
+function assortmentConcurrency(): number {
+  const configured = Number(process.env.LEADSHELF_ASSORTMENT_IMPORT_CONCURRENCY ?? 16)
+  return Number.isInteger(configured) && configured >= 1 && configured <= 32 ? configured : 16
+}
+
 export interface AssortmentImportInput {
   organizationId: string
   rows: RawCsvRow[]
   source?: string
   createdById?: string
   batchId?: string
+  expectedRows?: number
+  expectedChecksum?: string
 }
 
 export async function executeAssortmentImport(
@@ -43,6 +52,7 @@ export async function executeAssortmentImport(
       })
 
   const maps = await loadRefMaps(prisma, organizationId)
+  const concurrency = assortmentConcurrency()
   let totalRows = 0
   let errorRows = 0
   let importedRows = 0
@@ -51,6 +61,7 @@ export async function executeAssortmentImport(
     for (let offset = 0; offset < rows.length; offset += CHUNK_SIZE) {
       const chunk = rows.slice(offset, offset + CHUNK_SIZE)
       const issues: Array<RowIssue & { sourceRow?: RawCsvRow }> = []
+      const operations: Array<{ key: string; run: () => Promise<unknown> }> = []
 
       for (let i = 0; i < chunk.length; i++) {
         const rowNumber = offset + i + 2
@@ -92,16 +103,26 @@ export async function executeAssortmentImport(
             })
           }
           if (rowErrors.length === 0) {
-            await prisma.assortmentMatrix.upsert({
-              where: { formatId_productId: { formatId: formatId!, productId: productId! } },
-              update: { isActive: row.isActive, validFrom, validTo },
-              create: {
-                formatId: formatId!,
-                productId: productId!,
-                isActive: row.isActive,
-                validFrom,
-                validTo,
-              },
+            const resolvedFormatId = formatId!
+            const resolvedProductId = productId!
+            operations.push({
+              key: `format:${resolvedFormatId}:${resolvedProductId}`,
+              run: () => prisma.assortmentMatrix.upsert({
+                where: {
+                  formatId_productId: {
+                    formatId: resolvedFormatId,
+                    productId: resolvedProductId,
+                  },
+                },
+                update: { isActive: row.isActive, validFrom, validTo },
+                create: {
+                  formatId: resolvedFormatId,
+                  productId: resolvedProductId,
+                  isActive: row.isActive,
+                  validFrom,
+                  validTo,
+                },
+              }),
             })
           }
         } else {
@@ -115,16 +136,26 @@ export async function executeAssortmentImport(
             })
           }
           if (rowErrors.length === 0) {
-            await prisma.storeAssortment.upsert({
-              where: { storeId_productId: { storeId: storeId!, productId: productId! } },
-              update: { isActive: row.isActive, validFrom, validTo },
-              create: {
-                storeId: storeId!,
-                productId: productId!,
-                isActive: row.isActive,
-                validFrom,
-                validTo,
-              },
+            const resolvedStoreId = storeId!
+            const resolvedProductId = productId!
+            operations.push({
+              key: `store:${resolvedStoreId}:${resolvedProductId}`,
+              run: () => prisma.storeAssortment.upsert({
+                where: {
+                  storeId_productId: {
+                    storeId: resolvedStoreId,
+                    productId: resolvedProductId,
+                  },
+                },
+                update: { isActive: row.isActive, validFrom, validTo },
+                create: {
+                  storeId: resolvedStoreId,
+                  productId: resolvedProductId,
+                  isActive: row.isActive,
+                  validFrom,
+                  validTo,
+                },
+              }),
             })
           }
         }
@@ -132,10 +163,19 @@ export async function executeAssortmentImport(
         if (rowErrors.length > 0) {
           errorRows++
           issues.push(...rowErrors.map((e) => ({ ...e, sourceRow: raw })))
-        } else {
-          importedRows++
         }
       }
+
+      const operationGroups = new Map<string, typeof operations>()
+      for (const operation of operations) {
+        const group = operationGroups.get(operation.key)
+        if (group) group.push(operation)
+        else operationGroups.set(operation.key, [operation])
+      }
+      await mapWithConcurrency([...operationGroups.values()], concurrency, async (group) => {
+        for (const operation of group) await operation.run()
+      })
+      importedRows += operations.length
 
       if (issues.length > 0) {
         await prisma.importError.createMany({
@@ -156,10 +196,18 @@ export async function executeAssortmentImport(
       })
     }
 
-    const status = errorRows > 0 ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
+    const reconciliation = buildImportReconciliation({
+      rows,
+      processedRows: totalRows,
+      importedRows,
+      errorRows,
+      expectedRows: input.expectedRows,
+      expectedChecksum: input.expectedChecksum,
+    })
+    const status = errorRows > 0 || reconciliation.status === "MISMATCH" ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
     await prisma.importBatch.update({
       where: { id: batch.id },
-      data: { status, finishedAt: new Date() },
+      data: { status, finishedAt: new Date(), reconciliation },
     })
     if (errorRows > 0) {
       await emitProductEvent(prisma, organizationId, {
@@ -171,7 +219,7 @@ export async function executeAssortmentImport(
         payload: { title: "Assortment import errors", count: errorRows, source: input.source ?? null },
       })
     }
-    return { batchId: batch.id, totalRows, errorRows, importedRows, status }
+    return { batchId: batch.id, totalRows, errorRows, importedRows, status, reconciliation }
   } catch (err) {
     await prisma.importBatch.update({
       where: { id: batch.id },

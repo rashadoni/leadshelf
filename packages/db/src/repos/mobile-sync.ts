@@ -105,33 +105,43 @@ export async function pullChanges(
 ) {
   // Пилотный скоуп: только НАЗНАЧЕННЫЕ задачи (docs/18 решение b)
   const taskCursor = decodeCursor(cursors.tasks)
-  const tasks = await prisma.task.findMany({
-    where: {
-      organizationId,
-      assigneeId: userId,
-      ...cursorWhere(taskCursor),
-    },
-    orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-    take: PULL_LIMIT,
-    include: { store: { select: { id: true, name: true, code: true, address: true } } },
-  })
+  const [tasks, fieldAgent] = await Promise.all([
+    prisma.task.findMany({
+      where: {
+        organizationId,
+        assigneeId: userId,
+        ...cursorWhere(taskCursor),
+      },
+      orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+      take: PULL_LIMIT,
+      include: { store: { select: { id: true, name: true, code: true, address: true } } },
+    }),
+    prisma.fieldAgent.findFirst({
+      where: { organizationId, userId },
+      select: { id: true },
+    }),
+  ])
   const lastTask = tasks[tasks.length - 1]
   const nextTaskCursor = lastTask
     ? encodeCursor({ u: lastTask.updatedAt.toISOString(), id: lastTask.id })
     : (cursors.tasks ?? null)
 
   // Все назначенные задачи пользователя определяют точки и планограммы
-  const allAssigned = await prisma.task.findMany({
-    where: { organizationId, assigneeId: userId },
-    select: { id: true, storeId: true, planogramVersionId: true },
-  })
-  const fieldAgent = await prisma.fieldAgent.findFirst({
-    where: { organizationId, userId },
-    select: { id: true },
-  })
+  // Первый неполный window уже содержит все назначенные задачи: не повторяем
+  // тот же scan. При ровно PULL_LIMIT строках отдельный запрос обязателен,
+  // потому что следующая страница может существовать.
+  const allAssignedPromise = !taskCursor && tasks.length < PULL_LIMIT
+    ? Promise.resolve(tasks.map(({ id, storeId, planogramVersionId }) => ({ id, storeId, planogramVersionId })))
+    : prisma.task.findMany({
+        where: { organizationId, assigneeId: userId },
+        select: { id: true, storeId: true, planogramVersionId: true },
+      })
   const routeCursor = decodeCursor(cursors.routes)
-  const routes = fieldAgent
-    ? await prisma.route.findMany({
+  const visitCursor = decodeCursor(cursors.visits)
+  const [allAssigned, routes, visits] = await Promise.all([
+    allAssignedPromise,
+    fieldAgent
+      ? prisma.route.findMany({
         where: {
           organizationId,
           agentId: fieldAgent.id,
@@ -142,7 +152,19 @@ export async function pullChanges(
         take: 50,
         include: { stops: { orderBy: { sortOrder: "asc" } } },
       })
-    : []
+      : Promise.resolve([]),
+    fieldAgent
+      ? prisma.visit.findMany({
+          where: {
+            organizationId,
+            agentId: fieldAgent.id,
+            ...cursorWhere(visitCursor),
+          },
+          orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+          take: 100,
+        })
+      : Promise.resolve([]),
+  ])
   const lastRoute = routes[routes.length - 1]
   const nextRouteCursor = lastRoute
     ? encodeCursor({ u: lastRoute.updatedAt.toISOString(), id: lastRoute.id })
@@ -152,18 +174,6 @@ export async function pullChanges(
   const versionIds = [
     ...new Set(allAssigned.map((t) => t.planogramVersionId).filter((v): v is string => !!v)),
   ]
-  const visitCursor = decodeCursor(cursors.visits)
-  const visits = fieldAgent
-    ? await prisma.visit.findMany({
-        where: {
-          organizationId,
-          agentId: fieldAgent.id,
-          ...cursorWhere(visitCursor),
-        },
-        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-        take: 100,
-      })
-    : []
   const lastVisit = visits[visits.length - 1]
   const nextVisitCursor = lastVisit
     ? encodeCursor({ u: lastVisit.updatedAt.toISOString(), id: lastVisit.id })
@@ -240,7 +250,7 @@ export async function pullChanges(
   const retakesByTask = await listOpenCaptureRetakes(
     prisma,
     organizationId,
-    tasks.map((t) => t.id),
+    tasks.map((task) => task.id),
   )
 
   const assignedTaskIds = allAssigned.map((task) => task.id)

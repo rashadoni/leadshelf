@@ -8,7 +8,9 @@
     "mainNavigation": "Основная навигация",
     "moreNavigation": "Дополнительные разделы",
     "more": "Ещё",
-    "fieldForceShort": "Поле"
+    "fieldForceShort": "Поле",
+    "supportCode": "Код поддержки: {value}.",
+    "actionFailed": "Не удалось выполнить действие."
   },
   "auth": {
     "title": "Вход",
@@ -16,6 +18,7 @@
     "password": "Пароль",
     "submit": "Войти",
     "error": "Неверный e-mail или пароль",
+    "supportCode": "Код поддержки: {value}.",
     "logout": "Выход"
   },
   "nav": {
@@ -192,6 +195,7 @@
       "sku": "SKU",
       "name": "Название",
       "barcode": "Штрих-код",
+      "unit": "Единица измерения",
       "category": "Категория",
       "brand": "Бренд",
       "supplier": "Поставщик",
@@ -229,6 +233,10 @@
       "totalRows": "Всего строк",
       "importedRows": "Импортировано",
       "errorRows": "Строк с ошибками",
+      "reconciliationStatus": "Сверка с источником",
+      "reconciliationMatch": "контрольные данные совпали",
+      "reconciliationMismatch": "есть необъяснённое расхождение",
+      "checksum": "SHA-256 набора строк",
       "errorsTitle": "Ошибки и предупреждения",
       "row": "Строка",
       "field": "Поле",

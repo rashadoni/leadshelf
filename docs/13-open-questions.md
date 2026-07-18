@@ -59,8 +59,8 @@
     PDF-планограмма остается UX backlog, не DoD Phase 1-13.
 14. **Observability**: Sentry (web+mobile+API), структурные логи, uptime.
     → до пилота, минимум Sentry — в Phase 0 CI.
-15. ~~Бэкапы~~ **[решено v0]:** ночной `pg_dump` + MinIO-volume backup на
-    Hetzner Storage Box/borgbackup по `deploy/SERVER_SETUP.md`; включить до
+15. ~~Бэкапы~~ **[пересмотрено 2026-07-18]:** ночной `pg_dump` + mirror внешнего S3
+    в encrypted restic repository вне VPS по `deploy/SERVER_SETUP.md`; включить до
     загрузки пилотных данных.
 16. ~~Секреты прод-окружения~~ **[решено v0]:** GitHub Actions secrets +
     `.env.production` на сервере root:600; SOPS/Doppler можно добавить позже.

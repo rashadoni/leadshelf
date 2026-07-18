@@ -9,6 +9,9 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "tenant:offboarding": "tsx prisma/tenant-offboarding.ts",
+    "publish:capacity": "tsx prisma/publish-capacity.ts",
+    "publish:concurrency-capacity": "tsx prisma/publish-concurrency-capacity.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

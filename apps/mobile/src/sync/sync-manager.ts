@@ -182,6 +182,10 @@ export class SyncManager {
         }
       }
 
+      // Удаляем локальный media-файл только после тройного подтверждения:
+      // upload завершён, photo.submit applied, server submission пришёл pull-ом.
+      await this.deps.store.cleanupUploadedPhotoFiles?.()
+
       const now = (this.deps.now?.() ?? new Date()).toISOString()
       this.patch({ phase: "idle", lastSyncAt: now, error: null, lastDurationMs: Date.now() - startedAt })
       await this.refreshCounters()
@@ -189,6 +193,8 @@ export class SyncManager {
     } catch (e) {
       if (e instanceof UpgradeRequiredError) {
         this.patch({ phase: "upgradeRequired", error: null, lastDurationMs: Date.now() - startedAt })
+      } else if (e instanceof AuthLostError) {
+        this.patch({ phase: "authLost", error: null, lastDurationMs: Date.now() - startedAt })
       } else {
         this.patch({ phase: "error", error: e instanceof Error ? e.message : String(e), lastDurationMs: Date.now() - startedAt })
       }

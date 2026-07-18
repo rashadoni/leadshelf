@@ -8,7 +8,22 @@ export {
   TENANT_MODELS,
   type TenantClient,
 } from "./tenant-client.ts"
+export {
+  previewTenantOffboarding,
+  deleteTenantData,
+  type TenantOffboardingPreview,
+  type DeleteTenantDataInput,
+  type DeleteTenantDataResult,
+} from "./tenant-offboarding.ts"
 export { listImportErrorsForBatch } from "./repos/import.ts"
+export {
+  consumeDurableRateLimit,
+  opaqueRateLimitKey,
+  type RateLimitQuery,
+  type RateLimitResult,
+  type RateLimitRule,
+  type RateLimitRow,
+} from "./rate-limit.ts"
 export {
   createTemplateWithVersion,
   saveVersion,
@@ -86,6 +101,7 @@ export {
   claimPendingNotificationDeliveries,
   markNotificationDeliverySent,
   markNotificationDeliveryFailed,
+  recoverStaleNotificationDeliveries,
   detectStockGapAlerts,
   type NotificationDeliveryJob,
   type EmitProductEventInput,

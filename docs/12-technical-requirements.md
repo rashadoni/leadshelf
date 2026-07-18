@@ -57,10 +57,12 @@
 
 ## Файлы/медиа
 
-- `[решено]` S3-совместимый API с первого дня (dev: MinIO); presigned upload
-  с мобильного; EXIF сохраняется (форензика фото); thumbnails — worker.
-- `[решено]` Прод-провайдер v0: MinIO на том же Hetzner VPS через S3-совместимый
-  API. Cloudflare R2 остается миграционным вариантом при росте объема/трафика.
+- `[уточнено 2026-07-18]` S3-совместимый API с первого дня (dev: MinIO);
+  mobile media проходит через tenant-guarded app API, EXIF сохраняется;
+  thumbnails — worker.
+- `[пересмотрено 2026-07-18]` Production требует поддерживаемый внешний
+  S3/R2 provider с versioning/lifecycle; archived MinIO Community image на VPS
+  запрещён. Dev MinIO остаётся локальным эмулятором.
 
 ## Фоновые задачи
 
@@ -92,14 +94,14 @@
 
 - `[решено 2026-07-02, владелец]` **Новый Hetzner VPS сразу**, деплой с
   первого дня: CI (GitHub Actions) → сервер. Один хост:
-  web + worker + Postgres 16 + MinIO + Caddy (reverse proxy, авто-TLS),
+  web + worker + Postgres 16 + Caddy (reverse proxy, auto-TLS);
+  object storage — внешний S3/R2,
   всё в Docker. Спецификация: CPX31 (4 vCPU/8GB) или CX32, Ubuntu 24.04.
   Setup-чеклист: `deploy/SERVER_SETUP.md`.
-- `[решено]` Фото v0 — MinIO на том же VPS (volume + бэкап); миграция на
-  Cloudflare R2 — когда объем/трафик вырастет (S3 API совместим, переезд
-  дешевый).
-- `[решено]` Бэкапы: ночной pg_dump + бэкап MinIO-volume на Hetzner Storage
-  Box (или borgbackup); настроить ДО загрузки пилотных данных.
+- `[пересмотрено 2026-07-18]` Фото production — внешний S3/R2 с
+  versioning, lifecycle и отдельным backup; embedded MinIO не используется.
+- `[пересмотрено 2026-07-18]` Бэкапы: ночной pg_dump + mirror external S3
+  в шифрованный restic repository вне VPS; настроить до пилотных данных.
 - `[решено]` Секреты: GitHub Actions secrets + `.env` на сервере (не в git).
 - `[решено 2026-07-02, владелец]` Dev и prod на одном VPS ЖЁСТКО разделены:
   `/opt/leadshelf/prod` и `/opt/leadshelf/dev`, разные compose-имена

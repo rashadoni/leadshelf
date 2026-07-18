@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireApiSession, unauthorized, forbidden } from "@/server/http/api-guard"
 import { tenantDb, workerDb } from "@/server/db/client"
-import { productImageKey, putObject } from "@/server/storage/s3"
+import { deleteObject, productImageKey, putObject } from "@/server/storage/s3"
+import { attemptObjectWrite, persistWithObjectCleanup } from "@/server/storage/object-compensation"
 
 export const runtime = "nodejs"
 
@@ -38,12 +39,24 @@ export async function POST(
   if (file.size > MAX_SIZE) return NextResponse.json({ error: "too_large" }, { status: 413 })
 
   const key = productImageKey(session.org, product.id, ext)
-  await putObject(key, Buffer.from(await file.arrayBuffer()), file.type)
+  const bytes = Buffer.from(await file.arrayBuffer())
+  const stored = await attemptObjectWrite(() => putObject(key, bytes, file.type))
+  if (!stored) {
+    return NextResponse.json(
+      { error: "storage_unavailable" },
+      { status: 503, headers: { "Retry-After": "5" } },
+    )
+  }
 
-  // ProductImage — дочерняя модель (parent-path): продукт уже проверен выше
-  const count = await workerDb.productImage.count({ where: { productId: product.id } })
-  const image = await workerDb.productImage.create({
-    data: { productId: product.id, url: key, kind: "front", sortOrder: count },
+  const image = await persistWithObjectCleanup({
+    persist: async () => {
+    // ProductImage — дочерняя модель (parent-path): продукт уже проверен выше
+    const count = await workerDb.productImage.count({ where: { productId: product.id } })
+      return workerDb.productImage.create({
+        data: { productId: product.id, url: key, kind: "front", sortOrder: count },
+      })
+    },
+    cleanup: () => deleteObject(key),
   })
 
   return NextResponse.json({ id: image.id, url: `/api/media/${key}` }, { status: 201 })

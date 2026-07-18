@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 // Фото optional (решение владельца, docs/03): есть — показываем,
 // нет — заглушка-«упаковка» с инициалом и цветом от бренда/названия.
@@ -35,21 +37,25 @@ export function PhotoCell({
   imageKey: string | null
 }) {
   const router = useRouter()
+  const tc = useTranslations("common")
   const inputRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setPending(true)
+    setError(null)
     const form = new FormData()
     form.set("file", file)
-    const res = await fetch(`/api/v1/catalog/products/${productId}/images`, {
+    const res = await fetchApiResponse(`/api/v1/catalog/products/${productId}/images`, {
       method: "POST",
       body: form,
     })
     setPending(false)
     if (res.ok) router.refresh()
+    else setError(formatResponseError(res, tc("actionFailed"), (value) => tc("supportCode", { value })))
   }
 
   const label = (brandName ?? name).slice(0, 1).toUpperCase()
@@ -85,6 +91,7 @@ export function PhotoCell({
         className="hidden"
         onChange={onFile}
       />
+      {error ? <span role="alert" className="block max-w-48 text-xs text-red-700">{error}</span> : null}
     </>
   )
 }

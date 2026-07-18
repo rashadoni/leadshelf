@@ -1,0 +1,17 @@
+[Unit]
+Description=LeadShelf encrypted PostgreSQL and media backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+OnFailure=leadshelf-operations-alert@backup-failed.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/opt/leadshelf/prod/app/deploy/scripts/backup-production.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=6h

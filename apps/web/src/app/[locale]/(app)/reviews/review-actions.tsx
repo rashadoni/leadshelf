@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 
 export function ReviewActions({
   reviewId,
@@ -17,6 +18,7 @@ export function ReviewActions({
 }) {
   const router = useRouter()
   const t = useTranslations("reviews")
+  const tc = useTranslations("common")
   const [pending, setPending] = useState<"APPROVED" | "REJECTED" | "RETAKE" | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,10 +31,10 @@ export function ReviewActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       })
-      if (!res.ok && res.status !== 409) throw new Error(String(res.status))
+      requireApiResponse(res, [409])
       router.refresh()
-    } catch {
-      setError(t("actionFailed"))
+    } catch (error) {
+      setError(formatApiError(error, t("actionFailed"), (value) => tc("supportCode", { value })))
     } finally {
       setPending(null)
     }
@@ -48,10 +50,10 @@ export function ReviewActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stepId: captureStepId, stepKind: captureStepKind, reviewId }),
       })
-      if (!res.ok) throw new Error(String(res.status))
+      requireApiResponse(res)
       router.refresh()
-    } catch {
-      setError(t("actionFailed"))
+    } catch (error) {
+      setError(formatApiError(error, t("actionFailed"), (value) => tc("supportCode", { value })))
     } finally {
       setPending(null)
     }

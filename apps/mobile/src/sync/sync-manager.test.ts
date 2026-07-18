@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
-import { HttpError } from "./ports-error"
+import { AuthLostError, HttpError } from "./ports-error"
 import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi, SyncCursors } from "./ports"
 
 function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
@@ -132,6 +132,18 @@ describe("SyncManager", () => {
     expect(s.phase).toBe("idle")
     expect(ackSpy).toHaveBeenCalled()
     expect(store.calls.indexOf("applyPull")).toBeLessThan(store.calls.indexOf("setCursors"))
+  })
+
+  test("очистка подтверждённых media-файлов запускается после push", async () => {
+    const cleanup = vi.fn(async () => 1)
+    const store = makeStore({ cleanupUploadedPhotoFiles: cleanup })
+    const api = makeApi()
+    const m = new SyncManager({ api, store })
+
+    const s = await m.runSync()
+
+    expect(s.phase).toBe("idle")
+    expect(cleanup).toHaveBeenCalledOnce()
   })
 
   test("упавший apply НЕ доводит до ack (курсор не потерян)", async () => {
@@ -415,6 +427,19 @@ describe("SyncManager", () => {
     const m = new SyncManager({ api, store })
     const s = await m.runSync()
     expect(s.phase).toBe("upgradeRequired")
+  })
+
+  test("отзыв сессии переводит sync в terminal authLost без retryable error", async () => {
+    const store = makeStore()
+    const api = makeApi({
+      pull: async () => {
+        throw new AuthLostError()
+      },
+    })
+    const m = new SyncManager({ api, store })
+    const s = await m.runSync()
+    expect(s.phase).toBe("authLost")
+    expect(s.error).toBeNull()
   })
 
   test("операции с исчерпанными попытками не шлются повторно", async () => {

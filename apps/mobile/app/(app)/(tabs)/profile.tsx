@@ -1,12 +1,17 @@
 // Вкладка «Профиль»: агент, язык интерфейса, синхронизация, выход.
 import { useEffect, useState } from "react"
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router } from "expo-router"
+import * as FileSystem from "expo-file-system/legacy"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { SectionHint } from "../../../src/components/SectionHint"
 import { mobileLogout } from "../../../src/api/mobile-client"
 import { tokenStore } from "../../../src/auth/token-store"
+import { requiresLogoutConfirmation } from "../../../src/auth/logout-policy"
+import { getLocalDatabaseCapacity, getLogoutDataSummary, purgeLocalOperationalData } from "../../../src/db/local-store"
+import { formatCapacityBytes, photoCapacityLevel } from "../../../src/db/capacity"
+import { PHOTO_OUTBOX_DIR, readPhotoOutboxUsage } from "../../../src/photos/photo-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
@@ -19,25 +24,70 @@ export default function ProfileTab() {
   const { status, sync } = useSync()
   const [userName, setUserName] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [capacity, setCapacity] = useState<{
+    databaseBytes: number
+    photoFiles: number
+    photoBytes: number
+    photoLevel: ReturnType<typeof photoCapacityLevel>
+  } | null>(null)
+
+  async function refreshCapacity() {
+    const database = getLocalDatabaseCapacity()
+    const photos = await readPhotoOutboxUsage()
+    setCapacity({
+      databaseBytes: database.allocatedBytes,
+      photoFiles: photos.files,
+      photoBytes: photos.bytes,
+      photoLevel: photoCapacityLevel(photos),
+    })
+  }
 
   useEffect(() => {
     void tokenStore.getUserName().then((name) => setUserName(name))
+    void refreshCapacity()
   }, [])
 
   async function onSyncNow() {
     setSyncing(true)
     await sync()
+    await refreshCapacity()
     setSyncing(false)
   }
 
-  async function logout() {
-    await mobileLogout() // best-effort отзыв refresh-сессии на сервере
-    await tokenStore.clearSession()
-    router.replace("/(auth)/login" as never)
+  async function completeLogout() {
+    try {
+      await mobileLogout() // best-effort отзыв refresh-сессии на сервере
+      // Сначала удаляем чувствительные media-файлы; при ошибке сессия остаётся,
+      // чтобы пользователь мог повторить безопасную очистку.
+      await FileSystem.deleteAsync(PHOTO_OUTBOX_DIR, { idempotent: true })
+      purgeLocalOperationalData()
+      await tokenStore.clearSession()
+      router.replace("/(auth)/login" as never)
+    } catch {
+      Alert.alert(t("logoutFailed"))
+    }
+  }
+
+  function logout() {
+    const summary = getLogoutDataSummary()
+    if (!requiresLogoutConfirmation(summary)) {
+      void completeLogout()
+      return
+    }
+    Alert.alert(
+      t("logoutUnsyncedTitle"),
+      t("logoutUnsyncedBody")
+        .replace("{operations}", String(summary.unsyncedOperations))
+        .replace("{photos}", String(summary.unsyncedPhotos)),
+      [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("logoutDiscard"), style: "destructive", onPress: () => void completeLogout() },
+      ],
+    )
   }
 
   const initial = (userName ?? "?").trim().charAt(0).toUpperCase() || "?"
-  const running = !["idle", "offline", "error", "upgradeRequired"].includes(status.phase)
+  const running = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
   const issueCount = status.conflictOps + status.rejectedOps + status.quarantinedPhotos
   const duration = status.lastDurationMs == null
     ? t("profileNever")
@@ -118,6 +168,30 @@ export default function ProfileTab() {
           </Pressable>
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t("profileStorage")}</Text>
+          <View style={styles.metricsGrid}>
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>{t("profileSqliteSize")}</Text>
+              <Text style={styles.metricValue}>{capacity ? formatCapacityBytes(capacity.databaseBytes) : "—"}</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>{t("profileOfflineMedia")}</Text>
+              <Text style={[
+                styles.metricValue,
+                capacity && capacity.photoLevel !== "ok" && styles.metricWarning,
+              ]}>
+                {capacity
+                  ? `${capacity.photoFiles} · ${formatCapacityBytes(capacity.photoBytes)}`
+                  : "—"}
+              </Text>
+            </View>
+          </View>
+          {capacity && capacity.photoLevel !== "ok" ? (
+            <Text style={styles.capacityHint}>{t("profileStorageWarning")}</Text>
+          ) : null}
+        </View>
+
         <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]}>
           <Text style={styles.logoutText}>{t("logout")}</Text>
         </Pressable>
@@ -187,6 +261,7 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 11, color: colors.muted },
   metricValue: { marginTop: 5, fontSize: 13, fontWeight: "800", color: colors.text },
   metricWarning: { color: colors.warning },
+  capacityHint: { marginTop: 10, fontSize: 12, lineHeight: 17, color: colors.warning },
   syncPressed: { backgroundColor: colors.primaryPressed },
   syncDisabled: { backgroundColor: colors.disabled },
   syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },

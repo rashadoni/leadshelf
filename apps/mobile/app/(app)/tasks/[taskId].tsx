@@ -37,6 +37,7 @@ import {
   type CaptureScenarioStep,
 } from "../../../src/photos/capture-scenario"
 import { selectBestBurstShot, type BurstIssue, type BurstShot } from "../../../src/photos/burst-select"
+import { captureBurstFrames } from "../../../src/photos/capture-burst"
 import {
   buildEquipmentSilhouette,
   buildTelemetryPayload,
@@ -46,6 +47,7 @@ import {
 } from "../../../src/photos/capture-guide"
 import { buildProofExifJson } from "../../../src/photos/proof-metadata"
 import { persistAndQueuePhoto } from "../../../src/photos/photo-store"
+import { PhotoStorageLimitError } from "../../../src/photos/photo-storage-policy"
 import {
   findPlacementSummaryByCode,
   listChangeSummaries,
@@ -91,6 +93,7 @@ export default function TaskDetailScreen() {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false)
   const [photoSaving, setPhotoSaving] = useState(false)
+  const [cameraReady, setCameraReady] = useState(false)
   const [videoRecording, setVideoRecording] = useState(false)
   const [activeCaptureStepId, setActiveCaptureStepId] = useState<string | null>(null)
   const locale = useLocale()
@@ -189,6 +192,7 @@ export default function TaskDetailScreen() {
           photoCameraRef.current?.stopRecording()
           setVideoRecording(false)
         }
+        setCameraReady(false)
         setPhotoCameraOpen(false)
         return true
       }
@@ -274,6 +278,12 @@ export default function TaskDetailScreen() {
     void sync()
   }
 
+  function showCaptureError(error: unknown) {
+    Alert.alert(
+      error instanceof PhotoStorageLimitError ? t("photoStorageFull") : t("captureCameraFailed"),
+    )
+  }
+
   async function queueProofPhoto(
     sourceUri: string,
     captureStep: CaptureScenarioStep,
@@ -337,6 +347,7 @@ export default function TaskDetailScreen() {
     setMismatchFlagged(false)
     retakesRef.current = 0
     stepOpenedAtRef.current = Date.now()
+    setCameraReady(false)
     setPhotoCameraOpen(true)
   }
 
@@ -368,6 +379,8 @@ export default function TaskDetailScreen() {
       Object.keys(captureFlags).length > 0 ? captureFlags : null,
       captureTelemetry,
     )
+    await FileSystem.deleteAsync(shot.uri, { idempotent: true }).catch(() => {})
+    setCameraReady(false)
     setPhotoCameraOpen(false)
   }
 
@@ -376,24 +389,29 @@ export default function TaskDetailScreen() {
       await toggleProofVideo()
       return
     }
-    if (photoSaving) return
+    if (photoSaving || !cameraReady) return
     setPhotoSaving(true)
     try {
       // Burst-серия: лучший кадр по размеру файла, остальные удаляем.
-      const shots: BurstShot[] = []
       const burstCount = Math.max(1, activeCaptureStep.burstCount)
-      for (let i = 0; i < burstCount; i += 1) {
-        const picture = await photoCameraRef.current?.takePictureAsync({ quality: 0.7, exif: true })
-        if (picture?.uri) {
+      const burst = await captureBurstFrames<BurstShot>({
+        count: burstCount,
+        capture: async () => {
+          const picture = await photoCameraRef.current?.takePictureAsync({ quality: 0.7, exif: true })
+          if (!picture?.uri) return null
           const info = await FileSystem.getInfoAsync(picture.uri).catch(() => null)
-          shots.push({
+          return {
             uri: picture.uri,
             byteSize: info && info.exists && typeof info.size === "number" ? info.size : null,
             exif: (picture.exif as Record<string, unknown> | undefined) ?? null,
-          })
-        }
+          }
+        },
+      })
+      const shots = burst.frames.map((frame) => frame.value)
+      if (shots.length === 0) {
+        Alert.alert(t("captureCameraFailed"))
+        return
       }
-      if (shots.length === 0) return
       const selection = selectBestBurstShot(shots)
       const best = shots[selection.bestIndex]!
       await Promise.all(
@@ -420,10 +438,12 @@ export default function TaskDetailScreen() {
         {
           text: t("useAnyway"),
           onPress: () => {
-            void acceptBurstShot(best, selection.issues, true)
+            void acceptBurstShot(best, selection.issues, true).catch(showCaptureError)
           },
         },
       ])
+    } catch (error) {
+      showCaptureError(error)
     } finally {
       setPhotoSaving(false)
     }
@@ -450,7 +470,7 @@ export default function TaskDetailScreen() {
 
   async function toggleProofVideo() {
     const camera = photoCameraRef.current
-    if (!camera) return
+    if (!camera || !cameraReady) return
     if (videoRecording) {
       camera.stopRecording()
       setVideoRecording(false)
@@ -468,11 +488,17 @@ export default function TaskDetailScreen() {
       })
       if (!recording?.uri) return
       if (discardRecordingRef.current) {
+        await FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => {})
+        setCameraReady(false)
         setPhotoCameraOpen(false)
         return
       }
       await queueProofPhoto(recording.uri, activeCaptureStep, Date.now() - startedAt)
+      await FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => {})
+      setCameraReady(false)
       setPhotoCameraOpen(false)
+    } catch (error) {
+      showCaptureError(error)
     } finally {
       discardRecordingRef.current = false
       setVideoRecording(false)
@@ -588,6 +614,12 @@ export default function TaskDetailScreen() {
           style={styles.proofCamera}
           facing="back"
           mode={activeCaptureStep.mediaKind === "video" ? "video" : "picture"}
+          onCameraReady={() => setCameraReady(true)}
+          onMountError={() => {
+            setCameraReady(false)
+            setPhotoCameraOpen(false)
+            Alert.alert(t("captureCameraFailed"))
+          }}
           mute
           videoQuality="720p"
         />
@@ -666,18 +698,24 @@ export default function TaskDetailScreen() {
                   setVideoRecording(false)
                   return
                 }
+                setCameraReady(false)
                 setPhotoCameraOpen(false)
               }}
             >
               <Text style={styles.proofSecondaryText}>{t("cancel")}</Text>
             </Pressable>
             <Pressable
-              style={[styles.proofCapture, photoSaving && !videoRecording && styles.disabled]}
-              disabled={photoSaving && !videoRecording}
+              style={[
+                styles.proofCapture,
+                (!cameraReady || (photoSaving && !videoRecording)) && styles.disabled,
+              ]}
+              disabled={!cameraReady || (photoSaving && !videoRecording)}
               onPress={captureProofPhoto}
             >
               <Text style={styles.proofCaptureText}>
-                {activeCaptureStep.mediaKind === "video"
+                {!cameraReady
+                  ? t("cameraPreparing")
+                  : activeCaptureStep.mediaKind === "video"
                   ? videoRecording
                     ? t("stopVideo")
                     : photoSaving

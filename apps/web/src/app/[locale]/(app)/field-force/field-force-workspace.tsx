@@ -25,6 +25,7 @@ import {
 import { FieldForceDashboard } from "./field-force-dashboard"
 import { Link } from "@/i18n/navigation"
 import { useLocale, useTranslations } from "next-intl"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 import { formatLocaleDate } from "@/i18n/format"
 
 type ViewKey = "map" | "routes" | "agents" | "leaderboard" | "activity" | "reports" | "settings"
@@ -259,7 +260,8 @@ async function apiRequest(url: string, init: RequestInit) {
     headers,
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok || body.success === false) {
+  requireApiResponse(res)
+  if (body.success === false) {
     const message = typeof body.error === "string" ? body.error : `HTTP ${res.status}`
     throw new Error(message)
   }
@@ -268,6 +270,7 @@ async function apiRequest(url: string, init: RequestInit) {
 
 export function FieldForceWorkspace() {
   const tWork = useTranslations("fieldForce.workspace")
+  const tc = useTranslations("common")
   const locale = useLocale()
   const [activeView, setActiveView] = useState<ViewKey>("map")
   const [routes, setRoutes] = useState<RouteItem[]>([])
@@ -313,13 +316,20 @@ export function FieldForceWorkspace() {
         activityRes.json(),
         reportsRes.json(),
       ])
-      if (!routesRes.ok || !routesJson.success) throw new Error("routes_failed")
-      if (!agentsRes.ok || !agentsJson.success) throw new Error("agents_failed")
-      if (!storesRes.ok || !storesJson.success) throw new Error("stores_failed")
-      if (!settingsRes.ok || !settingsJson.success) throw new Error("settings_failed")
-      if (!leaderboardRes.ok || !leaderboardJson.success) throw new Error("leaderboard_failed")
-      if (!activityRes.ok || !activityJson.success) throw new Error("activity_failed")
-      if (!reportsRes.ok || !reportsJson.success) throw new Error("reports_failed")
+      requireApiResponse(routesRes)
+      requireApiResponse(agentsRes)
+      requireApiResponse(storesRes)
+      requireApiResponse(settingsRes)
+      requireApiResponse(leaderboardRes)
+      requireApiResponse(activityRes)
+      requireApiResponse(reportsRes)
+      if (!routesJson.success) throw new Error("routes_failed")
+      if (!agentsJson.success) throw new Error("agents_failed")
+      if (!storesJson.success) throw new Error("stores_failed")
+      if (!settingsJson.success) throw new Error("settings_failed")
+      if (!leaderboardJson.success) throw new Error("leaderboard_failed")
+      if (!activityJson.success) throw new Error("activity_failed")
+      if (!reportsJson.success) throw new Error("reports_failed")
 
       const nextRoutes = (routesJson.data?.routes ?? []) as RouteItem[]
       const nextSettings = settingsJson.data?.settings as (Partial<SettingsState> & { updatedAt?: string | null }) | undefined
@@ -335,8 +345,8 @@ export function FieldForceWorkspace() {
       if (nextSettings?.updatedAt) setSavedAt(new Date(nextSettings.updatedAt))
       setSelectedRouteId((current) => current ?? nextRoutes[0]?.id ?? null)
       setLastLoadedAt(new Date())
-    } catch {
-      setError(tWork("loadError"))
+    } catch (caught) {
+      setError(formatApiError(caught, tWork("loadError"), (value) => tc("supportCode", { value })))
     } finally {
       setLoading(false)
     }
@@ -362,7 +372,11 @@ export function FieldForceWorkspace() {
       setActionMessage({ type: "success", text: tWork("messages.routeCreated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: tWork("messages.routeCreateFailed", { error: (err as Error).message }) })
+      setActionMessage({ type: "error", text: formatApiError(
+        err,
+        tWork("messages.routeCreateFailed", { error: (err as Error).message }),
+        (value) => tc("supportCode", { value }),
+      ) })
       throw err
     }
   }, [loadWorkspace])
@@ -376,7 +390,11 @@ export function FieldForceWorkspace() {
       setActionMessage({ type: "success", text: tWork("messages.routeUpdated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: tWork("messages.routeUpdateFailed", { error: (err as Error).message }) })
+      setActionMessage({ type: "error", text: formatApiError(
+        err,
+        tWork("messages.routeUpdateFailed", { error: (err as Error).message }),
+        (value) => tc("supportCode", { value }),
+      ) })
       throw err
     }
   }, [loadWorkspace])
@@ -387,7 +405,11 @@ export function FieldForceWorkspace() {
       setActionMessage({ type: "success", text: tWork("messages.routeCancelled") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: tWork("messages.routeCancelFailed", { error: (err as Error).message }) })
+      setActionMessage({ type: "error", text: formatApiError(
+        err,
+        tWork("messages.routeCancelFailed", { error: (err as Error).message }),
+        (value) => tc("supportCode", { value }),
+      ) })
       throw err
     }
   }, [loadWorkspace])
@@ -401,7 +423,11 @@ export function FieldForceWorkspace() {
       setActionMessage({ type: "success", text: tWork("messages.agentCreated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: tWork("messages.agentCreateFailed", { error: (err as Error).message }) })
+      setActionMessage({ type: "error", text: formatApiError(
+        err,
+        tWork("messages.agentCreateFailed", { error: (err as Error).message }),
+        (value) => tc("supportCode", { value }),
+      ) })
       throw err
     }
   }, [loadWorkspace])
@@ -415,7 +441,11 @@ export function FieldForceWorkspace() {
       setActionMessage({ type: "success", text: tWork("messages.agentUpdated") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: tWork("messages.agentUpdateFailed", { error: (err as Error).message }) })
+      setActionMessage({ type: "error", text: formatApiError(
+        err,
+        tWork("messages.agentUpdateFailed", { error: (err as Error).message }),
+        (value) => tc("supportCode", { value }),
+      ) })
       throw err
     }
   }, [loadWorkspace])
@@ -465,7 +495,11 @@ export function FieldForceWorkspace() {
       setActionMessage({ type: "success", text: tWork("messages.settingsSaved") })
       await loadWorkspace()
     } catch (err) {
-      setActionMessage({ type: "error", text: tWork("messages.settingsFailed", { error: (err as Error).message }) })
+      setActionMessage({ type: "error", text: formatApiError(
+        err,
+        tWork("messages.settingsFailed", { error: (err as Error).message }),
+        (value) => tc("supportCode", { value }),
+      ) })
     } finally {
       setSettingsSaving(false)
     }

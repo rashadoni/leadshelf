@@ -250,6 +250,57 @@ describe("proof video analysis worker", () => {
     })
   })
 
+  test("falls back to human review before reading media when tenant AI budget is exhausted", async () => {
+    const photo = await prisma.photoSubmission.create({
+      data: {
+        organizationId: orgId,
+        storeId,
+        taskId,
+        userId,
+        url: `photos/${orgId}/${taskId}/rate-limited.jpg`,
+        mediaType: "PHOTO",
+        mimeType: "image/jpeg",
+        clientPhotoId: `${slug}-rate-limited-proof`,
+        takenAt: new Date(),
+        analysisStatus: "PENDING",
+      },
+    })
+    let storageReads = 0
+    let analyzeCalls = 0
+    const result = await processNextProofVideoAnalysisJob(prisma, {
+      organizationId: orgId,
+      storage: {
+        getObjectBuffer: async () => {
+          storageReads += 1
+          return { body: Buffer.from("private-proof"), contentType: "image/jpeg" }
+        },
+        putObjectBuffer: async () => undefined,
+      },
+      analysisIdentity: { provider: "openai", modelVersion: "rate-limit-test" },
+      consumeAiBudget: async () => ({ allowed: false, retryAfterSeconds: 120 }),
+      analyze: async () => {
+        analyzeCalls += 1
+        throw new Error("external_ai_must_not_run")
+      },
+    })
+
+    expect(result).toEqual({
+      status: "skipped",
+      photoSubmissionId: photo.id,
+      reason: "proof_ai_rate_limited",
+    })
+    expect(storageReads).toBe(0)
+    expect(analyzeCalls).toBe(0)
+    await expect(prisma.photoSubmission.findUniqueOrThrow({ where: { id: photo.id } }))
+      .resolves.toMatchObject({
+        analysisStatus: "SKIPPED",
+        analysisError: "proof_ai_rate_limited",
+      })
+    await expect(prisma.humanReview.findFirstOrThrow({
+      where: { organizationId: orgId, photoSubmissionId: photo.id },
+    })).resolves.toMatchObject({ status: "PENDING" })
+  })
+
   test("claims one pending proof exactly once under concurrent workers", async () => {
     const photo = await prisma.photoSubmission.create({
       data: {

@@ -2,7 +2,9 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { ProofOverlay, type ProofOverlayBox } from "./proof-overlay"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 
 interface ManualAnnotation {
   id: string
@@ -50,10 +52,12 @@ export function ManualShelfEditor({
   labels: ManualShelfEditorLabels
 }) {
   const router = useRouter()
+  const tc = useTranslations("common")
   const [rows, setRows] = useState(initialAnnotations)
   const [selectedId, setSelectedId] = useState<string | null>(initialAnnotations[0]?.id ?? null)
   const [sequence, setSequence] = useState(initialAnnotations.length + 1)
   const [state, setState] = useState<"idle" | "saving" | "saved" | "failed">("idle")
+  const [error, setError] = useState<string | null>(null)
 
   const boxes: ProofOverlayBox[] = rows.map((row) => {
     const product = products.find((item) => item.id === row.productId)
@@ -97,17 +101,19 @@ export function ManualShelfEditor({
 
   async function save() {
     setState("saving")
+    setError(null)
     try {
       const response = await fetch(`/api/v1/reviews/${reviewId}/annotations`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ annotations: rows }),
       })
-      if (!response.ok) throw new Error(String(response.status))
+      requireApiResponse(response)
       setState("saved")
       router.refresh()
-    } catch {
+    } catch (caught) {
       setState("failed")
+      setError(formatApiError(caught, labels.failed, (value) => tc("supportCode", { value })))
     }
   }
 
@@ -183,7 +189,7 @@ export function ManualShelfEditor({
           </button>
           <div className="flex items-center gap-3">
             {state === "saved" ? <span role="status" className="text-sm text-emerald-700">{labels.saved}</span> : null}
-            {state === "failed" ? <span role="alert" className="text-sm text-red-700">{labels.failed}</span> : null}
+            {state === "failed" ? <span role="alert" className="text-sm text-red-700">{error ?? labels.failed}</span> : null}
             <button type="button" disabled={state === "saving"} onClick={save} className="min-h-10 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60">
               {state === "saving" ? labels.saving : labels.save}
             </button>

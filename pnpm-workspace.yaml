@@ -24,6 +24,9 @@ overrides:
   "@expo/env": "2.4.0"
   "@expo/fingerprint": "0.20.1"
   "@expo/image-utils": "0.11.0"
+  "next>postcss": "8.5.10"
+  "exceljs>uuid": "11.1.1"
+  "xcode>uuid": "11.1.1"
 
 onlyBuiltDependencies:
   - "@parcel/watcher"

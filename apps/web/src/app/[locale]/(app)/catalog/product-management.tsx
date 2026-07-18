@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 type RefOption = { id: string; name: string; normalizedPath?: string }
 
@@ -80,6 +81,7 @@ function RefSelect({
 }) {
   return (
     <select
+      aria-label={placeholder}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="min-w-36 rounded-md border border-neutral-300 px-2 py-1 text-xs"
@@ -96,6 +98,7 @@ function RefSelect({
 
 export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
   const t = useTranslations("catalog.manage")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [values, setValues] = useState<ProductInput>(emptyProduct)
   const [pending, setPending] = useState(false)
@@ -108,14 +111,14 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
     event.preventDefault()
     setPending(true)
     setError(null)
-    const response = await fetch("/api/v1/catalog/products", {
+    const response = await fetchApiResponse("/api/v1/catalog/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(toPayload(values)),
     })
     setPending(false)
     if (!response.ok) {
-      setError(t("saveError"))
+      setError(formatResponseError(response, t("saveError"), (value) => tc("supportCode", { value })))
       return
     }
     setValues(emptyProduct)
@@ -146,6 +149,7 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
           className="w-36 rounded-md border border-neutral-300 px-2 py-1 text-xs"
         />
         <select
+          aria-label={t("unit")}
           value={values.unit}
           onChange={(event) => set("unit", event.target.value)}
           className="w-24 rounded-md border border-neutral-300 px-2 py-1 text-xs"
@@ -182,7 +186,7 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
         <button disabled={pending} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs text-white disabled:opacity-50">
           {pending ? t("saving") : t("create")}
         </button>
-        {error && <span className="text-xs text-red-600">{error}</span>}
+        {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
       </div>
     </form>
   )
@@ -198,17 +202,20 @@ export function ProductMetaEditor({
   refs: CatalogRefs
 }) {
   const t = useTranslations("catalog.manage")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
   const [values, setValues] = useState<ProductInput>(initial)
+  const [error, setError] = useState<string | null>(null)
   const set = (key: keyof ProductInput, value: string) => setValues((current) => ({ ...current, [key]: value }))
   const setBool = (key: "isSoftPack" | "isActive", value: boolean) =>
     setValues((current) => ({ ...current, [key]: value }))
 
   async function save(nextActive?: boolean) {
     setPending(true)
-    const response = await fetch(`/api/v1/catalog/products/${productId}`, {
+    setError(null)
+    const response = await fetchApiResponse(`/api/v1/catalog/products/${productId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(toPayload({ ...values, isActive: nextActive ?? values.isActive })),
@@ -217,15 +224,18 @@ export function ProductMetaEditor({
     if (response.ok) {
       setEditing(false)
       router.refresh()
+    } else {
+      setError(formatResponseError(response, t("saveError"), (value) => tc("supportCode", { value })))
     }
   }
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setEditing(true)} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100">
           {t("edit")}
         </button>
+        {error ? <span role="alert" className="text-xs text-red-600">{error}</span> : null}
         <button
           onClick={() => save(!values.isActive)}
           disabled={pending}
@@ -264,6 +274,7 @@ export function ProductMetaEditor({
           {t("cancel")}
         </button>
       </div>
+      {error ? <span role="alert" className="text-xs text-red-600">{error}</span> : null}
     </div>
   )
 }

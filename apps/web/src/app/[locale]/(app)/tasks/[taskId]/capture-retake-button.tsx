@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 
 export function CaptureRetakeButton({
   taskId,
@@ -16,6 +17,7 @@ export function CaptureRetakeButton({
   requested: boolean
 }) {
   const t = useTranslations("tasks")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,10 +31,10 @@ export function CaptureRetakeButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stepId, stepKind }),
       })
-      if (!res.ok && res.status !== 409) throw new Error(String(res.status))
+      requireApiResponse(res, [409])
       router.refresh()
-    } catch {
-      setError(t("detail.decisionFailed"))
+    } catch (error) {
+      setError(formatApiError(error, t("detail.decisionFailed"), (value) => tc("supportCode", { value })))
     } finally {
       setPending(false)
     }

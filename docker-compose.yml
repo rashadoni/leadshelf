@@ -27,8 +27,8 @@ services:
       MINIO_ROOT_USER: leadshelf
       MINIO_ROOT_PASSWORD: leadshelf-dev
     ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # web console
+      - "127.0.0.1:59000:9000" # S3 API; 9000 занят другими dev stacks
+      - "127.0.0.1:59001:9001" # web console
     volumes:
       - miniodata:/data
     healthcheck:

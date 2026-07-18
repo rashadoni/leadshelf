@@ -1,4 +1,5 @@
 import type { PrismaClient, TaskStatus } from "@prisma/client"
+import { randomUUID } from "node:crypto"
 import { shelfSpaceForShelf, validatePlacementOnShelf } from "@leadshelf/core"
 import { emitProductEvent } from "./alerts.ts"
 import { PlanogramRepoError } from "./planogram.ts"
@@ -187,8 +188,10 @@ export async function publishPlanogramVersion(
     const assignmentIds: string[] = []
     const taskIds: string[] = []
     if (input.target.type === "FORMAT") {
+      const assignmentId = randomUUID()
       const assignment = await tx.planogramAssignment.create({
         data: {
+          id: assignmentId,
           planogramVersionId: version.id,
           formatId: input.target.formatId,
           activeFrom,
@@ -196,45 +199,59 @@ export async function publishPlanogramVersion(
         },
       })
       assignmentIds.push(assignment.id)
-      for (const storeId of storeIds) {
-        const task = await tx.task.create({
-          data: {
-            organizationId,
-            storeId,
-            planogramVersionId: version.id,
-            assignmentId: assignment.id,
-            title: version.planogram.name,
-            status: "NEW",
-            dueAt: input.dueAt ?? null,
-          },
-        })
-        taskIds.push(task.id)
-        await tx.taskStatusHistory.create({
-          data: { taskId: task.id, fromStatus: null, toStatus: "NEW", byUserId: input.publishedById },
-        })
-      }
+      const tasks = storeIds.map((storeId) => ({
+        id: randomUUID(),
+        organizationId,
+        storeId,
+        planogramVersionId: version.id,
+        assignmentId,
+        title: version.planogram.name,
+        status: "NEW" as const,
+        dueAt: input.dueAt ?? null,
+      }))
+      await tx.task.createMany({ data: tasks })
+      await tx.taskStatusHistory.createMany({
+        data: tasks.map((task) => ({
+          taskId: task.id,
+          fromStatus: null,
+          toStatus: "NEW" as const,
+          byUserId: input.publishedById ?? null,
+        })),
+      })
+      taskIds.push(...tasks.map((task) => task.id))
     } else {
-      for (const storeId of storeIds) {
-        const assignment = await tx.planogramAssignment.create({
-          data: { planogramVersionId: version.id, storeId, activeFrom, activeTo },
-        })
-        assignmentIds.push(assignment.id)
-        const task = await tx.task.create({
-          data: {
-            organizationId,
-            storeId,
-            planogramVersionId: version.id,
-            assignmentId: assignment.id,
-            title: version.planogram.name,
-            status: "NEW",
-            dueAt: input.dueAt ?? null,
-          },
-        })
-        taskIds.push(task.id)
-        await tx.taskStatusHistory.create({
-          data: { taskId: task.id, fromStatus: null, toStatus: "NEW", byUserId: input.publishedById },
-        })
-      }
+      const assignments = storeIds.map((storeId) => ({
+        id: randomUUID(),
+        planogramVersionId: version.id,
+        storeId,
+        activeFrom,
+        activeTo,
+      }))
+      const assignmentIdByStore = new Map(
+        assignments.map((assignment) => [assignment.storeId, assignment.id]),
+      )
+      const tasks = storeIds.map((storeId) => ({
+        id: randomUUID(),
+        organizationId,
+        storeId,
+        planogramVersionId: version.id,
+        assignmentId: assignmentIdByStore.get(storeId)!,
+        title: version.planogram.name,
+        status: "NEW" as const,
+        dueAt: input.dueAt ?? null,
+      }))
+      await tx.planogramAssignment.createMany({ data: assignments })
+      await tx.task.createMany({ data: tasks })
+      await tx.taskStatusHistory.createMany({
+        data: tasks.map((task) => ({
+          taskId: task.id,
+          fromStatus: null,
+          toStatus: "NEW" as const,
+          byUserId: input.publishedById ?? null,
+        })),
+      })
+      assignmentIds.push(...assignments.map((assignment) => assignment.id))
+      taskIds.push(...tasks.map((task) => task.id))
     }
 
     return {

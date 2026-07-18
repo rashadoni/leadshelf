@@ -8,6 +8,8 @@ import {
 import type { ProductImportRowV1 } from "@leadshelf/api-contracts/import/v1"
 import { emitProductEvent } from "@leadshelf/db"
 
+import { buildImportReconciliation, type ImportReconciliation } from "./reconciliation"
+import { mapWithConcurrency } from "../concurrency/map-with-concurrency"
 // Исполнитель импорта товаров. Работает через system client ("import-worker"):
 // bulk upsert-ы по natural keys требуют операций, которые tenant client
 // осознанно блокирует. КАЖДЫЙ запрос обязан включать organizationId.
@@ -15,12 +17,21 @@ import { emitProductEvent } from "@leadshelf/db"
 const CHUNK_SIZE = 500
 const EXTERNAL_SYSTEM = "staging.v1"
 
+function productImportConcurrency(): number {
+  const configured = Number(process.env.LEADSHELF_PRODUCT_IMPORT_CONCURRENCY ?? 16)
+  return Number.isInteger(configured) && configured >= 1 && configured <= 32
+    ? configured
+    : 16
+}
+
 export interface ProductsImportInput {
   organizationId: string
   rows: RawCsvRow[]
   source?: string
   createdById?: string
   batchId?: string
+  expectedRows?: number
+  expectedChecksum?: string
 }
 
 export interface ImportSummary {
@@ -29,13 +40,14 @@ export interface ImportSummary {
   errorRows: number
   importedRows: number
   status: "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED"
+  reconciliation: ImportReconciliation
 }
 
 interface RefCaches {
-  brand: Map<string, string>
-  supplier: Map<string, string>
-  manufacturer: Map<string, string>
-  category: Map<string, string>
+  brand: Map<string, Promise<string>>
+  supplier: Map<string, Promise<string>>
+  manufacturer: Map<string, Promise<string>>
+  category: Map<string, Promise<string>>
 }
 
 async function ensureName(
@@ -43,7 +55,7 @@ async function ensureName(
   model: "brand" | "supplier" | "manufacturer",
   organizationId: string,
   name: string,
-  cache: Map<string, string>,
+  cache: Map<string, Promise<string>>,
 ): Promise<string> {
   const key = name.toLowerCase()
   const cached = cache.get(key)
@@ -52,20 +64,25 @@ async function ensureName(
   const delegate = prisma[model] as unknown as {
     upsert(args: object): Promise<{ id: string }>
   }
-  const row = await delegate.upsert({
+  const pending = delegate.upsert({
     where: { organizationId_name: { organizationId, name } },
     update: {},
     create: { organizationId, name },
-  })
-  cache.set(key, row.id)
-  return row.id
+  }).then((row) => row.id)
+  cache.set(key, pending)
+  try {
+    return await pending
+  } catch (error) {
+    if (cache.get(key) === pending) cache.delete(key)
+    throw error
+  }
 }
 
 async function ensureCategoryPath(
   prisma: PrismaClient,
   organizationId: string,
   pathRaw: string,
-  cache: Map<string, string>,
+  cache: Map<string, Promise<string>>,
 ): Promise<string | null> {
   const path = parseCategoryPath(pathRaw)
   if (!path) return null
@@ -74,11 +91,11 @@ async function ensureCategoryPath(
     const levelPath = path.levelPaths[i]!
     const cached = cache.get(levelPath)
     if (cached) {
-      parentId = cached
+      parentId = await cached
       continue
     }
     // явная аннотация разрывает циклический вывод типов (parentId <- cat.id)
-    const cat: { id: string } = await prisma.category.upsert({
+    const pending: Promise<string> = prisma.category.upsert({
       where: {
         organizationId_normalizedPath: { organizationId, normalizedPath: levelPath },
       },
@@ -90,9 +107,14 @@ async function ensureCategoryPath(
         parentId,
       },
       select: { id: true },
-    })
-    cache.set(levelPath, cat.id)
-    parentId = cat.id
+    }).then((category) => category.id)
+    cache.set(levelPath, pending)
+    try {
+      parentId = await pending
+    } catch (error) {
+      if (cache.get(levelPath) === pending) cache.delete(levelPath)
+      throw error
+    }
   }
   return parentId
 }
@@ -245,6 +267,10 @@ export async function executeProductsImport(
     manufacturer: new Map(),
     category: new Map(),
   }
+  // Внутри одного файла первая строка владеет barcode. Это сохраняет
+  // детерминированную прежнюю семантику при bounded parallel processing и
+  // не позволяет более позднему SKU выиграть concurrent create race.
+  const fileBarcodeOwner = new Map<string, string>()
   let totalRows = 0
   let errorRows = 0
   let importedRows = 0
@@ -253,6 +279,11 @@ export async function executeProductsImport(
     for (let offset = 0; offset < rows.length; offset += CHUNK_SIZE) {
       const chunk = rows.slice(offset, offset + CHUNK_SIZE)
       const chunkIssues: Array<RowIssue & { sourceRow?: RawCsvRow }> = []
+      const validRows: Array<{
+        row: ProductImportRowV1
+        rowNumber: number
+        preIssues: RowIssue[]
+      }> = []
 
       for (let i = 0; i < chunk.length; i++) {
         const rowNumber = offset + i + 2 // +2: 1-based + строка заголовков
@@ -269,14 +300,37 @@ export async function executeProductsImport(
           continue
         }
         chunkIssues.push(...parsed.warnings)
+        let row = parsed.value
+        const preIssues: RowIssue[] = []
+        if (row.barcode) {
+          const ownerSku = fileBarcodeOwner.get(row.barcode)
+          if (ownerSku) {
+            if (ownerSku !== row.sku) {
+              preIssues.push({
+                rowNumber,
+                field: "barcode",
+                reason: `штрих-код ${row.barcode} уже принадлежит другому товару`,
+                severity: "error",
+                suggestedFix: "проверьте дубликат в выгрузке; товар импортирован без штрих-кода",
+              })
+            }
+            row = { ...row, barcode: null }
+          } else {
+            fileBarcodeOwner.set(row.barcode, row.sku)
+          }
+        }
+        validRows.push({ row, rowNumber, preIssues })
+      }
 
-        const rowIssues = await importOneProduct(
-          prisma,
-          organizationId,
-          parsed.value,
-          rowNumber,
-          caches,
-        )
+      const imported = await mapWithConcurrency(
+        validRows,
+        productImportConcurrency(),
+        async ({ row, rowNumber, preIssues }) => [
+          ...preIssues,
+          ...(await importOneProduct(prisma, organizationId, row, rowNumber, caches)),
+        ],
+      )
+      for (const rowIssues of imported) {
         if (rowIssues.some((i2) => i2.severity === "error")) errorRows++
         else importedRows++
         chunkIssues.push(...rowIssues)
@@ -301,10 +355,18 @@ export async function executeProductsImport(
       })
     }
 
-    const status = errorRows > 0 ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
+    const reconciliation = buildImportReconciliation({
+      rows,
+      processedRows: totalRows,
+      importedRows,
+      errorRows,
+      expectedRows: input.expectedRows,
+      expectedChecksum: input.expectedChecksum,
+    })
+    const status = errorRows > 0 || reconciliation.status === "MISMATCH" ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
     await prisma.importBatch.update({
       where: { id: batch.id },
-      data: { status, finishedAt: new Date() },
+      data: { status, finishedAt: new Date(), reconciliation },
     })
     if (errorRows > 0) {
       await emitProductEvent(prisma, organizationId, {
@@ -316,7 +378,7 @@ export async function executeProductsImport(
         payload: { title: "Product import errors", count: errorRows, source: input.source ?? null },
       })
     }
-    return { batchId: batch.id, totalRows, errorRows, importedRows, status }
+    return { batchId: batch.id, totalRows, errorRows, importedRows, status, reconciliation }
   } catch (err) {
     await prisma.importBatch.update({
       where: { id: batch.id },

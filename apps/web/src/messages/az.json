@@ -8,7 +8,9 @@
     "mainNavigation": "Əsas naviqasiya",
     "moreNavigation": "Əlavə bölmələr",
     "more": "Daha",
-    "fieldForceShort": "Sahə"
+    "fieldForceShort": "Sahə",
+    "supportCode": "Dəstək kodu: {value}.",
+    "actionFailed": "Əməliyyatı yerinə yetirmək mümkün olmadı."
   },
   "auth": {
     "title": "Daxil ol",
@@ -16,6 +18,7 @@
     "password": "Şifrə",
     "submit": "Daxil ol",
     "error": "E-poçt və ya şifrə yanlışdır",
+    "supportCode": "Dəstək kodu: {value}.",
     "logout": "Çıxış"
   },
   "nav": {
@@ -192,6 +195,7 @@
       "sku": "SKU",
       "name": "Ad",
       "barcode": "Barkod",
+      "unit": "Ölçü vahidi",
       "category": "Kateqoriya",
       "brand": "Brend",
       "supplier": "Təchizatçı",
@@ -229,6 +233,10 @@
       "totalRows": "Cəmi sətir",
       "importedRows": "İdxal edildi",
       "errorRows": "Xətalı sətir",
+      "reconciliationStatus": "Mənbə ilə tutuşdurma",
+      "reconciliationMatch": "nəzarət məlumatları uyğundur",
+      "reconciliationMismatch": "izah olunmamış fərq var",
+      "checksum": "Sətir dəstinin SHA-256 dəyəri",
       "errorsTitle": "Xətalar və xəbərdarlıqlar",
       "row": "Sətir",
       "field": "Sahə",

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 export function RouteCreateForm({
   agents,
@@ -12,6 +13,7 @@ export function RouteCreateForm({
   stores: Array<{ id: string; name: string; code: string | null }>
 }) {
   const t = useTranslations("fieldForce")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [name, setName] = useState("")
   const [agentId, setAgentId] = useState("")
@@ -20,14 +22,18 @@ export function RouteCreateForm({
 
   async function submit() {
     if (!name.trim() || storeIds.length === 0) return
-    const res = await fetch("/api/v1/field-force/routes", {
+    const res = await fetchApiResponse("/api/v1/field-force/routes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, agentId: agentId || null, storeIds }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      setMessage(String(body.error ?? res.status))
+      setMessage(formatResponseError(
+        res,
+        String(body.error ?? res.status),
+        (value) => tc("supportCode", { value }),
+      ))
       return
     }
     setName("")

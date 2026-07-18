@@ -18,6 +18,7 @@ import {
   type PlacementStackMode,
 } from "@leadshelf/core"
 import { PublishDialog, type PublishTargetOption } from "./publish-dialog"
+import { formatResponseError } from "@/client/api-error"
 
 const PlanogramThreeViewer = dynamic(
   () => import("./planogram-three-viewer").then((mod) => mod.PlanogramThreeViewer),
@@ -233,6 +234,7 @@ export function PlanogramEditor({
   const t = useTranslations("planograms.editor")
   const tState = useTranslations("planograms.state")
   const tPub = useTranslations("planograms.publish")
+  const tc = useTranslations("common")
   const locale = useLocale()
   const router = useRouter()
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -321,12 +323,19 @@ export function PlanogramEditor({
   }
 
   async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const first = await fetch(input, init)
-    if (first.status !== 401) return first
+    try {
+      const first = await fetch(input, init)
+      if (first.status !== 401) return first
 
-    const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
-    if (!refreshed.ok) return first
-    return fetch(input, init)
+      const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
+      if (!refreshed.ok) return first
+      return fetch(input, init)
+    } catch {
+      return new Response(JSON.stringify({ error: "network_unavailable" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
   }
 
   async function createNextDraft() {
@@ -337,18 +346,20 @@ export function PlanogramEditor({
     if (res.ok) {
       const body = await res.json()
       router.push(`/${locale}/planograms/${planogram.id}/${body.versionId}`)
+    } else {
+      await handleResponse(res)
     }
   }
 
   async function handleResponse(res: Response): Promise<Record<string, unknown> | null> {
     if (res.status === 401) {
       setMessageTone("error")
-      setMessage(t("sessionExpired"))
+      setMessage(formatResponseError(res, t("sessionExpired"), (value) => tc("supportCode", { value })))
       return null
     }
     if (res.status === 409) {
       setMessageTone("error")
-      setMessage(t("conflict"))
+      setMessage(formatResponseError(res, t("conflict"), (value) => tc("supportCode", { value })))
       router.refresh()
       return null
     }
@@ -363,7 +374,11 @@ export function PlanogramEditor({
             ? t("zoneOutOfBounds")
             : String(raw)
       setMessageTone("error")
-      setMessage(`${t("rejected")}: ${suffix}`)
+      setMessage(formatResponseError(
+        res,
+        `${t("rejected")}: ${suffix}`,
+        (value) => tc("supportCode", { value }),
+      ))
       return null
     }
     setMessage(null)
@@ -381,6 +396,8 @@ export function PlanogramEditor({
     if (res.ok) {
       const body = await res.json()
       setPickerProducts(body.products)
+    } else {
+      await handleResponse(res)
     }
   }
 

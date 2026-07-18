@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
+import { fetchApiResponse } from "@/client/api-error"
 
 export default function LoginPage() {
   const t = useTranslations("auth")
@@ -9,25 +10,30 @@ export default function LoginPage() {
   const locale = useLocale()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState(false)
+  const [supportCode, setSupportCode] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setPending(true)
-    setError(false)
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    })
-    if (res.ok) {
-      // полный переход, чтобы middleware увидел свежие cookie
-      const next = new URLSearchParams(window.location.search).get("next")
-      const safeNext = next?.startsWith(`/${locale}/`) && !next.startsWith("//") ? next : `/${locale}`
-      window.location.assign(safeNext)
-    } else {
-      setError(true)
+    setSupportCode(null)
+    try {
+      const res = await fetchApiResponse("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      if (res.ok) {
+        // полный переход, чтобы middleware увидел свежие cookie
+        const next = new URLSearchParams(window.location.search).get("next")
+        const safeNext = next?.startsWith(`/${locale}/`) && !next.startsWith("//") ? next : `/${locale}`
+        window.location.assign(safeNext)
+        return
+      }
+      setSupportCode(res.headers.get("x-correlation-id") ?? "")
+    } catch {
+      setSupportCode("")
+    } finally {
       setPending(false)
     }
   }
@@ -63,7 +69,12 @@ export default function LoginPage() {
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
           />
         </label>
-        {error && <p className="text-sm text-red-600">{t("error")}</p>}
+        {supportCode !== null && (
+          <p role="alert" className="text-sm text-red-600">
+            {t("error")}
+            {supportCode ? <> {t("supportCode", { value: supportCode })}</> : null}
+          </p>
+        )}
         <button
           type="submit"
           disabled={pending}

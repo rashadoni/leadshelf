@@ -1,0 +1,25 @@
+# Caddy 2.11.4 rebuilt on patched Go. The upstream 2.11.4 image was built
+# with Go 1.26.3 and contained curl; neither is needed by this runtime.
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
+ARG CADDY_VERSION=v2.11.4
+ENV CGO_ENABLED=0
+RUN go install -trimpath -ldflags="-s -w" github.com/caddyserver/caddy/v2/cmd/caddy@${CADDY_VERSION}
+
+FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
+RUN apk add --no-cache ca-certificates libcap mailcap \
+    && addgroup -S caddy \
+    && adduser -S caddy -G caddy \
+    && mkdir -p /config/caddy /data/caddy /etc/caddy /srv \
+    && chown -R caddy:caddy /config /data /etc/caddy /srv
+COPY --from=builder /go/bin/caddy /usr/bin/caddy
+RUN setcap cap_net_bind_service=+ep /usr/bin/caddy
+
+USER caddy
+WORKDIR /srv
+ENV XDG_CONFIG_HOME=/config \
+    XDG_DATA_HOME=/data
+EXPOSE 80 443 443/udp 2019
+VOLUME ["/data", "/config"]
+
+ENTRYPOINT ["caddy"]
+CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

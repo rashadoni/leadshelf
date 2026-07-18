@@ -84,6 +84,7 @@ export interface LocalStore {
   bumpPhotoAttempts(clientPhotoIds: string[], reason?: string): Promise<void>
   quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
   quarantinedPhotoCount(): Promise<number>
+  cleanupUploadedPhotoFiles?(): Promise<number>
 }
 
 export interface OutboxDiagnostics {
@@ -101,6 +102,7 @@ export type SyncPhase =
   | "pushing"
   | "error"
   | "offline"
+  | "authLost"
   | "upgradeRequired"
 
 export interface SyncStatus {

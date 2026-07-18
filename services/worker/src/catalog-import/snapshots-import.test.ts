@@ -106,6 +106,34 @@ describe("executeSnapshotsImport", () => {
     const row = await prisma.salesSnapshot.findFirst({ where: { organizationId: orgId } })
     expect(row?.revenue.toString()).toBe("62.5")
   })
+
+  test("ERP totals mismatch is persisted and makes the batch non-clean", async () => {
+    const result = await executeSnapshotsImport(prisma, {
+      organizationId: orgId,
+      entityType: "sales",
+      rows: [{
+        sku: "P-2",
+        date: "2026-07-02",
+        storecode: "ST-1",
+        quantity: "2.5",
+        revenue: "20.10",
+        profit: "-1.10",
+      }],
+      expectedRows: 1,
+      expectedTotals: { quantity: "2.50", revenue: "20.11", profit: "-1.1" },
+    })
+
+    expect(result.status).toBe("COMPLETED_WITH_ERRORS")
+    expect(result.errorRows).toBe(0)
+    expect(result.reconciliation).toMatchObject({
+      status: "MISMATCH",
+      sourceTotals: { quantity: "2.5", revenue: "20.1", profit: "-1.1" },
+      mismatches: ["erp_total_revenue_mismatch"],
+    })
+    expect(await prisma.importBatch.findUniqueOrThrow({ where: { id: result.batchId } })).toMatchObject({
+      status: "COMPLETED_WITH_ERRORS",
+    })
+  })
 })
 
 describe("executeAssortmentImport", () => {
@@ -133,5 +161,26 @@ describe("executeAssortmentImport", () => {
       rows: [{ sku: "P-1", scope: "format", format: "Standart", isactive: "да" }],
     })
     expect(await prisma.assortmentMatrix.count(inOrg)).toBe(1)
+  })
+
+  test("повторяющиеся natural keys применяются строго в порядке строк", async () => {
+    const result = await executeAssortmentImport(prisma, {
+      organizationId: orgId,
+      rows: [
+        { sku: "P-2", scope: "format", format: "Standart", isactive: "да" },
+        { sku: "P-2", scope: "format", format: "Standart", isactive: "нет" },
+        { sku: "P-2", scope: "store", storecode: "ST-1", isactive: "нет" },
+        { sku: "P-2", scope: "store", storecode: "ST-1", isactive: "да" },
+      ],
+    })
+    expect(result.status).toBe("COMPLETED")
+    const matrix = await prisma.assortmentMatrix.findFirst({
+      where: { format: { organizationId: orgId }, product: { sku: "P-2" } },
+    })
+    const store = await prisma.storeAssortment.findFirst({
+      where: { store: { organizationId: orgId }, product: { sku: "P-2" } },
+    })
+    expect(matrix?.isActive).toBe(false)
+    expect(store?.isActive).toBe(true)
   })
 })

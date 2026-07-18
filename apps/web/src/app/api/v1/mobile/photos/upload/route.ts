@@ -13,8 +13,12 @@ import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
 import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
-import { putObject } from "@/server/storage/s3"
+import { deleteObject, putObject } from "@/server/storage/s3"
 
+import { matchesDeclaredMediaType } from "@/server/security/media-signature"
+import { consumeRateLimit } from "@/server/security/rate-limit"
+import { TrySemaphore } from "@/server/concurrency/try-semaphore"
+import { attemptObjectWrite, persistWithObjectCleanup } from "@/server/storage/object-compensation"
 export const runtime = "nodejs"
 export const maxDuration = 120
 
@@ -23,6 +27,14 @@ export const maxDuration = 120
 
 const MAX_PHOTO_SIZE = 15 * 1024 * 1024
 const MAX_VIDEO_SIZE = 35 * 1024 * 1024
+const configuredUploadConcurrency = Number(process.env.LEADSHELF_MEDIA_UPLOAD_CONCURRENCY ?? 8)
+const uploadSemaphore = new TrySemaphore(
+  Number.isInteger(configuredUploadConcurrency) &&
+    configuredUploadConcurrency >= 1 &&
+    configuredUploadConcurrency <= 32
+    ? configuredUploadConcurrency
+    : 8,
+)
 const ALLOWED: Record<string, { ext: string; mediaType: "photo" | "video" }> = {
   "image/jpeg": { ext: "jpg", mediaType: "photo" },
   "image/png": { ext: "png", mediaType: "photo" },
@@ -116,6 +128,28 @@ export async function POST(req: NextRequest) {
   const mismatch = protocolMismatchFromHeader(req)
   if (mismatch) return mismatch
 
+  const limit = await consumeRateLimit("mobile-upload", session.did, { max: 30, windowMs: 10 * 60_000 })
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    )
+  }
+
+  const release = uploadSemaphore.tryAcquire()
+  if (!release) {
+    return NextResponse.json(
+      { error: "upload_capacity_exhausted" },
+      { status: 503, headers: { "Retry-After": "2" } },
+    )
+  }
+  return handleUpload(req, session).finally(release)
+}
+
+async function handleUpload(
+  req: NextRequest,
+  session: NonNullable<Awaited<ReturnType<typeof requireApiSession>>>,
+) {
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
   if (!(file instanceof File)) return NextResponse.json({ error: "file_required" }, { status: 400 })
@@ -139,6 +173,10 @@ export async function POST(req: NextRequest) {
   }
   const maxSize = uploadType.mediaType === "video" ? MAX_VIDEO_SIZE : MAX_PHOTO_SIZE
   if (file.size > maxSize) return NextResponse.json({ error: "too_large" }, { status: 413 })
+  const bytes = Buffer.from(await file.arrayBuffer())
+  if (!matchesDeclaredMediaType(bytes, file.type)) {
+    return NextResponse.json({ error: "content_signature_mismatch" }, { status: 415 })
+  }
   if (uploadType.mediaType === "video" && parsed.data.durationMs == null) {
     return NextResponse.json({ error: "video_duration_required" }, { status: 400 })
   }
@@ -209,9 +247,7 @@ export async function POST(req: NextRequest) {
   })
   if (!task) return NextResponse.json({ error: "task_not_found_or_not_assigned" }, { status: 404 })
 
-  const key = `${uploadType.mediaType === "video" ? "videos" : "photos"}/${session.org}/${task.id}/${parsed.data.clientPhotoId}.${uploadType.ext}`
-  const bytes = Buffer.from(await file.arrayBuffer())
-  await putObject(key, bytes, file.type)
+  const key = `${uploadType.mediaType === "video" ? "videos" : "photos"}/${session.org}/${task.id}/${parsed.data.clientPhotoId}-${crypto.randomUUID()}.${uploadType.ext}`
 
   let exif: object | undefined
   try {
@@ -268,8 +304,16 @@ export async function POST(req: NextRequest) {
     qualityCheck: qualityDetails,
   }
 
-  const { photo, reviewId, queuedVisionReviewId } = await workerDb.$transaction(async (tx) => {
-    const photo = await tx.photoSubmission.create({
+  const stored = await attemptObjectWrite(() => putObject(key, bytes, file.type))
+  if (!stored) {
+    return NextResponse.json(
+      { error: "storage_unavailable" },
+      { status: 503, headers: { "Retry-After": "5" } },
+    )
+  }
+  const { photo, reviewId, queuedVisionReviewId } = await persistWithObjectCleanup({
+    persist: () => workerDb.$transaction(async (tx) => {
+      const photo = await tx.photoSubmission.create({
       data: {
         organizationId: session.org,
         storeId: task.storeId,
@@ -339,7 +383,13 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true },
     })
-    return { photo, reviewId: qualityReview?.id ?? null, queuedVisionReviewId: queuedVisionReview?.id ?? null }
+      return {
+        photo,
+        reviewId: qualityReview?.id ?? null,
+        queuedVisionReviewId: queuedVisionReview?.id ?? null,
+      }
+    }),
+    cleanup: () => deleteObject(key),
   })
   // Новое фото шага закрывает открытый запрос пересъемки офиса (docs/23).
   const submittedStepId = captureStep?.stepId ?? proofMetadata.capture.stepId

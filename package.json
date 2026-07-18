@@ -7,6 +7,8 @@
     "db:validate": "pnpm --filter @leadshelf/db validate",
     "db:generate": "pnpm --filter @leadshelf/db generate",
     "db:migrate": "pnpm --filter @leadshelf/db migrate",
+    "analytics:capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/capacity-benchmark.ts",
+    "analytics:db-capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/db-capacity-benchmark.ts",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
