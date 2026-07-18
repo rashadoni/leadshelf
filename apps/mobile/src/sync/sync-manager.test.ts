@@ -1,20 +1,33 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
 import { AuthLostError, HttpError } from "./ports-error"
-import type { LocalStore, OutboxRow, PhotoQueueRow, PullResponse, SyncApi, SyncCursors } from "./ports"
+import { EMPTY_MOBILE_COMMERCIAL_SNAPSHOT } from "@leadshelf/api-contracts/mobile/v1"
+import type {
+  CommercialMediaQueueRow,
+  LocalStore,
+  OutboxRow,
+  PhotoQueueRow,
+  PullResponse,
+  SyncApi,
+  SyncCursors,
+} from "./ports"
 
 function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
   calls: string[]
   outbox: OutboxRow[]
   photos: PhotoQueueRow[]
+  commercialMedia: CommercialMediaQueueRow[]
   quarantined: Set<string>
+  quarantinedCommercialMedia: Set<string>
 } {
   const calls: string[] = []
   const quarantined = new Set<string>()
+  const quarantinedCommercialMedia = new Set<string>()
   const state = {
     calls,
     outbox: [] as OutboxRow[],
     photos: [] as PhotoQueueRow[],
+    commercialMedia: [] as CommercialMediaQueueRow[],
     quarantined,
     cursors: {
       tasks: null as string | null,
@@ -28,7 +41,9 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
     calls,
     outbox: state.outbox,
     photos: state.photos,
+    commercialMedia: state.commercialMedia,
     quarantined,
+    quarantinedCommercialMedia,
     async applyPull() {
       calls.push("applyPull")
     },
@@ -42,7 +57,10 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
     },
     async pendingOutbox() {
       calls.push("pendingOutbox")
-      return state.outbox.filter((o) => o.status === "pending")
+      const blocked = new Set(
+        state.commercialMedia.filter((media) => !media.uploaded).map((media) => media.clientOpId),
+      )
+      return state.outbox.filter((o) => o.status === "pending" && !blocked.has(o.clientOpId))
     },
     async outboxDiagnostics() {
       const pending = state.outbox.filter((o) => o.status === "pending")
@@ -83,7 +101,33 @@ function makeStore(over: Partial<LocalStore> = {}): LocalStore & {
       quarantined.add(id)
     },
     async quarantinedPhotoCount() {
-      return quarantined.size
+      return quarantined.size + quarantinedCommercialMedia.size
+    },
+    async pendingCommercialMedia() {
+      calls.push("pendingCommercialMedia")
+      return state.commercialMedia.filter(
+        (media) => !media.uploaded && !quarantinedCommercialMedia.has(media.clientMediaId),
+      )
+    },
+    async markCommercialMediaUploaded(id, result) {
+      calls.push(`commercialMediaUploaded:${id}`)
+      const media = state.commercialMedia.find((item) => item.clientMediaId === id)
+      if (!media) return
+      media.uploaded = true
+      const operation = state.outbox.find((item) => item.clientOpId === media.clientOpId)
+      if (!operation) return
+      if (operation.kind === "promotion.submit") operation.payload.proofPhotoUrl = result.key
+      if (operation.kind === "return.create") operation.payload.evidencePhotoUrl = result.key
+    },
+    async bumpCommercialMediaAttempts(ids) {
+      calls.push(`bumpCommercialMedia:${ids.length}`)
+      for (const media of state.commercialMedia) {
+        if (ids.includes(media.clientMediaId)) media.attempts++
+      }
+    },
+    async quarantineCommercialMedia(id) {
+      calls.push(`quarantineCommercialMedia:${id}`)
+      quarantinedCommercialMedia.add(id)
     },
     ...over,
   }
@@ -96,6 +140,7 @@ const EMPTY_PULL: PullResponse = {
   visits: [],
   photoSubmissions: [],
   planogramBundles: [],
+  commercial: EMPTY_MOBILE_COMMERCIAL_SNAPSHOT,
   cursors: { tasks: "c1", planogramBundles: "c2", routes: "c3", visits: "c4", photoSubmissions: "c5" },
 }
 
@@ -114,6 +159,14 @@ function makeApi(over: Partial<SyncApi> = {}): SyncApi & { pushed: string[] } {
     async uploadPhoto(p) {
       return { photoId: "ph", key: `photos/x/${p.clientPhotoId}.jpg`, mediaType: p.mediaType ?? "photo" }
     },
+    async uploadCommercialMedia(media) {
+      return {
+        mediaId: media.clientMediaId,
+        key: `commercial-media/x/${media.clientMediaId}.jpg`,
+        purpose: media.purpose,
+      }
+    },
+    async cleanupCommercialMedia() {},
     ...over,
   }
 }
@@ -312,6 +365,79 @@ describe("SyncManager", () => {
     expect(store.quarantined.has("photo-bad-0003")).toBe(true)
   })
 
+  test("коммерческое фото загружается и подставляется в операцию до push", async () => {
+    const store = makeStore()
+    store.commercialMedia.push({
+      clientMediaId: "commercial-media-0001",
+      clientOpId: "op-promotion-proof01",
+      purpose: "PROMOTION_PROOF",
+      fileUri: "file:///promotion.jpg",
+      takenAt: "2026-07-16T10:00:00.000Z",
+      attempts: 0,
+      uploaded: false,
+    })
+    store.outbox.push({
+      clientOpId: "op-promotion-proof01",
+      kind: "promotion.submit",
+      payload: { clientExecutionId: "execution-0001", note: "Installed" },
+      status: "pending",
+      attempts: 0,
+    })
+    const pushedProofs: Array<string | null | undefined> = []
+    const cleanup = vi.fn(async () => {})
+    const api = makeApi({
+      cleanupCommercialMedia: cleanup,
+      push: async (operations) => {
+        pushedProofs.push(...operations.map((operation) => (
+          operation.kind === "promotion.submit" ? operation.payload.proofPhotoUrl : null
+        )))
+        return { results: operations.map((operation) => ({ clientOpId: operation.clientOpId, status: "applied" as const })) }
+      },
+    })
+
+    const result = await new SyncManager({ api, store }).runSync()
+
+    expect(result.phase).toBe("idle")
+    expect(pushedProofs).toEqual(["commercial-media/x/commercial-media-0001.jpg"])
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(store.calls.indexOf("commercialMediaUploaded:commercial-media-0001"))
+      .toBeLessThan(store.calls.findIndex((call) => call.startsWith("markOutbox")))
+  })
+
+  test("временная ошибка commercial media удерживает связанную операцию в очереди", async () => {
+    const store = makeStore()
+    store.commercialMedia.push({
+      clientMediaId: "commercial-media-0002",
+      clientOpId: "op-return-proof-0002",
+      purpose: "RETURN_EVIDENCE",
+      fileUri: "file:///return.jpg",
+      takenAt: "2026-07-16T10:00:00.000Z",
+      attempts: 0,
+      uploaded: false,
+    })
+    store.outbox.push({
+      clientOpId: "op-return-proof-0002",
+      kind: "return.create",
+      payload: {
+        orderId: "order-1",
+        reason: "DAMAGED",
+        lines: [{ orderLineId: "line-1", quantity: 1 }],
+      },
+      status: "pending",
+      attempts: 0,
+    })
+    const api = makeApi({
+      uploadCommercialMedia: async () => { throw new HttpError(503, "storage_unavailable") },
+    })
+
+    const result = await new SyncManager({ api, store }).runSync()
+
+    expect(api.pushed).toEqual([])
+    expect(store.commercialMedia[0]).toMatchObject({ uploaded: false, attempts: 1 })
+    expect(store.outbox[0]).toMatchObject({ status: "pending", attempts: 0 })
+    expect(result.pendingPhotos).toBe(1)
+  })
+
   test("conflict от сервера помечает операцию, sync не падает", async () => {
     const store = makeStore()
     store.outbox.push({
@@ -429,17 +555,17 @@ describe("SyncManager", () => {
     expect(s.phase).toBe("upgradeRequired")
   })
 
-  test("отзыв сессии переводит sync в terminal authLost без retryable error", async () => {
+  test("401 завершает цикл как authLost без бесконечного retry", async () => {
     const store = makeStore()
     const api = makeApi({
       pull: async () => {
         throw new AuthLostError()
       },
     })
-    const m = new SyncManager({ api, store })
-    const s = await m.runSync()
-    expect(s.phase).toBe("authLost")
-    expect(s.error).toBeNull()
+    const manager = new SyncManager({ api, store })
+    const status = await manager.runSync()
+    expect(status.phase).toBe("authLost")
+    expect(status.error).toBeNull()
   })
 
   test("операции с исчерпанными попытками не шлются повторно", async () => {

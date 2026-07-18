@@ -25,7 +25,8 @@ export async function GET(
     key.startsWith(`products/${session.org}/`) ||
     key.startsWith(`photos/${session.org}/`) ||
     key.startsWith(`videos/${session.org}/`) ||
-    key.startsWith(`frames/${session.org}/`)
+    key.startsWith(`frames/${session.org}/`) ||
+    key.startsWith(`commercial-media/${session.org}/`)
   if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 })
 
   const object = await getObject(key)

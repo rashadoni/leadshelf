@@ -3,6 +3,18 @@ import { evaluateVisitGeofence } from "@leadshelf/core"
 import { emitProductEvent } from "./alerts.ts"
 import { listOpenCaptureRetakes } from "./capture.ts"
 import { createOrder, OrderRepoError } from "./orders.ts"
+import {
+  CommercialRepoError,
+  createRewardClaim,
+  createSalesReturn,
+  emptyAgentCommercialSnapshot,
+  enrollPromotion,
+  getAgentCommercialSnapshot,
+  recordPromoInventoryEvent,
+  submitPromotionExecution,
+  type RewardClaimCreateInput,
+  type SalesReturnCreateInput,
+} from "./commercial.ts"
 import { transitionTaskStatus } from "./publish.ts"
 import { PlanogramRepoError } from "./planogram.ts"
 
@@ -442,6 +454,9 @@ export async function pullChanges(
   const nextBundleCursor = lastVersion?.publishedAt
     ? encodeCursor({ u: lastVersion.publishedAt.toISOString(), id: lastVersion.id })
     : (cursors.planogramBundles ?? null)
+  const commercial = fieldAgent
+    ? await getAgentCommercialSnapshot(prisma, organizationId, userId)
+    : emptyAgentCommercialSnapshot()
 
   return {
     tasks: tasks.map((t) => {
@@ -581,6 +596,7 @@ export async function pullChanges(
         },
       })),
     })),
+    commercial,
     cursors: {
       tasks: nextTaskCursor,
       planogramBundles: nextBundleCursor,
@@ -601,6 +617,11 @@ export interface PushOperation {
     | "visit.checkout"
     | "location.update"
     | "order.create"
+    | "promotion.enroll"
+    | "promotion.submit"
+    | "inventory.record"
+    | "return.create"
+    | "reward.claim"
     | "proof.exception"
   payload: Record<string, unknown>
   clientCreatedAt?: string
@@ -920,6 +941,74 @@ async function applyOrderCreate(
   }
 }
 
+const COMMERCIAL_CONFLICT_CODES = new Set([
+  "promotion_execution_locked",
+  "inventory_balance_insufficient",
+  "return_quantity_exceeded",
+  "reward_points_insufficient",
+  "reward_stock_insufficient",
+  "idempotency_payload_mismatch",
+  "concurrent_update",
+])
+
+async function applyCommercialOperation(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  deviceId: string,
+  clientOpId: string,
+  kind: "promotion.enroll" | "promotion.submit" | "inventory.record" | "return.create" | "reward.claim",
+  payload: Record<string, unknown>,
+): Promise<Omit<PushResult, "clientOpId">> {
+  try {
+    let entity: unknown
+    if (kind === "promotion.enroll") {
+      entity = await enrollPromotion(prisma, organizationId, userId, payload as never)
+    } else if (kind === "promotion.submit") {
+      entity = await submitPromotionExecution(prisma, organizationId, userId, payload as never)
+    } else if (kind === "inventory.record") {
+      const value = payload as {
+        itemId: string
+        eventType: "RECEIVE" | "ISSUE" | "RETURN" | "COUNT_ADJUSTMENT"
+        quantity?: number
+        countedBalance?: number
+        storeId?: string | null
+        visitId?: string | null
+        reason?: string | null
+        note?: string | null
+        recordedAt: string
+      }
+      entity = await recordPromoInventoryEvent(prisma, organizationId, userId, {
+        ...value,
+        recordedAt: new Date(value.recordedAt),
+        clientDeviceId: deviceId,
+        clientOpId,
+      })
+    } else if (kind === "return.create") {
+      const value = payload as unknown as Omit<SalesReturnCreateInput, "clientDeviceId" | "clientOpId">
+      entity = await createSalesReturn(prisma, organizationId, userId, {
+        ...value,
+        clientDeviceId: deviceId,
+        clientOpId,
+      })
+    } else {
+      const value = payload as unknown as Omit<RewardClaimCreateInput, "clientDeviceId" | "clientOpId">
+      entity = await createRewardClaim(prisma, organizationId, userId, {
+        ...value,
+        clientDeviceId: deviceId,
+        clientOpId,
+      })
+    }
+    return { status: "applied", detail: { entity } }
+  } catch (error) {
+    if (!(error instanceof CommercialRepoError)) throw error
+    return {
+      status: COMMERCIAL_CONFLICT_CODES.has(error.code) ? "conflict" : "rejected",
+      detail: { code: error.code, detail: error.detail },
+    }
+  }
+}
+
 export async function pushOperations(
   prisma: PrismaClient,
   organizationId: string,
@@ -968,6 +1057,22 @@ export async function pushOperations(
       result = await applyLocationUpdate(prisma, organizationId, userId, op.payload as never)
     } else if (op.kind === "order.create") {
       result = await applyOrderCreate(prisma, organizationId, userId, deviceId, op.clientOpId, op.payload as never)
+    } else if (
+      op.kind === "promotion.enroll"
+      || op.kind === "promotion.submit"
+      || op.kind === "inventory.record"
+      || op.kind === "return.create"
+      || op.kind === "reward.claim"
+    ) {
+      result = await applyCommercialOperation(
+        prisma,
+        organizationId,
+        userId,
+        deviceId,
+        op.clientOpId,
+        op.kind,
+        op.payload,
+      )
     } else if (op.kind === "proof.exception") {
       result = await applyProofException(prisma, organizationId, userId, op.payload as never)
     } else {

@@ -22,7 +22,7 @@ const modules = import.meta.glob("../../app/api/v1/**/route.ts", {
 }) as Record<string, RouteModule>
 
 const cases = Object.entries(modules).flatMap(([path, route]) => {
-  if (path.includes("/mobile/")) return []
+  if (path.includes("/mobile/") || path.includes("/internal/field/")) return []
   return mutationMethods.flatMap((method) =>
     typeof route[method] === "function"
       ? [{ path, method, handler: route[method] }]

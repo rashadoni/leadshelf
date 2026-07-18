@@ -4,6 +4,8 @@
 import type {
   MobilePushOperation,
   MobilePushResult,
+  MobileCommercialMediaPurpose,
+  MobileCommercialMediaUploadResponse,
   MobilePhotoUploadResponse,
   MobileRouteRow,
   MobileRouteStopRow,
@@ -12,6 +14,13 @@ import type {
   MobileTaskRow,
   MobileVisitRow,
 } from "@leadshelf/api-contracts/mobile/v1"
+import type { FieldRoutePushOperation } from "../field/route-outbox"
+import type {
+  FieldDocumentUploadPushOperation,
+  FieldExecutionPushOperation,
+  FieldLocationPushOperation,
+  FieldVisitPhotoPushOperation,
+} from "../field/execution-outbox"
 
 export type TaskRow = MobileTaskRow
 export type StoreRow = MobileStoreRow
@@ -19,7 +28,7 @@ export type RouteRow = MobileRouteRow
 export type RouteStopRow = MobileRouteStopRow
 export type VisitRow = MobileVisitRow
 export type PullResponse = MobileSyncPullResponse
-export type PushOperation = MobilePushOperation
+export type PushOperation = MobilePushOperation | FieldRoutePushOperation | FieldExecutionPushOperation | FieldVisitPhotoPushOperation | FieldLocationPushOperation | FieldDocumentUploadPushOperation
 export type PushResult = MobilePushResult
 
 export type SyncCursors = {
@@ -47,6 +56,8 @@ export interface SyncApi {
     captureFlagsJson?: string | null
     captureTelemetryJson?: string | null
   }): Promise<MobilePhotoUploadResponse>
+  uploadCommercialMedia(media: CommercialMediaQueueRow): Promise<MobileCommercialMediaUploadResponse>
+  cleanupCommercialMedia(media: CommercialMediaQueueRow): Promise<void>
 }
 
 export type OutboxRow = PushOperation & {
@@ -69,6 +80,16 @@ export interface PhotoQueueRow {
   uploaded: boolean
 }
 
+export interface CommercialMediaQueueRow {
+  clientMediaId: string
+  clientOpId: string
+  purpose: MobileCommercialMediaPurpose
+  fileUri: string
+  takenAt: string
+  attempts: number
+  uploaded: boolean
+}
+
 /** Локальное хранилище (реализация: db/local-store на expo-sqlite). */
 export interface LocalStore {
   applyPull(data: PullResponse): Promise<void>
@@ -85,6 +106,13 @@ export interface LocalStore {
   quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
   quarantinedPhotoCount(): Promise<number>
   cleanupUploadedPhotoFiles?(): Promise<number>
+  pendingCommercialMedia(): Promise<CommercialMediaQueueRow[]>
+  markCommercialMediaUploaded(
+    clientMediaId: string,
+    result: MobileCommercialMediaUploadResponse,
+  ): Promise<void>
+  bumpCommercialMediaAttempts(clientMediaIds: string[], reason?: string): Promise<void>
+  quarantineCommercialMedia(clientMediaId: string, reason: string): Promise<void>
 }
 
 export interface OutboxDiagnostics {

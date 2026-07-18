@@ -310,6 +310,150 @@ export const mobileSyncPullRequestSchema = z.object({
 })
 export type MobileSyncPullRequest = z.infer<typeof mobileSyncPullRequestSchema>
 
+export const mobilePromotionExecutionStatusSchema = z.enum([
+  "ENROLLED",
+  "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
+])
+
+export const mobileCommercialSnapshotSchema = z.object({
+  version: z.literal(1),
+  generatedAt: z.string().datetime(),
+  promotions: z.array(z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    kind: z.string(),
+    config: z.unknown(),
+    activeFrom: z.string().datetime(),
+    activeTo: z.string().datetime().nullable(),
+    productIds: z.array(z.string()),
+  })),
+  promotionExecutions: z.array(z.object({
+    id: z.string().min(1),
+    clientExecutionId: z.string().min(8).max(128),
+    promotionId: z.string().min(1),
+    storeId: z.string().min(1),
+    visitId: z.string().nullable(),
+    status: mobilePromotionExecutionStatusSchema,
+    note: z.string().nullable(),
+    proofPhotoUrl: z.string().nullable(),
+    submittedAt: z.string().datetime().nullable(),
+    updatedAt: z.string().datetime(),
+  })),
+  inventory: z.object({
+    items: z.array(z.object({
+      id: z.string().min(1),
+      code: z.string(),
+      name: z.string(),
+      kind: z.enum(["SAMPLE", "MATERIAL"]),
+      productId: z.string().nullable(),
+      unit: z.string(),
+      balance: z.number().finite(),
+    })),
+    events: z.array(z.object({
+      id: z.string().min(1),
+      itemId: z.string().min(1),
+      eventType: z.enum(["RECEIVE", "ISSUE", "RETURN", "COUNT_ADJUSTMENT"]),
+      quantityDelta: z.number().finite(),
+      countedBalance: z.number().finite().nullable(),
+      storeId: z.string().nullable(),
+      visitId: z.string().nullable(),
+      reason: z.string().nullable(),
+      note: z.string().nullable(),
+      recordedAt: z.string().datetime(),
+    })),
+  }),
+  orders: z.array(z.object({
+    id: z.string().min(1),
+    storeId: z.string().min(1),
+    storeName: z.string(),
+    visitId: z.string().nullable(),
+    status: z.enum(["DRAFT", "SUBMITTED", "CONFIRMED", "DELIVERED", "CANCELLED"]),
+    currency: z.string(),
+    subtotalAmount: z.number().finite(),
+    discountAmount: z.number().finite(),
+    taxAmount: z.number().finite(),
+    totalAmount: z.number().finite(),
+    appliedPromotions: z.unknown(),
+    invoiceNumber: z.string().nullable(),
+    submittedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    lines: z.array(z.object({
+      id: z.string().min(1),
+      productId: z.string().min(1),
+      productName: z.string(),
+      sku: z.string(),
+      quantity: z.number().positive(),
+      unitPrice: z.number().nonnegative(),
+      totalAmount: z.number().nonnegative(),
+      promotionId: z.string().nullable(),
+    })),
+  })),
+  returns: z.array(z.object({
+    id: z.string().min(1),
+    orderId: z.string().min(1),
+    storeId: z.string().min(1),
+    visitId: z.string().nullable(),
+    status: z.enum(["SUBMITTED", "APPROVED", "REJECTED", "RECEIVED"]),
+    reason: z.string(),
+    note: z.string().nullable(),
+    evidencePhotoUrl: z.string().nullable(),
+    submittedAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    lines: z.array(z.object({
+      id: z.string().min(1),
+      orderLineId: z.string().min(1),
+      productId: z.string().min(1),
+      quantity: z.number().positive(),
+      unitAmount: z.number().nonnegative(),
+    })),
+  })),
+  rewards: z.object({
+    balance: z.number().int().nonnegative(),
+    catalog: z.array(z.object({
+      id: z.string().min(1),
+      code: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      pointsCost: z.number().int().nonnegative(),
+      stockQuantity: z.number().int().nonnegative().nullable(),
+      imageUrl: z.string().nullable(),
+    })),
+    claims: z.array(z.object({
+      id: z.string().min(1),
+      rewardItemId: z.string().min(1),
+      status: z.enum(["SUBMITTED", "APPROVED", "REJECTED", "FULFILLED", "CANCELLED"]),
+      quantity: z.number().int().positive(),
+      pointsCost: z.number().int().nonnegative(),
+      note: z.string().nullable(),
+      submittedAt: z.string().datetime(),
+      updatedAt: z.string().datetime(),
+    })),
+    ledger: z.array(z.object({
+      id: z.string().min(1),
+      pointsDelta: z.number().int(),
+      reason: z.string(),
+      sourceType: z.string().nullable(),
+      sourceId: z.string().nullable(),
+      createdAt: z.string().datetime(),
+    })),
+  }),
+})
+export type MobileCommercialSnapshot = z.infer<typeof mobileCommercialSnapshotSchema>
+
+export const EMPTY_MOBILE_COMMERCIAL_SNAPSHOT: MobileCommercialSnapshot = {
+  version: 1,
+  generatedAt: "1970-01-01T00:00:00.000Z",
+  promotions: [],
+  promotionExecutions: [],
+  inventory: { items: [], events: [] },
+  orders: [],
+  returns: [],
+  rewards: { balance: 0, catalog: [], claims: [], ledger: [] },
+}
+
 export const mobileSyncPullResponseSchema = z.object({
   tasks: z.array(mobileTaskRowSchema),
   stores: z.array(mobileStoreRowSchema),
@@ -317,6 +461,7 @@ export const mobileSyncPullResponseSchema = z.object({
   visits: z.array(mobileVisitRowSchema).default([]),
   photoSubmissions: z.array(mobilePhotoSubmissionRowSchema).default([]),
   planogramBundles: z.array(mobilePlanogramBundleSchema),
+  commercial: mobileCommercialSnapshotSchema.default(EMPTY_MOBILE_COMMERCIAL_SNAPSHOT),
   cursors: z.object({
     tasks: z.string().nullable(),
     planogramBundles: z.string().nullable(),
@@ -381,6 +526,57 @@ export const mobileLocationUpdatePayloadSchema = z.object({
 })
 export type MobileLocationUpdatePayload = z.infer<typeof mobileLocationUpdatePayloadSchema>
 
+export const mobilePromotionEnrollPayloadSchema = z.object({
+  promotionId: z.string().min(1),
+  storeId: z.string().min(1),
+  visitId: z.string().min(1).nullable().optional(),
+  clientExecutionId: z.string().min(8).max(128),
+  note: z.string().trim().max(1000).nullable().optional(),
+})
+export type MobilePromotionEnrollPayload = z.infer<typeof mobilePromotionEnrollPayloadSchema>
+
+export const mobilePromotionSubmitPayloadSchema = z.object({
+  clientExecutionId: z.string().min(8).max(128),
+  note: z.string().trim().max(1000).nullable().optional(),
+  proofPhotoUrl: z.string().trim().max(2048).nullable().optional(),
+}).refine((value) => Boolean(value.note || value.proofPhotoUrl), {
+  message: "promotion proof requires note or photo",
+})
+export type MobilePromotionSubmitPayload = z.infer<typeof mobilePromotionSubmitPayloadSchema>
+
+export const mobilePromoInventoryRecordPayloadSchema = z.object({
+  itemId: z.string().min(1),
+  eventType: z.enum(["RECEIVE", "ISSUE", "RETURN", "COUNT_ADJUSTMENT"]),
+  quantity: z.number().positive().max(1_000_000).optional(),
+  countedBalance: z.number().nonnegative().max(1_000_000).optional(),
+  storeId: z.string().min(1).nullable().optional(),
+  visitId: z.string().min(1).nullable().optional(),
+  reason: z.string().trim().max(200).nullable().optional(),
+  note: z.string().trim().max(1000).nullable().optional(),
+  recordedAt: z.string().datetime(),
+})
+export type MobilePromoInventoryRecordPayload = z.infer<typeof mobilePromoInventoryRecordPayloadSchema>
+
+export const mobileSalesReturnCreatePayloadSchema = z.object({
+  orderId: z.string().min(1),
+  visitId: z.string().min(1).nullable().optional(),
+  reason: z.string().trim().min(1).max(100),
+  note: z.string().trim().max(1000).nullable().optional(),
+  evidencePhotoUrl: z.string().trim().max(2048).nullable().optional(),
+  lines: z.array(z.object({
+    orderLineId: z.string().min(1),
+    quantity: z.number().positive().max(1_000_000),
+  })).min(1).max(200),
+})
+export type MobileSalesReturnCreatePayload = z.infer<typeof mobileSalesReturnCreatePayloadSchema>
+
+export const mobileRewardClaimPayloadSchema = z.object({
+  rewardItemId: z.string().min(1),
+  quantity: z.number().int().min(1).max(100),
+  note: z.string().trim().max(1000).nullable().optional(),
+})
+export type MobileRewardClaimPayload = z.infer<typeof mobileRewardClaimPayloadSchema>
+
 export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
   z.object({
     clientOpId: z.string().min(8).max(128),
@@ -422,6 +618,36 @@ export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
     clientOpId: z.string().min(8).max(128),
     kind: z.literal("order.create"),
     payload: orderCreateRequestSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("promotion.enroll"),
+    payload: mobilePromotionEnrollPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("promotion.submit"),
+    payload: mobilePromotionSubmitPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("inventory.record"),
+    payload: mobilePromoInventoryRecordPayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("return.create"),
+    payload: mobileSalesReturnCreatePayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("reward.claim"),
+    payload: mobileRewardClaimPayloadSchema,
     clientCreatedAt: z.string().optional(),
   }),
   z.object({
@@ -487,3 +713,24 @@ export const mobilePhotoUploadResponseSchema = z.object({
   visionReason: z.string().nullable().optional(),
 })
 export type MobilePhotoUploadResponse = z.infer<typeof mobilePhotoUploadResponseSchema>
+
+export const mobileCommercialMediaPurposeSchema = z.enum([
+  "PROMOTION_PROOF",
+  "RETURN_EVIDENCE",
+])
+export type MobileCommercialMediaPurpose = z.infer<typeof mobileCommercialMediaPurposeSchema>
+
+export const mobileCommercialMediaUploadFieldsSchema = z.object({
+  clientMediaId: z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
+  purpose: mobileCommercialMediaPurposeSchema,
+  takenAt: z.string().datetime(),
+})
+export type MobileCommercialMediaUploadFields = z.infer<typeof mobileCommercialMediaUploadFieldsSchema>
+
+export const mobileCommercialMediaUploadResponseSchema = z.object({
+  mediaId: z.string().min(8).max(128),
+  key: z.string().min(1).max(2048),
+  purpose: mobileCommercialMediaPurposeSchema,
+  deduplicated: z.boolean().optional(),
+})
+export type MobileCommercialMediaUploadResponse = z.infer<typeof mobileCommercialMediaUploadResponseSchema>

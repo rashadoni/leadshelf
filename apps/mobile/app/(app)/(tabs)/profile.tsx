@@ -16,12 +16,15 @@ import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useField } from "../../../src/field/field-context"
+import { stopWorkdayTracking } from "../../../src/location/workday-tracking"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
 export default function ProfileTab() {
   const locale = useLocale()
   const { status, sync } = useSync()
+  const field = useField()
   const [userName, setUserName] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [capacity, setCapacity] = useState<{
@@ -49,13 +52,17 @@ export default function ProfileTab() {
 
   async function onSyncNow() {
     setSyncing(true)
-    await sync()
-    await refreshCapacity()
-    setSyncing(false)
+    try {
+      await Promise.all([sync(), field.refresh()])
+      await refreshCapacity()
+    } finally {
+      setSyncing(false)
+    }
   }
 
   async function completeLogout() {
     try {
+      await stopWorkdayTracking().catch(() => {})
       await mobileLogout() // best-effort отзыв refresh-сессии на сервере
       // Сначала удаляем чувствительные media-файлы; при ошибке сессия остаётся,
       // чтобы пользователь мог повторить безопасную очистку.
@@ -86,7 +93,9 @@ export default function ProfileTab() {
     )
   }
 
-  const initial = (userName ?? "?").trim().charAt(0).toUpperCase() || "?"
+  const agent = field.profile?.agent
+  const displayName = agent?.name ?? userName
+  const initial = (displayName ?? "?").trim().charAt(0).toUpperCase() || "?"
   const running = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
   const issueCount = status.conflictOps + status.rejectedOps + status.quarantinedPhotos
   const duration = status.lastDurationMs == null
@@ -117,10 +126,45 @@ export default function ProfileTab() {
           <View style={styles.accountBody}>
             <Text style={styles.accountLabel}>{t("profileAccount")}</Text>
             <Text style={styles.accountName} numberOfLines={1}>
-              {userName ?? "—"}
+              {displayName ?? "—"}
             </Text>
+            {agent?.role ? <Text style={styles.accountMeta}>{agent.role}</Text> : null}
           </View>
         </View>
+
+        {agent ? (
+          <View style={styles.card}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{t("organization")}</Text>
+              <Text style={styles.detailValue}>{agent.organizationName}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{t("manager")}</Text>
+              <Text style={styles.detailValue}>{agent.manager?.name ?? "—"}</Text>
+            </View>
+            <View style={[styles.detailRow, styles.detailRowLast]}>
+              <Text style={styles.detailLabel}>{t("shelfConnection")}</Text>
+              <View style={styles.connectionValue}>
+                <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
+                <Text style={styles.detailValue}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(app)/kpi" as never)}
+          style={({ pressed }) => [styles.card, styles.kpiEntry, pressed && styles.kpiEntryPressed]}
+        >
+          <View style={styles.kpiIcon}><Text style={styles.kpiIconText}>%</Text></View>
+          <View style={styles.kpiBody}>
+            <Text style={styles.kpiTitle}>{t("personalKpiTitle")}</Text>
+            <Text style={styles.kpiHint}>{t("personalKpiHint")}</Text>
+            <Text style={styles.kpiAction}>{t("personalKpiOpen")}</Text>
+          </View>
+          <Text style={styles.kpiArrow}>›</Text>
+        </Pressable>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("profileLanguage")}</Text>
@@ -155,6 +199,17 @@ export default function ProfileTab() {
               </View>
             ))}
           </View>
+          {issueCount > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(app)/sync-center" as never)}
+              style={styles.recoveryButton}
+            >
+              <View style={styles.recoveryMark}><Text style={styles.recoveryMarkText}>!</Text></View>
+              <Text style={styles.recoveryText}>{t("syncCenterOpen")}</Text>
+              <Text style={styles.recoveryArrow}>›</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             disabled={running || syncing}
             onPress={() => void onSyncNow()}
@@ -226,6 +281,22 @@ const styles = StyleSheet.create({
   accountBody: { flex: 1, minWidth: 0 },
   accountLabel: { fontSize: 11, fontWeight: "700", color: colors.faint, letterSpacing: 0.4, textTransform: "uppercase" },
   accountName: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 2 },
+  accountMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  kpiEntry: { minHeight: 112, flexDirection: "row", alignItems: "center", gap: 13, borderWidth: 1, borderColor: colors.infoBorder },
+  kpiEntryPressed: { backgroundColor: colors.primarySoft },
+  kpiIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  kpiIconText: { color: colors.headerText, fontSize: 20, fontWeight: "900" },
+  kpiBody: { flex: 1, minWidth: 0 },
+  kpiTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  kpiHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  kpiAction: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 7 },
+  kpiArrow: { color: colors.primary, fontSize: 30, fontWeight: "500" },
+  detailRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  detailRowLast: { borderBottomWidth: 0 },
+  detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "600" },
+  detailValue: { flexShrink: 1, color: colors.text, fontSize: 12, fontWeight: "800", textAlign: "right" },
+  connectionValue: { flexDirection: "row", alignItems: "center", gap: 6 },
+  connectionDot: { width: 7, height: 7, borderRadius: 4 },
   sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 10 },
   localeRow: { flexDirection: "row", gap: 8 },
   localeBtn: {
@@ -262,6 +333,11 @@ const styles = StyleSheet.create({
   metricValue: { marginTop: 5, fontSize: 13, fontWeight: "800", color: colors.text },
   metricWarning: { color: colors.warning },
   capacityHint: { marginTop: 10, fontSize: 12, lineHeight: 17, color: colors.warning },
+  recoveryButton: { minHeight: 50, marginTop: 12, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, flexDirection: "row", alignItems: "center", gap: 9 },
+  recoveryMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  recoveryMarkText: { color: colors.dangerPressed, fontSize: 14, fontWeight: "900" },
+  recoveryText: { flex: 1, color: colors.dangerPressed, fontSize: 11, fontWeight: "900" },
+  recoveryArrow: { color: colors.dangerPressed, fontSize: 22 },
   syncPressed: { backgroundColor: colors.primaryPressed },
   syncDisabled: { backgroundColor: colors.disabled },
   syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },

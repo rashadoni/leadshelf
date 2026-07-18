@@ -14,6 +14,7 @@ import { tokenStore } from "../auth/token-store"
 import { wipeRevokedSession } from "../auth/revocation-wipe"
 import * as FileSystem from "expo-file-system/legacy"
 import { PHOTO_OUTBOX_DIR } from "../photos/photo-store"
+import { stopWorkdayTracking } from "../location/workday-tracking"
 
 const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
 
@@ -46,7 +47,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       if (next.phase === "authLost") {
         clearRetry()
         revocationWipe.current ??= wipeRevokedSession({
-          deleteMedia: () => FileSystem.deleteAsync(PHOTO_OUTBOX_DIR, { idempotent: true }),
+          deleteMedia: async () => {
+            await stopWorkdayTracking().catch(() => {})
+            await FileSystem.deleteAsync(PHOTO_OUTBOX_DIR, { idempotent: true })
+          },
           purgeOperationalData: () => purgeLocalOperationalData(),
           clearSession: () => tokenStore.clearSession(),
         }).then(() => {

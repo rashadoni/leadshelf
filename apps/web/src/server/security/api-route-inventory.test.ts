@@ -12,6 +12,7 @@ const publicRoutes = new Set([
 const deviceScopedWorkerDbExceptions = new Set([
   "mobile/sync/ack/route.ts",
 ])
+const isFieldBffRoute = (relativePath: string) => relativePath.startsWith("internal/field/")
 
 function routeFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -28,7 +29,7 @@ const routes = routeFiles(apiRoot).map((path) => ({
 
 describe("v1 API security inventory", () => {
   it("scans the complete route surface", () => {
-    expect(routes).toHaveLength(56)
+    expect(routes).toHaveLength(63)
     expect(routes.filter((route) => publicRoutes.has(route.relativePath)).map((route) => route.relativePath).sort())
       .toEqual([...publicRoutes].sort())
   })
@@ -36,13 +37,15 @@ describe("v1 API security inventory", () => {
   it("requires an access session outside the explicit public allowlist", () => {
     for (const route of routes) {
       if (publicRoutes.has(route.relativePath)) continue
-      expect(route.source, route.relativePath).toContain("requireApiSession(")
+      expect(route.source, route.relativePath).toContain(
+        isFieldBffRoute(route.relativePath) ? "requireFieldBffSession(" : "requireApiSession(",
+      )
     }
   })
 
   it("requires a role denial path for every office mutation", () => {
     for (const route of routes) {
-      if (route.relativePath.startsWith("mobile/")) continue
+      if (route.relativePath.startsWith("mobile/") || isFieldBffRoute(route.relativePath)) continue
       if (!/export async function (POST|PUT|PATCH|DELETE)/.test(route.source)) continue
       expect(route.source, route.relativePath).toContain("forbidden(")
     }
@@ -65,8 +68,13 @@ describe("v1 API security inventory", () => {
       candidate.relativePath.includes("/photos/") ||
       candidate.relativePath.includes("/export/"),
     )) {
-      expect(route.source, route.relativePath).toContain("requireApiSession(")
-      expect(route.source, route.relativePath).toContain("session.org")
+      if (isFieldBffRoute(route.relativePath)) {
+        expect(route.source, route.relativePath).toContain("requireFieldBffSession(")
+        expect(route.source, route.relativePath).toContain("auth.session")
+      } else {
+        expect(route.source, route.relativePath).toContain("requireApiSession(")
+        expect(route.source, route.relativePath).toContain("session.org")
+      }
     }
   })
 })
