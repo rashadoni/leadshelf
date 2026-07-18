@@ -61,11 +61,15 @@ delete, повторным inventory и restore/tenant-isolation evidence. Ма�
 
 ## Незакрытые гейты
 
-- distributed durable login lockout/backoff;
-- полный API/job/export cross-tenant negative matrix;
-- app-level encryption мобильной SQLite/media и remote revocation wipe;
-- автоматизированные retention/delete и проверенный DSAR export;
+- account lockout policy: durable rate limit уже реализован, но threshold/
+  duration/unlock требуют business/support решения;
+- независимый pentest deployed environment; локальная API/job/export/media
+  cross-tenant и denied-role matrix уже проходит;
+- app-level encryption мобильной SQLite/media и physical-device проверка;
+  remote revocation wipe реализован и покрыт unit;
+- policy-driven retention purge и проверенный DSAR export; controlled tenant
+  DB delete с dry-run/dual approval/zero-residue уже реализован;
 - face blur before persistence либо юридически принятый режим;
-- production container/secret scan evidence.
+- production container/secret scan и runtime secret-rotation evidence.
 
 До закрытия/принятия этих пунктов Phase 16 и GA не отмечаются выполненными.

@@ -158,3 +158,8 @@ client production/GA или включать реальные клиентски
 production-like load/soak и infrastructure/mobile/privacy/pilot evidence.
 Канонический порядок и владельцы: `docs/03-roadmap-backlog.md` и
 `deploy/PILOT_GA_RUNBOOK.md`.
+
+Локальный production-readiness commit `6e7eb17` создан в ветке
+`codex/production-readiness`; push/remote CI не выполнен, потому что внешний
+экспорт требует отдельного явного разрешения. Полный минимально-привилегированный
+handoff по отсутствующим placeholders: `deploy/EXTERNAL_READINESS_HANDOFF.md`.

@@ -811,8 +811,10 @@ Definition of Done: двухнедельный прогон не теряет д
   `[реализовано/локально проверено 2026-07-18: CSP/anti-frame/nosniff,
   origin guard, production audit=0; CI actions pinned SHA, TruffleHog tracked-source
   scan=0, Grype web/worker/custom Caddy/custom PostgreSQL High/Critical=0.
-  Archived MinIO удалён из production. BLOCKED — remote GitHub CI run/commit SHA
-  evidence требует repository access и разрешения push]`
+  Archived MinIO удалён из production. Локальный hardening commit `6e7eb17`
+  создан на `codex/production-readiness`; три пользовательских удаления video
+  исключены. BLOCKED — remote GitHub CI run: защитный слой требует отдельного
+  явного подтверждения push именно этого commit в origin]`
 - [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
   `[частично реализовано/проверено mobile 91/91 + typecheck 2026-07-18: logout
   предупреждает о pending работе и очищает media+operational SQLite до
