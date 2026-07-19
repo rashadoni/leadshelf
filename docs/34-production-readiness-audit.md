@@ -19,7 +19,7 @@ evidence. Отсутствующее внешнее доказательство
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS prior branch HEAD; current push pending | PR #19 draft; exact SHA `4d7b7ee`, run 29678346550: `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED. Текущая client-runtime boundary до push подтверждена локально и не заявляется remote-validated |
+| Remote CI | PASS current feature SHA | PR #19 draft; exact feature SHA `5464afc950cc828a1defaddf737c9b22cb8966aa`, run 29679507492: 632-test `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
