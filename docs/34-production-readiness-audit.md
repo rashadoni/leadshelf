@@ -13,13 +13,13 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
-| Unit/integration | PASS local; prior SHA CI PASS | current local 577/577, DB 83/83; prior exact-SHA remote 575 tests, DB 81/81, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web. Current exact-SHA CI pending push |
+| Unit/integration | PASS local + CI | exact feature SHA local/remote 577/577, DB 83/83, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS | PR #19 CLEAN, exact SHA `205b71c68ed2ddfc4db442336554f801d178918d`, run 29666974870: 575-test `ci` SUCCESS, secret + four production-image High/Critical scans SUCCESS, annotations=0; deploy SKIPPED |
+| Remote CI | PASS | PR #19 CLEAN/draft, exact feature SHA `1df8b0debc16595daffef9ff687edb0cb88cbac9`, run 29667913641: 577-test `ci` SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
