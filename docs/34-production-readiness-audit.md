@@ -13,7 +13,7 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
-| Unit/integration | PASS local + CI | exact feature SHA local/remote 577/577, DB 83/83, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web |
+| Unit/integration | PASS local; prior baseline PASS CI | current working tree 580/580, DB 83/83, mobile 166/166, web 128/128; prior exact feature SHA remote 577/577; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
@@ -89,8 +89,17 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   files/bytes в профиле с near-limit warning; device-shift evidence pending;
 - remote mobile revocation: failed refresh becomes terminal `authLost`, stops
   retry, single-flight wipes media/operational SQLite/SecureStore and returns
-  to login; all backends are attempted on partial failure. Mobile 163/163 PASS;
+  to login; all backends are attempted on partial failure. Mobile 166/166 PASS;
   signed Android/iOS device evidence remains external;
+- mobile operational SQLite at rest: SQLCipher 4 включён для Android/iOS native
+  builds, device-only 256-bit SecureStore key не регенерируется поверх
+  существующей encrypted DB; legacy plaintext migration сверяет schema/row
+  inventory, marker и `cipher_integrity_check` до удаления исходника и
+  fail-closed показывает privacy-safe RU/AZ recovery. Mobile 166/166,
+  typecheck и Expo native config introspection PASS; это code/config evidence,
+  а не signed-device proof. Offline media encryption, physical upgrade/
+  revocation matrix, iOS bundle identifier/signing и recovery approval остаются
+  внешними блокерами;
 - authenticated API boundary emits privacy-safe allowlisted structured JSON
   with method/path/correlation/organization/user/device/task context; query,
   authorization, session ID and arbitrary headers are excluded by tests;

@@ -213,7 +213,12 @@ CV-инфраструктуре), Sentry DSN.
 - [ ] **Face blur покупателей** до персистентности (docs/24 срез 2) —
   приватность в договоре сети.
 - [ ] Шифрование локальной очереди/медиа at-rest (SQLCipher/secure-store
-  для чувствительного).
+  для чувствительного). `[частично реализовано 2026-07-19: operational SQLite
+  использует SQLCipher 4, device-only 256-bit SecureStore key, fail-closed
+  startup и inventory/integrity-verified plaintext migration; mobile 166/166,
+  typecheck и Android/iOS Expo native config introspection PASS. Не закрыто:
+  signed device upgrade/rollback evidence, шифрование отдельных media files,
+  iOS bundle/signing и утверждённая recovery policy.]`
 - [ ] Медиа не публичны — signed access есть; проверить tenant-guard на
   всех media-роутах.
 - [ ] Consent на GPS-трекинг агента и съёмку в торговом зале (пилот-договор).

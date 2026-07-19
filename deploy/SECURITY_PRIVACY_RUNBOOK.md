@@ -35,6 +35,29 @@ Face blur до persistence сейчас не реализован. До утве
 съёмка должна организационно исключать покупателей; AI/CV не отправляет фото
 внешнему провайдеру. Этот риск нельзя считать закрытым feature flag самого AI.
 
+## Mobile at-rest baseline
+
+Operational SQLite использует SQLCipher 4 в signed Android/iOS native build.
+Ключ — 32 random bytes, хранится только device-only в SecureStore и никогда не
+выводится в логи, backup, support artifact или telemetry. При наличии encrypted
+DB и отсутствии/повреждении ключа приложение обязано завершить startup
+fail-closed: нельзя автоматически генерировать новый ключ, удалять базу или
+предлагать пользователю «очистить данные», пока оператор не подтвердил, что
+несинхронизированной работы нет.
+
+Upgrade с legacy plaintext DB допускается только однонаправленно: создать новую
+encrypted DB, выполнить `sqlcipher_export`, сверить schema и row inventory,
+marker и полный `cipher_integrity_check`, и лишь затем удалить plaintext.
+Перед pilot на каждом типе устройства записать evidence signed artifact SHA,
+OS/device, upgrade с pending outbox/media, успешную синхронизацию, logout,
+remote revoke, kill/restart и key-loss recovery. Дополнительно проверить, что
+header DB не равен `SQLite format 3`. Expo Go не подтверждает SQLCipher.
+
+Отдельные offline media files пока не зашифрованы. До закрытия Phase 16 владелец
+утверждает iOS bundle/signing, media encryption/key lifecycle/recovery и
+процедуру approved wipe после доказанной синхронизации либо зафиксированной
+потери данных.
+
 ## Retention baseline
 
 Конкретные сроки не задаются разработчиком. Для каждого класса владелец
@@ -137,7 +160,8 @@ GPS, фото metadata, sync payloads и authored/agent commercial records ос�
 5. Клиентские bundles/artifacts проверены на отсутствие server secrets.
 6. Логи и support errors не содержат token/PIN/email/IP/media payload;
    correlation ID безопасен и доступен в API response header.
-7. Mobile logout/revoke/at-rest policy проверена на реальном устройстве.
+7. Mobile SQLite/media/logout/revoke/key-loss policy проверена signed build на
+   реальных Android/iOS устройствах; Expo Go не принимается как evidence.
 
 ## Незакрытые гейты
 
@@ -145,8 +169,10 @@ GPS, фото metadata, sync payloads и authored/agent commercial records ос�
   duration/unlock требуют business/support решения;
 - независимый pentest deployed environment; локальная API/job/export/media
   cross-tenant и denied-role matrix уже проходит;
-- app-level encryption мобильной SQLite/media и physical-device проверка;
-  remote revocation wipe реализован и покрыт unit;
+- SQLCipher для mobile operational SQLite, fail-closed key handling и guarded
+  plaintext migration реализованы и покрыты unit/config проверками; media-file
+  encryption, signed physical-device upgrade/revocation/key-loss evidence,
+  iOS signing identity и утверждённая recovery policy остаются gates;
 - утверждённые retention сроки/legal basis, external media orchestration и
   scheduler; guarded policy purge, controlled tenant delete и encrypted DSAR
   export реализованы локально, но реальный approved DSAR delivery/delete drill

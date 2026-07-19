@@ -23,7 +23,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 | Backup | внешний restic repository и alert endpoint | append backup; restore в изолированный target; root-only runtime secret | backup → 100% check → isolated DB/media restore → checksum/RPO/RTO receipt |
 | Monitoring | scraper, alert channel, log collector, Sentry projects | ingest/write для apps; read dashboards/checks; без admin за пределами проекта | test metric scrape, test alert delivery, Sentry test event и log redaction check |
 | ERP/1C | mapping sheet, 14 input manifests/fixtures и data owner | read согласованных staging files/API; без произвольного ERP write | count/SHA-256/totals reconciliation и replay report на каждом exchange |
-| Mobile signing | EAS/Apple/Google signing environments | build/sign/internal distribution; без store production publish до GO | immutable APK/AAB/IPA SHA, install/upgrade/rollback на matrix devices |
+| Mobile signing | EAS/Apple/Google signing environments + утверждённый iOS bundle identifier (config пока placeholder) | build/sign/internal distribution; без store production publish до GO | immutable APK/AAB/IPA SHA, SQLCipher availability/header/integrity, plaintext upgrade, install/upgrade/rollback на matrix devices |
 | Devices | iOS, current Android, low-end Android | test devices без реальных персональных данных | device IDs/OS/app SHA + signed smoke/offline/kill/disk-full/8h shift report |
 | Pilot | 1 client, 3–5 stores, 10–20 trained users, 2–4 weeks | изолированный tenant и согласованный support channel | acceptance log, incident/feedback journal, daily evidence и owner signatures |
 
@@ -38,7 +38,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 | GPS retention | число дней + purpose + роли доступа |
 | Audit retention | число дней + security/legal basis |
 | Privacy mode | verified pre-persistence face blur **или** режим без покупателей |
-| Mobile encryption | утверждённая native схема, key lifecycle и recovery policy |
+| Mobile encryption | SQLCipher operational SQLite уже выбран/реализован; утвердить media encryption, key lifecycle, key-loss recovery/approved wipe и signed-device evidence |
 | Login lockout | threshold/window/duration/unlock/support policy |
 | SLA/on-call | timezone, support hours, P0–P3 targets, named L1/L2/incident commander |
 | ERP destructive full sync | absence semantics, confirmation threshold и recovery owner |

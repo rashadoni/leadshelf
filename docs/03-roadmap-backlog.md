@@ -825,13 +825,23 @@ Definition of Done: двухнедельный прогон не теряет д
   `x-powered-by: Next.js`; это старый runtime, а не опровержение локального
   config test, и отдельная причина сохранять NO-GO до rollout]`
 - [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
-  `[частично реализовано/проверено mobile 163/163 + typecheck 2026-07-18: logout
+  `[частично реализовано/проверено mobile 166/166 + typecheck и Expo native
+  config introspection 2026-07-19: SQLite переведена на SQLCipher 4 через
+  expo-sqlite native plugin для Android/iOS; 256-bit ключ создаётся через
+  CSPRNG и хранится device-only в SecureStore. При существующей encrypted DB
+  без ключа приложение fail-closed и не создаёт новый ключ/не стирает данные.
+  Однонаправленная миграция legacy plaintext DB сверяет schema + row inventory,
+  marker и cipher_integrity_check до удаления plaintext; безопасный RU/AZ экран
+  запрещает пользователю очищать данные при возможной несинхронизированной
+  работе. Ранее logout
   предупреждает о pending работе и очищает media+operational SQLite до
   очистки session; remote 401/refresh revocation переводит sync в terminal
   authLost без retry, single-flight очищает media/SQLite/SecureStore и выходит
   на login, при частичном storage failure всё равно пытается очистить остальные
-  backends. BLOCKED — app-level encryption и physical Android/iOS revocation
-  smoke требуют native dependency/security choice, rebuild и devices]`
+  backends. BLOCKED — signed native build/upgrade migration и physical
+  Android/iOS revocation smoke; отдельные offline media files пока не
+  зашифрованы; iOS bundle identifier/signing и media key/recovery policy должны
+  быть утверждены владельцами. Expo Go не является evidence SQLCipher]`
 
 - [ ] Retention/deletion фото, GPS и audit data; consent/legal basis.
   `[частично реализовано/проверено PostgreSQL integration 2026-07-18: policy
