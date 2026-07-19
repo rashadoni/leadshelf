@@ -31,10 +31,13 @@ export interface ExecuteRetentionInput {
   organizationId: string
   slug: string
   policy: RetentionPolicyInput
+  changeId: string
+  reasonCode: string
   confirmation: string
   approvals: string[]
   backupReceipt: string
   mediaDeletionReceipt: string
+  legalHoldClearanceReceipt: string
   legalHoldCleared: boolean
   mediaManifestDigest: string
 }
@@ -43,10 +46,13 @@ export interface RetentionResult {
   organizationId: string
   slug: string
   policy: RetentionPolicyInput
+  changeId: string
+  reasonCode: string
   deleted: { mediaRows: number; gpsLocationRows: number; auditRows: number }
   redacted: { gpsVisitRows: number; gpsPhotoMetadataRows: number; gpsEventPayloadRows: number; gpsAlertPayloadRows: number }
   backupReceipt: string
   mediaDeletionReceipt: string
+  legalHoldClearanceReceipt: string
   mediaManifestDigest: string
 }
 
@@ -180,6 +186,9 @@ function validateExecution(input: ExecuteRetentionInput, preview: RetentionPrevi
   if (new Set(input.approvals.map((value) => value.trim()).filter(Boolean)).size < 2) throw new Error("[retention] нужны два разных approval ID")
   required(input.backupReceipt, "backupReceipt")
   required(input.mediaDeletionReceipt, "mediaDeletionReceipt")
+  required(input.legalHoldClearanceReceipt, "legalHoldClearanceReceipt")
+  required(input.changeId, "changeId")
+  required(input.reasonCode, "reasonCode")
   if (!input.legalHoldCleared) throw new Error("[retention] legal hold должен быть явно очищен")
   if (preview.affected.goldenReferenceBlockedRows > 0) {
     throw new Error("[retention] expired media используется GoldenReference; сначала примените отдельную approved reference policy")
@@ -218,9 +227,11 @@ export async function executeRetention(prisma: PrismaClient, input: ExecuteReten
     const auditRows = await tx.auditLog.deleteMany({ where: { organizationId, createdAt: { lt: new Date(preview.cutoffs.audit) } } })
     const result = {
       organizationId, slug, policy: preview.policy,
+      changeId: input.changeId.trim(), reasonCode: input.reasonCode.trim(),
       deleted: { mediaRows: mediaRows.count, gpsLocationRows: gpsLocationRows.count, auditRows: auditRows.count },
       redacted: { gpsVisitRows: gpsVisitRows.count, gpsPhotoMetadataRows, gpsEventPayloadRows, gpsAlertPayloadRows },
       backupReceipt: input.backupReceipt.trim(), mediaDeletionReceipt: input.mediaDeletionReceipt.trim(),
+      legalHoldClearanceReceipt: input.legalHoldClearanceReceipt.trim(),
       mediaManifestDigest: preview.mediaManifestDigest,
     }
     const audit = await tx.auditLog.create({
@@ -231,6 +242,8 @@ export async function executeRetention(prisma: PrismaClient, input: ExecuteReten
         entityId: organizationId,
         payload: {
           policy: preview.policy,
+          changeId: result.changeId,
+          reasonCode: result.reasonCode,
           cutoffs: preview.cutoffs,
           deleted: result.deleted,
           redacted: result.redacted,
@@ -238,6 +251,7 @@ export async function executeRetention(prisma: PrismaClient, input: ExecuteReten
           approvalIds: [...new Set(input.approvals.map((value) => value.trim()).filter(Boolean))],
           backupReceipt: result.backupReceipt,
           mediaDeletionReceipt: result.mediaDeletionReceipt,
+          legalHoldClearanceReceipt: result.legalHoldClearanceReceipt,
         } as unknown as Prisma.InputJsonObject,
       },
     })

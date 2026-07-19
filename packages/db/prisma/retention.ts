@@ -1,5 +1,10 @@
 import "dotenv/config"
 import { createSystemClient, executeRetention, previewRetention } from "../src/index"
+import {
+  safeRetentionExecuteOutput,
+  safeRetentionFailureOutput,
+  safeRetentionPreviewOutput,
+} from "../src/retention-cli-output"
 
 function values(args: string[], name: string): string[] {
   const result: string[] = []
@@ -33,22 +38,28 @@ async function main() {
       : command === "execute"
         ? await executeRetention(prisma, {
             organizationId, slug, policy,
+            changeId: value(args, "--change-id"),
+            reasonCode: value(args, "--reason-code"),
             confirmation: value(args, "--confirm"),
             approvals: values(args, "--approval"),
             backupReceipt: value(args, "--backup-receipt"),
             mediaDeletionReceipt: value(args, "--media-deletion-receipt"),
+            legalHoldClearanceReceipt: value(args, "--legal-hold-clearance-receipt"),
             legalHoldCleared: args.includes("--legal-hold-cleared"),
             mediaManifestDigest: value(args, "--media-manifest-digest"),
           })
         : (() => {
             throw new Error("usage: retention <preview|execute> --organization-id ID --slug SLUG --as-of ISO --media-days N --gps-days N --audit-days N")
           })()
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify(command === "preview"
+      ? safeRetentionPreviewOutput(result as Awaited<ReturnType<typeof previewRetention>>)
+      : safeRetentionExecuteOutput(result as Awaited<ReturnType<typeof executeRetention>>))}\n`)
   } finally {
     await prisma.$disconnect()
   }
 }
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error)
+  void error
+  process.stderr.write(`${JSON.stringify(safeRetentionFailureOutput())}\n`)
   process.exitCode = 1
 })

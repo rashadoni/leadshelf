@@ -35,6 +35,12 @@ drift terminal fail-closed без бессмысленных retry.
 source/token; незавершённая очистка остаётся повторяемой и наблюдаемой через
 отдельные metric/critical alert. Точный control contract описан в
 `deploy/ERP_IMPORT_RUNBOOK.md`.
+Retention external media purge использует отдельные
+`retention:prepare-media-purge` и `retention:execute-media-purge`: DB manifest
+связывается с exact tenant S3 versions в owner-only файле, а DB rows удаляются
+только после version/delete-marker purge и zero-version verification. Workflow
+default-disabled и требует approved policy/backup/legal-hold/dual approvals;
+точный contract находится в `deploy/SECURITY_PRIVACY_RUNBOOK.md`.
 Ошибки polling tick (включая временную недоступность PostgreSQL) не завершают
 долгоживущий runner: общий lifecycle использует capped exponential backoff с
 jitter до 60 секунд, пишет только безопасный код ошибки и сбрасывает backoff

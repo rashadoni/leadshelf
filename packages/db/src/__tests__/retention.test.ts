@@ -111,13 +111,16 @@ describe("retention purge", () => {
     expect(protectedPreview.mediaReferences).toEqual([])
     const base = {
       organizationId: organization.id, slug: organization.slug, policy,
+      changeId: "CHG-retention-guard", reasonCode: "approved-retention-policy",
       confirmation: `PURGE ${organization.slug} ${organization.id} ${asOf} ${protectedPreview.mediaManifestDigest}`,
       approvals: ["privacy-owner", "infrastructure-owner"],
       backupReceipt: "backup:verified", mediaDeletionReceipt: "media:deleted",
+      legalHoldClearanceReceipt: "legal-hold:cleared",
       legalHoldCleared: true, mediaManifestDigest: protectedPreview.mediaManifestDigest,
     }
     await expect(executeRetention(prisma, { ...base, approvals: ["same", "same"] })).rejects.toThrow("два разных")
     await expect(executeRetention(prisma, { ...base, legalHoldCleared: false })).rejects.toThrow("legal hold")
+    await expect(executeRetention(prisma, { ...base, legalHoldClearanceReceipt: "" })).rejects.toThrow("legalHoldClearanceReceipt")
     await expect(executeRetention(prisma, { ...base, confirmation: "PURGE wrong" })).rejects.toThrow("confirmation")
     await expect(executeRetention(prisma, base)).rejects.toThrow("GoldenReference")
   })
@@ -137,9 +140,11 @@ describe("retention purge", () => {
     )).toBe(true)
     const result = await executeRetention(prisma, {
       organizationId: target.organization.id, slug: target.organization.slug, policy,
+      changeId: "CHG-retention-target", reasonCode: "approved-retention-policy",
       confirmation: `PURGE ${target.organization.slug} ${target.organization.id} ${asOf} ${preview.mediaManifestDigest}`,
       approvals: ["privacy-owner", "infrastructure-owner"],
       backupReceipt: "backup:verified", mediaDeletionReceipt: "media:deleted",
+      legalHoldClearanceReceipt: "legal-hold:cleared",
       legalHoldCleared: true, mediaManifestDigest: preview.mediaManifestDigest,
     })
     expect(result.deleted).toEqual({ mediaRows: 1, gpsLocationRows: 1, auditRows: 1 })

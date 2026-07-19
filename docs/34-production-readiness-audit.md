@@ -13,7 +13,7 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local; prior remote PASS | current 33/33 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
-| Unit/integration | PASS local; prior remote PASS | current clean 35-migration schema 619/619: core 106, mobile 175, DB 91, vision 43, worker 62, web 142; remotely validated feature SHA — 582/582 |
+| Unit/integration | PASS local; prior remote PASS | current clean 33-migration schema 626/626: core 106, mobile 175, DB 92, vision 43, worker 68, web 142; remotely validated feature SHA — 582/582 |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | prior full 21/21; current tenant-qualified login regression 15/15 Chromium, Firefox, WebKit at 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
@@ -153,8 +153,19 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   GoldenReference guard; удаляет expired DB media/location/audit
   и redacts GPS в Visit/EXIF/geofence/visit-alert JSON, затем атомарно пишет
   минимальный retention audit event. На изолированной схеме
-  33/33 migrations и DB 91/91 PASS; recent/neighbor сохранены. Утверждённые
-  сроки/legal basis, scheduler и external S3/backups deletion остаются gates;
+  33/33 migrations и DB 92/92 PASS; recent/neighbor сохранены. Двухфазный
+  external-media workflow локально связывает этот DB digest с exact tenant S3
+  keys, paginated object versions/delete markers, expiring dual approvals,
+  backup/legal-hold receipts, preflight drift, expiry-blocked untouched start,
+  idempotent post-expiry partial retry и
+  post-delete zero-version verification; worker fake-versioned-store + DB
+  integration и pagination/cursor tests в worker 68/68 PASS. Actual adapter
+  drill на isolated local versioned MinIO также PASS: 2 versions
+  →0, head=false и bucket после trap отсутствует. Это local capability, не
+  staging provider/least-privilege evidence. Manifest >64 MiB отклоняется
+  fail-closed. Реальный versioned staging S3, утверждённые сроки/legal basis,
+  scheduler, автоматизированный tenant media-write quiescence/batching и backup
+  lifecycle остаются gates;
 - controlled DSAR CLI строит tenant/subject inventory, не выводит PII или
   subject/request identifiers в stdout, требует manifest match, exact
   confirmation, dual approval и legal-basis receipt, создаёт только новый

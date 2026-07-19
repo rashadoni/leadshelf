@@ -903,19 +903,30 @@ Definition of Done: двухнедельный прогон не теряет д
   UTC as-of + media/GPS/audit days без developer defaults, dry-run row/media
   inventory originals/thumbnails/video frames, SHA-256 manifest drift guard,
   fail-closed GoldenReference protection, exact confirmation, два разных
-  approvals, backup/media receipts, legal-hold clearance, tenant advisory lock
+  approvals, backup/media receipts, отдельный legal-hold clearance receipt, tenant advisory lock
   и serializable transaction. Просроченные DB media/AgentLocation/audit
   удаляются; Visit coordinates и GPS в EXIF/geofence/visit-alert JSON
   редактируются рекурсивно; новый минимальный audit event фиксирует
   policy/counts/digest и external evidence IDs. Изолированная схема: 30/30
   migrations, DB suite
-  83/83 PASS; target expired data удалены, recent и neighbor сохранены,
+  92/92 PASS; target expired data удалены, recent и neighbor сохранены,
   fixtures residue=0. Добавлен controlled DSAR inventory/export: exact
   org+slug+subject, manifest drift guard, dual approval/legal-basis receipt,
   exclusive 0600 artifact, AES-256-GCM и audit event; preview/result не
   раскрывают subject/request/PII, credential hashes/JTI/push tokens исключены,
-  neighbor tenant regression PASS. BLOCKED — сроки/legal basis, scheduler и фактическое
-  удаление external S3/backups требуют client privacy/legal/business и
+  neighbor tenant regression PASS. Двухфазный worker S3 purge теперь сверяет
+  DB digest с exact tenant key prefixes, инвентаризирует paginated versions и
+  delete markers, требует expiring owner-only dual-approval manifest, делает
+  preflight drift до удаления, после expiry разрешает только доказанный partial
+  recovery того же manifest, проверяет
+  zero remaining versions и только затем запускает DB purge с deterministic
+  receipt; worker 68/68, включая tenant/partial/drift/pagination tests, PASS.
+  Actual local AWS SDK adapter drill на isolated versioned MinIO: 2 versions →
+  0, head=false, bucket cleanup=absent; это dev capability evidence, не
+  production-provider/least-privilege proof. Manifest >64 MiB отклоняется
+  fail-closed. BLOCKED — утверждённые сроки/legal basis, scheduler,
+  автоматизированный tenant media-write quiescence/batching, реальный versioned
+  staging S3 и backup lifecycle требуют client privacy/legal/business и
   infrastructure owners; approved delivery/decrypt/delete DSAR drill требует
   privacy/security owners]`
 - [ ] Face blur до персистентности либо согласованный режим без покупателей.

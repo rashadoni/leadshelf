@@ -15,6 +15,8 @@
     "import:prepare-full-sync-approval": "tsx src/catalog-import/full-sync-prepare-cli.ts",
     "import:attach-full-sync-approval": "tsx src/catalog-import/full-sync-attach-cli.ts",
     "import:cancel-full-sync": "tsx src/catalog-import/full-sync-cancel-cli.ts",
+    "retention:prepare-media-purge": "tsx src/retention/media-purge-prepare-cli.ts",
+    "retention:execute-media-purge": "tsx src/retention/media-purge-execute-cli.ts",
     "notifications": "tsx src/notification-delivery-runner.ts",
     "notifications:once": "tsx src/notification-delivery-runner.ts --once",
     "proof-analysis": "tsx src/proof-analysis-runner.ts",

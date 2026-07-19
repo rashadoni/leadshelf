@@ -165,41 +165,84 @@ pnpm --filter @leadshelf/db retention -- preview \
   --audit-days APPROVED_AUDIT_DAYS
 ```
 
-Preview возвращает deletion manifest originals/thumbnails/persisted video
-frames, число media rows, заблокированных GoldenReference, и SHA-256 digest.
+Preview выводит только policy/cutoffs/counts и SHA-256 digest, без tenant
+identity, object keys и media content. Полный deletion manifest включает
+originals/thumbnails/persisted video frames, но остаётся внутри процесса.
 При `goldenReferenceBlockedRows > 0` execute fail-closed: сначала нужна
 отдельная approved reference lifecycle policy; deletion manifest будет пуст,
 потому что удалять общий object key нельзя.
-После
-проверенного backup, удаления именно этого media manifest и проверки legal
-hold разрешён execute:
+После проверенного backup и legal-hold clearance создать owner-only (`0600`)
+control-файл без symlink. Два approval ID должны быть разными, окно
+`issuedAt`→`expiresAt` — 5 минут..24 часа:
 
-```bash
-pnpm --filter @leadshelf/db retention -- execute \
-  --organization-id ORG_ID --slug TENANT_SLUG \
-  --as-of 2026-07-18T12:00:00.000Z \
-  --media-days APPROVED_MEDIA_DAYS \
-  --gps-days APPROVED_GPS_DAYS \
-  --audit-days APPROVED_AUDIT_DAYS \
-  --media-manifest-digest SHA256_FROM_PREVIEW \
-  --confirm "PURGE TENANT_SLUG ORG_ID 2026-07-18T12:00:00.000Z SHA256_FROM_PREVIEW" \
-  --approval PRIVACY_APPROVAL_ID --approval INFRA_APPROVAL_ID \
-  --backup-receipt VERIFIED_BACKUP_ID \
-  --media-deletion-receipt VERIFIED_MEDIA_DELETE_ID \
-  --legal-hold-cleared
+```json
+{
+  "version": 1,
+  "organizationId": "ORG_ID",
+  "slug": "TENANT_SLUG",
+  "changeId": "CHG-12345",
+  "requesterApprovalId": "privacy-approval-1",
+  "reviewerApprovalId": "infrastructure-approval-2",
+  "reasonCode": "approved-retention-policy",
+  "backupReceipt": "backup:verified:12345",
+  "legalHoldClearanceReceipt": "legal-hold:cleared:12345",
+  "issuedAt": "2026-07-18T12:05:00.000Z",
+  "expiresAt": "2026-07-18T13:05:00.000Z",
+  "policy": {
+    "asOf": "2026-07-18T12:00:00.000Z",
+    "mediaDays": 30,
+    "gpsDays": 14,
+    "auditDays": 90
+  },
+  "mediaManifestDigest": "SHA256_FROM_PREVIEW",
+  "confirmation": "PURGE RETENTION TENANT_SLUG ORG_ID 2026-07-18T12:00:00.000Z SHA256_FROM_PREVIEW"
+}
 ```
 
-CLI повторно строит inventory под tenant advisory lock и serializable
-transaction, отклоняет изменившийся manifest/GoldenReference, удаляет
-просроченные DB media
+Перед prepare владелец обязан остановить media writes выбранного tenant и
+доказать отсутствие in-flight uploads; этот quiescence сохраняется до успешного
+execute или оформленного abort. В приложении этот gate пока не автоматизирован,
+поэтому без утверждённой maintenance-процедуры production purge запрещён.
+Prepare повторно сверяет DB manifest, инвентаризирует все S3 object versions и
+delete markers только для exact `photos/ORG_ID/` и `frames/ORG_ID/` keys и
+эксклюзивно создаёт mode-0600 manifest. Manifest больше 64 MiB отклоняется
+fail-closed и требует утверждённого batching design, а не ручного разбиения:
+
+```bash
+pnpm --filter @leadshelf/worker retention:prepare-media-purge -- \
+  --control-file /run/leadshelf/retention/control.json \
+  --output-file /run/leadshelf/retention/prepared-manifest.json
+
+pnpm --filter @leadshelf/worker retention:execute-media-purge -- \
+  --manifest-file /run/leadshelf/retention/prepared-manifest.json
+```
+
+Prepared manifest содержит private object keys/version IDs: его нельзя печатать,
+класть в argv, CI artifact или тикет. Execute сначала выполняет preflight всех
+versions до первой destructive операции, отклоняет новый/unapproved version,
+не начинает untouched purge после expiry, но разрешает idempotent recovery
+того же exact manifest при доказанном missing-version subset,
+удаляет только prepared versions и delete markers, затем повторно доказывает
+отсутствие exact keys. Частичный delete повторяется по тому же manifest.
+Только после S3 verification CLI повторно строит DB inventory под tenant
+advisory lock и serializable transaction, отклоняет drift/GoldenReference,
+удаляет просроченные DB media
 rows/AgentLocation/audit, обнуляет Visit coordinates и рекурсивно удаляет GPS
 из EXIF, geofence anomaly и visit-alert JSON. Neighbor tenant не затрагивается.
 После purge в той же транзакции создаётся минимальный `retention.execute`
-audit event с policy/counts/digest и ID внешних approvals/receipts, без media
-content или координат.
-External S3/backups CLI намеренно не удаляет. Массовое удаление через ad-hoc
-SQL/S3 команды запрещено. Периодический scheduler включается только после
-утверждения сроков, legal basis, owner и external media orchestration.
+audit event с policy/counts/digest, deterministic S3 deletion receipt, legal-
+hold/backup, change/reason и approval IDs, без media content, keys или координат. Stdout/stderr
+обоих CLI — только allowlisted event/code.
+
+One-shot S3 identity передаётся только через root-only `RETENTION_S3_*` runtime
+environment; код не имеет fallback к application `S3_*`. IAM требует
+`ListBucketVersions`, `GetObject` для head и `DeleteObject`/
+`DeleteObjectVersion` только для media bucket, без PutObject и backup bucket.
+Прямой
+production `@leadshelf/db retention -- execute` и ad-hoc SQL/S3 deletion
+запрещены: эта низкоуровневая команда остаётся для DB integration tests.
+Периодический scheduler включается только после утверждения сроков, legal basis,
+owner и проверенного staging provider drill.
 
 ## DSAR export baseline
 

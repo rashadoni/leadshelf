@@ -77,7 +77,11 @@ apt install -y unattended-upgrades fail2ban awscli
 
 Production precondition: заранее создать private bucket, включить versioning
 и lifecycle/retention по договору, выдать отдельные least-privilege credentials
-и заполнить `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
+для controlled retention purge: bucket list-versions/head и delete/delete-version
+только media bucket, без put и без доступа к backup bucket; application write
+credentials для purge не переиспользовать. One-shot purge получает их только
+как root-only `RETENTION_S3_*`; normal worker services эти переменные не имеют.
+Отдельно заполнить application `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
 `S3_BUCKET`. `/api/ready` обязан подтвердить `storage.status=up`. Archived
 MinIO Community image запрещён в production; он не получает security fixes.
 `LEADSHELF_MEDIA_UPLOAD_CONCURRENCY` задаётся на каждую web replica (default 8,
