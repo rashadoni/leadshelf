@@ -816,7 +816,8 @@ Definition of Done: двухнедельный прогон не теряет д
   scan=0, Grype web/worker/custom Caddy/custom PostgreSQL High/Critical=0.
   Archived MinIO удалён из production. Интегрированная code baseline ветки
   `codex/production-readiness` на exact SHA
-  `bae29c8c629eb1b0788b81b578ef1d94185481e9` прошла remote checks;
+  `fb97aaeb75c6e8986982015db83479e53652df4e` прошла remote checks run
+  `29668962477`;
   draft PR #19 CLEAN, remote `ci` SUCCESS, TruffleHog и High/Critical scans
   web/worker/Caddy/PostgreSQL SUCCESS, deploy SKIPPED; три пользовательских
   удаления video исключены. BLOCKED — rollout/deployed-environment evidence.

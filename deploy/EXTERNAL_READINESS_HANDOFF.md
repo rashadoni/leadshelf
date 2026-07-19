@@ -5,7 +5,7 @@
 передавать их через runtime secret manager/защищённый CI environment.
 
 Проверенная инженерная база evidence: ветка `codex/production-readiness`,
-remotely validated feature SHA `1df8b0debc16595daffef9ff687edb0cb88cbac9`,
+remotely validated feature SHA `fb97aaeb75c6e8986982015db83479e53652df4e`,
 draft PR #19. Для
 последующих docs/CI-pin commits authoritative SHA и checks берутся из PR.
 Push, draft PR и read-only Actions checks выполнены; это не предоставляет
@@ -15,7 +15,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 
 | Gate | Что требуется | Минимальные права | Безопасная проверка предоставления |
 | --- | --- | --- | --- |
-| GitHub/CI | **ПРЕДОСТАВЛЕНО/ПРОВЕРЕНО**: ветка, PR и Actions доступны | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 CLEAN/draft; feature SHA `1df8b0de...`, run 29667913641; 577-test `ci` и secret/four-image scans SUCCESS; deploy SKIPPED |
+| GitHub/CI | **ПРЕДОСТАВЛЕНО/ПРОВЕРЕНО**: ветка, PR и Actions доступны | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 CLEAN/draft; feature SHA `fb97aaeb...`, run 29668962477; 580-test `ci`, cross-browser smoke и secret/four-image scans SUCCESS; deploy SKIPPED |
 | Staging | HTTPS URL и deploy target | deploy только staging namespace/service; read logs/health | `/api/ready`, TLS и immutable image SHA; никаких client production данных |
 | Production deploy | Явное `Production deployment разрешён: ДА` | только release owner/CI environment после backup gate | verified backup+restore receipt, approved SHA, change window и rollback owner |
 | PostgreSQL | Обезличенный production-like dump/staging DB | schema migrate/read/write только staging; production read запрещён до GO | restore в изоляции, `prisma migrate deploy/status`, row/checksum report |
