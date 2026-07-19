@@ -31,11 +31,11 @@ export default function RootLayout() {
       <View style={styles.failure} accessibilityRole="alert">
         <Text style={styles.title}>Защищённое хранилище недоступно</Text>
         <Text style={styles.body}>
-          Не очищайте данные приложения, если осталась несинхронизированная работа. Обратитесь в поддержку и сообщите код LS-MDB-INIT.
+          Не очищайте данные приложения, если осталась несинхронизированная работа. Обратитесь в поддержку и сообщите код LS-MST-INIT.
         </Text>
         <Text style={styles.title}>Qorunan yaddaş əlçatan deyil</Text>
         <Text style={styles.body}>
-          Sinxronlaşdırılmamış iş ola bilərsə, tətbiq məlumatlarını silməyin. Dəstəyə LS-MDB-INIT kodunu bildirin.
+          Sinxronlaşdırılmamış iş ola bilərsə, tətbiq məlumatlarını silməyin. Dəstəyə LS-MST-INIT kodunu bildirin.
         </Text>
       </View>
     )

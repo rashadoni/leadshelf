@@ -840,7 +840,7 @@ Definition of Done: двухнедельный прогон не теряет д
   `x-powered-by: Next.js`; это старый runtime, а не опровержение локального
   config test, и отдельная причина сохранять NO-GO до rollout]`
 - [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
-  `[частично реализовано/проверено mobile 166/166 + typecheck и Expo native
+  `[частично реализовано/проверено mobile 173/173 + typecheck и Expo native
   config introspection 2026-07-19: SQLite переведена на SQLCipher 4 через
   expo-sqlite native plugin для Android/iOS; 256-bit ключ создаётся через
   CSPRNG и хранится device-only в SecureStore. При существующей encrypted DB
@@ -848,15 +848,23 @@ Definition of Done: двухнедельный прогон не теряет д
   Однонаправленная миграция legacy plaintext DB сверяет schema + row inventory,
   marker и cipher_integrity_check до удаления plaintext; безопасный RU/AZ экран
   запрещает пользователю очищать данные при возможной несинхронизированной
-  работе. Ранее logout
-  предупреждает о pending работе и очищает media+operational SQLite до
+  работе. Все durable offline photo/video, commercial/visit media и
+  upload/download documents шифруются AES-256-GCM отдельным device-only
+  SecureStore ключом. Versioned marker, atomic encrypted replacement с
+  decrypt/verify, startup migration+integrity scan и plaintext-source deletion
+  не позволяют принять частично записанный ciphertext; marker без ключа или
+  повреждённый файл останавливают startup. Расшифрованный файл создаётся только
+  во временном cache на время preview/open/upload и удаляется в `finally` и при
+  следующем startup; Android backup отключён. Logout предупреждает о pending
+  работе и очищает все media+operational SQLite до
   очистки session; remote 401/refresh revocation переводит sync в terminal
   authLost без retry, single-flight очищает media/SQLite/SecureStore и выходит
   на login, при частичном storage failure всё равно пытается очистить остальные
-  backends. BLOCKED — signed native build/upgrade migration и physical
-  Android/iOS revocation smoke; отдельные offline media files пока не
-  зашифрованы; iOS bundle identifier/signing и media key/recovery policy должны
-  быть утверждены владельцами. Expo Go не является evidence SQLCipher]`
+  backends. BLOCKED — signed native build/DB+plaintext-media migration и
+  physical Android/iOS upload/preview/revocation smoke, low-end memory profile
+  для whole-file AES-GCM; iOS bundle identifier/signing и key-loss
+  recovery/approved wipe должны быть утверждены владельцами. Expo Go не
+  является evidence SQLCipher или native AES-GCM]`
 
 - [ ] Retention/deletion фото, GPS и audit data; consent/legal basis.
   `[частично реализовано/проверено PostgreSQL integration 2026-07-18: policy

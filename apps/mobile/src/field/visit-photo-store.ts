@@ -6,8 +6,9 @@ import * as Crypto from "expo-crypto"
 import * as FileSystem from "expo-file-system/legacy"
 import { enqueueFieldVisitPhoto } from "../db/local-store"
 import type { FieldVisitPhotoPayload } from "./execution-outbox"
+import { FIELD_VISIT_MEDIA_DIR, persistEncryptedMedia } from "../media/encrypted-media-store"
 
-const DIR = `${FileSystem.documentDirectory}field-visit-photo-outbox/`
+const DIR = FIELD_VISIT_MEDIA_DIR
 
 export async function persistAndQueueFieldVisitPhoto(input: {
   visitId: string
@@ -34,7 +35,7 @@ export async function persistFieldVisitPhoto(input: {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {})
   const clientPhotoId = `mobile-photo-${Crypto.randomUUID()}`
   const fileUri = `${DIR}${clientPhotoId}.jpg`
-  await FileSystem.copyAsync({ from: input.sourceUri, to: fileUri })
+  await persistEncryptedMedia(input.sourceUri, fileUri, { deletePlaintextSource: true })
   const payload: FieldVisitPhotoPayload = {
     clientPhotoId,
     visitId: input.visitId,

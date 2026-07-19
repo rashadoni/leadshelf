@@ -13,13 +13,13 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local; prior remote PASS | current 31/31 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
-| Unit/integration | PASS local; prior remote PASS | current local 590/590: DB 87/87, mobile 166/166, web 134/134; remotely validated feature SHA — 582/582 |
+| Unit/integration | PASS local; prior remote PASS | current clean 31-migration schema 597/597: core 105, mobile 173, DB 87, vision 43, worker 55, web 134; remotely validated feature SHA — 582/582 |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS last executable / BLOCKED latest | PR #19 draft; exact feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b`, run 29669623000: 582-test `ci` + cross-browser smoke SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED. Run 29669888178 не начал ни одного step: GitHub отклонил job из-за failed account payment/spending limit; это внешний billing blocker, не результат тестов |
+| Remote CI | PASS last executable / BLOCKED latest | PR #19 draft; exact feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b`, run 29669623000: 582-test `ci` + cross-browser smoke SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED. Latest run 29670669393 для `d4606a3...` не начал ни одного step: GitHub отклонил jobs из-за failed account payment/spending limit; это внешний billing blocker, не результат тестов |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
@@ -89,17 +89,21 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   files/bytes в профиле с near-limit warning; device-shift evidence pending;
 - remote mobile revocation: failed refresh becomes terminal `authLost`, stops
   retry, single-flight wipes media/operational SQLite/SecureStore and returns
-  to login; all backends are attempted on partial failure. Mobile 166/166 PASS;
+  to login; all backends are attempted on partial failure. Mobile 173/173 PASS;
   signed Android/iOS device evidence remains external;
 - mobile operational SQLite at rest: SQLCipher 4 включён для Android/iOS native
   builds, device-only 256-bit SecureStore key не регенерируется поверх
   существующей encrypted DB; legacy plaintext migration сверяет schema/row
   inventory, marker и `cipher_integrity_check` до удаления исходника и
-  fail-closed показывает privacy-safe RU/AZ recovery. Mobile 166/166,
-  typecheck и Expo native config introspection PASS; это code/config evidence,
-  а не signed-device proof. Offline media encryption, physical upgrade/
-  revocation matrix, iOS bundle identifier/signing и recovery approval остаются
-  внешними блокерами;
+  fail-closed показывает privacy-safe RU/AZ recovery. Durable offline
+  photo/video/commercial/visit/document files шифруются AES-256-GCM отдельным
+  device-only key: journalled legacy migration, atomic decrypt/byte-verify до
+  удаления plaintext, startup integrity scan, fail-closed missing key/corrupt
+  file, temporary decrypt cleanup и full logout/revoke wipe; Android backup
+  отключён. Mobile 173/173, typecheck, Expo config и production web build PASS;
+  это code/config evidence, а не signed-device proof. Physical DB/media
+  migration/upload/preview/revocation и low-end memory matrix, iOS bundle
+  identifier/signing и recovery approval остаются внешними блокерами;
 - authenticated API boundary emits privacy-safe allowlisted structured JSON
   with method/path/correlation/organization/user/device/task context; query,
   authorization, session ID and arbitrary headers are excluded by tests;

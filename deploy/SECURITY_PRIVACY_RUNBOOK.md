@@ -77,10 +77,24 @@ OS/device, upgrade с pending outbox/media, успешную синхрониз�
 remote revoke, kill/restart и key-loss recovery. Дополнительно проверить, что
 header DB не равен `SQLite format 3`. Expo Go не подтверждает SQLCipher.
 
-Отдельные offline media files пока не зашифрованы. До закрытия Phase 16 владелец
-утверждает iOS bundle/signing, media encryption/key lifecycle/recovery и
-процедуру approved wipe после доказанной синхронизации либо зафиксированной
-потери данных.
+Durable offline photo/video, commercial/visit media и upload/download documents
+шифруются AES-256-GCM отдельным 32-byte device-only SecureStore key. Versioned
+marker журналирует миграцию legacy plaintext; каждый startup повторно сканирует
+известные каталоги, шифрует rollback-created plaintext и аутентифицирует каждый
+ciphertext. Замена выполняется atomic move только после decrypt/byte-verify,
+затем plaintext source удаляется; marker без ключа, truncated/corrupt file или
+ошибка удаления fail-closed. Расшифрованные копии допустимы только в отдельном
+temporary cache во время preview/open/upload, удаляются в `finally` и целиком
+очищаются на startup. Android app backup отключён; key не мигрирует на другое
+устройство. Wipe сначала удаляет все media directories, затем marker и только
+потом key, чтобы частичный storage failure не сделал данные неявно
+нерасшифровываемыми.
+
+Это подтверждено code/config/unit evidence, но не signed native runtime. До
+закрытия Phase 16 владелец утверждает iOS bundle/signing, key-loss recovery и
+approved wipe после доказанной синхронизации либо зафиксированной потери данных;
+device matrix подтверждает legacy migration, preview/upload/revoke/kill/restart
+и memory profile на 35 MiB video. Expo Go не является native evidence.
 
 ## Retention baseline
 
@@ -195,9 +209,10 @@ GPS, фото metadata, sync payloads и authored/agent commercial records ос�
   требуют business/support решения;
 - независимый pentest deployed environment; локальная API/job/export/media
   cross-tenant и denied-role matrix уже проходит;
-- SQLCipher для mobile operational SQLite, fail-closed key handling и guarded
-  plaintext migration реализованы и покрыты unit/config проверками; media-file
-  encryption, signed physical-device upgrade/revocation/key-loss evidence,
+- SQLCipher для mobile operational SQLite и AES-256-GCM для durable offline
+  media, fail-closed key handling, guarded plaintext migration и temporary-file
+  cleanup реализованы и покрыты unit/config проверками; signed physical-device
+  DB/media upgrade/upload/preview/revocation/key-loss evidence, low-end memory,
   iOS signing identity и утверждённая recovery policy остаются gates;
 - утверждённые retention сроки/legal basis, external media orchestration и
   scheduler; guarded policy purge, controlled tenant delete и encrypted DSAR

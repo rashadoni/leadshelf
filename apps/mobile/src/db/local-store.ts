@@ -144,6 +144,7 @@ import {
   updateOptimisticAgentTask,
   type FieldTaskCustomerPreview,
 } from "../field/task-cache"
+import { bootstrapEncryptedMediaStorage } from "../media/encrypted-media-store"
 
 let db!: SQLite.SQLiteDatabase
 let initPromise: Promise<void> | null = null
@@ -348,6 +349,7 @@ export function initDb(): Promise<void> {
     initPromise = (async () => {
       db = await bootstrapEncryptedDatabase()
       initializeSchema()
+      await bootstrapEncryptedMediaStorage()
     })()
   }
   return initPromise

@@ -17,6 +17,7 @@ export default defineConfig({
       "src/auth/**/*.test.ts",
       "src/observability/**/*.test.ts",
       "src/field/**/*.test.ts",
+      "src/media/**/*.test.ts",
     ],
     environment: "node",
   },

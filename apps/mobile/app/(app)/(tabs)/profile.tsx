@@ -3,7 +3,6 @@ import { useEffect, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router } from "expo-router"
-import * as FileSystem from "expo-file-system/legacy"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { SectionHint } from "../../../src/components/SectionHint"
 import { mobileLogout } from "../../../src/api/mobile-client"
@@ -11,13 +10,17 @@ import { tokenStore } from "../../../src/auth/token-store"
 import { requiresLogoutConfirmation } from "../../../src/auth/logout-policy"
 import { getLocalDatabaseCapacity, getLogoutDataSummary, purgeLocalOperationalData } from "../../../src/db/local-store"
 import { formatCapacityBytes, photoCapacityLevel } from "../../../src/db/capacity"
-import { PHOTO_OUTBOX_DIR, readPhotoOutboxUsage } from "../../../src/photos/photo-store"
+import { readPhotoOutboxUsage } from "../../../src/photos/photo-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useField } from "../../../src/field/field-context"
 import { stopWorkdayTracking } from "../../../src/location/workday-tracking"
+import {
+  deleteAllEncryptedMedia,
+  readEncryptedMediaUsage,
+} from "../../../src/media/encrypted-media-store"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
@@ -36,11 +39,14 @@ export default function ProfileTab() {
 
   async function refreshCapacity() {
     const database = getLocalDatabaseCapacity()
-    const photos = await readPhotoOutboxUsage()
+    const [photos, media] = await Promise.all([
+      readPhotoOutboxUsage(),
+      readEncryptedMediaUsage(),
+    ])
     setCapacity({
       databaseBytes: database.allocatedBytes,
-      photoFiles: photos.files,
-      photoBytes: photos.bytes,
+      photoFiles: media.files,
+      photoBytes: media.bytes,
       photoLevel: photoCapacityLevel(photos),
     })
   }
@@ -66,7 +72,7 @@ export default function ProfileTab() {
       await mobileLogout() // best-effort отзыв refresh-сессии на сервере
       // Сначала удаляем чувствительные media-файлы; при ошибке сессия остаётся,
       // чтобы пользователь мог повторить безопасную очистку.
-      await FileSystem.deleteAsync(PHOTO_OUTBOX_DIR, { idempotent: true })
+      await deleteAllEncryptedMedia()
       purgeLocalOperationalData()
       await tokenStore.clearSession()
       router.replace("/(auth)/login" as never)

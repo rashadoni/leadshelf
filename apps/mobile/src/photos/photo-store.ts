@@ -6,8 +6,12 @@ import * as Crypto from "expo-crypto"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import { enqueuePhoto } from "../db/local-store"
 import { canStorePhoto, PhotoStorageLimitError } from "./photo-storage-policy"
+import {
+  PHOTO_MEDIA_DIR,
+  persistEncryptedMedia,
+} from "../media/encrypted-media-store"
 
-export const PHOTO_OUTBOX_DIR = `${FileSystem.documentDirectory}photo-outbox/`
+export const PHOTO_OUTBOX_DIR = PHOTO_MEDIA_DIR
 
 export async function readPhotoOutboxUsage(): Promise<{ files: number; bytes: number }> {
   const names = await FileSystem.readDirectoryAsync(PHOTO_OUTBOX_DIR).catch(() => [])
@@ -51,7 +55,7 @@ export async function persistAndQueuePhoto(input: {
   const mediaType = input.mediaType ?? "photo"
   const extension = mediaType === "video" ? "mp4" : "jpg"
   const fileUri = `${PHOTO_OUTBOX_DIR}${clientPhotoId}.${extension}`
-  await FileSystem.copyAsync({ from: input.sourceUri, to: fileUri })
+  await persistEncryptedMedia(input.sourceUri, fileUri, { deletePlaintextSource: true })
   enqueuePhoto({
     clientPhotoId,
     clientOpId: `op-${Crypto.randomUUID()}`,

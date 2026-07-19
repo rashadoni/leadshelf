@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import {
   Alert,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,6 +30,7 @@ import { formatShortDateTime } from "../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../src/i18n"
 import { useSync } from "../../src/sync/sync-context"
 import { colors, radii } from "../../src/theme"
+import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
 
 function kindKey(kind: string): MessageKey {
   if (kind === "field.route.create") return "syncKindRouteCreate"
@@ -212,7 +212,7 @@ export default function SyncCenterScreen() {
           return (
             <View key={row.clientOpId} style={styles.card}>
               <View style={styles.cardTop}>
-                {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} /> : <View style={styles.kindMark}><Text style={styles.kindMarkText}>↻</Text></View>}
+                {photoUri ? <EncryptedMediaImage uri={photoUri} style={styles.preview} /> : <View style={styles.kindMark}><Text style={styles.kindMarkText}>↻</Text></View>}
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle}>{kindLabel(row.kind, locale)}</Text>
                   {rowContext(row) ? <Text style={styles.cardContext} numberOfLines={2}>{rowContext(row)}</Text> : null}

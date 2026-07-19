@@ -12,9 +12,8 @@ import { localStore } from "../db/local-store"
 import { purgeLocalOperationalData } from "../db/local-store"
 import { tokenStore } from "../auth/token-store"
 import { wipeRevokedSession } from "../auth/revocation-wipe"
-import * as FileSystem from "expo-file-system/legacy"
-import { PHOTO_OUTBOX_DIR } from "../photos/photo-store"
 import { stopWorkdayTracking } from "../location/workday-tracking"
+import { deleteAllEncryptedMedia } from "../media/encrypted-media-store"
 
 const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
 
@@ -49,7 +48,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         revocationWipe.current ??= wipeRevokedSession({
           deleteMedia: async () => {
             await stopWorkdayTracking().catch(() => {})
-            await FileSystem.deleteAsync(PHOTO_OUTBOX_DIR, { idempotent: true })
+            await deleteAllEncryptedMedia()
           },
           purgeOperationalData: () => purgeLocalOperationalData(),
           clearSession: () => tokenStore.clearSession(),

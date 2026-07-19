@@ -57,6 +57,7 @@ import { PlanogramSvg, type Bundle } from "../../../src/planogram/PlanogramSvg"
 import { useSync } from "../../../src/sync/sync-context"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { ShelfComparisonCard } from "../../../src/components/ShelfComparisonCard"
+import { EncryptedMediaImage } from "../../../src/components/EncryptedMediaImage"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import type { TaskRow } from "../../../src/sync/ports"
@@ -767,7 +768,7 @@ export default function TaskDetailScreen() {
                 return (
                   <View key={proof.clientPhotoId} style={styles.proofRow}>
                     {proof.fileUri && proof.mediaType === "photo" ? (
-                      <Image source={{ uri: proof.fileUri }} style={styles.proofThumb} />
+                      <EncryptedMediaImage uri={proof.fileUri} style={styles.proofThumb} />
                     ) : (
                       <View style={[styles.proofThumb, styles.proofThumbEmpty]}>
                         <Text style={styles.proofThumbIcon}>{proof.mediaType === "video" ? "🎬" : "🖼"}</Text>
