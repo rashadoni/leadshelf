@@ -804,8 +804,8 @@ Definition of Done: двухнедельный прогон не теряет д
   row lock, zero-residue verification и минимальный tenant audit без principal.
   Все четыре `AUTH_LOCKOUT_*`, включая secret-manager pepper, задаются только
   вместе без developer defaults; `/api/ready` fail-closed, если approved policy
-  отсутствует. Проверка: clean 32-migration PostgreSQL, DB profile 6/6, web auth
-  10/10, full suite 608/608 и tenant-qualified browser smoke 15/15 PASS.
+  отсутствует. Проверка: clean 33-migration PostgreSQL, DB profile 6/6, web auth
+  10/10, full suite 610/610 и tenant-qualified browser smoke 15/15 PASS.
   `[BLOCKED — business/production evidence]`: нужны утверждённые threshold,
   window, duration, named support/security owners и approval policy, audit
   production collision preflight/rollout и реальный controlled unlock drill]`
@@ -919,7 +919,7 @@ Definition of Done: нет открытых critical/high; доказано, ч�
   сериализуются; сохраняются только safe error type, has-stack marker и
   bounded allowlisted source/component/isFatal/correlation operational fields.
   HTTP reject ingest теперь возвращает delivery=false. Негативные core/mobile
-  tests PASS; clean 32-migration full suite 608/608, typecheck, lint и
+  tests PASS; clean 33-migration full suite 610/610, typecheck, lint и
   production build PASS. BLOCKED — production DSN/projects/owner и проверенный
   real test event с retention/access policy]`
 
@@ -940,21 +940,35 @@ Definition of Done: нет открытых critical/high; доказано, ч�
   BLOCKED — production log collector/retention/owner]`
 - [ ] Метрики: availability/latency/errors, sync/outbox, import freshness,
   worker lag, media errors, DB и storage capacity.
-  `[частично реализовано/проверено config 2026-07-18: закрытый /api/metrics
+  `[частично реализовано/проверено 2026-07-19: закрытый /api/metrics
   для DB/queues/S3 и localhost-only Caddy Prometheus histograms для request
   latency/TTFB/codes/sizes; P95/P99 PromQL зафиксирован в runbook. Actual S3
   objects/bytes inventory использует полную ListObjectsV2 pagination,
   single-flight cache 15 минут, отдельные ready/age metrics и fail-closed
-  cursor test. Runtime smoke с текущим local apps/web/.env получил S3 403
+  cursor test. Добавлены rolling 15-minute aggregate failures для mobile
+  outbox/import/proof-analysis/notifications без tenant/PII и шесть partial
+  indexes; clean migration 33/33 и forced EXPLAIN подтвердил Index Only Scan
+  для failure/oldest-work scrape queries. Metrics route authorization/aggregate
+  contract 2/2 и full suite 610/610 PASS. Runtime smoke с текущим local
+  apps/web/.env получил S3 403
   InvalidAccessKeyId из-за рассинхрона credentials с Compose, поэтому exact
   live values не заявляются. BLOCKED — production scraper/alerts/storage
   credentials и infrastructure owner]`
 
 - [ ] Алерты с владельцем/runbook: web/DB/storage down, missed backup, stuck
   queue, stale import, sync/vision spike, disk/certificate expiry.
-  `[частично реализовано 2026-07-18: backup/verify systemd OnFailure -> external
-  webhook и operations runbook. BLOCKED — production webhook/monitor rules,
-  notification channel и named owner contacts]`
+  `[частично реализовано/проверено 2026-07-19: backup/verify systemd OnFailure
+  -> external webhook; добавлен Prometheus baseline из 17 rules для missing/down
+  web target, storage readiness/inventory, import stall/recent failure,
+  mobile/proof/notification recent failures и worker lag, sync-conflict growth,
+  5xx/P95 SLO, missed backup, disk и TLS expiry. Pinned Prometheus 3.12.0
+  promtool проверил все 17 rules;
+  unit fixtures реально перевели web down, storage down, import stall/failure,
+  proof/notification lag и sync-conflict growth в
+  firing с точными severity/owner_role/runbook annotations. Runbook требует
+  external scrape jobs, named routing и controlled staging delivery tests.
+  BLOCKED — production Prometheus/Alertmanager/webhook, notification channel,
+  named owner contacts и доставленные alert evidence]`
 
 - [x] Понятные ошибки пользователю с support correlationId.
   `[реализовано/проверено unit+E2E 2026-07-18: каждый API response содержит

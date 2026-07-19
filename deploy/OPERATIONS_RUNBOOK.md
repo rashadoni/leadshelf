@@ -70,6 +70,26 @@ BASE_URL=https://client.example.com \
 Скрипт автоматизирует безопасную часть 1 и 5. Мутирующие пункты 3, 4 и 6
 разрешены только в выделенном smoke tenant и фиксируются чек-листом релиза.
 
+## Monitoring и alert acceptance
+
+1. До upload проверить canonical rules: `pnpm alerts:check`. Команда обязана
+   показать 17 valid rules и successful firing fixtures.
+2. Prometheus job `leadshelf-web` получает `/api/metrics` с bearer token из
+   secret store. Caddy собирается только через loopback/on-host agent;
+   node-exporter включает filesystem+systemd, blackbox job называется
+   `leadshelf-tls`.
+3. Alertmanager routing заменяет `owner_role` на named primary/backup contacts,
+   escalation window и канал. Generic role без имени не закрывает gate.
+4. В staging по одному вызвать controlled web scrape failure, storage failure,
+   overdue import fixture и backup-verification failure. Для каждого доказать
+   pending -> firing -> delivered -> resolved, ровно одно уведомление, время
+   detection/delivery и ссылку на этот runbook. Production данные не менять.
+5. Проверить отсутствие organization/user/device/task IDs, URL query, token,
+   media и error payload в alert labels/annotations/notification. Evidence
+   содержит только alert name, safe instance, timestamps и external event ID.
+6. Production enable запрещён, пока нет named owners, silences/maintenance
+   policy и evidence всех controlled staging deliveries.
+
 ## Abort и rollback
 
 Остановить rollout, если readiness не зелёный за 5 минут, есть 5xx/auth/sync

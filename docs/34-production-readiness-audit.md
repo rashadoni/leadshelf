@@ -12,14 +12,14 @@ evidence. Отсутствующее внешнее доказательство
 | Gate | Результат | Evidence |
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
-| Миграции | PASS local; prior remote PASS | current 32/32 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
-| Unit/integration | PASS local; prior remote PASS | current clean 32-migration schema 608/608: core 106, mobile 175, DB 91, vision 43, worker 55, web 138; remotely validated feature SHA — 582/582 |
+| Миграции | PASS local; prior remote PASS | current 33/33 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
+| Unit/integration | PASS local; prior remote PASS | current clean 33-migration schema 610/610: core 106, mobile 175, DB 91, vision 43, worker 55, web 140; remotely validated feature SHA — 582/582 |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | prior full 21/21; current tenant-qualified login regression 15/15 Chromium, Firefox, WebKit at 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS last executable / BLOCKED implementation run | PR #19 draft; exact feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b`, run 29669623000: 582-test `ci` + cross-browser smoke SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED. Tenant-auth SHA `d3c879f72c9cf47f6f9c7ec9e8461f9634ce7541`, run 29672380975: `ci` и secret/image scan имели `steps: []`, потому что GitHub отклонил jobs из-за failed account payment/spending limit; deploy SKIPPED. Это внешний billing blocker, не результат тестов |
+| Remote CI | PASS last executable / BLOCKED implementation run | PR #19 draft; exact feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b`, run 29669623000: 582-test `ci` + cross-browser smoke SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED. Telemetry SHA `1ced5a53356a14ed391f22b3484424bf37b06186`, run 29672742232: `ci` и secret/image scan имели `steps: []`, потому что GitHub отклонил jobs из-за failed account payment/spending limit; deploy SKIPPED. Это внешний billing blocker, не результат тестов |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
@@ -126,7 +126,7 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   GoldenReference guard; удаляет expired DB media/location/audit
   и redacts GPS в Visit/EXIF/geofence/visit-alert JSON, затем атомарно пишет
   минимальный retention audit event. На изолированной схеме
-  32/32 migrations и DB 91/91 PASS; recent/neighbor сохранены. Утверждённые
+  33/33 migrations и DB 91/91 PASS; recent/neighbor сохранены. Утверждённые
   сроки/legal basis, scheduler и external S3/backups deletion остаются gates;
 - controlled DSAR CLI строит tenant/subject inventory, не выводит PII или
   subject/request identifiers в stdout, требует manifest match, exact
@@ -137,7 +137,7 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   regression PASS; approved real delivery/decrypt/delete drill остаётся gate;
 - mobile push domain log фиксирует только correlationId/org/device/opId/kind/
   status после schema validation; unit доказывает отсутствие payload/result
-  detail, GPS, token/email и отбрасывание unsafe IDs; web 138/138 PASS;
+  detail, GPS, token/email и отбрасывание unsafe IDs; web 140/140 PASS;
 - demo seed больше не выводит пароль/PIN, email/display names или raw error в
   CI/stdout: success/failure — allowlisted structured events, а regression 2/2
   проверяет отсутствие credential/private error material;
@@ -147,6 +147,15 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   private paths и nested objects и доказывают их отсутствие; HTTP reject ingest
   не считается доставкой. Реальные production projects/event/access/retention
   остаются внешним observability gate;
+- `/api/metrics` теперь отдаёт aggregate rolling-15m failures для mobile
+  outbox/import/proof/notifications; migration 33 добавляет шесть partial
+  indexes, а forced EXPLAIN доказал Index Only Scan для failure/oldest-work
+  queries. Набор
+  из 17 Prometheus rules покрывает web/storage availability, queue/failure/lag,
+  sync-conflict growth,
+  5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и 7 firing fixtures
+  PASS. External scraper/Alertmanager, named routing и staging delivery
+  остаются gates;
 - account-wide web/mobile lockout: durable tenant-qualified HMAC-SHA-256
   principal с отдельным secret-manager pepper без IP/PII; web login, limiter и
   lockout требуют organization slug, поэтому одинаковые email разных tenants
@@ -159,7 +168,7 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   mode-0600/O_NOFOLLOW request file, state digest + exact confirmation, dual
   approvals, ticket/reason, serializable locks, zero-residue verification и
   tenant audit без principal. DB profile 6/6, web auth 10/10, full suite
-  608/608 и browser regression 15/15 PASS. Production values, named owners,
+  610/610 и browser regression 15/15 PASS. Production values, named owners,
   approval policy, migration rehearsal и реальный unlock drill остаются gates;
 - backup/restore, incident, ERP, privacy, pilot/GA runbooks и evidence templates.
 

@@ -218,7 +218,10 @@ Prometheus-compatible operational metrics are available at `/api/metrics`
 only with `Authorization: Bearer $METRICS_BEARER_TOKEN`. The endpoint exposes
 aggregate counts/lag/readiness without tenant identifiers. Configure the
 external monitor to alert on readiness=0, pending queue age, failed proof/
-notification growth and database capacity.
+notification growth and database capacity. Canonical rules are
+`deploy/monitoring/leadshelf-alerts.yml`; validate them before upload with
+`pnpm alerts:check`. The verifier uses the digest-pinned official Prometheus
+3.12.0 image and runs both syntax and firing fixtures.
 
 Caddy exposes aggregate HTTP histograms only on production-host loopback at
 `http://127.0.0.1:2019/metrics`; its admin API is disabled. These metrics cover
@@ -249,6 +252,17 @@ sum(rate(caddy_http_request_duration_seconds_count{handler="reverse_proxy",code=
 
 Certificate/disk capacity stays a host-exporter rule; object bytes/retention
 comes from the external S3 provider metrics and billing API.
+
+External monitoring prerequisites:
+
+- scrape `/api/metrics` as job `leadshelf-web` with the bearer token supplied
+  from the monitor secret store, never a URL parameter;
+- collect loopback Caddy metrics through an on-host agent;
+- enable node-exporter filesystem + systemd collectors so
+  `node_systemd_timer_last_trigger_seconds` and root-filesystem metrics exist;
+- configure blackbox TLS probe job `leadshelf-tls`;
+- load the canonical rule file and map every `owner_role` to a named on-call
+  route. A generic role label is not accepted as owner evidence.
 
 Full release procedure: `deploy/OPERATIONS_RUNBOOK.md`.
 

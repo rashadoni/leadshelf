@@ -41,6 +41,12 @@ export async function GET(req: NextRequest) {
     latestImport,
     storageReady,
     storageInventory,
+    recentOutboxFailures,
+    recentImportFailures,
+    recentProofFailures,
+    recentNotificationFailures,
+    oldestProofAnalysis,
+    oldestNotification,
   ] = await Promise.all([
     authDb.$queryRaw<Scalar[]>`SELECT pg_database_size(current_database())::bigint AS value`,
     authDb.$queryRaw<StatusCount[]>`SELECT status::text, count(*)::bigint AS count FROM outbox_operations GROUP BY status`,
@@ -56,6 +62,24 @@ export async function GET(req: NextRequest) {
       FROM import_batches WHERE "finishedAt" IS NOT NULL`,
     checkObjectStorage().then(() => 1).catch(() => 0),
     getObjectStorageInventory().catch(() => null),
+    authDb.$queryRaw<Scalar[]>`
+      SELECT count(*)::bigint AS value FROM outbox_operations
+      WHERE status = 'FAILED' AND "processedAt" >= now() - interval '15 minutes'`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT count(*)::bigint AS value FROM import_queue_jobs
+      WHERE status = 'FAILED' AND "finishedAt" >= now() - interval '15 minutes'`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT count(*)::bigint AS value FROM photo_submissions
+      WHERE "analysisStatus" = 'FAILED' AND "analysisFinishedAt" >= now() - interval '15 minutes'`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT count(*)::bigint AS value FROM notification_deliveries
+      WHERE status = 'FAILED' AND "finishedAt" >= now() - interval '15 minutes'`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT COALESCE(EXTRACT(EPOCH FROM (now() - min("createdAt"))), 0)::double precision AS value
+      FROM photo_submissions WHERE "analysisStatus" IN ('PENDING','PROCESSING')`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT COALESCE(EXTRACT(EPOCH FROM (now() - min("createdAt"))), 0)::double precision AS value
+      FROM notification_deliveries WHERE status IN ('PENDING','SENDING')`,
   ])
 
   const lines = [
@@ -73,6 +97,12 @@ export async function GET(req: NextRequest) {
       storageInventory ? Math.max(0, (Date.now() - storageInventory.collectedAtMs) / 1000) : 0,
     ),
     metric("leadshelf_metrics_collection_duration_seconds", "Duration of metrics DB/storage collection.", (performance.now() - startedAt) / 1000),
+    metric("leadshelf_mobile_outbox_failures_recent", "Failed mobile outbox operations in the last 15 minutes.", Number(recentOutboxFailures[0]?.value ?? 0)),
+    metric("leadshelf_import_failures_recent", "Failed import queue jobs in the last 15 minutes.", Number(recentImportFailures[0]?.value ?? 0)),
+    metric("leadshelf_proof_analysis_failures_recent", "Failed proof analyses in the last 15 minutes.", Number(recentProofFailures[0]?.value ?? 0)),
+    metric("leadshelf_notification_failures_recent", "Failed notification deliveries in the last 15 minutes.", Number(recentNotificationFailures[0]?.value ?? 0)),
+    metric("leadshelf_proof_analysis_oldest_pending_seconds", "Age of the oldest pending or processing proof analysis.", Number(oldestProofAnalysis[0]?.value ?? 0)),
+    metric("leadshelf_notification_oldest_pending_seconds", "Age of the oldest pending or sending notification.", Number(oldestNotification[0]?.value ?? 0)),
   ]
   for (const row of outbox) {
     lines.push(metric("leadshelf_mobile_outbox_operations", "Server-side mobile outbox operations by status.", Number(row.count), { status: row.status }))

@@ -1,0 +1,108 @@
+rule_files:
+  - leadshelf-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="leadshelf-web",instance="web:3000"}'
+        values: '0x8'
+      - series: 'leadshelf_object_storage_ready{instance="web:3000"}'
+        values: '0x8'
+      - series: 'leadshelf_import_oldest_pending_seconds{instance="web:3000"}'
+        values: '1000x8'
+      - series: 'leadshelf_import_failures_recent{instance="web:3000"}'
+        values: '1x8'
+      - series: 'leadshelf_proof_analysis_oldest_pending_seconds{instance="web:3000"}'
+        values: '1000x8'
+      - series: 'leadshelf_notification_oldest_pending_seconds{instance="web:3000"}'
+        values: '1000x8'
+      - series: 'leadshelf_sync_conflicts_unresolved{instance="web:3000"}'
+        values: '0 1 2 3 4 12 15 18 20 22 24 26 28 30 32 34 36 38 40 42 44'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LeadShelfWebTargetDown
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              job: leadshelf-web
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf web metrics target is down
+              description: The web target has been unreachable for two minutes; check readiness, database, storage and the proxy.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 3m
+        alertname: LeadShelfObjectStorageUnavailable
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf object storage is unavailable
+              description: The application cannot reach its object storage dependency; uploads and media reads are unsafe.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfImportQueueStalled
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf import queue exceeds its 15-minute SLO
+              description: The oldest pending or processing import has exceeded 15 minutes for five consecutive minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfImportFailures
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf imports are failing
+              description: At least one import queue job failed within the rolling 15-minute window.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfProofAnalysisStalled
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf proof analysis queue is stalled
+              description: The oldest pending or processing proof analysis has exceeded the initial 15-minute operational baseline.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfNotificationQueueStalled
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf notification queue is stalled
+              description: The oldest pending or sending notification has exceeded the initial 15-minute operational baseline.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 20m
+        alertname: LeadShelfSyncConflictsGrowing
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf unresolved sync conflicts are growing
+              description: More than ten net unresolved conflicts were added within 15 minutes and the growth persisted for five minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md

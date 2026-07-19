@@ -9,6 +9,7 @@
     "db:migrate": "pnpm --filter @leadshelf/db migrate",
     "analytics:capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/capacity-benchmark.ts",
     "analytics:db-capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/db-capacity-benchmark.ts",
+    "alerts:check": "deploy/scripts/check-alert-rules.sh",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
