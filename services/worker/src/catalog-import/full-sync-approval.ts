@@ -1,5 +1,6 @@
 import {
   constants,
+  lstat,
   open,
   realpath,
   stat,
@@ -53,6 +54,55 @@ export async function readProtectedFullSyncFile(
     if ((metadata.mode & 0o077) !== 0) fail("input_file_permissions_invalid")
     if (metadata.size < 1 || metadata.size > maxBytes) fail("input_too_large")
     return await handle.readFile()
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function unlinkProtectedFullSyncFile(
+  filePath: string,
+  expectedUid: number,
+  options: { allowedParent?: string } = {},
+): Promise<"deleted" | "missing"> {
+  if (!isAbsolute(filePath) || filePath === "/") fail("path_invalid")
+  const parent = dirname(filePath)
+  try {
+    const [parentMetadata, canonicalParent] = await Promise.all([stat(parent), realpath(parent)])
+    if (
+      !parentMetadata.isDirectory() ||
+      parentMetadata.uid !== expectedUid ||
+      (parentMetadata.mode & 0o022) !== 0 ||
+      canonicalParent !== resolve(parent)
+    ) fail("input_file_invalid")
+    if (options.allowedParent) {
+      const canonicalAllowedParent = await realpath(options.allowedParent)
+      if (canonicalParent !== canonicalAllowedParent) fail("path_invalid")
+    }
+  } catch (error) {
+    if (error instanceof FullSyncApprovalIssueError) throw error
+    fail("input_file_invalid")
+  }
+
+  let handle
+  try {
+    handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing"
+    fail("input_file_invalid")
+  }
+  try {
+    const opened = await handle.stat()
+    if (!opened.isFile() || opened.uid !== expectedUid || (opened.mode & 0o077) !== 0) {
+      fail("input_file_permissions_invalid")
+    }
+    const current = await lstat(filePath)
+    if (!current.isFile() || current.dev !== opened.dev || current.ino !== opened.ino) fail("input_file_invalid")
+    await unlink(filePath)
+    return "deleted"
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing"
+    if (error instanceof FullSyncApprovalIssueError) throw error
+    fail("input_file_invalid")
   } finally {
     await handle.close()
   }

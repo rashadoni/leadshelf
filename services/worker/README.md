@@ -29,6 +29,12 @@ Products full-sync всегда идёт через durable queue и по умо
 отсутствующих SKU + audit в serializable transaction под tenant advisory lock.
 Token и source удаляются только после commit; cryptographic/context/source
 drift terminal fail-closed без бессмысленных retry.
+Ожидающий full-sync отменяется только dual-approval командой
+`pnpm --filter @leadshelf/worker import:cancel-full-sync -- --control-file ...`.
+Она сначала terminal fail-close фиксирует отмену в БД, затем проверенно удаляет
+source/token; незавершённая очистка остаётся повторяемой и наблюдаемой через
+отдельные metric/critical alert. Точный control contract описан в
+`deploy/ERP_IMPORT_RUNBOOK.md`.
 Ошибки polling tick (включая временную недоступность PostgreSQL) не завершают
 долгоживущий runner: общий lifecycle использует capped exponential backoff с
 jitter до 60 секунд, пишет только безопасный код ошибки и сбрасывает backoff

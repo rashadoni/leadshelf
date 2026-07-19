@@ -178,9 +178,9 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   outbox/import/proof/notifications; migration 33 добавляет шесть partial
   indexes, а forced EXPLAIN доказал Index Only Scan для failure/oldest-work
   queries. Набор
-  из 18 Prometheus rules покрывает web/storage availability, queue/failure/lag,
+  из 19 Prometheus rules покрывает web/storage availability, queue/failure/lag,
   sync-conflict growth,
-  full-sync approval wait, 5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и все 18 firing fixtures
+  full-sync approval wait/cancel cleanup, 5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и все 19 firing fixtures
   PASS, `pnpm alerts:check` включён в обязательный PR CI. External
   scraper/Alertmanager, named routing и staging delivery
   остаются gates;

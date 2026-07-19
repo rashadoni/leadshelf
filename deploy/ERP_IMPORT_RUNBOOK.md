@@ -144,6 +144,36 @@ stdout, помещать в argv, CI artifact, тикет или лог; пос�
 реальный staging replay/recovery и 14 последовательных reconciliation runs
 отсутствуют. До этих evidence включать full-sync runtime запрещено.
 
+### Контролируемая отмена ожидающего full-sync
+
+Отмена допускается только пока job имеет status `PENDING`. Она требует двух
+разных approval ID и отдельного owner-only (`0600`) control-файла без symlink:
+
+```json
+{
+  "organizationId": "APPROVED_ORGANIZATION_ID",
+  "jobId": "QUEUED_JOB_ID",
+  "changeId": "CHG-12345",
+  "requesterApprovalId": "erp-owner-approval-1",
+  "reviewerApprovalId": "data-owner-approval-2",
+  "reasonCode": "operator-cancelled-stale-source",
+  "confirmation": "CANCEL FULL SYNC QUEUED_JOB_ID APPROVED_ORGANIZATION_ID"
+}
+```
+
+```bash
+pnpm --filter @leadshelf/worker import:cancel-full-sync -- \
+  --control-file /run/leadshelf/erp/full-sync-cancel.json
+```
+
+DB-транзакция сначала terminal fail-close переводит job и batch в `FAILED` и
+пишет allowlisted `catalog.full_sync_cancelled`. Затем CLI удаляет только
+owner-only regular source/token из защищённых директорий и фиксирует
+`catalog.full_sync_cleanup_completed`. При filesystem error job остаётся с
+`full_sync_cancelled_cleanup_required`, metric/critical alert не гаснет, а та
+же команда безопасно повторяет только cleanup. Ручное удаление файлов или
+ImportBatch запрещено. Для `PROCESSING`/завершённого job команда fail-closed.
+
 ## Повтор и восстановление
 
 - Ошибка parse/validation: исправить источник, новый batch; старый не менять.
@@ -153,6 +183,8 @@ stdout, помещать в argv, CI artifact, тикет или лог; пос�
 - Неверные бизнес-значения: загрузить корректирующий snapshot с тем же natural
   key; исторический batch/error audit сохранить.
 - Нельзя редактировать production БД вручную или удалять ImportBatch.
+- Ожидающий full-sync отменять только процедурой выше; при cleanup alert
+  устранить права/mount и повторить ту же команду с тем же control-файлом.
 
 ## Приёмка клиента
 

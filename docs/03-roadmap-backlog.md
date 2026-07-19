@@ -975,11 +975,11 @@ Definition of Done: нет открытых critical/high; доказано, ч�
 - [ ] Алерты с владельцем/runbook: web/DB/storage down, missed backup, stuck
   queue, stale import, sync/vision spike, disk/certificate expiry.
   `[частично реализовано/проверено 2026-07-19: backup/verify systemd OnFailure
-  -> external webhook; добавлен Prometheus baseline из 18 rules для missing/down
+  -> external webhook; добавлен Prometheus baseline из 19 rules для missing/down
   web target, storage readiness/inventory, import stall/recent failure,
   mobile/proof/notification recent failures и worker lag, sync-conflict growth,
   5xx/P95 SLO, missed backup, disk и TLS expiry. Pinned Prometheus 3.12.0
-  promtool проверил все 18 rules; каждая из 18 rules имеет firing fixture с
+  promtool проверил все 19 rules; каждая из 19 rules имеет firing fixture с
   точными severity/owner_role/runbook annotations, а `pnpm alerts:check`
   добавлен обязательным шагом PR CI. Runbook требует
   external scrape jobs, named routing и controlled staging delivery tests.
@@ -1033,7 +1033,10 @@ Definition of Done: тестовые отказы вызывают ожидае�
   fail-closed. DB trigger сериализует все same-tenant product writes тем же
   lock и не блокирует neighbor. PostgreSQL end-to-end и tamper/cross-
   context/time/input/file/concurrency matrix PASS; waiting-approval отделён от runnable
-  queue metrics. BLOCKED — production secret-manager mount/UID policy, client
+  queue metrics. Controlled dual-approval cancel атомарно terminal fail-close
+  останавливает только PENDING full-sync, удаляет source/token через
+  owner/mode/symlink/parent checks, сохраняет audit и повторяемый cleanup marker;
+  отдельные metric/critical alert покрывают незавершённую очистку. BLOCKED — production secret-manager mount/UID policy, client
   mapping, staging replay/recovery, 14 reconciliation runs и production alert/
   semantics owners]`
 

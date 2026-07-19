@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { access, mkdtemp, rm, unlink, writeFile } from "node:fs/promises"
+import { access, chmod, mkdtemp, rm, unlink, writeFile } from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
 import { createSystemClient } from "@leadshelf/db"
@@ -13,6 +13,7 @@ import {
   prepareFullSyncApprovalRequest,
 } from "./full-sync-workflow"
 import { issueDestructiveFullSyncApprovalFromFiles } from "./full-sync-approval"
+import { cancelPendingFullSyncJob } from "./full-sync-cancel"
 
 const prisma = createSystemClient("import-queue-recovery-test")
 const policy: ImportQueueRetryPolicy = {
@@ -179,6 +180,70 @@ describe("durable catalog import queue recovery", () => {
       status: "PENDING",
     })
     expect(await prisma.product.count({ where: { organizationId, sku: "FULL-1" } })).toBe(0)
+  })
+
+  it("atomically cancels a pending full sync and safely retries artifact cleanup", async () => {
+    const suffix = `cancel-${Date.now().toString(36)}`
+    const rows = readCsvRecords(Buffer.from(`sku,name\nFULL-${suffix},Cancelled product\n`))
+    const queued = await enqueueCatalogImport(prisma, {
+      organizationId,
+      entityType: "products",
+      source: "csv",
+      fileName: "full-sync-cancel.csv",
+      buffer: Buffer.from(`sku,name\nFULL-${suffix},Cancelled product\n`),
+      expectedRows: rows.length,
+      expectedChecksum: checksumImportRows(rows),
+      syncMode: "full",
+    })
+    const job = await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })
+    const tokenFile = path.join(queuePath, `cancel-token-${suffix}`)
+    await writeFile(tokenFile, "protected-cancel-token\n", { mode: 0o600 })
+    await prisma.importQueueJob.update({
+      where: { id: queued.jobId },
+      data: { fullSyncApprovalPath: tokenFile, fullSyncApprovedAt: new Date() },
+    })
+    const control = {
+      organizationId,
+      jobId: queued.jobId,
+      changeId: `CHG-${suffix}`,
+      requesterApprovalId: `requester-${suffix}`,
+      reviewerApprovalId: `reviewer-${suffix}`,
+      reasonCode: "operator-cancelled-stale-source",
+      confirmation: `CANCEL FULL SYNC ${queued.jobId} ${organizationId}`,
+    }
+
+    await chmod(job.storagePath, 0o644)
+    await expect(cancelPendingFullSyncJob(prisma, control)).rejects.toMatchObject({ code: "cleanup_failed" })
+    expect(await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })).toMatchObject({
+      status: "FAILED",
+      error: "full_sync_cancelled_cleanup_required",
+    })
+    expect(await prisma.importBatch.findUniqueOrThrow({ where: { id: queued.batchId } })).toMatchObject({ status: "FAILED" })
+    expect(await prisma.auditLog.count({
+      where: { organizationId, action: "catalog.full_sync_cancelled", entityId: queued.batchId },
+    })).toBe(1)
+
+    await chmod(job.storagePath, 0o600)
+    await expect(cancelPendingFullSyncJob(prisma, {
+      ...control,
+      changeId: `CHG-different-${suffix}`,
+    })).rejects.toMatchObject({ code: "cancellation_context_mismatch" })
+    await expect(cancelPendingFullSyncJob(prisma, control)).resolves.toEqual({ cleanup: "completed" })
+    await expect(access(job.storagePath)).rejects.toThrow()
+    await expect(access(tokenFile)).rejects.toThrow()
+    expect(await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })).toMatchObject({
+      status: "FAILED",
+      error: "full_sync_cancelled",
+      fullSyncApprovalPath: null,
+      fullSyncApprovedAt: null,
+    })
+    expect(await prisma.auditLog.count({
+      where: { organizationId, action: "catalog.full_sync_cancelled", entityId: queued.batchId },
+    })).toBe(1)
+    expect(await prisma.auditLog.count({
+      where: { organizationId, action: "catalog.full_sync_cleanup_completed", entityId: queued.batchId },
+    })).toBe(1)
+    expect(await prisma.product.count({ where: { organizationId, sku: `FULL-${suffix}` } })).toBe(0)
   })
 
   it("rejects full sync for unsupported entities or without an exact manifest", async () => {

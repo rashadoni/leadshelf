@@ -83,6 +83,18 @@ groups:
           description: A protected full-sync source has remained unapproved for at least one hour and fifteen minutes; approve or cancel it through the ERP runbook.
           runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
 
+      - alert: LeadShelfFullSyncCleanupRequired
+        expr: leadshelf_import_full_sync_cleanup_required > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: leadshelf
+          owner_role: erp
+        annotations:
+          summary: LeadShelf full-sync cancellation cleanup is incomplete
+          description: A cancelled full-sync still has protected source or approval artifacts; rerun the controlled cancellation procedure.
+          runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+
       - alert: LeadShelfMobileOutboxFailures
         expr: leadshelf_mobile_outbox_failures_recent > 0
         for: 5m
