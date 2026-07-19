@@ -15,7 +15,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 
 | Gate | Что требуется | Минимальные права | Безопасная проверка предоставления |
 | --- | --- | --- | --- |
-| GitHub/CI | **ЧАСТИЧНО**: ветка/PR/push доступны; новые jobs блокирует billing аккаунта | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 draft; feature SHA `a257fa3f...`, run 29669623000: 582-test `ci`, cross-browser smoke и secret/four-image scans SUCCESS; deploy SKIPPED. Latest run 29670669393 для `d4606a3...` получил zero-step account-level billing rejection |
+| GitHub/CI | **ЧАСТИЧНО**: ветка/PR/push доступны; новые jobs блокирует billing аккаунта | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 draft; feature SHA `a257fa3f...`, run 29669623000: 582-test `ci`, cross-browser smoke и secret/four-image scans SUCCESS; deploy SKIPPED. Media-encryption implementation SHA `7221c1e...`, run 29671574904: `ci` и secret/image scan получили zero-step account-level billing rejection, deploy SKIPPED |
 | Staging | HTTPS URL и deploy target | deploy только staging namespace/service; read logs/health | `/api/ready`, TLS и immutable image SHA; никаких client production данных |
 | Production deploy | Явное `Production deployment разрешён: ДА` | только release owner/CI environment после backup gate | verified backup+restore receipt, approved SHA, change window и rollback owner |
 | PostgreSQL | Обезличенный production-like dump/staging DB | schema migrate/read/write только staging; production read запрещён до GO | restore в изоляции, `prisma migrate deploy/status`, row/checksum report |
