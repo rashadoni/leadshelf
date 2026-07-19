@@ -3,6 +3,9 @@ import { mobileCommercialMediaUploadFieldsSchema } from "@leadshelf/api-contract
 import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
 import { putObject } from "@/server/storage/s3"
 import type { MobilePhotoSession } from "@/server/mobile/photo-upload-handler"
+import { acquireMediaUploadAdmission } from "@/server/mobile/media-upload-admission"
+import { matchesDeclaredMediaType } from "@/server/security/media-signature"
+import { attemptObjectWrite } from "@/server/storage/object-compensation"
 
 const MAX_PHOTO_SIZE = 15 * 1024 * 1024
 const ALLOWED: Record<string, string> = {
@@ -15,6 +18,15 @@ export async function handleCommercialMediaUpload(req: NextRequest, session: Mob
   const mismatch = protocolMismatchFromHeader(req)
   if (mismatch) return mismatch
 
+  const admission = await acquireMediaUploadAdmission("mobile-upload", session.did, {
+    max: 30,
+    windowMs: 10 * 60_000,
+  })
+  if (!admission.ok) return admission.response
+  return handleUpload(req, session).finally(admission.release)
+}
+
+async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
   if (!(file instanceof File)) return NextResponse.json({ error: "file_required" }, { status: 400 })
@@ -29,10 +41,20 @@ export async function handleCommercialMediaUpload(req: NextRequest, session: Mob
   if (!extension) return NextResponse.json({ error: "unsupported_type" }, { status: 415 })
   if (file.size <= 0) return NextResponse.json({ error: "empty_file" }, { status: 400 })
   if (file.size > MAX_PHOTO_SIZE) return NextResponse.json({ error: "too_large" }, { status: 413 })
+  const bytes = Buffer.from(await file.arrayBuffer())
+  if (!matchesDeclaredMediaType(bytes, file.type)) {
+    return NextResponse.json({ error: "content_signature_mismatch" }, { status: 415 })
+  }
 
   const purposePath = parsed.data.purpose === "PROMOTION_PROOF" ? "promotion" : "return"
   const key = `commercial-media/${session.org}/${session.sub}/${purposePath}/${parsed.data.clientMediaId}.${extension}`
-  await putObject(key, Buffer.from(await file.arrayBuffer()), file.type)
+  const stored = await attemptObjectWrite(() => putObject(key, bytes, file.type))
+  if (!stored) {
+    return NextResponse.json(
+      { error: "storage_unavailable" },
+      { status: 503, headers: { "Retry-After": "5" } },
+    )
+  }
 
   return NextResponse.json({
     mediaId: parsed.data.clientMediaId,

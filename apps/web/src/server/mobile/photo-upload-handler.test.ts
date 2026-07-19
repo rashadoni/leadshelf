@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 const {
-  consumeRateLimit,
+  acquireMediaUploadAdmission,
   deleteObject,
   emitProductEvent,
   putObject,
   resolveCaptureRetakesForStep,
   workerDb,
 } = vi.hoisted(() => ({
-  consumeRateLimit: vi.fn(),
+  acquireMediaUploadAdmission: vi.fn(),
   deleteObject: vi.fn(),
   emitProductEvent: vi.fn(),
   putObject: vi.fn(),
@@ -22,7 +22,7 @@ const {
   },
 }))
 
-vi.mock("@/server/security/rate-limit", () => ({ consumeRateLimit }))
+vi.mock("@/server/mobile/media-upload-admission", () => ({ acquireMediaUploadAdmission }))
 vi.mock("@/server/storage/s3", () => ({ deleteObject, putObject }))
 vi.mock("@/server/db/client", () => ({ workerDb }))
 vi.mock("@leadshelf/db", () => ({ emitProductEvent, resolveCaptureRetakesForStep }))
@@ -50,7 +50,7 @@ function request(bytes: Uint8Array = new Uint8Array([0xff, 0xd8, 0xff, 0x00])) {
 describe("shared mobile photo upload handler", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    consumeRateLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 })
+    acquireMediaUploadAdmission.mockResolvedValue({ ok: true, release: vi.fn() })
     workerDb.photoSubmission.findFirst.mockResolvedValue(null)
     workerDb.task.findFirst.mockResolvedValue({
       id: "task-1",
@@ -61,7 +61,13 @@ describe("shared mobile photo upload handler", () => {
   })
 
   it("rejects a device over its durable limit before multipart parsing or storage", async () => {
-    consumeRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 17 })
+    acquireMediaUploadAdmission.mockResolvedValue({
+      ok: false,
+      response: NextResponse.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Retry-After": "17" } },
+      ),
+    })
     const req = new NextRequest("http://localhost/api/v1/internal/field/photos/upload", {
       method: "POST",
       headers: { "x-leadshelf-protocol": "1", "content-type": "application/octet-stream" },
@@ -72,6 +78,11 @@ describe("shared mobile photo upload handler", () => {
 
     expect(response.status).toBe(429)
     expect(response.headers.get("retry-after")).toBe("17")
+    expect(acquireMediaUploadAdmission).toHaveBeenCalledWith(
+      "mobile-upload",
+      session.did,
+      { max: 30, windowMs: 10 * 60_000 },
+    )
     expect(putObject).not.toHaveBeenCalled()
     expect(workerDb.photoSubmission.findFirst).not.toHaveBeenCalled()
   })

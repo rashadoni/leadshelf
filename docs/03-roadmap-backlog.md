@@ -706,7 +706,7 @@ web-раздел синхронизированных заказов без из
   при недоступном object storage возвращает privacy-safe 503 + Retry-After без
   raw provider error, bucket/key или credential material. Production workflow
   не содержит seed-demo; seed остаётся отдельным Compose tool/profile.
-  Architecture/release invariants, full suite 638/638 и client-profile
+  Architecture/release invariants, full suite 647/647 и client-profile
   Playwright 15/15 Chromium+Firefox+WebKit PASS. BLOCKED — production
   rollout/release owner evidence]`
 - [ ] Ночной backup PostgreSQL и external S3 во внешнее хранилище: шифрование,
@@ -818,11 +818,12 @@ Definition of Done: двухнедельный прогон не теряет д
   `[частично реализовано/проверено unit+PostgreSQL integration 2026-07-18:
   web/mobile login, sync, upload и import используют общий durable fixed-window
   limiter с atomic upsert, hashed keys и Retry-After; 12 concurrent consumers
-  доказали 5 allow/7 deny. Общий limiter вынесен в db package. Public mobile
-  и trusted Field BFF photo upload больше не имеют расходящихся реализаций:
-  после независимых auth boundaries оба входят в один handler, который до
-  multipart/storage применяет тот же durable device limit и общий bounded
-  semaphore. Route/handler regressions 8/8 и полный web suite 154/154 PASS;
+  доказали 5 allow/7 deny. Общий limiter вынесен в db package. Все три
+  S3 media-write surface используют один aggregate process semaphore до
+  multipart parsing: public mobile и trusted Field BFF photo/commercial
+  routes разделяют один durable device budget, catalog product-image имеет
+  отдельный tenant/user budget. Focused admission/handler/route regressions
+  16/16 и полный web suite 163/163 PASS;
   внешний
   OpenAI/Gemini proof worker использует durable per-tenant budget (default
   100/час, bounded env), а over-limit до чтения media/AI call сохраняет
@@ -866,13 +867,15 @@ Definition of Done: двухнедельный прогон не теряет д
   Независимый pentest deployed environment остаётся внешним GA evidence]`
 - [ ] Upload guard: size, MIME, magic bytes, path safety, quarantine и HEIC/video.
   `[реализовано/проверено тестами 2026-07-19: size+MIME+magic bytes для
-  JPEG/PNG/WebP/MP4/MOV/WebM и tenant-owned S3 key применяются единым shared
-  pipeline к public mobile и trusted Field BFF photo routes. Каждый write
-  получает уникальный per-attempt UUID key; storage error становится
-  privacy-safe retryable 503, а DB failure удаляет только собственный object.
-  Rate-before-parse, signature-before-DB/S3, private-error suppression и exact
-  compensation negatives PASS; web 154/154. HEIC отклоняется 415 и mobile
-  quarantines файл. BLOCKED — HEIC native/server codec choice, rebuild и
+  JPEG/PNG/WebP/MP4/MOV/WebM и tenant-owned S3 key применяются ко всем трём
+  S3 media-write surface: photo proof, commercial evidence и catalog product
+  images. Admission с durable rate limit и общим bounded semaphore выполняется
+  до multipart parsing; signature проверяется до object/metadata write.
+  Photo/catalog DB-backed writes получают уникальный per-attempt UUID key и
+  exact compensating delete; idempotent commercial retry пишет в тот же
+  clientMediaId key. Storage exceptions везде становятся privacy-safe
+  retryable 503. Focused negatives 16/16 и web 163/163 PASS. HEIC отклоняется
+  415 и mobile quarantines файл. BLOCKED — HEIC native/server codec choice, rebuild и
   real-device fixtures; конвертация не реализована]`
 - [ ] Ротация JWT/S3/vision/deploy secrets; секреты не попадают в client bundle,
   логи, backup и CI artifacts.

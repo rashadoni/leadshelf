@@ -14,9 +14,8 @@ import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
 import { deleteObject, putObject } from "@/server/storage/s3"
 import { matchesDeclaredMediaType } from "@/server/security/media-signature"
-import { consumeRateLimit } from "@/server/security/rate-limit"
-import { TrySemaphore } from "@/server/concurrency/try-semaphore"
 import { attemptObjectWrite, persistWithObjectCleanup } from "@/server/storage/object-compensation"
+import { acquireMediaUploadAdmission } from "@/server/mobile/media-upload-admission"
 
 export type MobilePhotoSession = {
   org: string
@@ -30,14 +29,6 @@ export type MobilePhotoSession = {
 
 const MAX_PHOTO_SIZE = 15 * 1024 * 1024
 const MAX_VIDEO_SIZE = 35 * 1024 * 1024
-const configuredUploadConcurrency = Number(process.env.LEADSHELF_MEDIA_UPLOAD_CONCURRENCY ?? 8)
-const uploadSemaphore = new TrySemaphore(
-  Number.isInteger(configuredUploadConcurrency) &&
-    configuredUploadConcurrency >= 1 &&
-    configuredUploadConcurrency <= 32
-    ? configuredUploadConcurrency
-    : 8,
-)
 const ALLOWED: Record<string, { ext: string; mediaType: "photo" | "video" }> = {
   "image/jpeg": { ext: "jpg", mediaType: "photo" },
   "image/png": { ext: "png", mediaType: "photo" },
@@ -129,22 +120,12 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
   const mismatch = protocolMismatchFromHeader(req)
   if (mismatch) return mismatch
 
-  const limit = await consumeRateLimit("mobile-upload", session.did, { max: 30, windowMs: 10 * 60_000 })
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
-    )
-  }
-
-  const release = uploadSemaphore.tryAcquire()
-  if (!release) {
-    return NextResponse.json(
-      { error: "upload_capacity_exhausted" },
-      { status: 503, headers: { "Retry-After": "2" } },
-    )
-  }
-  return handleUpload(req, session).finally(release)
+  const admission = await acquireMediaUploadAdmission("mobile-upload", session.did, {
+    max: 30,
+    windowMs: 10 * 60_000,
+  })
+  if (!admission.ok) return admission.response
+  return handleUpload(req, session).finally(admission.release)
 }
 
 async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
