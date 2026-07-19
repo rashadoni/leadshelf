@@ -43,6 +43,16 @@ export {
   type RateLimitRow,
 } from "./rate-limit.ts"
 export {
+  clearAuthenticationFailures,
+  getAuthenticationLockout,
+  recordAuthenticationFailure,
+  validateAuthenticationLockoutPolicy,
+  type AuthenticationLockoutExecute,
+  type AuthenticationLockoutPolicy,
+  type AuthenticationLockoutQuery,
+  type AuthenticationLockoutState,
+} from "./auth-lockout.ts"
+export {
   createTemplateWithVersion,
   saveVersion,
   copyTemplate,

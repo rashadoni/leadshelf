@@ -176,6 +176,21 @@ model RateLimitBucket {
   @@map("rate_limit_buckets")
 }
 
+model AuthenticationLockout {
+  scope             String
+  keyHash           String
+  failureCount      Int
+  windowStartedAt   DateTime
+  windowExpiresAt   DateTime
+  lockedUntil       DateTime?
+  updatedAt         DateTime @updatedAt
+
+  @@id([scope, keyHash])
+  @@index([lockedUntil])
+  @@index([windowExpiresAt])
+  @@map("authentication_lockouts")
+}
+
 // Trusted server-to-server identity link. The unified field app authenticates
 // against LeadDrive once; LeadDrive's Field BFF then addresses the matching
 // LeadShelf user through this explicit mapping. No LeadShelf token or service

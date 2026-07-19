@@ -8,12 +8,14 @@ export type ReadinessResult = {
   status: "ready" | "not_ready"
   checkedAt: string
   checks: {
+    configuration: ReadinessCheck
     database: ReadinessCheck
     objectStorage: ReadinessCheck
   }
 }
 
 type ReadinessDependencies = {
+  configuration: () => Promise<void>
   database: () => Promise<void>
   objectStorage: () => Promise<void>
   now?: () => Date
@@ -57,20 +59,24 @@ async function runCheck(operation: () => Promise<void>, timeoutMs: number): Prom
 }
 
 export async function checkReadiness({
+  configuration,
   database,
   objectStorage,
   now = () => new Date(),
   timeoutMs = 2_000,
 }: ReadinessDependencies): Promise<ReadinessResult> {
-  const [databaseCheck, objectStorageCheck] = await Promise.all([
+  const [configurationCheck, databaseCheck, objectStorageCheck] = await Promise.all([
+    runCheck(configuration, timeoutMs),
     runCheck(database, timeoutMs),
     runCheck(objectStorage, timeoutMs),
   ])
-  const ready = databaseCheck.status === "up" && objectStorageCheck.status === "up"
+  const ready = configurationCheck.status === "up"
+    && databaseCheck.status === "up"
+    && objectStorageCheck.status === "up"
 
   return {
     status: ready ? "ready" : "not_ready",
     checkedAt: now().toISOString(),
-    checks: { database: databaseCheck, objectStorage: objectStorageCheck },
+    checks: { configuration: configurationCheck, database: databaseCheck, objectStorage: objectStorageCheck },
   }
 }

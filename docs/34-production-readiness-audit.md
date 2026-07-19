@@ -1,4 +1,4 @@
-# Production readiness audit — 2026-07-18
+# Production readiness audit — 2026-07-19
 
 Статус решения: **NO-GO для client production и GA**.
 
@@ -12,14 +12,14 @@ evidence. Отсутствующее внешнее доказательство
 | Gate | Результат | Evidence |
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
-| Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
-| Unit/integration | PASS local + CI | exact feature SHA local/remote 582/582, DB 85/85, mobile 166/166, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web |
+| Миграции | PASS local; prior remote PASS | current 31/31 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
+| Unit/integration | PASS local; prior remote PASS | current local 590/590: DB 87/87, mobile 166/166, web 134/134; remotely validated feature SHA — 582/582 |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS | PR #19 CLEAN/draft, exact feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b`, run 29669623000: 582-test `ci` + cross-browser smoke SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED |
+| Remote CI | PASS last executable / BLOCKED latest | PR #19 draft; exact feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b`, run 29669623000: 582-test `ci` + cross-browser smoke SUCCESS, secret + four production-image High/Critical scans SUCCESS; deploy SKIPPED. Run 29669888178 не начал ни одного step: GitHub отклонил job из-за failed account payment/spending limit; это внешний billing blocker, не результат тестов |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
@@ -122,7 +122,7 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   GoldenReference guard; удаляет expired DB media/location/audit
   и redacts GPS в Visit/EXIF/geofence/visit-alert JSON, затем атомарно пишет
   минимальный retention audit event. На изолированной схеме
-  30/30 migrations и DB 83/83 PASS; recent/neighbor сохранены. Утверждённые
+  31/31 migrations и DB 87/87 PASS; recent/neighbor сохранены. Утверждённые
   сроки/legal basis, scheduler и external S3/backups deletion остаются gates;
 - controlled DSAR CLI строит tenant/subject inventory, не выводит PII или
   subject/request identifiers в stdout, требует manifest match, exact
@@ -133,10 +133,17 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   regression PASS; approved real delivery/decrypt/delete drill остаётся gate;
 - mobile push domain log фиксирует только correlationId/org/device/opId/kind/
   status после schema validation; unit доказывает отсутствие payload/result
-  detail, GPS, token/email и отбрасывание unsafe IDs; web 128/128 PASS;
+  detail, GPS, token/email и отбрасывание unsafe IDs; web 134/134 PASS;
 - demo seed больше не выводит пароль/PIN, email/display names или raw error в
   CI/stdout: success/failure — allowlisted structured events, а regression 2/2
   проверяет отсутствие credential/private error material;
+- account-wide web/mobile lockout: durable HMAC-SHA-256 principal с отдельным
+  secret-manager pepper без IP/PII,
+  atomic threshold/window/duration, generic response, no attack extension,
+  success reset, новое окно после timed unlock, allowlisted audit и fail-closed
+  readiness без approved policy/pepper. PostgreSQL concurrency 12→threshold 5
+  PASS; DB 2/2 и web policy/route/readiness 10/10 PASS. Production values и
+  controlled manual support unlock остаются business gate;
 - backup/restore, incident, ERP, privacy, pilot/GA runbooks и evidence templates.
 
 ## Технические блокеры до client production

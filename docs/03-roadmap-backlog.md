@@ -785,8 +785,19 @@ Definition of Done: двухнедельный прогон не теряет д
   OpenAI/Gemini proof worker использует durable per-tenant budget (default
   100/час, bounded env), а over-limit до чтения media/AI call сохраняет
   human-review fallback; PostgreSQL test доказал 1 allow/1 deny при max=1.
-  Account lockout `[BLOCKED — business decision]`: нужны утверждённые порог,
-  длительность, способ разблокировки и support policy]`
+  Account-wide lockout частично реализован/проверен 2026-07-19: отдельная
+  durable PostgreSQL state machine использует только HMAC-SHA-256 principal key
+  с runtime pepper без IP/email/employeeCode, atomic threshold/window/duration,
+  не продлевает lock новыми атаками, возвращает generic invalid_credentials с
+  одинаковым коротким backoff без раскрытия точного duration, пишет allowlisted
+  audit, сбрасывает failures только после успешной проверки и автоматически
+  открывает аккаунт по окончании duration. 12 concurrent failures точно
+  остановились на threshold=5; PostgreSQL integration 2/2 и route/policy/
+  readiness 10/10 PASS. Все четыре `AUTH_LOCKOUT_*`, включая secret-manager
+  pepper, задаются только вместе без developer defaults; `/api/ready`
+  fail-closed, если approved policy отсутствует. `[BLOCKED — business
+  decision]`: нужны утверждённые threshold,
+  window, duration, разрешение/процесс manual support unlock и owner]`
 - [x] Негативные RBAC/cross-tenant тесты всех API, jobs, exports и media.
   `[реализовано/проверено 2026-07-18 на текущем surface: fail-closed inventory всех 63
   v1 route files + mutation/RBAC/workerDb/media fences; динамическая PostgreSQL

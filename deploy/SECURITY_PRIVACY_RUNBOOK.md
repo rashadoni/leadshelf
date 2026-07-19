@@ -20,6 +20,30 @@
 shell history, CI artifacts, тикеты или Git. После подозрения на компрометацию
 ротация немедленная, а не по календарю.
 
+## Authentication lockout policy
+
+Production owner письменно утверждает threshold, observation window и lock
+duration, затем задаёт все четыре runtime-параметра вместе:
+
+- `AUTH_LOCKOUT_MAX_FAILURES` — integer 2..100;
+- `AUTH_LOCKOUT_WINDOW_SECONDS` — 60..86400;
+- `AUTH_LOCKOUT_DURATION_SECONDS` — 60..604800;
+- `AUTH_LOCKOUT_PEPPER` — secret manager only, не менее 32 символов.
+
+Developer defaults отсутствуют. Неполная/невалидная policy отклоняется, а при
+полностью отсутствующей policy `/api/ready` возвращает fail-closed 503. Web и
+mobile используют разные account-wide HMAC-SHA-256 keys без email, employeeCode,
+organization slug или IP в persistence/logs. Ответ locked и неверный credential
+одинаков (`invalid_credentials` + одинаковый короткий `Retry-After`); новые
+атаки не продлевают действующий lock и точный остаток duration клиенту не
+раскрывается.
+Pepper не хранится в БД и не выводится в логи; его ротация инвалидирует текущие
+lockout rows и поэтому выполняется только по утверждённой incident procedure.
+Успешная проверка после окончания duration очищает failures. До утверждения
+support policy ручной unlock через ad-hoc SQL запрещён; автоматическое окончание
+duration — единственный реализованный unlock. Manual unlock должен получить
+отдельный controlled interface, named role, approval/audit и recovery check.
+
 ## Privacy decisions до пилота
 
 Владелец privacy документирует purpose/legal basis, категории субъектов,
@@ -165,8 +189,10 @@ GPS, фото metadata, sync payloads и authored/agent commercial records ос�
 
 ## Незакрытые гейты
 
-- account lockout policy: durable rate limit уже реализован, но threshold/
-  duration/unlock требуют business/support решения;
+- account-wide durable lockout machinery, HMAC principal/pepper, atomic concurrency,
+  generic response, success reset, timed unlock и readiness gate реализованы;
+  production threshold/window/duration и controlled manual support unlock
+  требуют business/support решения;
 - независимый pentest deployed environment; локальная API/job/export/media
   cross-tenant и denied-role matrix уже проходит;
 - SQLCipher для mobile operational SQLite, fail-closed key handling и guarded

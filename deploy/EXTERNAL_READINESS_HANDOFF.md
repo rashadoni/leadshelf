@@ -15,7 +15,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 
 | Gate | Что требуется | Минимальные права | Безопасная проверка предоставления |
 | --- | --- | --- | --- |
-| GitHub/CI | **ПРЕДОСТАВЛЕНО/ПРОВЕРЕНО**: ветка, PR и Actions доступны | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 CLEAN/draft; feature SHA `a257fa3a...`, run 29669623000; 582-test `ci`, cross-browser smoke и secret/four-image scans SUCCESS; deploy SKIPPED |
+| GitHub/CI | **ЧАСТИЧНО**: ветка/PR/push доступны; новые jobs блокирует billing аккаунта | push только ветки `codex/production-readiness`, read Actions/checks | PR #19 draft; feature SHA `a257fa3f...`, run 29669623000: 582-test `ci`, cross-browser smoke и secret/four-image scans SUCCESS; deploy SKIPPED. Run 29669888178 получил zero-step account-level billing rejection |
 | Staging | HTTPS URL и deploy target | deploy только staging namespace/service; read logs/health | `/api/ready`, TLS и immutable image SHA; никаких client production данных |
 | Production deploy | Явное `Production deployment разрешён: ДА` | только release owner/CI environment после backup gate | verified backup+restore receipt, approved SHA, change window и rollback owner |
 | PostgreSQL | Обезличенный production-like dump/staging DB | schema migrate/read/write только staging; production read запрещён до GO | restore в изоляции, `prisma migrate deploy/status`, row/checksum report |
@@ -39,7 +39,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 | Audit retention | число дней + security/legal basis |
 | Privacy mode | verified pre-persistence face blur **или** режим без покупателей |
 | Mobile encryption | SQLCipher operational SQLite уже выбран/реализован; утвердить media encryption, key lifecycle, key-loss recovery/approved wipe и signed-device evidence |
-| Login lockout | threshold/window/duration/unlock/support policy |
+| Login lockout | durable HMAC machinery/timed unlock уже реализованы; утвердить threshold/window/duration, secret-manager pepper и controlled manual unlock/support owner |
 | SLA/on-call | timezone, support hours, P0–P3 targets, named L1/L2/incident commander |
 | ERP destructive full sync | absence semantics, confirmation threshold и recovery owner |
 | Production deploy | точное `ДА`, approved SHA, окно, backup receipt и rollback owner |

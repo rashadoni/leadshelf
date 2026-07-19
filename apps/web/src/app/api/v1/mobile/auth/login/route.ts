@@ -10,7 +10,15 @@ import {
 } from "@/server/security/rate-limit"
 
 import { writeSecurityAudit } from "@/server/security/audit"
+import {
+  accountLockoutState,
+  clearAccountAuthenticationFailures,
+  configuredAuthLockoutPolicy,
+  mobileAccountLockoutKey,
+  recordAccountAuthenticationFailure,
+} from "@/server/security/auth-lockout"
 export const runtime = "nodejs"
+const INVALID_CREDENTIALS_HEADERS = { "Retry-After": "1" }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
@@ -28,6 +36,14 @@ export async function POST(req: NextRequest) {
     parsed.data.employeeCode.toLowerCase(),
     clientAddress(req),
   ])
+  const lockoutPolicy = configuredAuthLockoutPolicy()
+  const accountKey = lockoutPolicy
+    ? mobileAccountLockoutKey(
+        parsed.data.orgSlug,
+        parsed.data.employeeCode,
+        lockoutPolicy.pepper,
+      )
+    : null
   const limit = await consumeRateLimit("mobile-login", key, {
     max: 10,
     windowMs: 15 * 60_000,
@@ -40,10 +56,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (lockoutPolicy && accountKey) {
+    const lockout = await accountLockoutState("mobile", accountKey)
+    if (lockout.locked) {
+      writeSecurityAudit("authentication_locked", { channel: "mobile", principalKey: accountKey })
+      return NextResponse.json(
+        { error: "invalid_credentials" },
+        { status: 401, headers: INVALID_CREDENTIALS_HEADERS },
+      )
+    }
+  }
+
   const result = await mobileLogin(parsed.data)
   if (!result) {
     writeSecurityAudit("authentication_failed", { channel: "mobile", principalKey: key })
-    return NextResponse.json({ error: "invalid_credentials" }, { status: 401 })
+    if (lockoutPolicy && accountKey) {
+      const lockout = await recordAccountAuthenticationFailure("mobile", accountKey, lockoutPolicy)
+      if (lockout.locked) {
+        writeSecurityAudit("authentication_locked", { channel: "mobile", principalKey: accountKey })
+      }
+    }
+    return NextResponse.json(
+      { error: "invalid_credentials" },
+      { status: 401, headers: INVALID_CREDENTIALS_HEADERS },
+    )
+  }
+  if (lockoutPolicy && accountKey) {
+    await clearAccountAuthenticationFailures("mobile", accountKey)
   }
   return NextResponse.json(result)
 }

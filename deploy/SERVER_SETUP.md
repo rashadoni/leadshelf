@@ -13,8 +13,8 @@
   в проекте), root-доступ проверен.
 - **Демо/production домен зафиксирован:** `https://hermescrm.xyz`
   (за Cloudflare; запасной прямой вход `https://157-90-227-191.sslip.io`) —
-  оба host работают по HTTPS, логины demo-тенанта
-  (пароль demo1234). Прод-стек в /opt/leadshelf/prod (compose
+  оба host работают по HTTPS; demo credentials передаются только утверждённым
+  закрытым каналом и не фиксируются в Git/логах. Прод-стек в /opt/leadshelf/prod (compose
   leadshelf-prod: caddy+web+workers+postgres16; media во внешнем S3), секреты в
   .env.production (root:600, сгенерированы на сервере).
 - **Автодеплой**: push в main -> CI (тесты) -> deploy job (ssh, git pull,
@@ -82,6 +82,10 @@ Production precondition: заранее создать private bucket, вклю�
 MinIO Community image запрещён в production; он не получает security fixes.
 `LEADSHELF_MEDIA_UPLOAD_CONCURRENCY` задаётся на каждую web replica (default 8,
 range 1..32) и ограничивает одновременную буферизацию multipart photo/video.
+До rollout owner также задаёт утверждённые `AUTH_LOCKOUT_MAX_FAILURES`,
+`AUTH_LOCKOUT_WINDOW_SECONDS`, `AUTH_LOCKOUT_DURATION_SECONDS` и не менее чем
+32-символьный `AUTH_LOCKOUT_PEPPER` из secret manager; отсутствие или частичная
+policy делает `/api/ready` красным намеренно.
 
 Секреты:
 

@@ -27,6 +27,11 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://leadshelf:leadshelf@localhost:5432/leadshelf?schema=public
+      # CI-only policy exercises lockout readiness; production values require owner approval.
+      AUTH_LOCKOUT_MAX_FAILURES: "5"
+      AUTH_LOCKOUT_WINDOW_SECONDS: "900"
+      AUTH_LOCKOUT_DURATION_SECONDS: "1800"
+      AUTH_LOCKOUT_PEPPER: "ci-only-lockout-pepper-not-a-secret"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

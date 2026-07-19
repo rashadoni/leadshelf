@@ -1,6 +1,7 @@
 type SecurityEvent =
   | "authentication_failed"
   | "authentication_rate_limited"
+  | "authentication_locked"
 
 export function writeSecurityAudit(
   event: SecurityEvent,

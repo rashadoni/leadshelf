@@ -16,7 +16,15 @@ import {
 } from "@/server/security/rate-limit"
 
 import { writeSecurityAudit } from "@/server/security/audit"
+import {
+  accountLockoutState,
+  clearAccountAuthenticationFailures,
+  configuredAuthLockoutPolicy,
+  recordAccountAuthenticationFailure,
+  webAccountLockoutKey,
+} from "@/server/security/auth-lockout"
 export const runtime = "nodejs"
+const INVALID_CREDENTIALS_HEADERS = { "Retry-After": "1" }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
@@ -26,6 +34,10 @@ export async function POST(req: NextRequest) {
   }
 
   const key = opaqueRateLimitKey([parsed.data.email.toLowerCase(), clientAddress(req)])
+  const lockoutPolicy = configuredAuthLockoutPolicy()
+  const accountKey = lockoutPolicy
+    ? webAccountLockoutKey(parsed.data.email, lockoutPolicy.pepper)
+    : null
   const limit = await consumeRateLimit("web-login", key, { max: 10, windowMs: 15 * 60_000 })
   if (!limit.allowed) {
     writeSecurityAudit("authentication_rate_limited", { channel: "web", principalKey: key })
@@ -35,6 +47,17 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (lockoutPolicy && accountKey) {
+    const lockout = await accountLockoutState("web", accountKey)
+    if (lockout.locked) {
+      writeSecurityAudit("authentication_locked", { channel: "web", principalKey: accountKey })
+      return NextResponse.json(
+        { error: "invalid_credentials" },
+        { status: 401, headers: INVALID_CREDENTIALS_HEADERS },
+      )
+    }
+  }
+
   const result = await login(
     parsed.data.email,
     parsed.data.password,
@@ -42,8 +65,19 @@ export async function POST(req: NextRequest) {
   )
   if (!result) {
     writeSecurityAudit("authentication_failed", { channel: "web", principalKey: key })
-    return NextResponse.json({ error: "invalid_credentials" }, { status: 401 })
+    if (lockoutPolicy && accountKey) {
+      const lockout = await recordAccountAuthenticationFailure("web", accountKey, lockoutPolicy)
+      if (lockout.locked) {
+        writeSecurityAudit("authentication_locked", { channel: "web", principalKey: accountKey })
+      }
+    }
+    return NextResponse.json(
+      { error: "invalid_credentials" },
+      { status: 401, headers: INVALID_CREDENTIALS_HEADERS },
+    )
   }
+
+  if (lockoutPolicy && accountKey) await clearAccountAuthenticationFailures("web", accountKey)
 
   const res = NextResponse.json({ user: result.user })
   res.cookies.set(ACCESS_COOKIE, result.tokens.access, cookieOptions(ACCESS_MAX_AGE))
