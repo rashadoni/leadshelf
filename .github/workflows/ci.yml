@@ -60,6 +60,9 @@ jobs:
       - name: Lint (architecture fences)
         run: pnpm lint
 
+      - name: Validate Prometheus alert rules and firing fixtures
+        run: pnpm alerts:check
+
       - name: Typecheck
         run: pnpm -r typecheck
 

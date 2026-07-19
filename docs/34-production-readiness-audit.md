@@ -153,8 +153,9 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   queries. Набор
   из 17 Prometheus rules покрывает web/storage availability, queue/failure/lag,
   sync-conflict growth,
-  5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и 7 firing fixtures
-  PASS. External scraper/Alertmanager, named routing и staging delivery
+  5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и все 17 firing fixtures
+  PASS, `pnpm alerts:check` включён в обязательный PR CI. External
+  scraper/Alertmanager, named routing и staging delivery
   остаются gates;
 - account-wide web/mobile lockout: durable tenant-qualified HMAC-SHA-256
   principal с отдельным secret-manager pepper без IP/PII; web login, limiter и

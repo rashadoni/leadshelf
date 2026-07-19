@@ -73,7 +73,7 @@ BASE_URL=https://client.example.com \
 ## Monitoring и alert acceptance
 
 1. До upload проверить canonical rules: `pnpm alerts:check`. Команда обязана
-   показать 17 valid rules и successful firing fixtures.
+   показать 17 valid rules и successful firing fixtures для каждой из них.
 2. Prometheus job `leadshelf-web` получает `/api/metrics` с bearer token из
    secret store. Caddy собирается только через loopback/on-host agent;
    node-exporter включает filesystem+systemd, blackbox job называется

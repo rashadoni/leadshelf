@@ -962,10 +962,9 @@ Definition of Done: нет открытых critical/high; доказано, ч�
   web target, storage readiness/inventory, import stall/recent failure,
   mobile/proof/notification recent failures и worker lag, sync-conflict growth,
   5xx/P95 SLO, missed backup, disk и TLS expiry. Pinned Prometheus 3.12.0
-  promtool проверил все 17 rules;
-  unit fixtures реально перевели web down, storage down, import stall/failure,
-  proof/notification lag и sync-conflict growth в
-  firing с точными severity/owner_role/runbook annotations. Runbook требует
+  promtool проверил все 17 rules; каждая из 17 rules имеет firing fixture с
+  точными severity/owner_role/runbook annotations, а `pnpm alerts:check`
+  добавлен обязательным шагом PR CI. Runbook требует
   external scrape jobs, named routing и controlled staging delivery tests.
   BLOCKED — production Prometheus/Alertmanager/webhook, notification channel,
   named owner contacts и доставленные alert evidence]`
