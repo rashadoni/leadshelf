@@ -725,8 +725,10 @@ web-раздел синхронизированных заказов без из
   SSH/sudo bash/git pull и параллельный release.
   Mode-0600 non-symlink receipt привязан к exact SHA, approval, свежему restore
   drill, backup snapshot и rollback owner; fresh backup+verify выполняются до
-  exact-SHA checkout/migration. Пять negative receipt cases и статические
-  workflow ordering/forbidden-behavior invariants PASS. Runbook покрывает
+  exact-SHA checkout/migration. После migration wrapper ждёт green health web,
+  vision и всех worker services до записи release success. Пять negative
+  receipt cases и статические workflow ordering/forbidden-behavior invariants
+  PASS. Runbook покрывает
   rollback/forward-fix и DR; production release/rollback BLOCKED — explicit
   `ДА`, protected environment/access/window/owners и real backup/restore receipt]`
 - [ ] Проверять миграции на обезличенной production-подобной БД.

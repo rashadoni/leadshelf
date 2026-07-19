@@ -98,7 +98,8 @@ for text in \
   'deploy/scripts/verify-production-backup.sh' \
   'git fetch --depth=1 origin "$release_sha"' \
   'git checkout --detach "$release_sha"' \
-  'docker compose run --rm migrate'; do
+  'docker compose run --rm migrate' \
+  'docker compose up -d --wait --wait-timeout 300'; do
   grep -Fq -- "$text" "$deploy_wrapper" || {
     echo "[release-preflight-test] missing wrapper invariant: $text" >&2
     exit 1
@@ -113,8 +114,14 @@ approval_line="$(grep -nF 'LEADSHELF_RELEASE_SHA="$release_sha" "$release_verifi
 backup_line="$(grep -nF 'deploy/scripts/backup-production.sh' "$deploy_wrapper" | cut -d: -f1)"
 verify_line="$(grep -nF 'deploy/scripts/verify-production-backup.sh' "$deploy_wrapper" | cut -d: -f1)"
 migrate_line="$(grep -nF 'docker compose run --rm migrate' "$deploy_wrapper" | cut -d: -f1)"
+wait_line="$(grep -nF 'docker compose up -d --wait --wait-timeout 300' "$deploy_wrapper" | cut -d: -f1)"
+receipt_line="$(grep -nF '> "$prod_root/LAST_RELEASE"' "$deploy_wrapper" | cut -d: -f1)"
 (( approval_line < backup_line && backup_line < verify_line && verify_line < migrate_line )) || {
   echo "[release-preflight-test] release evidence and verified backup must precede migration" >&2
+  exit 1
+}
+(( migrate_line < wait_line && wait_line < receipt_line )) || {
+  echo "[release-preflight-test] service health wait must precede release success receipt" >&2
   exit 1
 }
 

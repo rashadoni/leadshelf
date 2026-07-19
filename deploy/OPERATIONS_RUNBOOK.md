@@ -22,7 +22,9 @@
    SHA, approval/restore drill/backup IDs, UTC epoch и rollback owner. Проверить
    `pnpm release-preflight:test`; stale/mismatched receipt запрещает релиз.
 4. Protected workflow сам выполняет `backup-production.sh`, затем
-   `verify-production-backup.sh` до migration; при любой ошибке релиз запрещён.
+   `verify-production-backup.sh` до migration; после запуска `compose --wait`
+   требует green web/vision/worker healthchecks до записи `LAST_RELEASE`. При
+   любой ошибке релиз запрещён.
 5. Новые миграции прогнать через `rehearse-migrations.sh` на свежем
    обезличенном dump production-подобного объёма.
    Migration `20260719034000_case_insensitive_auth_principals` берёт table lock

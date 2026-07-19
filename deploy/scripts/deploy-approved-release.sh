@@ -43,7 +43,8 @@ install -m 644 deploy/Caddyfile "$prod_root/Caddyfile"
 cd "$prod_root"
 docker compose build caddy postgres web migrate worker-import worker-notifications worker-proof-analysis vision
 docker compose run --rm migrate
-docker compose up -d web caddy worker-import worker-notifications worker-proof-analysis vision
+docker compose up -d --wait --wait-timeout 300 \
+  web caddy worker-import worker-notifications worker-proof-analysis vision
 docker compose ps
 printf 'release_sha=%s\nprevious_sha=%s\ndeployed_at=%s\n' \
   "$release_sha" "$previous_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

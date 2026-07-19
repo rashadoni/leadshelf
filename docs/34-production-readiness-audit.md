@@ -60,7 +60,8 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   требует explicit repository enable и protected environment, pinned known
   hosts, non-root SSH и root-owned exact-SHA wrapper. Mode-0600 receipt
   fail-closed связывает SHA с approval, backup/restore и rollback evidence;
-  wrapper выполняет новый backup+verify до migration и никогда не seed-ит demo.
+  wrapper выполняет новый backup+verify до migration, ждёт health web/vision/
+  всех workers до success receipt и никогда не seed-ит demo.
   Негативные receipt/workflow invariant tests PASS; реальная environment
   protection и release execution остаются внешним gate;
 - non-root web/worker images без npm/corepack; custom current Caddy/PostgreSQL
