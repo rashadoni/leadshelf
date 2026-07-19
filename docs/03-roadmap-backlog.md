@@ -809,6 +809,9 @@ Definition of Done: двухнедельный прогон не теряет д
   логи, backup и CI artifacts.
   `[runbook реализован 2026-07-18: inventory, least-privilege storage,
   staged rotation и smoke/revoke для JWT/DB/S3/vision/deploy/backup/metrics;
+  demo seeder 2026-07-19 больше не печатает пароль, PIN, email/display names
+  или raw error в stdout/stderr: только allowlisted structured readiness/error
+  metadata, credential-leak regression 2/2 PASS;
   BLOCKED — production secret-manager access/owners и фактическая ротация]`
 - [ ] Security headers, CORS/CSRF policy, dependency/container scanning.
   `[реализовано/локально проверено 2026-07-18: CSP/anti-frame/nosniff,
@@ -892,6 +895,8 @@ Definition of Done: нет открытых critical/high; доказано, ч�
   после schema validation пишет отдельный allowlisted domain event с
   correlationId/org/device/opId/kind/status; payload/result detail, GPS,
   token/email не сериализуются, unsafe IDs отбрасываются. Web 128/128 PASS.
+  Demo seed/CI output переведён на allowlisted structured event без password,
+  PIN, email/display name и private error message; regression 2/2 PASS.
   BLOCKED — production log collector/retention/owner]`
 - [ ] Метрики: availability/latency/errors, sync/outbox, import freshness,
   worker lag, media errors, DB и storage capacity.

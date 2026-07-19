@@ -13,7 +13,7 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
-| Unit/integration | PASS local + CI | exact feature SHA local/remote 580/580, DB 83/83, mobile 166/166, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web |
+| Unit/integration | PASS local; prior feature PASS CI | current working tree 582/582, DB 85/85, mobile 166/166, web 128/128; prior exact feature SHA remote 580/580; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
@@ -134,6 +134,9 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
 - mobile push domain log фиксирует только correlationId/org/device/opId/kind/
   status после schema validation; unit доказывает отсутствие payload/result
   detail, GPS, token/email и отбрасывание unsafe IDs; web 128/128 PASS;
+- demo seed больше не выводит пароль/PIN, email/display names или raw error в
+  CI/stdout: success/failure — allowlisted structured events, а regression 2/2
+  проверяет отсутствие credential/private error material;
 - backup/restore, incident, ERP, privacy, pilot/GA runbooks и evidence templates.
 
 ## Технические блокеры до client production
