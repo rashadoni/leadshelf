@@ -22,7 +22,7 @@ evidence. Отсутствующее внешнее доказательство
 | Remote CI | PASS current feature SHA | PR #19 draft; exact feature SHA `5464afc950cc828a1defaddf737c9b22cb8966aa`, run 29679507492: 632-test `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
-| Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
+| Restore drill | PASS local contract; production blocked | exact receipt snapshot/host/tag/freshness, checksum-protected migration/media inventory and isolated restore (including empty bucket) PASS with fake restic/docker plus negative mismatch/receipt cases; prior encrypted local restore: 23 migrations, media=1/26 bytes; real external repository drill pending |
 | Post-deploy smoke | PASS local | health/readiness/login/pull/logout; opt-in comment delta=1, cleanup=0 |
 | Replay/idempotency | PASS local | 20 VU, 100 replays, 304/304 checks, P95 177.92 ms, row delta=1 |
 | Pull 1/10/50 VU | PASS local | 0% errors; P95 109.70 ms / 160.83 ms / 1.08 s |
@@ -77,6 +77,15 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   wrappers без High/Critical findings;
 - archived MinIO удалён из production; production требует maintained external
   S3/R2; backup/drill больше не запускают archived MinIO image;
+- backup/restore не выбирает двусмысленный `latest`: атомарный mode-0600
+  receipt связывает exact restic snapshot ID/host/epoch, verifier сверяет
+  repository ID/host/production tag/freshness, а isolated restore требует
+  checksum-защищённое точное совпадение migration/media file+byte inventory
+  (пустой bucket валиден). Shell configs, receipt и temporary roots
+  fail-closed проверяются по owner/mode/no-symlink; deterministic fake
+  restic/docker end-to-end и host/tag/ID, mode/symlink/duplicate/future/stale,
+  migration/media mismatch negatives PASS в обязательном CI. Это code/local
+  contract evidence, не реальный external repository или measured RPO/RTO;
 - readiness/metrics, localhost Caddy Prometheus endpoint, JSON access logs и
   privacy-safe worker JSON logs; paginated/cached S3 object count/bytes
   inventory с ready/age signals (unit PASS; current local `.env` runtime

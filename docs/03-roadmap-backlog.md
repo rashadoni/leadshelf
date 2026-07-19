@@ -711,14 +711,25 @@ web-раздел синхронизированных заказов без из
   rollout/release owner evidence]`
 - [ ] Ночной backup PostgreSQL и external S3 во внешнее хранилище: шифрование,
   ротация минимум 14 дней и алерт на пропуск.
-  `[реализовано/локально проверено 2026-07-18: pg_dump + media mirror + encrypted
-  restic retention. BLOCKED — external repository credentials, production
-  scheduler/alert endpoint и infrastructure owner]`
+  `[реализовано/локально проверено 2026-07-19: pg_dump + media mirror +
+  encrypted restic retention; backup metadata с точным migration/media
+  inventory checksum-защищены. Mode-0600 receipt атомарно привязан к exact
+  64-char restic snapshot ID/host/epoch, а source shell configs проверяются по
+  owner/mode/no-symlink до source. Deterministic fake-restic/docker integration
+  и негативные receipt/repository tests PASS и входят в CI. BLOCKED — external
+  repository credentials, production scheduler/alert endpoint,
+  infrastructure owner и controlled write-quiescence для DB+S3 consistency]`
 - [ ] Автоматическая проверка backup и ежемесячный restore drill в изоляции;
   зафиксировать RPO/RTO.
-  `[реализовано/локально проверено 2026-07-18: backup -> 100% restic check ->
-  restore PostgreSQL (23 migrations) + media checksum/bytes. BLOCKED —
-  production backup repository и monthly drill owner/window]`
+  `[реализовано/локально проверено 2026-07-19: verifier принимает только exact
+  snapshot ID с ожидаемыми host/tag/freshness; restore никогда не использует
+  latest, работает в owner-only mktemp и требует точного совпадения migrations,
+  media file count/bytes с checksum metadata, включая валидный пустой bucket.
+  End-to-end fake repository restore и mismatch/symlink/mode/duplicate/future/
+  stale negatives PASS; прежний локальный encrypted restore PostgreSQL
+  (23 migrations) + media checksum/bytes также PASS. BLOCKED — реальный
+  production backup repository, fresh exact receipt и monthly drill
+  owner/window с измеренными RPO/RTO]`
 - [ ] Разделить liveness процесса и readiness PostgreSQL/критических сервисов.
   `[реализовано/проверено тестами 2026-07-18: /api/ready fail-closed для DB+S3,
   Compose healthchecks web/workers/vision и readiness DB+external S3. BLOCKED —

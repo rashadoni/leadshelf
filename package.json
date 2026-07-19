@@ -10,6 +10,7 @@
     "analytics:capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/capacity-benchmark.ts",
     "analytics:db-capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/db-capacity-benchmark.ts",
     "alerts:check": "deploy/scripts/check-alert-rules.sh",
+    "backup-recovery:test": "deploy/scripts/backup-recovery.test.sh",
     "release-preflight:test": "deploy/scripts/verify-release-approval.test.sh",
     "post-deploy-smoke:test": "deploy/scripts/post-deploy-smoke.test.sh",
     "lint": "eslint .",

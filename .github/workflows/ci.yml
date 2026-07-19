@@ -64,6 +64,9 @@ jobs:
       - name: Validate Prometheus alert rules and firing fixtures
         run: pnpm alerts:check
 
+      - name: Validate exact-snapshot backup and isolated restore contract
+        run: pnpm backup-recovery:test
+
       - name: Validate fail-closed production release evidence gate
         run: pnpm release-preflight:test
 

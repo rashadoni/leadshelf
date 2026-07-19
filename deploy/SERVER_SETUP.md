@@ -212,7 +212,7 @@ volume не является backup: restic repository обязан находи
 1. Установить `restic` из репозитория Ubuntu и создать root-only конфигурацию:
 
 ```bash
-apt install -y restic
+apt install -y restic jq
 install -m 600 /opt/leadshelf/prod/app/deploy/.env.backup.example \
   /opt/leadshelf/prod/.env.backup
 # Заполнить RESTIC_REPOSITORY/RESTIC_PASSWORD и credentials внешнего S3.
@@ -227,8 +227,13 @@ restic init
 ```
 
 Backup включает custom-format `pg_dump`, полный mirror media bucket,
-`SHA256SUMS` и несекретный metadata-файл. Снапшот шифруется restic. Политика
-по умолчанию: 14 daily, 8 weekly, 12 monthly.
+`SHA256SUMS` и checksum-защищённый несекретный metadata-файл с точным числом
+миграций, media-файлов и байтов (нулевой bucket допустим). После успешного
+restic backup атомарно создаётся root-owned mode-0600
+`/opt/leadshelf/backups/LAST_SUCCESS_RECEIPT` с exact 64-символьным snapshot
+ID, host и UTC epoch. Verify принимает только этот ID с ожидаемыми host/tag и
+свежестью; двусмысленный `latest` не используется. Политика по умолчанию:
+14 daily, 8 weekly, 12 monthly.
 
 3. Установить timers:
 
@@ -251,9 +256,12 @@ that the external incident channel receives exactly one alert.
 /opt/leadshelf/prod/app/deploy/scripts/restore-drill.sh
 ```
 
-Drill не подключается к production: он поднимает временные PostgreSQL,
-проверяет checksums, восстанавливает БД, наличие завершённых Prisma migrations
-и restored media checksums/bytes, затем удаляет только свои контейнеры/temporary dir.
+Drill не подключается к production: он восстанавливает exact snapshot из
+receipt в непредсказуемый owner-only temporary dir, поднимает временный
+PostgreSQL, проверяет checksums и точное совпадение числа завершённых Prisma
+migrations, media-файлов и байтов с checksum-защищёнными metadata, затем
+удаляет только свои контейнеры/temporary dir. После обновления этих скриптов
+нужен новый backup: старый marker без exact receipt намеренно не принимается.
 Зафиксировать дату, snapshot ID, длительность и результат в журнале операций.
 
 RPO: 24 часа. Начальный RTO: 4 часа; уточнить по результату первого drill.

@@ -91,7 +91,7 @@ PIN file должен быть regular non-symlink, доступным толь�
 ## Monitoring и alert acceptance
 
 1. До upload проверить canonical rules: `pnpm alerts:check`. Команда обязана
-   показать 18 valid rules и successful firing fixtures для каждой из них.
+   показать 19 valid rules и successful firing fixtures для каждой из них.
 2. Prometheus job `leadshelf-web` получает `/api/metrics` с bearer token из
    secret store. Caddy собирается только через loopback/on-host agent;
    node-exporter включает filesystem+systemd, blackbox job называется
@@ -126,8 +126,12 @@ PIN file должен быть regular non-symlink, доступным толь�
 
 1. Объявить инцидент, остановить записи, зафиксировать время последней
    подтверждённой целостности.
-2. Поднять чистое изолированное окружение, выбрать проверенный restic snapshot.
-3. Выполнить `restore-drill.sh` и сверить checksums, Prisma migrations и media.
+2. Поднять чистое изолированное окружение и получить root-owned mode-0600
+   `LAST_SUCCESS_RECEIPT` для последнего проверенного exact snapshot. Не
+   выбирать `latest`: ID, host, production tag и свежесть должны пройти
+   `verify-production-backup.sh`.
+3. Выполнить `restore-drill.sh`: он восстановит только snapshot ID из receipt
+   и сверит checksums, точное число Prisma migrations, media-файлов и байтов.
 4. Переключить DNS/traffic только после полного smoke.
 5. Зафиксировать фактические RPO/RTO и провести postmortem.
 
