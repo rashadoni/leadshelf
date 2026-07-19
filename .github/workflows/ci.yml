@@ -66,6 +66,9 @@ jobs:
       - name: Validate fail-closed production release evidence gate
         run: pnpm release-preflight:test
 
+      - name: Validate credential-safe post-deploy smoke
+        run: pnpm post-deploy-smoke:test
+
       - name: Typecheck
         run: pnpm -r typecheck
 

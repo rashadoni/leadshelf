@@ -11,6 +11,7 @@
     "analytics:db-capacity": "pnpm --filter @leadshelf/worker exec tsx ../../apps/web/src/server/analytics/db-capacity-benchmark.ts",
     "alerts:check": "deploy/scripts/check-alert-rules.sh",
     "release-preflight:test": "deploy/scripts/verify-release-approval.test.sh",
+    "post-deploy-smoke:test": "deploy/scripts/post-deploy-smoke.test.sh",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"

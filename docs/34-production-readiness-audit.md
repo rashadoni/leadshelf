@@ -74,6 +74,12 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
 - единый client error contract с RU/AZ support correlation ID для текущего
   fetch inventory; network failure становится retryable 503, а 3-browser E2E
   доказывает, что private response body не показывается пользователю;
+- post-deploy mobile smoke больше не передаёт PIN, access/refresh tokens или
+  tenant identifiers через jq/curl argv: owner-only PIN, mode-0600 temp request/
+  curl-config files, disabled implicit `.curlrc` и trap cleanup. Mock health/
+  ready/login/pull/push/logout regression доказывает отсутствие private markers
+  в child argv/stdout/stderr и fail-closed отклоняет group/world-readable или
+  symlink PIN; deployed full smoke pending;
 - axe audit без rule exclusions на RU/AZ login/catalog/tasks/analytics во всех
   трёх браузках; zoom остаётся доступен, selects именованы, nested controls
   устранены, horizontal analytics tables доступны с клавиатуры;

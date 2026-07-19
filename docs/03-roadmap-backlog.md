@@ -734,10 +734,17 @@ web-раздел синхронизированных заказов без из
   restore local demo копии и migrate deploy, 23 migrations; свежий обезличенный
   production dump клиента BLOCKED — client data owner/access]`
 - [ ] Post-deploy smoke: web, auth, import, publish, mobile sync, media и workers.
-  `[частично реализовано/проверено local 2026-07-18: health/readiness и mobile
-  login/pull/logout прошли; opt-in task.comment создал ровно 1 row и cleanup
-  оставил 0 artifacts. BLOCKED — deployed production environment/access для
-  import/publish/media/workers smoke]`
+  `[частично реализовано/проверено local 2026-07-19: health/readiness и mobile
+  login/pull/logout прошли; opt-in task.comment ранее создал ровно 1 row и
+  cleanup оставил 0 artifacts. Smoke credential boundary исправлен: PIN,
+  access/refresh token и tenant identifiers больше не передаются в jq/curl
+  argv, PIN file обязан быть non-symlink owner-only, все sensitive request/
+  config files mode-0600 в trap-cleaned temp dir. Mock runtime прошёл полный
+  health/ready/login/pull/push/logout и доказал отсутствие private markers в
+  curl argv/stdout; insecure PIN mode и symlink negative tests PASS, проверка
+  обязательна в PR CI; implicit `.curlrc` отключён. BLOCKED — deployed
+  environment/access и disposable tenant cleanup для import/publish/media/
+  workers smoke]`
 
 Definition of Done: БД и медиа восстановлены в чистом окружении; отказ
 зависимостей вызывает алерт; неудачный релиз откатывается без потери данных.

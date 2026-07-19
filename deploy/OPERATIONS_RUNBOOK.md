@@ -62,6 +62,13 @@ BASE_URL=https://client.example.com \
   deploy/scripts/post-deploy-smoke.sh
 ```
 
+PIN file должен быть regular non-symlink, доступным только владельцу (0400 или
+0600). Скрипт хранит PIN, access/refresh tokens и tenant identifiers только во
+временном mode-0700 каталоге с mode-0600 request/curl-config files, не передаёт
+их через process arguments, отключает implicit `.curlrc` и удаляет каталог
+через trap. Этот invariant
+проверяется `pnpm post-deploy-smoke:test` с mock runtime и входит в PR CI.
+
 Обязательная карта:
 
 1. `/api/health` и `/api/ready` возвращают 200.
