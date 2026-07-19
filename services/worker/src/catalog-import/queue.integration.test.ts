@@ -1,10 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises"
+import { access, mkdtemp, rm, unlink, writeFile } from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
 import { createSystemClient } from "@leadshelf/db"
 import { enqueueCatalogImport, processNextCatalogImportJob, recoverStaleCatalogImportJobs } from "./queue"
 import type { ImportQueueRetryPolicy } from "./retry-policy"
+import { checksumImportRows, signDestructiveFullSyncApproval } from "./reconciliation"
+import { readCsvRecords } from "./csv"
+import {
+  attachFullSyncApprovalToJob,
+  checksumActiveProductSkus,
+  prepareFullSyncApprovalRequest,
+} from "./full-sync-workflow"
+import { issueDestructiveFullSyncApprovalFromFiles } from "./full-sync-approval"
 
 const prisma = createSystemClient("import-queue-recovery-test")
 const policy: ImportQueueRetryPolicy = {
@@ -142,5 +150,269 @@ describe("durable catalog import queue recovery", () => {
       status: "MISMATCH",
       mismatches: ["erp_row_count_mismatch", "erp_checksum_mismatch"],
     })
+  })
+
+  it("persists a full sync but never claims it without an attached approval", async () => {
+    const queued = await enqueueCatalogImport(prisma, {
+      organizationId,
+      entityType: "products",
+      source: "csv",
+      fileName: "full-sync.csv",
+      buffer: Buffer.from("sku,name\nFULL-1,Full product\n"),
+      expectedRows: 1,
+      expectedChecksum: "f".repeat(64),
+      syncMode: "full",
+    })
+    const job = await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })
+    expect(job).toMatchObject({ syncMode: "full", fullSyncApprovalPath: null, attempts: 0, status: "PENDING" })
+
+    process.env.LEADSHELF_FULL_SYNC_ENABLED = "true"
+    try {
+      expect(await processNextCatalogImportJob(prisma, {
+        now: new Date(job.availableAt.getTime() + 1), policy,
+      })).toBeNull()
+    } finally {
+      delete process.env.LEADSHELF_FULL_SYNC_ENABLED
+    }
+    expect(await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })).toMatchObject({
+      attempts: 0,
+      status: "PENDING",
+    })
+    expect(await prisma.product.count({ where: { organizationId, sku: "FULL-1" } })).toBe(0)
+  })
+
+  it("rejects full sync for unsupported entities or without an exact manifest", async () => {
+    await expect(enqueueCatalogImport(prisma, {
+      organizationId,
+      entityType: "stock",
+      source: "csv",
+      fileName: "stock.csv",
+      buffer: Buffer.from("sku,quantity\nFULL-1,1\n"),
+      expectedRows: 1,
+      expectedChecksum: "f".repeat(64),
+      syncMode: "full",
+    })).rejects.toThrow("full_sync_entity_not_supported")
+    await expect(enqueueCatalogImport(prisma, {
+      organizationId,
+      entityType: "products",
+      source: "csv",
+      fileName: "products.csv",
+      buffer: Buffer.from("sku,name\nFULL-1,Full product\n"),
+      syncMode: "full",
+    })).rejects.toThrow("full_sync_manifest_required")
+  })
+
+  it("atomically applies an approved full sync, audits it and preserves another tenant", async () => {
+    const suffix = Date.now().toString(36)
+    const neighbor = await prisma.organization.create({
+      data: { name: "Full sync neighbor", slug: `full-sync-neighbor-${suffix}` },
+    })
+    const existing = await prisma.product.createMany({
+      data: [
+        { organizationId, sku: `FULL-KEEP-${suffix}`, name: "Keep" },
+        { organizationId, sku: `FULL-ABSENT-${suffix}`, name: "Absent" },
+        { organizationId: neighbor.id, sku: `FULL-ABSENT-${suffix}`, name: "Neighbor" },
+      ],
+    })
+    expect(existing.count).toBe(3)
+    const csv = Buffer.from(
+      `sku,name,isActive\nFULL-KEEP-${suffix},Keep updated,true\nFULL-NEW-${suffix},New,true\n`,
+    )
+    const rows = readCsvRecords(csv)
+    const sourceChecksum = checksumImportRows(rows)
+    const currentActiveProducts = await prisma.product.findMany({
+      where: { organizationId, isActive: true },
+      select: { sku: true },
+    })
+    const currentActiveRows = currentActiveProducts.length
+    const queued = await enqueueCatalogImport(prisma, {
+      organizationId,
+      entityType: "products",
+      source: "csv",
+      fileName: "approved-full-sync.csv",
+      buffer: csv,
+      expectedRows: rows.length,
+      expectedChecksum: sourceChecksum,
+      syncMode: "full",
+    })
+    const now = new Date()
+    const secret = "Q".repeat(48)
+    const secretFile = path.join(queuePath, `secret-${suffix}`)
+    const controlFile = path.join(queuePath, `control-${suffix}.json`)
+    const requestFile = path.join(queuePath, `request-${suffix}.json`)
+    const tokenFile = path.join(queuePath, `token-${suffix}`)
+    await writeFile(secretFile, `${secret}\n`, { mode: 0o600 })
+    await writeFile(controlFile, `${JSON.stringify({
+      organizationId,
+      jobId: queued.jobId,
+      changeId: `CHG-${suffix}`,
+      requesterApprovalId: `requester-${suffix}`,
+      reviewerApprovalId: `reviewer-${suffix}`,
+      reasonCode: "authoritative-catalog-reconciliation",
+      ttlSeconds: 1800,
+    })}\n`, { mode: 0o600 })
+    await expect(prepareFullSyncApprovalRequest(prisma, {
+      controlFile,
+      outputFile: requestFile,
+      now,
+    })).resolves.toEqual({ changeId: `CHG-${suffix}` })
+    await expect(issueDestructiveFullSyncApprovalFromFiles({
+      requestFile,
+      secretFile,
+      outputFile: tokenFile,
+      now,
+    })).resolves.toEqual({ changeId: `CHG-${suffix}` })
+    await expect(attachFullSyncApprovalToJob(prisma, {
+      organizationId,
+      jobId: queued.jobId,
+      tokenFile,
+      secretFile,
+      now,
+    })).resolves.toEqual({ changeId: `CHG-${suffix}` })
+
+    process.env.LEADSHELF_FULL_SYNC_ENABLED = "true"
+    process.env.LEADSHELF_FULL_SYNC_APPROVAL_KEY_FILE = secretFile
+    try {
+      await expect(processNextCatalogImportJob(prisma, {
+        now: new Date(now.getTime() + 1_000), policy,
+      })).resolves.toMatchObject({ jobId: queued.jobId, status: "COMPLETED" })
+    } finally {
+      delete process.env.LEADSHELF_FULL_SYNC_ENABLED
+      delete process.env.LEADSHELF_FULL_SYNC_APPROVAL_KEY_FILE
+    }
+    expect(await prisma.product.findUniqueOrThrow({
+      where: { organizationId_sku: { organizationId, sku: `FULL-KEEP-${suffix}` } },
+    })).toMatchObject({ name: "Keep updated", isActive: true })
+    expect(await prisma.product.findUniqueOrThrow({
+      where: { organizationId_sku: { organizationId, sku: `FULL-NEW-${suffix}` } },
+    })).toMatchObject({ isActive: true })
+    expect(await prisma.product.findUniqueOrThrow({
+      where: { organizationId_sku: { organizationId, sku: `FULL-ABSENT-${suffix}` } },
+    })).toMatchObject({ isActive: false })
+    expect(await prisma.product.findUniqueOrThrow({
+      where: { organizationId_sku: { organizationId: neighbor.id, sku: `FULL-ABSENT-${suffix}` } },
+    })).toMatchObject({ isActive: true })
+    expect(await prisma.auditLog.findFirstOrThrow({
+      where: { organizationId, action: "catalog.full_sync_applied", entityId: queued.batchId },
+    })).toMatchObject({
+      payload: expect.objectContaining({
+        changeId: `CHG-${suffix}`,
+        sourceChecksum,
+        currentActiveRows,
+        incomingActiveRows: 2,
+      }),
+    })
+    const completedJob = await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })
+    await expect(access(completedJob.storagePath)).rejects.toThrow()
+    await expect(access(tokenFile)).rejects.toThrow()
+    await expect(access(secretFile)).resolves.toBeUndefined()
+    await prisma.organization.delete({ where: { id: neighbor.id } })
+  })
+
+  it("rolls back every product change when an attached source drifts", async () => {
+    const suffix = `drift-${Date.now().toString(36)}`
+    await prisma.product.create({ data: { organizationId, sku: `FULL-${suffix}`, name: "Original" } })
+    const csv = Buffer.from(`sku,name\nFULL-${suffix},Updated\n`)
+    const rows = readCsvRecords(csv)
+    const sourceChecksum = checksumImportRows(rows)
+    const currentActiveProducts = await prisma.product.findMany({
+      where: { organizationId, isActive: true },
+      select: { sku: true },
+    })
+    const currentActiveRows = currentActiveProducts.length
+    const queued = await enqueueCatalogImport(prisma, {
+      organizationId,
+      entityType: "products",
+      source: "csv",
+      fileName: "drift-full-sync.csv",
+      buffer: csv,
+      expectedRows: 1,
+      expectedChecksum: sourceChecksum,
+      syncMode: "full",
+    })
+    const now = new Date()
+    const secret = "R".repeat(48)
+    const tokenFile = path.join(queuePath, `token-${suffix}`)
+    const secretFile = path.join(queuePath, `secret-${suffix}`)
+    await writeFile(tokenFile, `${signDestructiveFullSyncApproval({
+      version: 1,
+      action: "deactivate_absent_products",
+      changeId: `CHG-${suffix}`,
+      requesterApprovalId: `requester-${suffix}`,
+      reviewerApprovalId: `reviewer-${suffix}`,
+      reasonCode: "authoritative-catalog-reconciliation",
+      organizationId,
+      entityType: "products",
+      sourceChecksum,
+      currentActiveChecksum: checksumActiveProductSkus(currentActiveProducts.map((product) => product.sku)),
+      currentActiveRows,
+      incomingActiveRows: 1,
+      issuedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
+    }, secret)}\n`, { mode: 0o600 })
+    await writeFile(secretFile, `${secret}\n`, { mode: 0o600 })
+    await attachFullSyncApprovalToJob(prisma, { organizationId, jobId: queued.jobId, tokenFile, secretFile, now })
+    const job = await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })
+    await writeFile(job.storagePath, `sku,name\nFULL-${suffix},Tampered\n`, { mode: 0o600 })
+
+    process.env.LEADSHELF_FULL_SYNC_ENABLED = "true"
+    process.env.LEADSHELF_FULL_SYNC_APPROVAL_KEY_FILE = secretFile
+    try {
+      await expect(processNextCatalogImportJob(prisma, {
+        now: new Date(now.getTime() + 1_000), policy,
+      })).resolves.toMatchObject({ jobId: queued.jobId, status: "FAILED" })
+    } finally {
+      delete process.env.LEADSHELF_FULL_SYNC_ENABLED
+      delete process.env.LEADSHELF_FULL_SYNC_APPROVAL_KEY_FILE
+    }
+    expect(await prisma.product.findUniqueOrThrow({
+      where: { organizationId_sku: { organizationId, sku: `FULL-${suffix}` } },
+    })).toMatchObject({ name: "Original", isActive: true })
+    expect(await prisma.auditLog.count({
+      where: { organizationId, action: "catalog.full_sync_applied", entityId: queued.batchId },
+    })).toBe(0)
+    expect(await prisma.importQueueJob.findUniqueOrThrow({ where: { id: queued.jobId } })).toMatchObject({
+      status: "FAILED",
+      attempts: 1,
+      error: "manifest_mismatch",
+      fullSyncApprovalPath: null,
+      fullSyncApprovedAt: null,
+    })
+    await expect(access(tokenFile)).rejects.toThrow()
+  })
+
+  it("DB trigger blocks a concurrent same-tenant product write without blocking a neighbor tenant", async () => {
+    const suffix = `lock-${Date.now().toString(36)}`
+    const neighbor = await prisma.organization.create({
+      data: { name: "Product lock neighbor", slug: `product-lock-neighbor-${suffix}` },
+    })
+    const target = await prisma.product.create({
+      data: { organizationId, sku: `LOCK-${suffix}`, name: "Original" },
+    })
+    const neighborProduct = await prisma.product.create({
+      data: { organizationId: neighbor.id, sku: `LOCK-${suffix}`, name: "Neighbor original" },
+    })
+    const writer = createSystemClient("product-tenant-lock-writer-test")
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${organizationId}, 5))`
+        await expect(writer.product.update({
+          where: { id: neighborProduct.id },
+          data: { name: "Neighbor updated" },
+        })).resolves.toMatchObject({ name: "Neighbor updated" })
+        await expect(writer.$transaction(async (writerTx) => {
+          await writerTx.$executeRawUnsafe("SET LOCAL statement_timeout = '150ms'")
+          return writerTx.product.update({ where: { id: target.id }, data: { name: "Must wait" } })
+        })).rejects.toThrow()
+      })
+      expect(await prisma.product.findUniqueOrThrow({ where: { id: target.id } })).toMatchObject({ name: "Original" })
+      await expect(writer.product.update({
+        where: { id: target.id },
+        data: { name: "After release" },
+      })).resolves.toMatchObject({ name: "After release" })
+    } finally {
+      await writer.$disconnect()
+      await prisma.organization.delete({ where: { id: neighbor.id } })
+    }
   })
 })

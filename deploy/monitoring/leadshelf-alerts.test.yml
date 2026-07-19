@@ -14,6 +14,8 @@ tests:
         values: '1000x8'
       - series: 'leadshelf_import_failures_recent{instance="web:3000"}'
         values: '1x8'
+      - series: 'leadshelf_import_full_sync_oldest_waiting_approval_seconds{instance="web:3000"}'
+        values: '4000x20'
       - series: 'leadshelf_proof_analysis_oldest_pending_seconds{instance="web:3000"}'
         values: '1000x8'
       - series: 'leadshelf_notification_oldest_pending_seconds{instance="web:3000"}'
@@ -69,6 +71,18 @@ tests:
             exp_annotations:
               summary: LeadShelf imports are failing
               description: At least one import queue job failed within the rolling 15-minute window.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 16m
+        alertname: LeadShelfFullSyncApprovalWaiting
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf full-sync approval has waited over one hour
+              description: A protected full-sync source has remained unapproved for at least one hour and fifteen minutes; approve or cancel it through the ERP runbook.
               runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
       - eval_time: 6m
         alertname: LeadShelfProofAnalysisStalled

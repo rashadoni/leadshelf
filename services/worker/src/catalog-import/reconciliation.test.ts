@@ -84,6 +84,7 @@ describe("ERP import reconciliation", () => {
       organizationId: "org-full-sync",
       entityType: "products" as const,
       sourceChecksum,
+      currentActiveChecksum: "d".repeat(64),
       currentActiveRows: 100,
       incomingActiveRows: 80,
       now,
@@ -98,6 +99,7 @@ describe("ERP import reconciliation", () => {
       organizationId: context.organizationId,
       entityType: context.entityType,
       sourceChecksum,
+      currentActiveChecksum: context.currentActiveChecksum,
       currentActiveRows: context.currentActiveRows,
       incomingActiveRows: context.incomingActiveRows,
       issuedAt: now.toISOString(),
@@ -126,6 +128,7 @@ describe("ERP import reconciliation", () => {
     for (const mismatch of [
       { organizationId: "neighbor-tenant" },
       { sourceChecksum: "b".repeat(64) },
+      { currentActiveChecksum: "e".repeat(64) },
       { currentActiveRows: 101 },
       { incomingActiveRows: 79 },
     ]) {
@@ -167,6 +170,10 @@ describe("ERP import reconciliation", () => {
       reviewerApprovalId: payload.requesterApprovalId,
     }, secret)).toThrow("full_sync_approval_payload_invalid")
     expect(guardDestructiveFullSync({ ...context, sourceChecksum: "bad" })).toMatchObject({
+      allowed: false,
+      reason: "input_invalid",
+    })
+    expect(guardDestructiveFullSync({ ...context, currentActiveChecksum: "bad" })).toMatchObject({
       allowed: false,
       reason: "input_invalid",
     })

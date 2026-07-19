@@ -13,7 +13,7 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local; prior remote PASS | current 33/33 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
-| Unit/integration | PASS local; prior remote PASS | current clean 33-migration schema 610/610: core 106, mobile 175, DB 91, vision 43, worker 55, web 140; remotely validated feature SHA — 582/582 |
+| Unit/integration | PASS local; prior remote PASS | current clean 35-migration schema 619/619: core 106, mobile 175, DB 91, vision 43, worker 62, web 142; remotely validated feature SHA — 582/582 |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | prior full 21/21; current tenant-qualified login regression 15/15 Chromium, Firefox, WebKit at 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
@@ -83,13 +83,17 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   symlink PIN; deployed full smoke pending;
 - ERP destructive guard больше не имеет boolean bypass: опасный zero/>10% drop
   допускается только HMAC-SHA-256 approval с exact action/tenant/entity/source
-  checksum/counts/issuedAt/expiresAt binding, change/reason и двумя разными
-  approval IDs, <=1h TTL и >=32-byte explicit secret. Controlled file-based
+  checksum/current active-set checksum/counts/issuedAt/expiresAt binding,
+  change/reason и двумя разными approval IDs, <=1h TTL и >=32-byte explicit
+  secret. Controlled file-based
   issuer проверяет owner/mode/no-symlink, пишет token O_EXCL mode 0600 и не
-  раскрывает protected values через CLI; tamper/cross-context/time/input/file
-  negative matrix PASS. Secret-manager deployment, queue consumer и
-  transactional deactivation ещё не подключены, поэтому текущий upsert-only
-  path ничего отсутствующего не деактивирует;
+  раскрывает protected values через CLI. Durable queue persist-ит только token
+  path; default-disabled consumer повторно проверяет source/context и атомарно
+  выполняет upsert + absent-SKU soft-deactivation + audit в serializable tenant-
+  locked transaction только при MATCH/zero errors; DB trigger сериализует
+  concurrent same-tenant product writes без блокировки neighbor. PostgreSQL
+  end-to-end, rollback-on-drift и lock concurrency PASS; production secret-manager/
+  UID mount, client mapping и staging/14-run evidence отсутствуют;
 - axe audit без rule exclusions на RU/AZ login/catalog/tasks/analytics во всех
   трёх браузках; zoom остаётся доступен, selects именованы, nested controls
   устранены, horizontal analytics tables доступны с клавиатуры;
@@ -174,9 +178,9 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   outbox/import/proof/notifications; migration 33 добавляет шесть partial
   indexes, а forced EXPLAIN доказал Index Only Scan для failure/oldest-work
   queries. Набор
-  из 17 Prometheus rules покрывает web/storage availability, queue/failure/lag,
+  из 18 Prometheus rules покрывает web/storage availability, queue/failure/lag,
   sync-conflict growth,
-  5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и все 17 firing fixtures
+  full-sync approval wait, 5xx/P95, backup/disk/TLS; pinned promtool syntax PASS и все 18 firing fixtures
   PASS, `pnpm alerts:check` включён в обязательный PR CI. External
   scraper/Alertmanager, named routing и staging delivery
   остаются gates;

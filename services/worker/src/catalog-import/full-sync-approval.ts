@@ -35,7 +35,7 @@ function fail(code: FullSyncApprovalIssueErrorCode): never {
   throw new FullSyncApprovalIssueError(code)
 }
 
-async function readProtectedFile(
+export async function readProtectedFullSyncFile(
   filePath: string,
   expectedUid: number,
   maxBytes: number,
@@ -73,6 +73,34 @@ async function validateOutputDirectory(outputPath: string, expectedUid: number):
     if (error instanceof FullSyncApprovalIssueError) throw error
     fail("output_directory_invalid")
   }
+}
+
+export async function writeProtectedFullSyncFile(
+  outputFile: string,
+  content: string,
+  expectedUid: number,
+): Promise<void> {
+  await validateOutputDirectory(outputFile, expectedUid)
+  let handle
+  try {
+    handle = await open(
+      outputFile,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      0o600,
+    )
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") fail("output_exists")
+    fail("output_write_failed")
+  }
+  try {
+    await handle.writeFile(content, "utf8")
+    await handle.sync()
+  } catch {
+    await handle.close().catch(() => undefined)
+    await unlink(outputFile).catch(() => undefined)
+    fail("output_write_failed")
+  }
+  await handle.close()
 }
 
 function parseRequest(buffer: Buffer, now: Date): DestructiveFullSyncApprovalPayload {
@@ -118,10 +146,9 @@ export async function issueDestructiveFullSyncApprovalFromFiles(input: {
 }): Promise<{ changeId: string }> {
   const expectedUid = input.expectedUid ?? process.getuid?.()
   if (!Number.isSafeInteger(expectedUid) || Number(expectedUid) < 0) fail("path_invalid")
-  await validateOutputDirectory(input.outputFile, Number(expectedUid))
   const [requestBuffer, secretBuffer] = await Promise.all([
-    readProtectedFile(input.requestFile, Number(expectedUid), 16 * 1024),
-    readProtectedFile(input.secretFile, Number(expectedUid), 4 * 1024),
+    readProtectedFullSyncFile(input.requestFile, Number(expectedUid), 16 * 1024),
+    readProtectedFullSyncFile(input.secretFile, Number(expectedUid), 4 * 1024),
   ])
   const payload = parseRequest(requestBuffer, input.now ?? new Date())
   const secret = parseSecret(secretBuffer)
@@ -132,26 +159,7 @@ export async function issueDestructiveFullSyncApprovalFromFiles(input: {
     fail("request_invalid")
   }
 
-  let handle
-  try {
-    handle = await open(
-      input.outputFile,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
-      0o600,
-    )
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") fail("output_exists")
-    fail("output_write_failed")
-  }
-  try {
-    await handle.writeFile(`${token}\n`, "utf8")
-    await handle.sync()
-  } catch {
-    await handle.close().catch(() => undefined)
-    await unlink(input.outputFile).catch(() => undefined)
-    fail("output_write_failed")
-  }
-  await handle.close()
+  await writeProtectedFullSyncFile(input.outputFile, `${token}\n`, Number(expectedUid))
   token = ""
   return { changeId: payload.changeId }
 }

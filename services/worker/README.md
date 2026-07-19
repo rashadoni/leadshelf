@@ -20,6 +20,15 @@ push delivery хранят следующее разрешенное время 
 `FAILED`. Proof analysis применяет ту же модель через поля `PhotoSubmission`.
 Значения retry/lease настраиваются в `.env.example`; input import-файла после
 terminal failure сохраняется для расследования и ручного решения оператора.
+Products full-sync всегда идёт через durable queue и по умолчанию не claim-ится.
+Он требует exact ERP manifest, controlled prepare/issue/attach workflow,
+`LEADSHELF_FULL_SYNC_ENABLED=true` и абсолютный путь
+`LEADSHELF_FULL_SYNC_APPROVAL_KEY_FILE` к owner-only signing key. В БД хранится
+только путь к краткоживущему token-файлу, не bearer или signing key. Consumer
+повторно проверяет source/counts/token и выполняет upsert + soft-deactivation
+отсутствующих SKU + audit в serializable transaction под tenant advisory lock.
+Token и source удаляются только после commit; cryptographic/context/source
+drift terminal fail-closed без бессмысленных retry.
 Ошибки polling tick (включая временную недоступность PostgreSQL) не завершают
 долгоживущий runner: общий lifecycle использует capped exponential backoff с
 jitter до 60 секунд, пишет только безопасный код ошибки и сбрасывает backoff

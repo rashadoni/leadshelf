@@ -709,6 +709,9 @@ model ImportQueueJob {
   expectedRows     Int?
   expectedChecksum String?
   expectedTotals   Json?
+  syncMode         String       @default("delta")
+  fullSyncApprovalPath String?
+  fullSyncApprovedAt DateTime?
   status           ImportStatus @default(PENDING)
   attempts         Int          @default(0)
   error            String?

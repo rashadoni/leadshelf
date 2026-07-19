@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
     unresolvedConflicts,
     importQueue,
     oldestImport,
+    waitingFullSyncApprovals,
+    oldestWaitingFullSyncApproval,
     proofAnalysis,
     notifications,
     latestImport,
@@ -54,7 +56,16 @@ export async function GET(req: NextRequest) {
     authDb.$queryRaw<StatusCount[]>`SELECT status::text, count(*)::bigint AS count FROM import_queue_jobs GROUP BY status`,
     authDb.$queryRaw<Scalar[]>`
       SELECT COALESCE(EXTRACT(EPOCH FROM (now() - min("createdAt"))), 0)::double precision AS value
-      FROM import_queue_jobs WHERE status IN ('PENDING','PROCESSING')`,
+      FROM import_queue_jobs
+      WHERE status = 'PROCESSING'
+         OR (status = 'PENDING' AND ("syncMode" = 'delta' OR "fullSyncApprovalPath" IS NOT NULL))`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT count(*)::bigint AS value FROM import_queue_jobs
+      WHERE status = 'PENDING' AND "syncMode" = 'full' AND "fullSyncApprovalPath" IS NULL`,
+    authDb.$queryRaw<Scalar[]>`
+      SELECT COALESCE(EXTRACT(EPOCH FROM (now() - min("createdAt"))), 0)::double precision AS value
+      FROM import_queue_jobs
+      WHERE status = 'PENDING' AND "syncMode" = 'full' AND "fullSyncApprovalPath" IS NULL`,
     authDb.$queryRaw<StatusCount[]>`SELECT "analysisStatus"::text AS status, count(*)::bigint AS count FROM photo_submissions GROUP BY "analysisStatus"`,
     authDb.$queryRaw<StatusCount[]>`SELECT status, count(*)::bigint AS count FROM notification_deliveries GROUP BY status`,
     authDb.$queryRaw<Scalar[]>`
@@ -86,6 +97,8 @@ export async function GET(req: NextRequest) {
     metric("leadshelf_database_size_bytes", "Current PostgreSQL database size.", Number(databaseSize[0]?.value ?? 0)),
     metric("leadshelf_sync_conflicts_unresolved", "Unresolved mobile sync conflicts.", Number(unresolvedConflicts[0]?.value ?? 0)),
     metric("leadshelf_import_oldest_pending_seconds", "Age of oldest pending or processing import.", Number(oldestImport[0]?.value ?? 0)),
+    metric("leadshelf_import_full_sync_waiting_approval", "Full sync imports waiting for an attached approval.", Number(waitingFullSyncApprovals[0]?.value ?? 0)),
+    metric("leadshelf_import_full_sync_oldest_waiting_approval_seconds", "Age of the oldest full sync import waiting for approval.", Number(oldestWaitingFullSyncApproval[0]?.value ?? 0)),
     metric("leadshelf_import_last_success_timestamp_seconds", "Latest finished import UNIX timestamp.", Number(latestImport[0]?.value ?? 0)),
     metric("leadshelf_object_storage_ready", "Object storage dependency readiness.", storageReady),
     metric("leadshelf_object_storage_inventory_ready", "Object storage inventory collection status.", storageInventory ? 1 : 0),

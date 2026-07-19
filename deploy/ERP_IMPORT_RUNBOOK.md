@@ -69,24 +69,69 @@ manifest сохраняется в durable queue и применяется те�
 только HMAC-SHA-256 token с secret не короче 32 bytes, подписанный доверенным
 server-side issuer. Payload exact-schema привязан к action
 `deactivate_absent_products`, change ID, два разных approval ID, reason code,
-tenant, entity, source SHA-256, current/incoming active counts, canonical
+tenant, entity, source SHA-256, current active SKU-set SHA-256,
+current/incoming active counts, canonical
 issuedAt/expiresAt и TTL максимум один час. Signature сравнивается constant-time;
 malformed/tampered, иной tenant/checksum/count, expired/future token, слабый
 secret и некорректные input counts fail-closed. Token/secret нельзя помещать в
 API response, import error или log.
 
-Контролируемый file-based issuer реализован. Request и signing key должны быть
-абсолютными owner-only regular files с mode `0600` (или строже), без symlink;
-output directory принадлежит тому же UID и не допускает group/world write.
-Issuer создаёт новый token-файл эксклюзивно с mode `0600`, выполняет `fsync`,
-никогда не перезаписывает существующий файл и выводит только безопасный event:
+Контролируемый durable workflow реализован и по умолчанию выключен. Multipart
+products import с `syncMode=full` требует `expectedRows` и `expectedChecksum`,
+всегда сохраняется в queue и не claim-ится без attached approval. Request,
+control, signing key и token должны быть абсолютными owner-only regular files
+с mode `0600` (или строже), без symlink; output directory принадлежит тому же
+UID и не допускает group/world write. Все CLI создают output эксклюзивно с mode
+`0600`, выполняют `fsync`, никогда не перезаписывают файл и выводят только
+безопасный event. Один control-файл:
+
+```json
+{
+  "organizationId": "APPROVED_ORGANIZATION_ID",
+  "jobId": "QUEUED_JOB_ID",
+  "changeId": "CHG-12345",
+  "requesterApprovalId": "erp-owner-approval-1",
+  "reviewerApprovalId": "data-owner-approval-2",
+  "reasonCode": "authoritative-catalog-reconciliation",
+  "ttlSeconds": 1800
+}
+```
+
+Последовательность prepare → issue → attach:
 
 ```bash
+pnpm --filter @leadshelf/worker import:prepare-full-sync-approval -- \
+  --control-file /run/leadshelf/erp/full-sync-control.json \
+  --output-file /run/leadshelf/erp/full-sync-request.json
+
 pnpm --filter @leadshelf/worker import:issue-full-sync-approval -- \
   --request-file /run/leadshelf/erp/full-sync-request.json \
   --secret-file /run/secrets/erp-full-sync-approval-key \
   --output-file /run/leadshelf/erp/full-sync-approval.token
+
+pnpm --filter @leadshelf/worker import:attach-full-sync-approval -- \
+  --control-file /run/leadshelf/erp/full-sync-control.json \
+  --secret-file /run/secrets/erp-full-sync-approval-key \
+  --token-file /run/leadshelf/erp/full-sync-approval.token
 ```
+
+Prepare пересчитывает row count/source checksum/current active-set checksum и
+current+incoming active counts из реального queued source; attach повторяет
+расчёт и сохраняет только путь к
+token. Web принимает full-sync только при отдельном временном opt-in
+`LEADSHELF_FULL_SYNC_REQUESTS_ENABLED=true`; без него API возвращает 503 и не
+создаёт queue artifact. Worker запускает full-sync лишь при точных runtime
+значениях
+`LEADSHELF_FULL_SYNC_ENABLED=true` и абсолютном
+`LEADSHELF_FULL_SYNC_APPROVAL_KEY_FILE`. Он ещё раз проверяет protected source,
+manifest, counts, signature и expiry внутри serializable transaction под
+tenant advisory lock. Только `COMPLETED` + MATCH + zero row errors допускают
+soft-deactivation (`isActive=false`) отсутствующих SKU и allowlisted AuditLog;
+DB trigger заставляет любой concurrent product writer того же tenant взять тот
+же transaction lock, но не блокирует соседний tenant. Source/token удаляются
+после commit. Context,
+crypto или source drift завершается terminal FAILED с rollback всей транзакции;
+transient DB failure остаётся retryable.
 
 Token-файл является краткоживущим bearer credential: его нельзя выводить в
 stdout, помещать в argv, CI artifact, тикет или лог; после контролируемой
@@ -94,11 +139,10 @@ stdout, помещать в argv, CI artifact, тикет или лог; пос�
 должен поступать из production secret manager в owner-only файл и ротироваться
 по security runbook.
 
-Это пока issuer и проверенный approval contract, а не включённое удаление:
-secret-manager deployment, persisted queue field, consumer token-файла,
-транзакционная деактивация и recovery ещё не подключены. Текущий staging v1
-использует upsert и не удаляет отсутствующие строки, поэтому массовое удаление
-сейчас невозможно.
+Локальная mechanics и PostgreSQL integration проверены, но production gate не
+закрыт: flag остаётся `false`, secret-manager mount/UID policy, client mapping,
+реальный staging replay/recovery и 14 последовательных reconciliation runs
+отсутствуют. До этих evidence включать full-sync runtime запрещено.
 
 ## Повтор и восстановление
 

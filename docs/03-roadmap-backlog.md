@@ -975,11 +975,11 @@ Definition of Done: нет открытых critical/high; доказано, ч�
 - [ ] Алерты с владельцем/runbook: web/DB/storage down, missed backup, stuck
   queue, stale import, sync/vision spike, disk/certificate expiry.
   `[частично реализовано/проверено 2026-07-19: backup/verify systemd OnFailure
-  -> external webhook; добавлен Prometheus baseline из 17 rules для missing/down
+  -> external webhook; добавлен Prometheus baseline из 18 rules для missing/down
   web target, storage readiness/inventory, import stall/recent failure,
   mobile/proof/notification recent failures и worker lag, sync-conflict growth,
   5xx/P95 SLO, missed backup, disk и TLS expiry. Pinned Prometheus 3.12.0
-  promtool проверил все 17 rules; каждая из 17 rules имеет firing fixture с
+  promtool проверил все 18 rules; каждая из 18 rules имеет firing fixture с
   точными severity/owner_role/runbook annotations, а `pnpm alerts:check`
   добавлен обязательным шагом PR CI. Runbook требует
   external scrape jobs, named routing и controlled staging delivery tests.
@@ -1021,14 +1021,21 @@ Definition of Done: тестовые отказы вызывают ожидае�
   `[частично 2026-07-19: staging v1 идемпотентно upsert-ит payload и metrics
   отдаёт freshness. Boolean confirmation удалён: HMAC-SHA-256 approval contract
   fail-closed связывает action/change/two distinct approvals/reason/tenant/
-  entity/source checksum/current+incoming counts/canonical issuedAt+expiresAt
-  с TTL <=1h и secret >=32 bytes. Controlled file-based issuer принимает только
-  owner-only non-symlink request/key, создаёт token эксклюзивно mode 0600 и не
-  раскрывает protected values через CLI; tamper/cross-context/time/input/file
-  negative matrix PASS. Secret-manager deployment, persisted queue field,
-  token consumer, transactional absent-product deactivation и recovery ещё не
-  реализованы; production alert/semantics требуют client data/business/
-  infrastructure owners]`
+  entity/source checksum/current active-set checksum/current+incoming counts/
+  canonical issuedAt+expiresAt с TTL <=1h и secret >=32 bytes. Durable
+  full-sync всегда queue-only и
+  имеет независимые default-disabled API/worker gates; prepare -> issue ->
+  attach принимает owner-only non-symlink
+  control/source/key/token, persist-ит только token path, а consumer повторно
+  проверяет exact context. Upsert + absent-SKU soft-deactivation + allowlisted
+  audit выполняются атомарно в serializable tenant-locked transaction только
+  при MATCH/zero errors; source drift откатывает все изменения и terminal
+  fail-closed. DB trigger сериализует все same-tenant product writes тем же
+  lock и не блокирует neighbor. PostgreSQL end-to-end и tamper/cross-
+  context/time/input/file/concurrency matrix PASS; waiting-approval отделён от runnable
+  queue metrics. BLOCKED — production secret-manager mount/UID policy, client
+  mapping, staging replay/recovery, 14 reconciliation runs и production alert/
+  semantics owners]`
 
 - [ ] Контрольные суммы и сверка количества/сумм с ERP.
   `[локальная механика реализована/проверена 2026-07-18: optional multipart
@@ -1040,8 +1047,9 @@ Definition of Done: тестовые отказы вызывают ожидае�
 
 - [x] Guard от массового удаления/обнуления без подтверждения.
   `[guard реализован/проверен unit: zero и drop >10% блокируются без signed
-  exact-context approval; старого boolean bypass больше нет. Destructive
-  full-sync сейчас отсутствует и ничего не удаляет]`
+  exact-context approval; старого boolean bypass больше нет. Full-sync runtime
+  дополнительно требует signed approval для любого размера изменения и
+  disabled-by-default flag]`
 
 - [x] Runbook повторного импорта и восстановления ошибочной загрузки.
   `[runbook реализован. BLOCKED — клиентский ERP fixture/operator и staging

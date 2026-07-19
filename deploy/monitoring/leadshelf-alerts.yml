@@ -71,6 +71,18 @@ groups:
           description: At least one import queue job failed within the rolling 15-minute window.
           runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
 
+      - alert: LeadShelfFullSyncApprovalWaiting
+        expr: leadshelf_import_full_sync_oldest_waiting_approval_seconds > 3600
+        for: 15m
+        labels:
+          severity: warning
+          service: leadshelf
+          owner_role: erp
+        annotations:
+          summary: LeadShelf full-sync approval has waited over one hour
+          description: A protected full-sync source has remained unapproved for at least one hour and fifteen minutes; approve or cancel it through the ERP runbook.
+          runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+
       - alert: LeadShelfMobileOutboxFailures
         expr: leadshelf_mobile_outbox_failures_recent > 0
         for: 5m

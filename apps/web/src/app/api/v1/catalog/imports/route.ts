@@ -10,7 +10,7 @@ import {
 } from "@leadshelf/worker"
 import { canImport, forbidden, requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
-import { parseCatalogImportManifest } from "@/server/catalog/import-manifest"
+import { fullSyncRequestsEnabled, parseCatalogImportManifest } from "@/server/catalog/import-manifest"
 
 import { consumeRateLimit } from "@/server/security/rate-limit"
 export const runtime = "nodejs"
@@ -58,9 +58,13 @@ export async function POST(req: NextRequest) {
     expectedRows: form.get("expectedRows"),
     expectedChecksum: form.get("expectedChecksum"),
     expectedTotals: form.get("expectedTotals"),
+    syncMode: form.get("syncMode"),
   })
   if (!manifest.success) {
     return NextResponse.json({ error: "invalid_import_manifest", reason: manifest.reason }, { status: 400 })
+  }
+  if (manifest.data.syncMode === "full" && !fullSyncRequestsEnabled()) {
+    return NextResponse.json({ error: "full_sync_disabled" }, { status: 503, headers: { "Retry-After": "3600" } })
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
     file.name.toLowerCase().endsWith(".xlsx") ||
     file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   const source = isXlsx ? "xlsx" : "csv"
-  if (buffer.byteLength > SYNC_IMPORT_MAX_BYTES) {
+  if (buffer.byteLength > SYNC_IMPORT_MAX_BYTES || manifest.data.syncMode === "full") {
     const queued = await enqueueCatalogImport(workerDb, {
       organizationId: session.org,
       entityType: parsed.data.entityType,
@@ -80,7 +84,11 @@ export async function POST(req: NextRequest) {
       createdById: session.sub,
       ...manifest.data,
     })
-    return NextResponse.json({ ...queued, queued: true }, { status: 202 })
+    return NextResponse.json({
+      ...queued,
+      queued: true,
+      approvalRequired: manifest.data.syncMode === "full",
+    }, { status: 202 })
   }
 
   let rows

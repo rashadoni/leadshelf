@@ -23,20 +23,36 @@ export type CatalogImportManifest = {
   expectedRows?: number
   expectedChecksum?: string
   expectedTotals?: Record<string, string>
+  syncMode: "delta" | "full"
+}
+
+export function fullSyncRequestsEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return env.LEADSHELF_FULL_SYNC_REQUESTS_ENABLED === "true"
 }
 
 export function parseCatalogImportManifest(
   entityType: CatalogImportEntity,
-  input: { expectedRows: FormDataEntryValue | null; expectedChecksum: FormDataEntryValue | null; expectedTotals: FormDataEntryValue | null },
+  input: {
+    expectedRows: FormDataEntryValue | null
+    expectedChecksum: FormDataEntryValue | null
+    expectedTotals: FormDataEntryValue | null
+    syncMode?: FormDataEntryValue | null
+  },
 ): { success: true; data: CatalogImportManifest } | { success: false; reason: string } {
   const rowsRaw = input.expectedRows
   const checksumRaw = input.expectedChecksum
   const totalsRaw = input.expectedTotals
-  if (rowsRaw instanceof File || checksumRaw instanceof File || totalsRaw instanceof File) {
+  const syncModeRaw = input.syncMode
+  if (rowsRaw instanceof File || checksumRaw instanceof File || totalsRaw instanceof File || syncModeRaw instanceof File) {
     return { success: false, reason: "manifest_fields_must_be_text" }
   }
 
-  const result: CatalogImportManifest = {}
+  if (syncModeRaw != null && syncModeRaw !== "" && syncModeRaw !== "delta" && syncModeRaw !== "full") {
+    return { success: false, reason: "sync_mode_invalid" }
+  }
+  const result: CatalogImportManifest = { syncMode: syncModeRaw === "full" ? "full" : "delta" }
   if (rowsRaw != null && rowsRaw !== "") {
     if (!/^\d+$/.test(rowsRaw)) return { success: false, reason: "expected_rows_invalid" }
     const expectedRows = Number(rowsRaw)
@@ -65,6 +81,12 @@ export function parseCatalogImportManifest(
       return { success: false, reason: "expected_totals_not_applicable" }
     }
     result.expectedTotals = parsed.data as Record<string, string>
+  }
+  if (result.syncMode === "full") {
+    if (entityType !== "products") return { success: false, reason: "full_sync_entity_not_supported" }
+    if (result.expectedRows == null || result.expectedChecksum == null) {
+      return { success: false, reason: "full_sync_manifest_required" }
+    }
   }
   return { success: true, data: result }
 }

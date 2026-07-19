@@ -137,6 +137,7 @@ export type DestructiveFullSyncApprovalPayload = {
   organizationId: string
   entityType: "products"
   sourceChecksum: string
+  currentActiveChecksum: string
   currentActiveRows: number
   incomingActiveRows: number
   issuedAt: string
@@ -161,6 +162,7 @@ function validApprovalPayload(payload: unknown): payload is DestructiveFullSyncA
   const exactKeys = [
     "action",
     "changeId",
+    "currentActiveChecksum",
     "currentActiveRows",
     "entityType",
     "expiresAt",
@@ -181,6 +183,7 @@ function validApprovalPayload(payload: unknown): payload is DestructiveFullSyncA
   if (value.requesterApprovalId === value.reviewerApprovalId) return false
   if (typeof value.organizationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.organizationId)) return false
   if (typeof value.sourceChecksum !== "string" || !/^[0-9a-f]{64}$/.test(value.sourceChecksum)) return false
+  if (typeof value.currentActiveChecksum !== "string" || !/^[0-9a-f]{64}$/.test(value.currentActiveChecksum)) return false
   if (!Number.isSafeInteger(value.currentActiveRows) || Number(value.currentActiveRows) < 0) return false
   if (!Number.isSafeInteger(value.incomingActiveRows) || Number(value.incomingActiveRows) < 0) return false
   if (typeof value.issuedAt !== "string" || typeof value.expiresAt !== "string") return false
@@ -203,6 +206,7 @@ function canonicalApprovalPayload(payload: DestructiveFullSyncApprovalPayload): 
     organizationId: payload.organizationId,
     entityType: payload.entityType,
     sourceChecksum: payload.sourceChecksum,
+    currentActiveChecksum: payload.currentActiveChecksum,
     currentActiveRows: payload.currentActiveRows,
     incomingActiveRows: payload.incomingActiveRows,
     issuedAt: payload.issuedAt,
@@ -221,7 +225,7 @@ export function signDestructiveFullSyncApproval(
   return `${encoded}.${signature}`
 }
 
-function verifyDestructiveFullSyncApproval(
+export function verifyDestructiveFullSyncApproval(
   token: string,
   secret: string,
 ): DestructiveFullSyncApprovalPayload | null {
@@ -251,6 +255,7 @@ export function guardDestructiveFullSync(input: {
   organizationId: string
   entityType: "products"
   sourceChecksum: string
+  currentActiveChecksum: string
   currentActiveRows: number
   incomingActiveRows: number
   approvalToken?: string
@@ -265,6 +270,7 @@ export function guardDestructiveFullSync(input: {
     !/^[A-Za-z0-9_-]{1,128}$/.test(input.organizationId) ||
     input.entityType !== "products" ||
     !/^[0-9a-f]{64}$/.test(input.sourceChecksum) ||
+    !/^[0-9a-f]{64}$/.test(input.currentActiveChecksum) ||
     !Number.isSafeInteger(current) || current < 0 ||
     !Number.isSafeInteger(incoming) || incoming < 0 ||
     !Number.isFinite(maxDropRatio) || maxDropRatio < 0 || maxDropRatio > 1
@@ -294,6 +300,7 @@ export function guardDestructiveFullSync(input: {
     approval.organizationId !== input.organizationId ||
     approval.entityType !== input.entityType ||
     approval.sourceChecksum !== input.sourceChecksum ||
+    approval.currentActiveChecksum !== input.currentActiveChecksum ||
     approval.currentActiveRows !== current ||
     approval.incomingActiveRows !== incoming
   ) {
