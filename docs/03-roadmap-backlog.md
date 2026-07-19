@@ -697,8 +697,9 @@ web-раздел синхронизированных заказов без из
 
 - [ ] Разделить demo и client production: `seed-demo` не запускается в
   клиентском deploy-профиле, demo tenant не является зависимостью приложения.
-  `[реализовано/проверено статически 2026-07-18: DEPLOY_MODE=client по умолчанию,
-  seed только при явном demo. BLOCKED — production deploy access/release owner]`
+  `[реализовано/проверено статически 2026-07-19: production workflow вообще не
+  содержит seed-demo; demo остаётся отдельным Compose tool/profile и не является
+  зависимостью runtime. BLOCKED — production rollout/release owner evidence]`
 - [ ] Ночной backup PostgreSQL и external S3 во внешнее хранилище: шифрование,
   ротация минимум 14 дней и алерт на пропуск.
   `[реализовано/локально проверено 2026-07-18: pg_dump + media mirror + encrypted
@@ -718,9 +719,16 @@ web-раздел синхронизированных заказов без из
   hardening build ещё не развёрнут и production readiness сейчас FAIL]`
 - [ ] Runbook: pre-migration backup, deploy, migrate, smoke, rollback/forward-fix
   схемы и disaster recovery.
-  `[реализовано/локально проверено 2026-07-18: operations runbook,
-  production-safe migrate deploy, rollback/forward-fix и DR; production
-  release/rollback BLOCKED — release access/window/owner]`
+  `[реализовано/локально проверено 2026-07-19: production job fail-closed без
+  explicit repository enable + protected environment; pinned known_hosts,
+  non-root SSH, GitHub+host deploy lock и root-owned wrapper исключают root
+  SSH/sudo bash/git pull и параллельный release.
+  Mode-0600 non-symlink receipt привязан к exact SHA, approval, свежему restore
+  drill, backup snapshot и rollback owner; fresh backup+verify выполняются до
+  exact-SHA checkout/migration. Пять negative receipt cases и статические
+  workflow ordering/forbidden-behavior invariants PASS. Runbook покрывает
+  rollback/forward-fix и DR; production release/rollback BLOCKED — explicit
+  `ДА`, protected environment/access/window/owners и real backup/restore receipt]`
 - [ ] Проверять миграции на обезличенной production-подобной БД.
   `[реализовано/локально проверено 2026-07-18: изолированный PostgreSQL 16,
   restore local demo копии и migrate deploy, 23 migrations; свежий обезличенный

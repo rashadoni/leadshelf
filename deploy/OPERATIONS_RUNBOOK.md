@@ -14,10 +14,15 @@
 
 ## До релиза
 
-1. CI для точного commit SHA зелёный; артефакт образа неизменяем и помечен SHA.
+1. CI для точного commit SHA зелёный; protected GitHub Environment имеет
+   required release reviewer, а `PRODUCTION_DEPLOY_ENABLED=true` установлен
+   только после явного решения `ДА` на этот release window.
 2. Нет незакрытого P0-инцидента, backup/verify timers зелёные.
-3. Выполнить `backup-production.sh`; записать snapshot ID.
-4. Выполнить `verify-production-backup.sh`; при любой ошибке релиз запрещён.
+3. Создать root:root 0600 `release-evidence/production.env` по шаблону с exact
+   SHA, approval/restore drill/backup IDs, UTC epoch и rollback owner. Проверить
+   `pnpm release-preflight:test`; stale/mismatched receipt запрещает релиз.
+4. Protected workflow сам выполняет `backup-production.sh`, затем
+   `verify-production-backup.sh` до migration; при любой ошибке релиз запрещён.
 5. Новые миграции прогнать через `rehearse-migrations.sh` на свежем
    обезличенном dump production-подобного объёма.
    Migration `20260719034000_case_insensitive_auth_principals` берёт table lock
@@ -29,17 +34,18 @@
 6. Проверить совместимость: текущий mobile protocol не получает 426 от нового
    сервера; предыдущий web image совместим с новой схемой.
 7. Зафиксировать release SHA, предыдущий image SHA, окно и release owner.
+   CI использует pinned `DEPLOY_KNOWN_HOSTS`, non-root SSH account и только
+   root-owned `/usr/local/sbin/leadshelf-deploy-approved-release`; `sudo bash`,
+   `git pull`, root SSH и dynamic `ssh-keyscan` запрещены. GitHub concurrency и
+   host `flock` не допускают параллельный CI/break-glass deploy.
 
 ## Deploy
 
+Обычный путь — protected CI job. Break-glass оператор с отдельным approval
+может вызвать только root-owned wrapper с exact approved SHA:
+
 ```bash
-cd /opt/leadshelf/prod/app
-export DEPLOY_MODE=client
-docker compose -f deploy/docker-compose.prod.yml pull
-docker compose -f deploy/docker-compose.prod.yml run --rm web \
-  pnpm --filter @leadshelf/db exec prisma migrate deploy
-docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
-docker compose -f deploy/docker-compose.prod.yml ps
+sudo /usr/local/sbin/leadshelf-deploy-approved-release <40-char-sha>
 ```
 
 Никогда не запускать `seed-demo` в client production. Не применять `down -v`.

@@ -63,6 +63,9 @@ jobs:
       - name: Validate Prometheus alert rules and firing fixtures
         run: pnpm alerts:check
 
+      - name: Validate fail-closed production release evidence gate
+        run: pnpm release-preflight:test
+
       - name: Typecheck
         run: pnpm -r typecheck
 
@@ -163,44 +166,56 @@ jobs:
 
   deploy:
     needs: [ci, security]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      vars.PRODUCTION_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
-    concurrency: deploy-prod
+    timeout-minutes: 120
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
-      - name: Deploy to leadshelf-1
+      - name: Validate protected release configuration
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
-          # Repository variable. Default is client-safe: demo data is never seeded.
-          DEPLOY_MODE: ${{ vars.DEPLOY_MODE || 'client' }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
         run: |
           set -euo pipefail
-          case "$DEPLOY_MODE" in
-            client|demo) ;;
-            *) echo "DEPLOY_MODE must be client or demo" >&2; exit 2 ;;
-          esac
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/deploy_key "root@$HOST" bash -s -- "$DEPLOY_MODE" <<'REMOTE'
-            set -euo pipefail
-            deploy_mode="$1"
-            cd /opt/leadshelf/prod/app
-            git pull --ff-only
-            cp deploy/docker-compose.prod.yml ../docker-compose.yml
-            cp deploy/Caddyfile ../Caddyfile
-            cd /opt/leadshelf/prod
-            docker compose build caddy postgres web migrate worker-import worker-notifications worker-proof-analysis vision
-            docker compose run --rm migrate
-            if [ "$deploy_mode" = "demo" ]; then
-              docker compose build seed-demo
-              docker compose run --rm seed-demo
-            fi
-            docker compose up -d web caddy worker-import worker-notifications worker-proof-analysis vision
-            docker image prune -f > /dev/null
-          REMOTE
-      - name: Smoke check
+          [ -n "$SSH_KEY" ] || { echo "DEPLOY_SSH_KEY is required" >&2; exit 2; }
+          [[ "$HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$ ]] || { echo "DEPLOY_HOST is invalid" >&2; exit 2; }
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo "DEPLOY_USER is invalid" >&2; exit 2; }
+          [ "$DEPLOY_USER" != "root" ] || { echo "root SSH deploy is forbidden" >&2; exit 2; }
+          [ -n "$DEPLOY_KNOWN_HOSTS" ] || { echo "DEPLOY_KNOWN_HOSTS is required" >&2; exit 2; }
+          [[ "$PRODUCTION_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]] || { echo "PRODUCTION_URL must be an HTTPS origin" >&2; exit 2; }
+
+      - name: Exact-SHA backup-gated production deploy
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key "$DEPLOY_USER@$HOST" \
+            sudo -n /usr/local/sbin/leadshelf-deploy-approved-release "$RELEASE_SHA"
+
+      - name: Read-only readiness smoke
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          set -euo pipefail
           sleep 8
-          curl -sf --max-time 20 https://hermescrm.xyz/api/ready
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_URL/api/ready"

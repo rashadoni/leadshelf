@@ -56,6 +56,13 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   и проверяет scheduled overdue/stock-gap/digest isolation; dynamic RBAC
   исполняет все 40 office mutations с запрещённой ролью и точным 403;
 - pinned GitHub Actions, full-history secret scan и four-image vulnerability gate;
+- production deploy больше не следует автоматически из push в main: job
+  требует explicit repository enable и protected environment, pinned known
+  hosts, non-root SSH и root-owned exact-SHA wrapper. Mode-0600 receipt
+  fail-closed связывает SHA с approval, backup/restore и rollback evidence;
+  wrapper выполняет новый backup+verify до migration и никогда не seed-ит demo.
+  Негативные receipt/workflow invariant tests PASS; реальная environment
+  protection и release execution остаются внешним gate;
 - non-root web/worker images без npm/corepack; custom current Caddy/PostgreSQL
   wrappers без High/Critical findings;
 - archived MinIO удалён из production; production требует maintained external

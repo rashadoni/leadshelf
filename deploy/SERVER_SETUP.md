@@ -98,21 +98,56 @@ policy делает `/api/ready` красным намеренно.
 
 ## Шаг 4. CI → сервер
 
-GitHub Actions (появится с web-скаффолдом):
+PR job выполняет migrations, lint, typecheck, tests, production build,
+cross-browser smoke, security scans, все alert fixtures и негативные тесты
+release gate. Production job по умолчанию **skipped** и не может запускаться
+только из-за push в `main`.
 
-1. PR: typecheck + prisma validate + vitest (+ тесты изоляции тенанта).
-2. push в main: build образа → push в ghcr.io → ssh на сервер →
-   `docker compose pull && docker compose up -d` → `prisma migrate deploy`.
+1. Создать GitHub Environment `production`: required reviewers, запрет
+   self-review, только protected `main`. Repository variable
+   `PRODUCTION_DEPLOY_ENABLED` отсутствует/`false` до точного письменного `ДА`;
+   environment/repository variable `PRODUCTION_URL` содержит только HTTPS
+   origin.
+2. Environment secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` и
+   `DEPLOY_KNOWN_HOSTS`. `DEPLOY_USER` — отдельный непривилегированный account;
+   known_hosts формируется после отдельной сверки host-key fingerprint, не
+   через `ssh-keyscan` внутри CI.
+3. Установить reviewed wrappers вне writable checkout:
 
-Секреты в GitHub: `SSH_HOST`, `SSH_KEY`, `DATABASE_URL`, `JWT_SECRET`,
-`S3_*`. На сервере — `.env` рядом с compose (не в git).
+```bash
+install -o root -g root -m 755 \
+  /opt/leadshelf/prod/app/deploy/scripts/verify-release-approval.sh \
+  /usr/local/sbin/leadshelf-verify-release-approval
+install -o root -g root -m 755 \
+  /opt/leadshelf/prod/app/deploy/scripts/deploy-approved-release.sh \
+  /usr/local/sbin/leadshelf-deploy-approved-release
+install -o root -g root -m 700 -d /opt/leadshelf/prod/release-evidence
+install -o root -g root -m 600 \
+  /opt/leadshelf/prod/app/deploy/.env.release-approval.example \
+  /opt/leadshelf/prod/release-evidence/production.env
+```
 
-Repository variable `DEPLOY_MODE` принимает только `client` или `demo`.
-Значение по умолчанию — `client`: миграции выполняются, но demo seed никогда
-не запускается. `demo` разрешён только для отдельного демонстрационного
-окружения. Переключение клиентского production в `demo` запрещено, потому что
-seed создаёт демонстрационные организации, пользователей и операционные
-данные.
+4. Разрешить deploy user только root-owned wrapper; сам wrapper принимает ровно
+   один 40-символьный SHA и повторно валидирует его:
+
+```text
+leadshelf-deploy ALL=(root) NOPASSWD: /usr/local/sbin/leadshelf-deploy-approved-release *
+```
+
+Файл установить как `/etc/sudoers.d/leadshelf-deploy` mode 0440 и проверить
+`visudo -cf`. Не разрешать `sudo bash`, произвольный `docker`, `git` или запись
+в `/opt/leadshelf/prod/app`.
+
+5. Для каждого SHA release owner создаёт новый root:root 0600 receipt с exact
+   SHA, approval ID, backup snapshot, successful isolated restore drill epoch/
+   ID и rollback owner. Restore evidence старше 31 дня, future timestamp,
+   symlink, неизвестное/дублированное поле или иной SHA fail-closed.
+
+После environment approval workflow проверяет pinned host key, вызывает только
+wrapper, создаёт свежий PostgreSQL+media backup и проверяет restic **до**
+checkout/migration, разворачивает exact approved SHA и делает read-only
+readiness smoke. Production workflow не содержит `seed-demo`; demo допускается
+только в отдельном не-production окружении.
 
 ## Шаг 4a. Vision / AI (photo-proof анализ)
 
