@@ -835,13 +835,20 @@ Definition of Done: двухнедельный прогон не теряет д
 
 - [ ] Retention/deletion фото, GPS и audit data; consent/legal basis.
   `[частично реализовано/проверено PostgreSQL integration 2026-07-18: policy
-  template и controlled tenant DB delete CLI с exact ID+slug confirmation,
-  двумя разными approvals, обязательными backup/media receipts, legal-hold
-  clearance, dry-run row/media inventory, FK-safe serializable transaction и
-  zero-residue check. Тест удалил только target tenant и сохранил neighbor;
-  DB suite 72/72 PASS, fixtures residue=0. BLOCKED — сроки/legal basis,
-  автоматический policy purge и фактическое удаление external S3/backups
-  требуют client privacy/legal/business и infrastructure owners]`
+  template, controlled tenant delete и новый guarded retention CLI: explicit
+  UTC as-of + media/GPS/audit days без developer defaults, dry-run row/media
+  inventory originals/thumbnails/video frames, SHA-256 manifest drift guard,
+  fail-closed GoldenReference protection, exact confirmation, два разных
+  approvals, backup/media receipts, legal-hold clearance, tenant advisory lock
+  и serializable transaction. Просроченные DB media/AgentLocation/audit
+  удаляются; Visit coordinates и GPS в EXIF/geofence/visit-alert JSON
+  редактируются рекурсивно; новый минимальный audit event фиксирует
+  policy/counts/digest и external evidence IDs. Изолированная схема: 30/30
+  migrations, DB suite
+  81/81 PASS; target expired data удалены, recent и neighbor сохранены,
+  fixtures residue=0. BLOCKED — сроки/legal basis, scheduler и фактическое
+  удаление external S3/backups требуют client privacy/legal/business и
+  infrastructure owners]`
 - [ ] Face blur до персистентности либо согласованный режим без покупателей.
   `[не реализовано: runbook требует организационно исключать покупателей до
   появления проверенного pre-persistence blur либо письменного legal режима;

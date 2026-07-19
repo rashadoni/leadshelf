@@ -42,10 +42,53 @@ Face blur до persistence сейчас не реализован. До утве
 orders, imports/source files, sync conflicts, audit/security logs, backups и
 support artifacts.
 
-До появления автоматического tenant-safe purge сроки исполняются
-контролируемой операцией с dry-run inventory, backup, dual approval, scoped
-delete, повторным inventory и restore/tenant-isolation evidence. Массовое
-удаление через ad-hoc SQL/S3 команды запрещено.
+Tenant-safe purge запускается только с утверждёнными сроками и неизменяемым
+UTC cutoff. Сначала получить inventory (команда не изменяет данные):
+
+```bash
+pnpm --filter @leadshelf/db retention -- preview \
+  --organization-id ORG_ID --slug TENANT_SLUG \
+  --as-of 2026-07-18T12:00:00.000Z \
+  --media-days APPROVED_MEDIA_DAYS \
+  --gps-days APPROVED_GPS_DAYS \
+  --audit-days APPROVED_AUDIT_DAYS
+```
+
+Preview возвращает deletion manifest originals/thumbnails/persisted video
+frames, число media rows, заблокированных GoldenReference, и SHA-256 digest.
+При `goldenReferenceBlockedRows > 0` execute fail-closed: сначала нужна
+отдельная approved reference lifecycle policy; deletion manifest будет пуст,
+потому что удалять общий object key нельзя.
+После
+проверенного backup, удаления именно этого media manifest и проверки legal
+hold разрешён execute:
+
+```bash
+pnpm --filter @leadshelf/db retention -- execute \
+  --organization-id ORG_ID --slug TENANT_SLUG \
+  --as-of 2026-07-18T12:00:00.000Z \
+  --media-days APPROVED_MEDIA_DAYS \
+  --gps-days APPROVED_GPS_DAYS \
+  --audit-days APPROVED_AUDIT_DAYS \
+  --media-manifest-digest SHA256_FROM_PREVIEW \
+  --confirm "PURGE TENANT_SLUG ORG_ID 2026-07-18T12:00:00.000Z SHA256_FROM_PREVIEW" \
+  --approval PRIVACY_APPROVAL_ID --approval INFRA_APPROVAL_ID \
+  --backup-receipt VERIFIED_BACKUP_ID \
+  --media-deletion-receipt VERIFIED_MEDIA_DELETE_ID \
+  --legal-hold-cleared
+```
+
+CLI повторно строит inventory под tenant advisory lock и serializable
+transaction, отклоняет изменившийся manifest/GoldenReference, удаляет
+просроченные DB media
+rows/AgentLocation/audit, обнуляет Visit coordinates и рекурсивно удаляет GPS
+из EXIF, geofence anomaly и visit-alert JSON. Neighbor tenant не затрагивается.
+После purge в той же транзакции создаётся минимальный `retention.execute`
+audit event с policy/counts/digest и ID внешних approvals/receipts, без media
+content или координат.
+External S3/backups CLI намеренно не удаляет. Массовое удаление через ad-hoc
+SQL/S3 команды запрещено. Периодический scheduler включается только после
+утверждения сроков, legal basis, owner и external media orchestration.
 
 ## Проверки релиза
 
@@ -67,8 +110,9 @@ delete, повторным inventory и restore/tenant-isolation evidence. Ма�
   cross-tenant и denied-role matrix уже проходит;
 - app-level encryption мобильной SQLite/media и physical-device проверка;
   remote revocation wipe реализован и покрыт unit;
-- policy-driven retention purge и проверенный DSAR export; controlled tenant
-  DB delete с dry-run/dual approval/zero-residue уже реализован;
+- утверждённые retention сроки/legal basis, external media orchestration,
+  scheduler и проверенный DSAR export; guarded policy purge и controlled
+  tenant delete уже реализованы;
 - face blur before persistence либо юридически принятый режим;
 - production container/secret scan и runtime secret-rotation evidence.
 

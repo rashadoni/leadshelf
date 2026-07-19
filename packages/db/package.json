@@ -10,6 +10,7 @@
     "migrate": "prisma migrate dev",
     "seed:demo": "tsx prisma/seed-demo.ts",
     "tenant:offboarding": "tsx prisma/tenant-offboarding.ts",
+    "retention": "tsx prisma/retention.ts",
     "publish:capacity": "tsx prisma/publish-capacity.ts",
     "publish:concurrency-capacity": "tsx prisma/publish-concurrency-capacity.ts",
     "typecheck": "tsc --noEmit",

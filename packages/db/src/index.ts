@@ -15,6 +15,15 @@ export {
   type DeleteTenantDataInput,
   type DeleteTenantDataResult,
 } from "./tenant-offboarding.ts"
+export {
+  previewRetention,
+  executeRetention,
+  redactLocationData,
+  type RetentionPolicyInput,
+  type RetentionPreview,
+  type ExecuteRetentionInput,
+  type RetentionResult,
+} from "./retention.ts"
 export { listImportErrorsForBatch } from "./repos/import.ts"
 export {
   consumeDurableRateLimit,
