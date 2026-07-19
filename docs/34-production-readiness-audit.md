@@ -19,7 +19,7 @@ evidence. Отсутствующее внешнее доказательство
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS current feature SHA | PR #19 draft; exact feature SHA `5464afc950cc828a1defaddf737c9b22cb8966aa`, run 29679507492: 632-test `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED |
+| Remote CI | PASS current feature SHA | PR #19 draft; exact feature SHA `cb746b1800333c2d5db82c03432990d9ba948662`, run 29681097318: exact-snapshot backup/restore contract, 632-test `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local contract; production blocked | exact receipt snapshot/host/tag/freshness, checksum-protected migration/media inventory and isolated restore (including empty bucket) PASS with fake restic/docker plus negative mismatch/receipt cases; prior encrypted local restore: 23 migrations, media=1/26 bytes; real external repository drill pending |
@@ -283,7 +283,7 @@ production-like load/soak и infrastructure/mobile/privacy/pilot evidence.
 `deploy/PILOT_GA_RUNBOOK.md`.
 
 Интегрированная инженерная база ветки `codex/production-readiness` на exact
-feature SHA `a257fa3f1e91150d3c9d60055855bafdc5dcbb2b` прошла draft PR #19: remote
+feature SHA `cb746b1800333c2d5db82c03432990d9ba948662` прошла draft PR #19: remote
 `ci` и secret/four-image vulnerability gate завершились SUCCESS, production
 deploy закономерно SKIPPED для pull request. Полный минимально-привилегированный
 handoff по отсутствующим placeholders: `deploy/EXTERNAL_READINESS_HANDOFF.md`.
