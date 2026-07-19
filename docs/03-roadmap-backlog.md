@@ -805,7 +805,7 @@ Definition of Done: двухнедельный прогон не теряет д
   Все четыре `AUTH_LOCKOUT_*`, включая secret-manager pepper, задаются только
   вместе без developer defaults; `/api/ready` fail-closed, если approved policy
   отсутствует. Проверка: clean 32-migration PostgreSQL, DB profile 6/6, web auth
-  10/10, full suite 605/605 и tenant-qualified browser smoke 15/15 PASS.
+  10/10, full suite 608/608 и tenant-qualified browser smoke 15/15 PASS.
   `[BLOCKED — business/production evidence]`: нужны утверждённые threshold,
   window, duration, named support/security owners и approval policy, audit
   production collision preflight/rollout и реальный controlled unlock drill]`
@@ -833,7 +833,10 @@ Definition of Done: двухнедельный прогон не теряет д
   staged rotation и smoke/revoke для JWT/DB/S3/vision/deploy/backup/metrics;
   demo seeder 2026-07-19 больше не печатает пароль, PIN, email/display names
   или raw error в stdout/stderr: только allowlisted structured readiness/error
-  metadata, credential-leak regression 2/2 PASS;
+  metadata, credential-leak regression 2/2 PASS. Sentry boundary для
+  web/workers/mobile больше не сериализует raw error message, stack или
+  произвольный context: наружу уходят только тип ошибки, факт stack и
+  allowlisted bounded operational metadata; PII/secret regression PASS;
   BLOCKED — production secret-manager access/owners и фактическая ротация]`
 - [ ] Security headers, CORS/CSRF policy, dependency/container scanning.
   `[реализовано/локально проверено 2026-07-18: CSP/anti-frame/nosniff,
@@ -851,7 +854,7 @@ Definition of Done: двухнедельный прогон не теряет д
   `x-powered-by: Next.js`; это старый runtime, а не опровержение локального
   config test, и отдельная причина сохранять NO-GO до rollout]`
 - [ ] Шифрование mobile-данных/медиа at rest и очистка при logout/revocation.
-  `[частично реализовано/проверено mobile 173/173 + typecheck и Expo native
+  `[частично реализовано/проверено mobile 175/175 + typecheck и Expo native
   config introspection 2026-07-19: SQLite переведена на SQLCipher 4 через
   expo-sqlite native plugin для Android/iOS; 256-bit ключ создаётся через
   CSPRNG и хранится device-only в SecureStore. При существующей encrypted DB
@@ -910,8 +913,15 @@ Definition of Done: нет открытых critical/high; доказано, ч�
 ### Phase 17 — P1: observability и эксплуатация
 
 - [ ] Error/crash reporting для web, workers и native mobile.
-  `[реализовано в коде/проверено unit 2026-07-18: Sentry-compatible handlers
-  gated by DSN. BLOCKED — production DSN/projects/owner и real test event]`
+  `[реализовано в коде/проверено 2026-07-19: Sentry-compatible handlers gated
+  by DSN. External telemetry boundary fail-closed: raw exception message,
+  stack, arbitrary/nested context, email/PIN/token и unsafe metadata не
+  сериализуются; сохраняются только safe error type, has-stack marker и
+  bounded allowlisted source/component/isFatal/correlation operational fields.
+  HTTP reject ingest теперь возвращает delivery=false. Негативные core/mobile
+  tests PASS; clean 32-migration full suite 608/608, typecheck, lint и
+  production build PASS. BLOCKED — production DSN/projects/owner и проверенный
+  real test event с retention/access policy]`
 
 - [ ] Структурные логи с correlationId/organizationId/deviceId/taskId/opId без
   токенов, PIN и персональных данных.

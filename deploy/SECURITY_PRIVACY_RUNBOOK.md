@@ -247,15 +247,21 @@ GPS, фото metadata, sync payloads и authored/agent commercial records ос�
 5. Клиентские bundles/artifacts проверены на отсутствие server secrets.
 6. Логи и support errors не содержат token/PIN/email/IP/media payload;
    correlation ID безопасен и доступен в API response header.
+   Sentry не является исключением: отправлять raw exception message/stack и
+   arbitrary context запрещено. Текущий reporter экспортирует только safe
+   error type, `has_stack` и bounded allowlisted operational fields. Проверка
+   test event включает поиск seeded canary email/PIN/token/path в Sentry UI и
+   export API; любое совпадение блокирует rollout и требует удаления event.
 7. Mobile SQLite/media/logout/revoke/key-loss policy проверена signed build на
    реальных Android/iOS устройствах; Expo Go не принимается как evidence.
 
 ## Незакрытые гейты
 
 - account-wide durable lockout machinery, HMAC principal/pepper, atomic concurrency,
-  generic response, success reset, timed unlock и readiness gate реализованы;
-  production threshold/window/duration и controlled manual support unlock
-  требуют business/support решения;
+  generic response, success reset, timed unlock, readiness gate и
+  disabled-by-default controlled manual support unlock реализованы; production
+  threshold/window/duration, named support/security owners, dual-approval
+  policy и реальный controlled drill требуют business/support решения;
 - независимый pentest deployed environment; локальная API/job/export/media
   cross-tenant и denied-role matrix уже проходит;
 - SQLCipher для mobile operational SQLite и AES-256-GCM для durable offline
