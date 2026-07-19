@@ -55,6 +55,7 @@ export default defineConfig({
         timeout: 120_000,
         env: {
           JWT_SECRET: process.env.JWT_SECRET ?? "local-e2e-only-not-a-secret",
+          LEADSHELF_RUNTIME_PROFILE: process.env.LEADSHELF_RUNTIME_PROFILE ?? "client",
           ALLOWED_WEB_ORIGINS: process.env.ALLOWED_WEB_ORIGINS ?? baseURL,
           LEADSHELF_E2E_HTTP_ORIGIN: baseURL === "http://localhost:3100" ? baseURL : "",
         },

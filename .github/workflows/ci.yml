@@ -32,6 +32,7 @@ jobs:
       AUTH_LOCKOUT_WINDOW_SECONDS: "900"
       AUTH_LOCKOUT_DURATION_SECONDS: "1800"
       AUTH_LOCKOUT_PEPPER: "ci-only-lockout-pepper-not-a-secret"
+      LEADSHELF_RUNTIME_PROFILE: "client"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

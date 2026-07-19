@@ -13,13 +13,13 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local; prior remote PASS | current 33/33 на чистой изолированной PostgreSQL 16; remotely validated feature SHA имел 30/30 |
-| Unit/integration | PASS local; prior remote PASS | current clean 33-migration schema 626/626: core 106, mobile 175, DB 92, vision 43, worker 68, web 142; remotely validated feature SHA — 582/582 |
+| Unit/integration | PASS local; prior remote PASS | current clean 33-migration schema 632/632: core 106, mobile 175, DB 92, vision 43, worker 68, web 148; prior exact-SHA remote suite PASS |
 | Production build | PASS | Next.js 15.5.20 standalone build |
-| Browser smoke | PASS | prior full 21/21; current tenant-qualified login regression 15/15 Chromium, Firefox, WebKit at 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
+| Browser smoke | PASS | prior full 21/21; current explicit client-profile 15/15 Chromium, Firefox, WebKit at 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA; server output contains no raw S3 provider error |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS current | PR #19 draft; exact SHA `94157a8da5e2ab5b6b816eeaf9d81a2aab20997e`, run 29678106913: 626-test `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED. Предыдущий run 29677810199 поймал stale login tab-order test после добавления tenant field; узкое test-contract исправление прошло локально и в текущем run |
+| Remote CI | PASS prior branch HEAD; current push pending | PR #19 draft; exact SHA `4d7b7ee`, run 29678346550: `ci`, migrations/lint/typecheck/build/readiness, 15/15 Chromium/Firefox/WebKit responsive+accessibility smoke, full-history secret scan и web/worker/Caddy/PostgreSQL High/Critical image gates SUCCESS; deploy SKIPPED. Текущая client-runtime boundary до push подтверждена локально и не заявляется remote-validated |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
@@ -44,6 +44,15 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
 
 ## Реализовано в этой production-readiness итерации
 
+- explicit `client|demo` runtime boundary: production Compose hard-pin-ит
+  `client`, readiness fail-closed при отсутствующем/неизвестном профиле;
+  authenticated client shell не зависит от demo readiness/data, RU/AZ copy не
+  содержит demo-заглушек, а synthetic demo media доступны только в explicit
+  tenant-scoped demo profile. Client media storage failure превращается в
+  bounded 503 + Retry-After без raw provider error/credential/key leakage;
+  architecture/release/privacy regressions, full suite 632/632 и explicit
+  client-profile browser smoke 15/15 PASS. Реальный production rollout и S3
+  evidence отсутствуют;
 - durable PostgreSQL-backed atomic rate limiting для login/sync/upload/import
   и внешнего OpenAI/Gemini proof budget; AI over-limit до media/AI call уходит
   в persisted human-review fallback;

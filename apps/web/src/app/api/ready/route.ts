@@ -3,12 +3,14 @@ import { authDb } from "@/server/db/client"
 import { checkReadiness } from "@/server/health/readiness"
 import { checkObjectStorage } from "@/server/storage/s3"
 import { configuredAuthLockoutPolicy } from "@/server/security/auth-lockout"
+import { runtimeProfile } from "@/server/runtime-profile"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   const readiness = await checkReadiness({
     configuration: async () => {
+      runtimeProfile()
       if (!configuredAuthLockoutPolicy()) throw new Error("authentication lockout policy is not configured")
     },
     database: async () => {

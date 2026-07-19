@@ -3,7 +3,6 @@
     "appName": "LeadShelf",
     "loading": "Yüklənir...",
     "workspace": "Rəf əməliyyat konturu",
-    "demoTenant": "Demo tenant hazırdır",
     "details": "Detallar",
     "mainNavigation": "Əsas naviqasiya",
     "moreNavigation": "Əlavə bölmələr",
@@ -116,7 +115,7 @@
     }
   },
   "dashboard": {
-    "title": "Demo hazırlıq paneli",
+    "title": "Əməliyyat paneli",
     "subtitle": "LeadShelf əməliyyat icmalı: kataloq, avadanlıq, zal planı, yayımlanmış planoqram, mağaza tapşırığı və foto yoxlama bir axına bağlanmalıdır.",
     "hero": {
       "planogram": "Son yayımlanmış planoqram",
@@ -135,20 +134,20 @@
       "pendingReviews": "yoxlama gözləyir: {value}"
     },
     "flow": {
-      "title": "Demo axını",
-      "hint": "Nümayiş zamanı izlənməli əsas ardıcıllıq.",
+      "title": "Rəf icrası prosesi",
+      "hint": "Hazırlıq, dərc və icra yoxlamasının ardıcıllığı.",
       "catalog": "Məhsul kataloqu",
       "equipment": "Avadanlıq kitabxanası",
       "floorPlan": "Zal planı",
       "planogram": "Yayımlanmış planoqram",
       "task": "Mağaza tapşırığı",
       "review": "Foto yoxlama",
-      "ready": "Göstərmək üçün data var",
+      "ready": "Mərhələ data ilə təmin olunub",
       "needsData": "Doldurmaq lazımdır"
     },
     "quality": {
-      "title": "Nümayişdən əvvəl yoxlanacaq",
-      "hint": "Demo tenant üçün ən görünən risklər.",
+      "title": "Data keyfiyyətinə nəzarət",
+      "hint": "Dərc və icra yoxlamasına təsir edən boşluqlar.",
       "missingDimensions": "Ölçüsüz məhsullar",
       "missingImages": "Şəkilsiz məhsullar",
       "pendingReviews": "Əl ilə yoxlamada olan fotolar"
@@ -383,7 +382,7 @@
       "referenceCanvasHint": "Foto rəfin faktiki görünüşünü göstərir; foto üzərindəki punktir konturlar SKU ilə bağlı yoxlama zonalarıdır.",
       "referenceZoneLabel": "{sku} zonası",
       "referenceLegendPhotoTitle": "Foto",
-      "referenceLegendPhotoBody": "Şəklin içindəki rəngli bloklar fotonun və ya demo qablaşdırmanın özüdür.",
+      "referenceLegendPhotoBody": "Şəklin içindəki rəngli bloklar fotonun və ya məhsul qablaşdırmasının özüdür.",
       "referenceLegendZoneTitle": "Punktir zona",
       "referenceLegendZoneBody": "Bu, SKU yoxlama sahəsidir; onu hərəkət etdirmək və ölçüsünü dəyişmək olar.",
       "referenceLegendListTitle": "Sağdakı siyahı",
@@ -1311,7 +1310,7 @@
     "proofSubmitted": "Foto göndərilib",
     "officeSnapshot": {
       "title": "Ofis icranı görür",
-      "subtitle": "Demo zənciri: yayımlanmış planoqram → telefonda tapşırıq → check-in → foto → review.",
+      "subtitle": "İcra zənciri: yayımlanmış planoqram → telefonda tapşırıq → check-in → foto → review.",
       "agent": "Agent",
       "timing": "Check-in",
       "checkout": "Check-out: {value}",

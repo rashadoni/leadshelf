@@ -153,6 +153,12 @@ checkout/migration, разворачивает exact approved SHA и делае�
 readiness smoke. Production workflow не содержит `seed-demo`; demo допускается
 только в отдельном не-production окружении.
 
+Production Compose жёстко задаёт `LEADSHELF_RUNTIME_PROFILE=client`: основной
+layout не выполняет demo-readiness queries, client UI не показывает demo copy,
+а synthetic demo media недоступны. Значение `demo` допустимо только в отдельном
+non-client окружении и не должно попадать в `.env.production` как способ обойти
+этот boundary. `/api/ready` fail-closed при отсутствующем/неизвестном profile.
+
 ## Шаг 4a. Vision / AI (photo-proof анализ)
 
 Security/operations variables in `.env.production`:

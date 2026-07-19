@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { getObject } from "@/server/storage/s3"
+import { demoMediaFallbackAllowed, runtimeProfile } from "@/server/runtime-profile"
+import { safeMediaRead } from "@/server/storage/media-read"
 
 export const runtime = "nodejs"
 
@@ -26,7 +28,8 @@ export async function GET(
     return NextResponse.json({ error: "forbidden" }, { status: 403 })
   }
 
-  if (key.startsWith(`products/${session.org}/`) && key.endsWith("/demo-pack.svg")) {
+  const demoFallback = demoMediaFallbackAllowed(runtimeProfile(), key, session.org)
+  if (demoFallback && key.startsWith(`products/${session.org}/`)) {
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640" role="img" aria-label="Demo product package">
   <rect width="640" height="640" fill="#f5f5f4"/>
@@ -47,7 +50,7 @@ export async function GET(
     })
   }
 
-  if (key.startsWith(`photos/${session.org}/`) && key.endsWith("/demo-proof-001.svg")) {
+  if (demoFallback && key.startsWith(`photos/${session.org}/`)) {
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="960" viewBox="0 0 1280 960" role="img" aria-label="Demo shelf photo proof">
   <rect width="1280" height="960" fill="#f5f5f4"/>
@@ -87,8 +90,15 @@ export async function GET(
     })
   }
 
-  const object = await getObject(key)
-  if (!object) return NextResponse.json({ error: "not_found" }, { status: 404 })
+  const media = await safeMediaRead(key, getObject)
+  if (media.status === "missing") return NextResponse.json({ error: "not_found" }, { status: 404 })
+  if (media.status === "unavailable") {
+    return NextResponse.json(
+      { error: "storage_unavailable" },
+      { status: 503, headers: { "Retry-After": "5", "Cache-Control": "no-store" } },
+    )
+  }
+  const object = media.object
 
   return new NextResponse(object.body, {
     headers: {

@@ -60,6 +60,7 @@ ln -s "$receipt" "$fixture_root/release-link.env"
 expect_failure "symlink receipt" run_verifier "$release_sha" "$fixture_root/release-link.env"
 
 workflow="$repo_root/.github/workflows/ci.yml"
+production_compose="$repo_root/deploy/docker-compose.prod.yml"
 deploy_job="$fixture_root/deploy-job.yml"
 deploy_wrapper="$repo_root/deploy/scripts/deploy-approved-release.sh"
 awk '/^  deploy:/{found=1} found' "$workflow" > "$deploy_job"
@@ -90,6 +91,16 @@ forbid_workflow_text 'ssh-keyscan'
 forbid_workflow_text 'root@$HOST'
 forbid_workflow_text 'seed-demo'
 forbid_workflow_text 'sudo -n /bin/bash'
+
+grep -Fq -- 'LEADSHELF_RUNTIME_PROFILE: client' "$production_compose" || {
+  echo "[release-preflight-test] production compose must pin client runtime profile" >&2
+  exit 1
+}
+seed_profile="$(awk '/^  seed-demo:/{found=1} found && /profiles:/{print; exit}' "$production_compose")"
+grep -Fq -- 'profiles: ["tools"]' <<<"$seed_profile" || {
+  echo "[release-preflight-test] demo seed must remain an explicit tool profile" >&2
+  exit 1
+}
 
 for text in \
   'LEADSHELF_RELEASE_SHA="$release_sha" "$release_verifier"' \

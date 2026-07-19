@@ -51,6 +51,9 @@ sudo /usr/local/sbin/leadshelf-deploy-approved-release <40-char-sha>
 ```
 
 Никогда не запускать `seed-demo` в client production. Не применять `down -v`.
+Client production всегда запускается с `LEADSHELF_RUNTIME_PROFILE=client`,
+закреплённым Compose поверх env-file. `demo` разрешён только отдельному
+non-client окружению; отсутствие/неизвестное значение делает readiness красным.
 Миграции должны быть backward-compatible: expand -> deploy -> contract в
 отдельном последующем релизе.
 

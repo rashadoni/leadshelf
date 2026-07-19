@@ -697,9 +697,18 @@ web-раздел синхронизированных заказов без из
 
 - [ ] Разделить demo и client production: `seed-demo` не запускается в
   клиентском deploy-профиле, demo tenant не является зависимостью приложения.
-  `[реализовано/проверено статически 2026-07-19: production workflow вообще не
-  содержит seed-demo; demo остаётся отдельным Compose tool/profile и не является
-  зависимостью runtime. BLOCKED — production rollout/release owner evidence]`
+  `[реализовано/проверено 2026-07-19: production Compose жёстко фиксирует
+  explicit client runtime profile, а отсутствующее/неизвестное production
+  значение fail-closed отражается в readiness. Authenticated layout больше не
+  выполняет demo-specific DB probes и не показывает demo banner; RU/AZ client
+  copy не содержит demo-заглушек. Synthetic demo-pack/proof media разрешены
+  только в explicit demo profile и только для exact tenant key; client profile
+  при недоступном object storage возвращает privacy-safe 503 + Retry-After без
+  raw provider error, bucket/key или credential material. Production workflow
+  не содержит seed-demo; seed остаётся отдельным Compose tool/profile.
+  Architecture/release invariants, full suite 632/632 и client-profile
+  Playwright 15/15 Chromium+Firefox+WebKit PASS. BLOCKED — production
+  rollout/release owner evidence]`
 - [ ] Ночной backup PostgreSQL и external S3 во внешнее хранилище: шифрование,
   ротация минимум 14 дней и алерт на пропуск.
   `[реализовано/локально проверено 2026-07-18: pg_dump + media mirror + encrypted
@@ -1181,13 +1190,17 @@ P95/P99 и error rate соответствуют SLO на soak test.
   deploy/PILOT_GA_RUNBOOK.md. BLOCKED — named client users и training window]`
 - [ ] Web QA: Chromium/WebKit/Firefox, desktop/tablet, accessibility keyboard/
   focus/contrast и полная проверка RU/AZ локализации без demo-заглушек.
-  `[частично реализовано/проверено Playwright 2026-07-18: exact-SHA remote CI
+  `[частично реализовано/проверено Playwright 2026-07-19: exact-SHA remote CI
   production standalone, 15/15 Chromium+Firefox+WebKit tests; responsive 390/768/1440,
   RU/AZ lang/accessible names/Tab/focus, безопасная support-error выдача и
   axe WCAG 2 A/AA + 2.1 A/AA audit login/catalog/tasks/analytics без rule
   exclusions. Audit выявил и исправил constrained zoom, 5 unnamed selects,
-  nested interactive и 12 keyboard-inaccessible scroll regions. Ручной full
-  copy audit и прогон без demo fixture BLOCKED — client data/copy owner]`
+  nested interactive и 12 keyboard-inaccessible scroll regions. Client runtime
+  больше не выполняет demo readiness probes, не показывает demo banner и не
+  подменяет отсутствующие media synthetic SVG; статический RU/AZ invariant
+  запрещает demo-copy. Client-profile 15/15 во всех трёх браузках PASS без raw
+  storage error в server output. Ручной full copy audit на реальных client data
+  BLOCKED — client data/copy owner]`
 - [ ] Onboarding/offboarding tenant, экспорт/удаление данных, support SLA,
   каналы эскалации и ответственные за ERP, mobile release и инфраструктуру.
   `[процессы реализованы в pilot/security runbooks: onboarding/offboarding,

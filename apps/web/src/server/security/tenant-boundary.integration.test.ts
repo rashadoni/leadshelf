@@ -89,8 +89,13 @@ describe("tenant API boundary integration", () => {
       { params: Promise.resolve({ path: foreignPath }) },
     )
     const ownPath = ["products", organizationB, "demo-pack.svg"]
+    const previousProfile = process.env.LEADSHELF_RUNTIME_PROFILE
+    process.env.LEADSHELF_RUNTIME_PROFILE = "demo"
     const own = await getMedia(request(`/api/media/${ownPath.join("/")}`, tokenB), {
       params: Promise.resolve({ path: ownPath }),
+    }).finally(() => {
+      if (previousProfile === undefined) delete process.env.LEADSHELF_RUNTIME_PROFILE
+      else process.env.LEADSHELF_RUNTIME_PROFILE = previousProfile
     })
 
     expect(foreign.status).toBe(403)
