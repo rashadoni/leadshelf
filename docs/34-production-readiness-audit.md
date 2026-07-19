@@ -13,13 +13,13 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
-| Unit/integration | PASS local + CI baseline | 570 exact-SHA remote tests + 3 new retention tests locally; current DB 81/81; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, worker, mobile, web |
+| Unit/integration | PASS local + CI baseline | 573 exact-SHA remote tests + 2 new opId log tests locally; current DB 81/81, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, worker, mobile, web |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
 | Dependency audit | PASS local | production audit: 0 known vulnerabilities |
 | Secrets | PASS local | current source 0; full Git history 0 verified/unknown |
-| Remote CI | PASS | PR #19, exact SHA `b7280c91d4b92adca855dcdddc7c75f47c4f12ac`, run 29665601343: `ci` SUCCESS, secret + four production-image High/Critical scans SUCCESS, annotations=0; Node 24 pinned actions; deploy SKIPPED |
+| Remote CI | PASS | PR #19 CLEAN, exact SHA `d74a35387c6318dcbe378c43de8a30c6ab3a8fa8`, run 29666630833: 573-test `ci` SUCCESS, secret + four production-image High/Critical scans SUCCESS, annotations=0; deploy SKIPPED |
 | Runtime images | PASS local | Grype High/Critical=0; current web `sha256:1500d453de78...`, worker `sha256:1082a67e8c32...`; custom Caddy/PostgreSQL also clean |
 | Compose/proxy/scripts | PASS | Compose config, Caddy validate, workflow YAML, bash syntax, diff check |
 | Restore drill | PASS local | encrypted restic restore, checksums, 23 migrations, media=1/26 bytes |
@@ -115,6 +115,9 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   минимальный retention audit event. На изолированной схеме
   30/30 migrations и DB 81/81 PASS; recent/neighbor сохранены. Утверждённые
   сроки/legal basis, scheduler и external S3/backups deletion остаются gates;
+- mobile push domain log фиксирует только correlationId/org/device/opId/kind/
+  status после schema validation; unit доказывает отсутствие payload/result
+  detail, GPS, token/email и отбрасывание unsafe IDs; web 128/128 PASS;
 - backup/restore, incident, ERP, privacy, pilot/GA runbooks и evidence templates.
 
 ## Технические блокеры до client production

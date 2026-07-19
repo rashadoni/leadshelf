@@ -872,9 +872,11 @@ Definition of Done: нет открытых critical/high; доказано, ч�
   три worker runner и shutdown lifecycle пишут JSON через allowlist полей,
   тесты доказывают отбрасывание token/email. Authenticated API boundary теперь
   централизованно пишет allowlisted method/path/correlationId/organizationId/
-  userId/deviceId/taskId без query/token/session/header leakage; web 126/126
-  PASS. BLOCKED — production log collector/retention/owner; opId для body-only
-  операций добавляется только в соответствующем domain event, не из raw body]`
+  userId/deviceId/taskId без query/token/session/header leakage. Mobile push
+  после schema validation пишет отдельный allowlisted domain event с
+  correlationId/org/device/opId/kind/status; payload/result detail, GPS,
+  token/email не сериализуются, unsafe IDs отбрасываются. Web 128/128 PASS.
+  BLOCKED — production log collector/retention/owner]`
 - [ ] Метрики: availability/latency/errors, sync/outbox, import freshness,
   worker lag, media errors, DB и storage capacity.
   `[частично реализовано/проверено config 2026-07-18: закрытый /api/metrics

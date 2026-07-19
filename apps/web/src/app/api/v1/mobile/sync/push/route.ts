@@ -19,5 +19,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   if (body == null) return NextResponse.json({ error: "invalid_request" }, { status: 400 })
-  return handleMobilePush(body, session as { org: string; sub: string; did: string; role: string })
+  return handleMobilePush(
+    body,
+    session as { org: string; sub: string; did: string; role: string },
+    { correlationId: req.headers.get("x-correlation-id") },
+  )
 }
