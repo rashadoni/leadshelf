@@ -65,9 +65,19 @@ manifest сохраняется в durable queue и применяется те�
 - входной active count = 0 при ненулевом текущем наборе;
 - уменьшение active набора более 10%.
 
-Подтверждение привязывается к tenant, entity, checksum и expiresAt; простой
-boolean из публичного API недостаточен. Текущий staging v1 использует upsert и
-не удаляет отсутствующие строки, поэтому массовое удаление сейчас невозможно.
+Простой boolean удалён из контракта. Для опасного уменьшения guard принимает
+только HMAC-SHA-256 token с secret не короче 32 bytes, подписанный доверенным
+server-side issuer. Payload exact-schema привязан к action
+`deactivate_absent_products`, approval ID, tenant, entity, source SHA-256,
+current/incoming active counts, canonical issuedAt/expiresAt и TTL максимум
+один час. Signature сравнивается constant-time; malformed/tampered, иной tenant/
+checksum/count, expired/future token, слабый secret и некорректные input counts
+fail-closed. Token/secret нельзя помещать в API response, import error или log.
+
+Это пока только проверенный approval contract, а не включённое удаление:
+trusted issuer/secret-manager path, очередь и транзакционная деактивация ещё не
+подключены. Текущий staging v1 использует upsert и не удаляет отсутствующие
+строки, поэтому массовое удаление сейчас невозможно.
 
 ## Повтор и восстановление
 

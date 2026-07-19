@@ -4,6 +4,7 @@ import {
   buildSnapshotSourceTotals,
   checksumImportRows,
   guardDestructiveFullSync,
+  signDestructiveFullSyncApproval,
   sumExactDecimals,
 } from "./reconciliation"
 
@@ -75,10 +76,98 @@ describe("ERP import reconciliation", () => {
     })
   })
 
-  it("blocks mass zero/drop until explicit confirmation", () => {
-    expect(guardDestructiveFullSync({ currentActiveRows: 100, incomingActiveRows: 0, confirmed: false })).toMatchObject({ allowed: false, reason: "mass_zero" })
-    expect(guardDestructiveFullSync({ currentActiveRows: 100, incomingActiveRows: 80, confirmed: false })).toMatchObject({ allowed: false, reason: "mass_drop" })
-    expect(guardDestructiveFullSync({ currentActiveRows: 100, incomingActiveRows: 95, confirmed: false })).toEqual({ allowed: true })
-    expect(guardDestructiveFullSync({ currentActiveRows: 100, incomingActiveRows: 0, confirmed: true })).toEqual({ allowed: true })
+  it("requires a signed tenant/checksum/count/expiry-bound approval for a destructive full sync", () => {
+    const now = new Date("2026-07-19T05:00:00.000Z")
+    const secret = "full-sync-test-secret-at-least-32-bytes"
+    const sourceChecksum = "a".repeat(64)
+    const context = {
+      organizationId: "org-full-sync",
+      entityType: "products" as const,
+      sourceChecksum,
+      currentActiveRows: 100,
+      incomingActiveRows: 80,
+      now,
+    }
+    const payload = {
+      version: 1 as const,
+      action: "deactivate_absent_products" as const,
+      approvalId: "CHG-2026-001",
+      organizationId: context.organizationId,
+      entityType: context.entityType,
+      sourceChecksum,
+      currentActiveRows: context.currentActiveRows,
+      incomingActiveRows: context.incomingActiveRows,
+      issuedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
+    }
+    const approvalToken = signDestructiveFullSyncApproval(payload, secret)
+
+    expect(guardDestructiveFullSync(context)).toMatchObject({ allowed: false, reason: "mass_drop" })
+    expect(guardDestructiveFullSync({ ...context, incomingActiveRows: 0 })).toMatchObject({ allowed: false, reason: "mass_zero" })
+    expect(guardDestructiveFullSync({ ...context, incomingActiveRows: 90 })).toEqual({ allowed: true })
+    expect(guardDestructiveFullSync({ ...context, approvalToken, approvalSecret: secret })).toEqual({
+      allowed: true,
+      approvalId: payload.approvalId,
+    })
+
+    const tampered = `${approvalToken.slice(0, -1)}${approvalToken.endsWith("A") ? "B" : "A"}`
+    expect(guardDestructiveFullSync({ ...context, approvalToken: tampered, approvalSecret: secret })).toMatchObject({
+      allowed: false,
+      reason: "approval_invalid",
+    })
+    expect(guardDestructiveFullSync({ ...context, approvalToken, approvalSecret: "wrong-secret-that-is-still-at-least-32-bytes" })).toMatchObject({
+      allowed: false,
+      reason: "approval_invalid",
+    })
+
+    for (const mismatch of [
+      { organizationId: "neighbor-tenant" },
+      { sourceChecksum: "b".repeat(64) },
+      { currentActiveRows: 101 },
+      { incomingActiveRows: 79 },
+    ]) {
+      expect(guardDestructiveFullSync({ ...context, ...mismatch, approvalToken, approvalSecret: secret })).toMatchObject({
+        allowed: false,
+        reason: "approval_mismatch",
+      })
+    }
+
+    const expiredPayload = {
+      ...payload,
+      issuedAt: new Date(now.getTime() - 60 * 60_000).toISOString(),
+      expiresAt: new Date(now.getTime() - 30 * 60_000).toISOString(),
+    }
+    expect(guardDestructiveFullSync({
+      ...context,
+      approvalToken: signDestructiveFullSyncApproval(expiredPayload, secret),
+      approvalSecret: secret,
+    })).toMatchObject({ allowed: false, reason: "approval_expired" })
+
+    const futurePayload = {
+      ...payload,
+      issuedAt: new Date(now.getTime() + 2 * 60_000).toISOString(),
+      expiresAt: new Date(now.getTime() + 32 * 60_000).toISOString(),
+    }
+    expect(guardDestructiveFullSync({
+      ...context,
+      approvalToken: signDestructiveFullSyncApproval(futurePayload, secret),
+      approvalSecret: secret,
+    })).toMatchObject({ allowed: false, reason: "approval_expired" })
+
+    expect(() => signDestructiveFullSyncApproval(payload, "short-secret")).toThrow("full_sync_approval_secret_invalid")
+    expect(() => signDestructiveFullSyncApproval({
+      ...payload,
+      expiresAt: new Date(now.getTime() + 61 * 60_000).toISOString(),
+    }, secret)).toThrow("full_sync_approval_payload_invalid")
+    expect(guardDestructiveFullSync({ ...context, sourceChecksum: "bad" })).toMatchObject({
+      allowed: false,
+      reason: "input_invalid",
+    })
+    expect(guardDestructiveFullSync({
+      ...context,
+      approvalToken,
+      approvalSecret: secret,
+      now: new Date(Number.NaN),
+    })).toMatchObject({ allowed: false, reason: "input_invalid" })
   })
 })

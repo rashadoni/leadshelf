@@ -81,6 +81,12 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   ready/login/pull/push/logout regression доказывает отсутствие private markers
   в child argv/stdout/stderr и fail-closed отклоняет group/world-readable или
   symlink PIN; deployed full smoke pending;
+- ERP destructive guard больше не имеет boolean bypass: опасный zero/>10% drop
+  допускается только HMAC-SHA-256 approval с exact action/tenant/entity/source
+  checksum/counts/issuedAt/expiresAt binding, <=1h TTL и >=32-byte explicit
+  secret. Tamper/cross-tenant/checksum/count/expiry/input negative matrix и
+  worker 55/55 PASS; issuer/queue/deactivation ещё не подключены, поэтому
+  текущий upsert-only path ничего отсутствующего не деактивирует;
 - axe audit без rule exclusions на RU/AZ login/catalog/tasks/analytics во всех
   трёх браузках; zoom остаётся доступен, selects именованы, nested controls
   устранены, horizontal analytics tables доступны с клавиатуры;

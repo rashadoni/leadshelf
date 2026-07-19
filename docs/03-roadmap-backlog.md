@@ -1018,9 +1018,15 @@ Definition of Done: тестовые отказы вызывают ожидае�
   COMPLETED_WITH_ERRORS. BLOCKED — manifest/client ERP access для реальной сверки]`
 
 - [ ] Delta/full sync, freshness monitoring и алерт на расхождение.
-  `[частично: staging v1 идемпотентно upsert-ит delta/full payload и metrics
-  отдаёт freshness. BLOCKED — destructive absence semantics/confirmation и
-  production alert требуют client data/business/infrastructure owners]`
+  `[частично 2026-07-19: staging v1 идемпотентно upsert-ит payload и metrics
+  отдаёт freshness. Boolean confirmation удалён: HMAC-SHA-256 approval contract
+  fail-closed связывает action/approval/tenant/entity/source checksum/current+
+  incoming counts/canonical issuedAt+expiresAt с TTL <=1h и secret >=32 bytes;
+  tamper, wrong secret/tenant/checksum/count, expiry, excessive TTL и malformed
+  input negative matrix PASS, worker 55/55. Trusted issuer/secret-manager,
+  persisted queue field, transactional absent-product deactivation и recovery
+  ещё не реализованы; production alert/semantics требуют client data/business/
+  infrastructure owners]`
 
 - [ ] Контрольные суммы и сверка количества/сумм с ERP.
   `[локальная механика реализована/проверена 2026-07-18: optional multipart
@@ -1031,8 +1037,9 @@ Definition of Done: тестовые отказы вызывают ожидае�
   BLOCKED — реальные ERP manifest/access и 14 последовательных обменов]`
 
 - [x] Guard от массового удаления/обнуления без подтверждения.
-  `[guard реализован/проверен unit: zero и drop >10% блокируются без
-  подтверждения; destructive full-sync сейчас отсутствует и ничего не удаляет]`
+  `[guard реализован/проверен unit: zero и drop >10% блокируются без signed
+  exact-context approval; старого boolean bypass больше нет. Destructive
+  full-sync сейчас отсутствует и ничего не удаляет]`
 
 - [x] Runbook повторного импорта и восстановления ошибочной загрузки.
   `[runbook реализован. BLOCKED — клиентский ERP fixture/operator и staging
