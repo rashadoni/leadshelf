@@ -13,7 +13,7 @@ evidence. Отсутствующее внешнее доказательство
 | --- | --- | --- |
 | Prisma schema/client | PASS | validate + generate; Prisma 6.19.3 |
 | Миграции | PASS local + CI | 30/30; deploy/status на изолированной PostgreSQL 16 и exact-SHA GitHub Actions PostgreSQL 16 |
-| Unit/integration | PASS local + CI | 575 exact-SHA remote tests; DB 81/81, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, worker, mobile, web |
+| Unit/integration | PASS local; prior SHA CI PASS | current local 577/577, DB 83/83; prior exact-SHA remote 575 tests, DB 81/81, web 128/128; tenant isolation, durable limiter, ERP manifest, core workflow, offboarding, retention, encrypted DSAR, worker, mobile, web. Current exact-SHA CI pending push |
 | Production build | PASS | Next.js 15.5.20 standalone build |
 | Browser smoke | PASS | 21/21 Chromium, Firefox, WebKit; 390/768/1440 + RU/AZ keyboard/focus + safe support errors + axe WCAG A/AA |
 | Public runtime smoke | FAIL / NO-GO | 2026-07-18 22:56 UTC: `hermescrm.xyz/api/health`=200, `/api/ready`=404, `/api/metrics`=404; direct `/api/ready`=404. Login response lacks new CSP/HSTS/frame/nosniff and exposes `x-powered-by`; hardening commit is not deployed |
@@ -113,8 +113,15 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
   GoldenReference guard; удаляет expired DB media/location/audit
   и redacts GPS в Visit/EXIF/geofence/visit-alert JSON, затем атомарно пишет
   минимальный retention audit event. На изолированной схеме
-  30/30 migrations и DB 81/81 PASS; recent/neighbor сохранены. Утверждённые
+  30/30 migrations и DB 83/83 PASS; recent/neighbor сохранены. Утверждённые
   сроки/legal basis, scheduler и external S3/backups deletion остаются gates;
+- controlled DSAR CLI строит tenant/subject inventory, не выводит PII или
+  subject/request identifiers в stdout, требует manifest match, exact
+  confirmation, dual approval и legal-basis receipt, создаёт только новый
+  mode-0600 AES-256-GCM artifact и минимальный audit event. Credential hashes,
+  JTI и push tokens исключены; encrypted bundle покрывает GPS/media metadata,
+  sync и authored/agent commercial records. Tenant-isolation/decrypt/secret
+  regression PASS; approved real delivery/decrypt/delete drill остаётся gate;
 - mobile push domain log фиксирует только correlationId/org/device/opId/kind/
   status после schema validation; unit доказывает отсутствие payload/result
   detail, GPS, token/email и отбрасывание unsafe IDs; web 128/128 PASS;
@@ -150,8 +157,8 @@ Security/API inventory: `docs/33-security-api-inventory.md`.
    все 40 office mutations — denied-role matrix, durable/scheduled jobs —
    PostgreSQL tenant-boundary tests.
 6. Утвердить retention сроки/legal basis и подключить scheduler + external
-   media purge к реализованному tenant-safe CLI; решить face/privacy
-   режим до persistence.
+   media purge к реализованному tenant-safe CLI; выполнить approved DSAR
+   delivery/decrypt/delete drill; решить face/privacy режим до persistence.
 7. Выпустить подписанные APK/AAB/IPA и пройти physical-device, offline/kill,
    permission, disk-full, battery/memory/SQLite shift matrix.
 

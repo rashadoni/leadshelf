@@ -845,10 +845,15 @@ Definition of Done: двухнедельный прогон не теряет д
   редактируются рекурсивно; новый минимальный audit event фиксирует
   policy/counts/digest и external evidence IDs. Изолированная схема: 30/30
   migrations, DB suite
-  81/81 PASS; target expired data удалены, recent и neighbor сохранены,
-  fixtures residue=0. BLOCKED — сроки/legal basis, scheduler и фактическое
+  83/83 PASS; target expired data удалены, recent и neighbor сохранены,
+  fixtures residue=0. Добавлен controlled DSAR inventory/export: exact
+  org+slug+subject, manifest drift guard, dual approval/legal-basis receipt,
+  exclusive 0600 artifact, AES-256-GCM и audit event; preview/result не
+  раскрывают subject/request/PII, credential hashes/JTI/push tokens исключены,
+  neighbor tenant regression PASS. BLOCKED — сроки/legal basis, scheduler и фактическое
   удаление external S3/backups требуют client privacy/legal/business и
-  infrastructure owners]`
+  infrastructure owners; approved delivery/decrypt/delete DSAR drill требует
+  privacy/security owners]`
 - [ ] Face blur до персистентности либо согласованный режим без покупателей.
   `[не реализовано: runbook требует организационно исключать покупателей до
   появления проверенного pre-persistence blur либо письменного legal режима;

@@ -58,8 +58,9 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 
 В переданном промте все значения остались буквальными placeholders (`[URL]`,
 `[СПОСОБ ДОСТУПА]`, `[ДА/НЕТ]`). Это не доступ и не решение. Единственное
-новое локальное evidence — подготовленный commit; его push также требует
-отдельного явного подтверждения после сообщения о внешнем экспорте.
+новое локальное evidence — подготовленный commit. Push ветки
+`codex/production-readiness` и запуск GitHub Actions явно разрешены
+2026-07-19; production deploy этим разрешением не разрешён.
 
 Read-only runtime evidence 2026-07-18 22:56 UTC: публичный `/api/health`
 отвечает 200, но `/api/ready` и `/api/metrics` отвечают 404; direct readiness

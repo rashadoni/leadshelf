@@ -90,6 +90,43 @@ External S3/backups CLI намеренно не удаляет. Массовое
 SQL/S3 команды запрещено. Периодический scheduler включается только после
 утверждения сроков, legal basis, owner и external media orchestration.
 
+## DSAR export baseline
+
+DSAR export не является публичным API. Оператор сначала выполняет tenant-safe
+inventory; stdout содержит только organization metadata, counts и SHA-256
+manifest, без email/name/subject/request identifiers:
+
+```bash
+pnpm --filter @leadshelf/db dsar -- preview \
+  --organization-id ORG_ID --slug TENANT_SLUG \
+  --subject-user-id USER_ID --request-id APPROVED_DSAR_ID
+```
+
+Execute разрешён после проверки личности/полномочий заявителя, legal basis и
+двух независимых approvals. Ключевой файл содержит 32 raw bytes либо 64 hex
+symbols, имеет permissions `0600` или строже и не передаётся через argv/stdout.
+Выходной файл создаётся эксклюзивно с mode `0600` и не перезаписывается:
+
+```bash
+pnpm --filter @leadshelf/db dsar -- execute \
+  --organization-id ORG_ID --slug TENANT_SLUG \
+  --subject-user-id USER_ID --request-id APPROVED_DSAR_ID \
+  --manifest-digest SHA256_FROM_PREVIEW \
+  --confirm "EXPORT TENANT_SLUG ORG_ID USER_ID APPROVED_DSAR_ID SHA256_FROM_PREVIEW" \
+  --approval PRIVACY_APPROVAL_ID --approval SECURITY_APPROVAL_ID \
+  --legal-basis-receipt VERIFIED_REQUEST_ID \
+  --encryption-key-file ROOT_ONLY_KEY_FILE \
+  --output NEW_ENCRYPTED_ARTIFACT_PATH
+```
+
+CLI повторно строит inventory под tenant advisory lock и serializable
+transaction, отклоняет drift и соседний tenant, шифрует bundle AES-256-GCM и
+пишет минимальный `dsar.export` audit event. Password/refresh hashes, JTI,
+credential/secret/token fields и push tokens исключаются fail-closed по имени;
+GPS, фото metadata, sync payloads и authored/agent commercial records остаются
+только внутри ciphertext. Передача артефакта, срок его хранения, удаление и
+расшифровка выполняются утверждённым внешним secure-delivery процессом.
+
 ## Проверки релиза
 
 1. `pnpm audit --prod --audit-level moderate` зелёный.
@@ -110,9 +147,10 @@ SQL/S3 команды запрещено. Периодический scheduler �
   cross-tenant и denied-role matrix уже проходит;
 - app-level encryption мобильной SQLite/media и physical-device проверка;
   remote revocation wipe реализован и покрыт unit;
-- утверждённые retention сроки/legal basis, external media orchestration,
-  scheduler и проверенный DSAR export; guarded policy purge и controlled
-  tenant delete уже реализованы;
+- утверждённые retention сроки/legal basis, external media orchestration и
+  scheduler; guarded policy purge, controlled tenant delete и encrypted DSAR
+  export реализованы локально, но реальный approved DSAR delivery/delete drill
+  остаётся внешним evidence;
 - face blur before persistence либо юридически принятый режим;
 - production container/secret scan и runtime secret-rotation evidence.
 

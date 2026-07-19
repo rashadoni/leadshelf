@@ -24,6 +24,15 @@ export {
   type ExecuteRetentionInput,
   type RetentionResult,
 } from "./retention.ts"
+export {
+  previewDsarExport,
+  executeDsarExport,
+  encryptDsarBundle,
+  type DsarInventoryInput,
+  type DsarPreview,
+  type ExecuteDsarExportInput,
+  type DsarExportResult,
+} from "./dsar.ts"
 export { listImportErrorsForBatch } from "./repos/import.ts"
 export {
   consumeDurableRateLimit,
