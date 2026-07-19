@@ -793,11 +793,22 @@ Definition of Done: двухнедельный прогон не теряет д
   audit, сбрасывает failures только после успешной проверки и автоматически
   открывает аккаунт по окончании duration. 12 concurrent failures точно
   остановились на threshold=5; PostgreSQL integration 2/2 и route/policy/
-  readiness 10/10 PASS. Все четыре `AUTH_LOCKOUT_*`, включая secret-manager
-  pepper, задаются только вместе без developer defaults; `/api/ready`
-  fail-closed, если approved policy отсутствует. `[BLOCKED — business
-  decision]`: нужны утверждённые threshold,
-  window, duration, разрешение/процесс manual support unlock и owner]`
+  readiness 10/10 PASS. Web login и его limiter/lockout теперь обязательно
+  tenant-qualified через `organizationSlug + email`; одинаковый email в двух
+  tenants не разделяет authentication state. Migration 32 добавляет
+  case-insensitive unique indexes для organization slug, tenant email и
+  employee code с PII-safe collision preflight. Controlled manual unlock
+  реализован disabled-by-default: principal принимается только из bounded
+  mode-0600/O_NOFOLLOW файла, preview выдаёт digest+exact confirmation, execute
+  требует два независимых approval ID, ticket/reason, serializable advisory+
+  row lock, zero-residue verification и минимальный tenant audit без principal.
+  Все четыре `AUTH_LOCKOUT_*`, включая secret-manager pepper, задаются только
+  вместе без developer defaults; `/api/ready` fail-closed, если approved policy
+  отсутствует. Проверка: clean 32-migration PostgreSQL, DB profile 6/6, web auth
+  10/10, full suite 605/605 и tenant-qualified browser smoke 15/15 PASS.
+  `[BLOCKED — business/production evidence]`: нужны утверждённые threshold,
+  window, duration, named support/security owners и approval policy, audit
+  production collision preflight/rollout и реальный controlled unlock drill]`
 - [x] Негативные RBAC/cross-tenant тесты всех API, jobs, exports и media.
   `[реализовано/проверено 2026-07-18 на текущем surface: fail-closed inventory всех 63
   v1 route files + mutation/RBAC/workerDb/media fences; динамическая PostgreSQL

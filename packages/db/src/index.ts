@@ -44,14 +44,27 @@ export {
 } from "./rate-limit.ts"
 export {
   clearAuthenticationFailures,
+  authenticationLockoutScope,
   getAuthenticationLockout,
+  mobileAuthenticationLockoutKey,
   recordAuthenticationFailure,
   validateAuthenticationLockoutPolicy,
+  webAuthenticationLockoutKey,
+  type AuthenticationChannel,
   type AuthenticationLockoutExecute,
   type AuthenticationLockoutPolicy,
   type AuthenticationLockoutQuery,
   type AuthenticationLockoutState,
 } from "./auth-lockout.ts"
+export {
+  previewManualAuthenticationUnlock,
+  executeManualAuthenticationUnlock,
+  type ManualAuthenticationUnlockPreviewInput,
+  type ManualAuthenticationUnlockPreview,
+  type ExecuteManualAuthenticationUnlockInput,
+  type ManualAuthenticationUnlockResult,
+} from "./manual-auth-unlock.ts"
+export { readManualAuthUnlockRequestFile } from "./manual-auth-unlock-file.ts"
 export {
   createTemplateWithVersion,
   saveVersion,

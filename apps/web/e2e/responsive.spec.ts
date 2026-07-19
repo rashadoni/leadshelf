@@ -14,6 +14,7 @@ const targets = [
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/ru/login")
+  await page.getByRole("textbox", { name: "Код организации" }).fill(process.env.E2E_ORGANIZATION_SLUG ?? "demo")
   await page.getByRole("textbox", { name: "E-mail" }).fill(process.env.E2E_EMAIL ?? "admin@leadshelf.com")
   await page.getByRole("textbox", { name: "Пароль" }).fill(process.env.E2E_PASSWORD ?? "demo1234")
   const loginResponse = page.waitForResponse(

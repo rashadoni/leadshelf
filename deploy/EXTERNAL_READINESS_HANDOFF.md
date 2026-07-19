@@ -39,7 +39,7 @@ staging/production, S3, monitoring, mobile signing или client-data access.
 | Audit retention | число дней + security/legal basis |
 | Privacy mode | verified pre-persistence face blur **или** режим без покупателей |
 | Mobile encryption | SQLCipher operational SQLite и AES-256-GCM durable offline media уже реализованы; утвердить key-loss recovery/approved wipe, iOS identity/signing и получить signed-device DB/media migration/upload/preview/revocation + low-end memory evidence |
-| Login lockout | durable HMAC machinery/timed unlock уже реализованы; утвердить threshold/window/duration, secret-manager pepper и controlled manual unlock/support owner |
+| Login lockout | tenant-qualified HMAC machinery, timed unlock и disabled-by-default controlled manual unlock уже реализованы; утвердить threshold/window/duration, secret-manager pepper, named support/security owners, dual-approval policy и выполнить production-like collision/unlock drill |
 | SLA/on-call | timezone, support hours, P0–P3 targets, named L1/L2/incident commander |
 | ERP destructive full sync | absence semantics, confirmation threshold и recovery owner |
 | Production deploy | точное `ДА`, approved SHA, окно, backup receipt и rollback owner |

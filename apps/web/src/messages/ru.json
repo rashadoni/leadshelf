@@ -14,10 +14,11 @@
   },
   "auth": {
     "title": "Вход",
+    "organizationSlug": "Код организации",
     "email": "E-mail",
     "password": "Пароль",
     "submit": "Войти",
-    "error": "Неверный e-mail или пароль",
+    "error": "Неверный код организации, e-mail или пароль",
     "supportCode": "Код поддержки: {value}.",
     "logout": "Выход"
   },

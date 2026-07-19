@@ -14,10 +14,11 @@
   },
   "auth": {
     "title": "Daxil ol",
+    "organizationSlug": "Təşkilat kodu",
     "email": "E-poçt",
     "password": "Şifrə",
     "submit": "Daxil ol",
-    "error": "E-poçt və ya şifrə yanlışdır",
+    "error": "Təşkilat kodu, e-poçt və ya şifrə yanlışdır",
     "supportCode": "Dəstək kodu: {value}.",
     "logout": "Çıxış"
   },

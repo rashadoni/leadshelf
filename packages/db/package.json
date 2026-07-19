@@ -12,6 +12,7 @@
     "tenant:offboarding": "tsx prisma/tenant-offboarding.ts",
     "retention": "tsx prisma/retention.ts",
     "dsar": "tsx prisma/dsar.ts",
+    "auth:unlock": "tsx prisma/auth-unlock.ts",
     "publish:capacity": "tsx prisma/publish-capacity.ts",
     "publish:concurrency-capacity": "tsx prisma/publish-concurrency-capacity.ts",
     "typecheck": "tsc --noEmit",

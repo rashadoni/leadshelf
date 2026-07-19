@@ -20,6 +20,12 @@
 4. Выполнить `verify-production-backup.sh`; при любой ошибке релиз запрещён.
 5. Новые миграции прогнать через `rehearse-migrations.sh` на свежем
    обезличенном dump production-подобного объёма.
+   Migration `20260719034000_case_insensitive_auth_principals` берёт table lock
+   и останавливается с generic error, если найдены case-only collisions в
+   organization slug, tenant email или employee code. DBA исследует значения
+   только в защищённой сессии без CI/log output, делает backup и выполняет
+   отдельно утверждённое исправление данных. Автоматически merge/delete таких
+   principals запрещён; после remediation rehearsal запускается заново.
 6. Проверить совместимость: текущий mobile protocol не получает 426 от нового
    сервера; предыдущий web image совместим с новой схемой.
 7. Зафиксировать release SHA, предыдущий image SHA, окно и release owner.

@@ -2,6 +2,9 @@ import { expect, test, type Page } from "@playwright/test"
 
 async function login(page: Page) {
   await page.goto("/ru/login")
+  await page.getByRole("textbox", { name: "Код организации" }).fill(
+    process.env.E2E_ORGANIZATION_SLUG ?? "demo",
+  )
   await page.getByRole("textbox", { name: "E-mail" }).fill(
     process.env.E2E_EMAIL ?? "admin@leadshelf.com",
   )

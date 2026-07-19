@@ -22,6 +22,7 @@ async function login(page: Page) {
   const response = await page.context().request.post(`${origin}/api/auth/login`, {
     headers: { origin },
     data: {
+      organizationSlug: process.env.E2E_ORGANIZATION_SLUG ?? "demo",
       email: process.env.E2E_EMAIL ?? "admin@leadshelf.com",
       password: process.env.E2E_PASSWORD ?? "demo1234",
     },

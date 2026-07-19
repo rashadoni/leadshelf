@@ -1,4 +1,13 @@
+import { createHmac } from "node:crypto"
 import { opaqueRateLimitKey } from "./rate-limit.ts"
+
+export type AuthenticationChannel = "web" | "mobile"
+
+const MINIMUM_PEPPER_LENGTH = 32
+const LOCKOUT_SCOPES: Record<AuthenticationChannel, string> = {
+  web: "web-account",
+  mobile: "mobile-account",
+}
 
 export type AuthenticationLockoutPolicy = {
   maxFailures: number
@@ -30,6 +39,47 @@ export type AuthenticationLockoutExecute = (
 
 function assertScope(scope: string): void {
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(scope)) throw new Error("invalid authentication lockout scope")
+}
+
+function normalizedPrincipal(value: string, field: string): string {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) throw new Error(`authentication lockout ${field} is required`)
+  return normalized
+}
+
+function accountKey(parts: string[], pepper: string): string {
+  if (pepper.trim().length < MINIMUM_PEPPER_LENGTH) {
+    throw new Error(`authentication lockout pepper must contain at least ${MINIMUM_PEPPER_LENGTH} characters`)
+  }
+  return createHmac("sha256", pepper).update(parts.join("\0")).digest("hex")
+}
+
+export function authenticationLockoutScope(channel: AuthenticationChannel): string {
+  return LOCKOUT_SCOPES[channel]
+}
+
+export function webAuthenticationLockoutKey(
+  organizationSlug: string,
+  email: string,
+  pepper: string,
+): string {
+  return accountKey([
+    "web",
+    normalizedPrincipal(organizationSlug, "organization slug"),
+    normalizedPrincipal(email, "email"),
+  ], pepper)
+}
+
+export function mobileAuthenticationLockoutKey(
+  organizationSlug: string,
+  employeeCode: string,
+  pepper: string,
+): string {
+  return accountKey([
+    "mobile",
+    normalizedPrincipal(organizationSlug, "organization slug"),
+    normalizedPrincipal(employeeCode, "employee code"),
+  ], pepper)
 }
 
 export function validateAuthenticationLockoutPolicy(

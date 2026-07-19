@@ -32,13 +32,14 @@ describe("authentication lockout policy", () => {
   })
 
   it("uses account-wide peppered opaque keys without IP or plaintext principal", () => {
-    const web = webAccountLockoutKey(" Admin@Example.COM ", pepper)
+    const web = webAccountLockoutKey(" Tenant-A ", " Admin@Example.COM ", pepper)
     const mobile = mobileAccountLockoutKey(" Demo ", " M-001 ", pepper)
     expect(web).toMatch(/^[a-f\d]{64}$/)
     expect(mobile).toMatch(/^[a-f\d]{64}$/)
-    expect(web).toBe(webAccountLockoutKey("admin@example.com", pepper))
+    expect(web).toBe(webAccountLockoutKey("tenant-a", "admin@example.com", pepper))
+    expect(web).not.toBe(webAccountLockoutKey("tenant-b", "admin@example.com", pepper))
     expect(mobile).toBe(mobileAccountLockoutKey("demo", "m-001", pepper))
-    expect(web).not.toBe(webAccountLockoutKey("admin@example.com", `${pepper}-rotated`))
+    expect(web).not.toBe(webAccountLockoutKey("tenant-a", "admin@example.com", `${pepper}-rotated`))
     expect(`${web}${mobile}`).not.toMatch(/admin|example|demo|m-001/i)
   })
 })

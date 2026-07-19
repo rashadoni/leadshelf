@@ -33,10 +33,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 })
   }
 
-  const key = opaqueRateLimitKey([parsed.data.email.toLowerCase(), clientAddress(req)])
+  const key = opaqueRateLimitKey([
+    parsed.data.organizationSlug.toLowerCase(),
+    parsed.data.email.toLowerCase(),
+    clientAddress(req),
+  ])
   const lockoutPolicy = configuredAuthLockoutPolicy()
   const accountKey = lockoutPolicy
-    ? webAccountLockoutKey(parsed.data.email, lockoutPolicy.pepper)
+    ? webAccountLockoutKey(
+        parsed.data.organizationSlug,
+        parsed.data.email,
+        lockoutPolicy.pepper,
+      )
     : null
   const limit = await consumeRateLimit("web-login", key, { max: 10, windowMs: 15 * 60_000 })
   if (!limit.allowed) {
@@ -59,6 +67,7 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await login(
+    parsed.data.organizationSlug,
     parsed.data.email,
     parsed.data.password,
     req.headers.get("user-agent") ?? undefined,

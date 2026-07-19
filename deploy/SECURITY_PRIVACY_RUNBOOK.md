@@ -32,17 +32,66 @@ duration, затем задаёт все четыре runtime-параметра
 
 Developer defaults отсутствуют. Неполная/невалидная policy отклоняется, а при
 полностью отсутствующей policy `/api/ready` возвращает fail-closed 503. Web и
-mobile используют разные account-wide HMAC-SHA-256 keys без email, employeeCode,
-organization slug или IP в persistence/logs. Ответ locked и неверный credential
+mobile используют разные tenant-qualified HMAC-SHA-256 keys без email,
+employeeCode, organization slug или IP в persistence/logs. Web login всегда
+требует `organizationSlug + email + password`; одинаковый email в двух tenants
+не разделяет login/lockout/rate-limit state. Ответ locked и неверный credential
 одинаков (`invalid_credentials` + одинаковый короткий `Retry-After`); новые
 атаки не продлевают действующий lock и точный остаток duration клиенту не
 раскрывается.
 Pepper не хранится в БД и не выводится в логи; его ротация инвалидирует текущие
 lockout rows и поэтому выполняется только по утверждённой incident procedure.
 Успешная проверка после окончания duration очищает failures. До утверждения
-support policy ручной unlock через ad-hoc SQL запрещён; автоматическое окончание
-duration — единственный реализованный unlock. Manual unlock должен получить
-отдельный controlled interface, named role, approval/audit и recovery check.
+support policy ручной unlock через ad-hoc SQL запрещён. Controlled CLI
+реализован, но execute disabled-by-default и разрешается только после утверждения
+support policy, named owners и двух независимых approval IDs.
+
+### Controlled manual unlock
+
+Principal нельзя передавать через argv, stdout, ticket или shell history.
+Оператор создаёт временный JSON-файл в защищённом каталоге с permissions `0600`
+или строже. CLI открывает его с `O_NOFOLLOW`, ограничивает размер 16 KiB,
+отклоняет symlink/неизвестные поля и никогда не возвращает principal:
+
+```json
+{
+  "organizationId": "APPROVED_ORGANIZATION_ID",
+  "slug": "approved-organization-slug",
+  "channel": "web",
+  "principal": "VALUE_FROM_VERIFIED_SUPPORT_CHANNEL",
+  "ticketId": "SUP-12345",
+  "reasonCode": "verified_account_recovery",
+  "approvals": ["support-owner:approval-1", "security-owner:approval-2"]
+}
+```
+
+Сначала preview с `AUTH_LOCKOUT_PEPPER` из secret manager:
+
+```bash
+pnpm --filter @leadshelf/db auth:unlock -- preview \
+  --request-file /secure/ephemeral/auth-unlock.json
+```
+
+Preview проверяет точную пару organization ID/slug, active user и текущий
+tenant-qualified lockout; выводит только состояние, state digest и exact
+confirmation. Оператор добавляет `stateDigest` и `confirmation` в тот же 0600
+файл. Execute допускается только one-shot runtime с точным значением флага:
+
+```bash
+AUTH_LOCKOUT_MANUAL_UNLOCK_ENABLED=true \
+pnpm --filter @leadshelf/db auth:unlock -- execute \
+  --request-file /secure/ephemeral/auth-unlock.json
+```
+
+В serializable transaction CLI берёт tenant advisory lock и row lock, повторно
+сверяет state digest/confirmation, требует два разных approvals, удаляет ровно
+одну lockout row, проверяет отсутствие residue и пишет
+`authentication.manual_unlock` в tenant AuditLog. Audit содержит только channel,
+ticket/reason, approval IDs, previous state и digest — без principal/pepper.
+После операции owner проверяет вход, audit event и отсутствие неожиданной
+блокировки соседнего tenant, выключает one-shot flag и безопасно уничтожает
+request file согласно support evidence policy. Любой drift требует нового
+preview; прямой SQL по-прежнему запрещён.
 
 ## Privacy decisions до пилота
 

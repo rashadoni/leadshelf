@@ -5,7 +5,7 @@
  * 1280×720 + ffmpeg muxes per-scene narration on top).
  *
  * LeadShelf ADAPTATIONS vs the reference:
- *  - AUTH: custom POST /api/auth/login {email,password} → ls_access/ls_refresh
+ *  - AUTH: custom POST /api/auth/login {organizationSlug,email,password} → ls_access/ls_refresh
  *    cookies (NOT NextAuth). ls_access lives 15 min and middleware does NOT
  *    auto-refresh → the recorder RE-LOGINS every SESSION_REFRESH_MS and pushes
  *    fresh cookies into the LIVE browser context between scenes (a full film
@@ -545,6 +545,7 @@ async function loginWithRetry(api, attempts = 4) {
     try {
       const res = await api.post("/api/auth/login", {
         data: {
+          organizationSlug: process.env.HELP_VIDEO_ORGANIZATION_SLUG || "demo",
           email: process.env.HELP_VIDEO_EMAIL || "admin@leadshelf.com",
           password: process.env.HELP_VIDEO_PASSWORD || "demo1234",
         },

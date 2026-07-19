@@ -1,16 +1,16 @@
 import {
   clearAuthenticationFailures,
+  authenticationLockoutScope,
   getAuthenticationLockout,
+  mobileAuthenticationLockoutKey,
   recordAuthenticationFailure,
   validateAuthenticationLockoutPolicy,
+  webAuthenticationLockoutKey,
   type AuthenticationLockoutPolicy,
   type AuthenticationLockoutState,
 } from "@leadshelf/db"
-import { createHmac } from "node:crypto"
 import { workerDb } from "@/server/db/client"
 
-const WEB_SCOPE = "web-account"
-const MOBILE_SCOPE = "mobile-account"
 const MINIMUM_PEPPER_LENGTH = 32
 
 export type ConfiguredAuthLockoutPolicy = AuthenticationLockoutPolicy & {
@@ -49,12 +49,12 @@ export function configuredAuthLockoutPolicy(
   }
 }
 
-function accountLockoutKey(parts: string[], pepper: string): string {
-  return createHmac("sha256", pepper).update(parts.join("\0")).digest("hex")
-}
-
-export function webAccountLockoutKey(email: string, pepper: string): string {
-  return accountLockoutKey(["web", email.trim().toLowerCase()], pepper)
+export function webAccountLockoutKey(
+  organizationSlug: string,
+  email: string,
+  pepper: string,
+): string {
+  return webAuthenticationLockoutKey(organizationSlug, email, pepper)
 }
 
 export function mobileAccountLockoutKey(
@@ -62,14 +62,7 @@ export function mobileAccountLockoutKey(
   employeeCode: string,
   pepper: string,
 ): string {
-  return accountLockoutKey(
-    ["mobile", orgSlug.trim().toLowerCase(), employeeCode.trim().toLowerCase()],
-    pepper,
-  )
-}
-
-function scope(channel: "web" | "mobile"): string {
-  return channel === "web" ? WEB_SCOPE : MOBILE_SCOPE
+  return mobileAuthenticationLockoutKey(orgSlug, employeeCode, pepper)
 }
 
 export function accountLockoutState(
@@ -78,7 +71,7 @@ export function accountLockoutState(
 ): Promise<AuthenticationLockoutState> {
   return getAuthenticationLockout(
     (strings, ...values) => workerDb.$queryRaw(strings, ...values),
-    scope(channel),
+    authenticationLockoutScope(channel),
     key,
   )
 }
@@ -90,7 +83,7 @@ export function recordAccountAuthenticationFailure(
 ): Promise<AuthenticationLockoutState> {
   return recordAuthenticationFailure(
     (strings, ...values) => workerDb.$queryRaw(strings, ...values),
-    scope(channel),
+    authenticationLockoutScope(channel),
     key,
     policy,
   )
@@ -102,7 +95,7 @@ export function clearAccountAuthenticationFailures(
 ): Promise<void> {
   return clearAuthenticationFailures(
     (strings, ...values) => workerDb.$executeRaw(strings, ...values),
-    scope(channel),
+    authenticationLockoutScope(channel),
     key,
   )
 }

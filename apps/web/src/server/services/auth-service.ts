@@ -23,17 +23,24 @@ export interface AuthenticatedUser {
 }
 
 /**
- * Phase 0: логин по email+паролю (админ-персонал). Email ищется глобально —
- * при появлении дублей между тенантами добавится выбор организации
- * (docs/13). Employee code + PIN для полевых — Phase 6.
+ * Office login is tenant-qualified. User.email is unique only inside an
+ * organization, therefore a global findFirst(email) would authenticate an
+ * arbitrary tenant when the same address exists in more than one organization.
  */
 export async function login(
+  organizationSlug: string,
   email: string,
   password: string,
   userAgent?: string,
 ): Promise<{ user: AuthenticatedUser; tokens: TokenPair } | null> {
   const user = await authDb.user.findFirst({
-    where: { email: email.toLowerCase().trim(), isActive: true },
+    where: {
+      organization: {
+        slug: { equals: organizationSlug.trim(), mode: "insensitive" },
+      },
+      email: { equals: email.trim(), mode: "insensitive" },
+      isActive: true,
+    },
   })
   if (!user?.passwordHash) return null
   if (!(await verifyPassword(user.passwordHash, password))) return null

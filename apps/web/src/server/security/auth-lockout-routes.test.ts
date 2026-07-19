@@ -68,6 +68,34 @@ beforeEach(() => {
 })
 
 describe("login route account lockout", () => {
+  it("requires tenant-qualified web credentials before any authentication work", async () => {
+    const response = await webLoginPost(request("/api/auth/login", {
+      email: "agent@example.test",
+      password: "not-a-real-password",
+    }))
+    expect(response.status).toBe(400)
+    expect(mocks.consumeRateLimit).not.toHaveBeenCalled()
+    expect(mocks.login).not.toHaveBeenCalled()
+  })
+
+  it("does not share the web login rate-limit key between tenants with the same email", async () => {
+    mocks.configuredAuthLockoutPolicy.mockReturnValue(null)
+    mocks.login.mockResolvedValue(null)
+    await webLoginPost(request("/api/auth/login", {
+      organizationSlug: "tenant-a",
+      email: "shared@example.test",
+      password: "not-a-real-password",
+    }))
+    await webLoginPost(request("/api/auth/login", {
+      organizationSlug: "tenant-b",
+      email: "shared@example.test",
+      password: "not-a-real-password",
+    }))
+    const keys = mocks.consumeRateLimit.mock.calls.map((call) => call[1])
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
   it("rejects a locked web account generically before password verification", async () => {
     mocks.accountLockoutState.mockResolvedValue({
       locked: true,
@@ -76,6 +104,7 @@ describe("login route account lockout", () => {
       lockedUntil: new Date("2026-07-19T04:00:00.000Z"),
     })
     const response = await webLoginPost(request("/api/auth/login", {
+      organizationSlug: "tenant-a",
       email: "agent@example.test",
       password: "not-a-real-password",
     }))
@@ -83,6 +112,11 @@ describe("login route account lockout", () => {
     expect(await response.json()).toEqual({ error: "invalid_credentials" })
     expect(response.headers.get("retry-after")).toBe("1")
     expect(mocks.login).not.toHaveBeenCalled()
+    expect(mocks.webAccountLockoutKey).toHaveBeenCalledWith(
+      "tenant-a",
+      "agent@example.test",
+      policy.pepper,
+    )
     expect(mocks.writeSecurityAudit).toHaveBeenCalledWith("authentication_locked", {
       channel: "web",
       principalKey: "a".repeat(64),
@@ -98,6 +132,7 @@ describe("login route account lockout", () => {
       lockedUntil: new Date("2026-07-19T04:00:00.000Z"),
     })
     const response = await webLoginPost(request("/api/auth/login", {
+      organizationSlug: "tenant-a",
       email: "agent@example.test",
       password: "not-a-real-password",
     }))
