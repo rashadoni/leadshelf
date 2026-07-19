@@ -11,6 +11,7 @@
     "import:products-capacity": "tsx src/catalog-import/product-capacity-benchmark.ts",
     "import:assortment-capacity": "tsx src/catalog-import/assortment-capacity-benchmark.ts",
     "import:backlog-capacity": "tsx src/catalog-import/queue-backlog-benchmark.ts",
+    "import:issue-full-sync-approval": "tsx src/catalog-import/full-sync-approval-cli.ts",
     "notifications": "tsx src/notification-delivery-runner.ts",
     "notifications:once": "tsx src/notification-delivery-runner.ts --once",
     "proof-analysis": "tsx src/proof-analysis-runner.ts",

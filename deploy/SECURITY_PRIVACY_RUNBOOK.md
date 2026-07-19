@@ -14,6 +14,7 @@
 | Deploy SSH | CI protected secret | 90 дней/смена owner | immutable image deploy |
 | Backup/restic | root-only secret file | 90 дней/инцидент | backup + isolated restore |
 | Metrics/alert webhook | runtime/root-only | 90 дней/инцидент | scrape/test alert |
+| ERP full-sync approval signing | secret manager -> owner-only file | 90 дней/инцидент | issue + validate canary token; no destructive execution |
 
 Ротация: создать новый credential → обновить consumers → smoke → отозвать
 старый → проверить логи/очереди → записать evidence. Не печатать значения в

@@ -1020,12 +1020,14 @@ Definition of Done: тестовые отказы вызывают ожидае�
 - [ ] Delta/full sync, freshness monitoring и алерт на расхождение.
   `[частично 2026-07-19: staging v1 идемпотентно upsert-ит payload и metrics
   отдаёт freshness. Boolean confirmation удалён: HMAC-SHA-256 approval contract
-  fail-closed связывает action/approval/tenant/entity/source checksum/current+
-  incoming counts/canonical issuedAt+expiresAt с TTL <=1h и secret >=32 bytes;
-  tamper, wrong secret/tenant/checksum/count, expiry, excessive TTL и malformed
-  input negative matrix PASS, worker 55/55. Trusted issuer/secret-manager,
-  persisted queue field, transactional absent-product deactivation и recovery
-  ещё не реализованы; production alert/semantics требуют client data/business/
+  fail-closed связывает action/change/two distinct approvals/reason/tenant/
+  entity/source checksum/current+incoming counts/canonical issuedAt+expiresAt
+  с TTL <=1h и secret >=32 bytes. Controlled file-based issuer принимает только
+  owner-only non-symlink request/key, создаёт token эксклюзивно mode 0600 и не
+  раскрывает protected values через CLI; tamper/cross-context/time/input/file
+  negative matrix PASS. Secret-manager deployment, persisted queue field,
+  token consumer, transactional absent-product deactivation и recovery ещё не
+  реализованы; production alert/semantics требуют client data/business/
   infrastructure owners]`
 
 - [ ] Контрольные суммы и сверка количества/сумм с ERP.

@@ -68,16 +68,37 @@ manifest сохраняется в durable queue и применяется те�
 Простой boolean удалён из контракта. Для опасного уменьшения guard принимает
 только HMAC-SHA-256 token с secret не короче 32 bytes, подписанный доверенным
 server-side issuer. Payload exact-schema привязан к action
-`deactivate_absent_products`, approval ID, tenant, entity, source SHA-256,
-current/incoming active counts, canonical issuedAt/expiresAt и TTL максимум
-один час. Signature сравнивается constant-time; malformed/tampered, иной tenant/
-checksum/count, expired/future token, слабый secret и некорректные input counts
-fail-closed. Token/secret нельзя помещать в API response, import error или log.
+`deactivate_absent_products`, change ID, два разных approval ID, reason code,
+tenant, entity, source SHA-256, current/incoming active counts, canonical
+issuedAt/expiresAt и TTL максимум один час. Signature сравнивается constant-time;
+malformed/tampered, иной tenant/checksum/count, expired/future token, слабый
+secret и некорректные input counts fail-closed. Token/secret нельзя помещать в
+API response, import error или log.
 
-Это пока только проверенный approval contract, а не включённое удаление:
-trusted issuer/secret-manager path, очередь и транзакционная деактивация ещё не
-подключены. Текущий staging v1 использует upsert и не удаляет отсутствующие
-строки, поэтому массовое удаление сейчас невозможно.
+Контролируемый file-based issuer реализован. Request и signing key должны быть
+абсолютными owner-only regular files с mode `0600` (или строже), без symlink;
+output directory принадлежит тому же UID и не допускает group/world write.
+Issuer создаёт новый token-файл эксклюзивно с mode `0600`, выполняет `fsync`,
+никогда не перезаписывает существующий файл и выводит только безопасный event:
+
+```bash
+pnpm --filter @leadshelf/worker import:issue-full-sync-approval -- \
+  --request-file /run/leadshelf/erp/full-sync-request.json \
+  --secret-file /run/secrets/erp-full-sync-approval-key \
+  --output-file /run/leadshelf/erp/full-sync-approval.token
+```
+
+Token-файл является краткоживущим bearer credential: его нельзя выводить в
+stdout, помещать в argv, CI artifact, тикет или лог; после контролируемой
+передачи consumer-у он удаляется по утверждённой evidence policy. Signing key
+должен поступать из production secret manager в owner-only файл и ротироваться
+по security runbook.
+
+Это пока issuer и проверенный approval contract, а не включённое удаление:
+secret-manager deployment, persisted queue field, consumer token-файла,
+транзакционная деактивация и recovery ещё не подключены. Текущий staging v1
+использует upsert и не удаляет отсутствующие строки, поэтому массовое удаление
+сейчас невозможно.
 
 ## Повтор и восстановление
 

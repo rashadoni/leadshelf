@@ -91,7 +91,10 @@ describe("ERP import reconciliation", () => {
     const payload = {
       version: 1 as const,
       action: "deactivate_absent_products" as const,
-      approvalId: "CHG-2026-001",
+      changeId: "CHG-2026-001",
+      requesterApprovalId: "approval-requester-001",
+      reviewerApprovalId: "approval-reviewer-001",
+      reasonCode: "catalog-authoritative-full-sync",
       organizationId: context.organizationId,
       entityType: context.entityType,
       sourceChecksum,
@@ -107,7 +110,7 @@ describe("ERP import reconciliation", () => {
     expect(guardDestructiveFullSync({ ...context, incomingActiveRows: 90 })).toEqual({ allowed: true })
     expect(guardDestructiveFullSync({ ...context, approvalToken, approvalSecret: secret })).toEqual({
       allowed: true,
-      approvalId: payload.approvalId,
+      changeId: payload.changeId,
     })
 
     const tampered = `${approvalToken.slice(0, -1)}${approvalToken.endsWith("A") ? "B" : "A"}`
@@ -158,6 +161,10 @@ describe("ERP import reconciliation", () => {
     expect(() => signDestructiveFullSyncApproval({
       ...payload,
       expiresAt: new Date(now.getTime() + 61 * 60_000).toISOString(),
+    }, secret)).toThrow("full_sync_approval_payload_invalid")
+    expect(() => signDestructiveFullSyncApproval({
+      ...payload,
+      reviewerApprovalId: payload.requesterApprovalId,
     }, secret)).toThrow("full_sync_approval_payload_invalid")
     expect(guardDestructiveFullSync({ ...context, sourceChecksum: "bad" })).toMatchObject({
       allowed: false,

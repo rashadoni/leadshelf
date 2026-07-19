@@ -130,7 +130,10 @@ const FULL_SYNC_APPROVAL_MAX_TTL_MS = 60 * 60_000
 export type DestructiveFullSyncApprovalPayload = {
   version: 1
   action: "deactivate_absent_products"
-  approvalId: string
+  changeId: string
+  requesterApprovalId: string
+  reviewerApprovalId: string
+  reasonCode: string
   organizationId: string
   entityType: "products"
   sourceChecksum: string
@@ -157,19 +160,25 @@ function validApprovalPayload(payload: unknown): payload is DestructiveFullSyncA
   const value = payload as Record<string, unknown>
   const exactKeys = [
     "action",
-    "approvalId",
+    "changeId",
     "currentActiveRows",
     "entityType",
     "expiresAt",
     "incomingActiveRows",
     "issuedAt",
     "organizationId",
+    "reasonCode",
+    "requesterApprovalId",
+    "reviewerApprovalId",
     "sourceChecksum",
     "version",
   ]
   if (Object.keys(value).sort().join("\0") !== exactKeys.join("\0")) return false
   if (value.version !== 1 || value.action !== "deactivate_absent_products" || value.entityType !== "products") return false
-  if (typeof value.approvalId !== "string" || !/^[A-Za-z0-9._:-]{1,80}$/.test(value.approvalId)) return false
+  for (const key of ["changeId", "requesterApprovalId", "reviewerApprovalId", "reasonCode"] as const) {
+    if (typeof value[key] !== "string" || !/^[A-Za-z0-9._:-]{1,80}$/.test(value[key])) return false
+  }
+  if (value.requesterApprovalId === value.reviewerApprovalId) return false
   if (typeof value.organizationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.organizationId)) return false
   if (typeof value.sourceChecksum !== "string" || !/^[0-9a-f]{64}$/.test(value.sourceChecksum)) return false
   if (!Number.isSafeInteger(value.currentActiveRows) || Number(value.currentActiveRows) < 0) return false
@@ -187,7 +196,10 @@ function canonicalApprovalPayload(payload: DestructiveFullSyncApprovalPayload): 
   return JSON.stringify({
     version: payload.version,
     action: payload.action,
-    approvalId: payload.approvalId,
+    changeId: payload.changeId,
+    requesterApprovalId: payload.requesterApprovalId,
+    reviewerApprovalId: payload.reviewerApprovalId,
+    reasonCode: payload.reasonCode,
     organizationId: payload.organizationId,
     entityType: payload.entityType,
     sourceChecksum: payload.sourceChecksum,
@@ -245,7 +257,7 @@ export function guardDestructiveFullSync(input: {
   approvalSecret?: string
   now?: Date
   maxDropRatio?: number
-}): { allowed: true; approvalId?: string } | { allowed: false; reason: DestructiveFullSyncGuardReason; dropRatio: number } {
+}): { allowed: true; changeId?: string } | { allowed: false; reason: DestructiveFullSyncGuardReason; dropRatio: number } {
   const current = input.currentActiveRows
   const incoming = input.incomingActiveRows
   const maxDropRatio = input.maxDropRatio ?? 0.1
@@ -287,5 +299,5 @@ export function guardDestructiveFullSync(input: {
   ) {
     return { allowed: false, reason: "approval_mismatch", dropRatio }
   }
-  return { allowed: true, approvalId: approval.approvalId }
+  return { allowed: true, changeId: approval.changeId }
 }
