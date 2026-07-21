@@ -25,6 +25,7 @@ overrides:
   "@expo/fingerprint": "0.20.1"
   "@expo/image-utils": "0.11.0"
   "next>postcss": "8.5.10"
+  "brace-expansion@^1.0.0": "1.1.16"
   "exceljs>uuid": "11.1.1"
   "xcode>uuid": "11.1.1"
 
