@@ -2,8 +2,9 @@ import * as Crypto from "expo-crypto"
 import * as FileSystem from "expo-file-system/legacy"
 import type { MobileCommercialMediaPurpose } from "@leadshelf/api-contracts/mobile/v1"
 import type { CommercialMediaAttachment } from "../db/local-store"
+import { COMMERCIAL_MEDIA_DIR, persistEncryptedMedia } from "../media/encrypted-media-store"
 
-const DIR = `${FileSystem.documentDirectory}commercial-media-outbox/`
+const DIR = COMMERCIAL_MEDIA_DIR
 
 export async function persistCommercialMedia(input: {
   sourceUri: string
@@ -13,7 +14,7 @@ export async function persistCommercialMedia(input: {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {})
   const clientMediaId = `commercial-${Crypto.randomUUID()}`
   const fileUri = `${DIR}${clientMediaId}.jpg`
-  await FileSystem.copyAsync({ from: input.sourceUri, to: fileUri })
+  await persistEncryptedMedia(input.sourceUri, fileUri, { deletePlaintextSource: true })
   return {
     clientMediaId,
     purpose: input.purpose,

@@ -5,7 +5,7 @@
  * 1280×720 + ffmpeg muxes per-scene narration on top).
  *
  * LeadShelf ADAPTATIONS vs the reference:
- *  - AUTH: custom POST /api/auth/login {email,password} → ls_access/ls_refresh
+ *  - AUTH: custom POST /api/auth/login {organizationSlug,email,password} → ls_access/ls_refresh
  *    cookies (NOT NextAuth). ls_access lives 15 min and middleware does NOT
  *    auto-refresh → the recorder RE-LOGINS every SESSION_REFRESH_MS and pushes
  *    fresh cookies into the LIVE browser context between scenes (a full film
@@ -376,7 +376,9 @@ function muxSection(webm, audio, offsetsMs, out) {
   }
   if (!n) throw new Error("no scene audio to mux");
 
-  const outSec = ((audioEndMs + 900) / 1000).toFixed(2);
+  // 2.4s outro: Gemini narration carries no trailing silence, so a short tail
+  // makes the film feel cut off right after the last word (user-reported).
+  const outSec = ((audioEndMs + 2400) / 1000).toFixed(2);
   filters.unshift(`[0:v]scale=${videoSize.width}:${videoSize.height},format=yuv420p,tpad=stop_mode=clone:stop_duration=${outSec}[v]`);
   filters.push(`${mixLabels.join("")}amix=inputs=${n}:normalize=0:dropout_transition=0[aout]`);
 
@@ -484,8 +486,11 @@ async function geminiTTS(text, outMp3) {
     }
     const pcm = resolve(dirname(outMp3), `${basename(outMp3)}.pcm`);
     writeFileSync(pcm, Buffer.from(b64, "base64"));
+    // apad: Gemini speech ends flush with the last word — pad 0.8s of silence
+    // so scene holds (and the film outro) never clip the final syllable.
     execFileSync("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error",
       "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", pcm,
+      "-af", "apad=pad_dur=0.8",
       "-codec:a", "libmp3lame", "-q:a", "3", outMp3], { stdio: "inherit" });
     rmSync(pcm, { force: true });
     await sleep(1000);
@@ -540,6 +545,7 @@ async function loginWithRetry(api, attempts = 4) {
     try {
       const res = await api.post("/api/auth/login", {
         data: {
+          organizationSlug: process.env.HELP_VIDEO_ORGANIZATION_SLUG || "demo",
           email: process.env.HELP_VIDEO_EMAIL || "admin@leadshelf.com",
           password: process.env.HELP_VIDEO_PASSWORD || "demo1234",
         },

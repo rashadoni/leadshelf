@@ -114,6 +114,40 @@ describe("executeProductsImport", () => {
     })
     expect(a100?.name).toBe("Парацетамол 500мг N20")
   })
+
+  test("parallel rows share reference upserts without unique races", async () => {
+    const rows = Array.from({ length: 64 }, (_, index) => ({
+      sku: `RACE-${index.toString().padStart(3, "0")}`,
+      name: `Race product ${index}`,
+      brand: "Concurrent Brand",
+      supplier: "Concurrent Supplier",
+      manufacturer: "Concurrent Manufacturer",
+      categoryPath: "Concurrent / Shared",
+    }))
+
+    await expect(
+      executeProductsImport(prisma, { organizationId: orgId, rows }),
+    ).resolves.toMatchObject({
+      status: "COMPLETED",
+      importedRows: 64,
+    })
+    await expect(
+      prisma.brand.count({ where: { organizationId: orgId, name: "Concurrent Brand" } }),
+    ).resolves.toBe(1)
+    await expect(
+      prisma.supplier.count({ where: { organizationId: orgId, name: "Concurrent Supplier" } }),
+    ).resolves.toBe(1)
+    await expect(
+      prisma.manufacturer.count({
+        where: { organizationId: orgId, name: "Concurrent Manufacturer" },
+      }),
+    ).resolves.toBe(1)
+    await expect(
+      prisma.category.count({
+        where: { organizationId: orgId, normalizedPath: { startsWith: "concurrent" } },
+      }),
+    ).resolves.toBe(2)
+  })
 })
 
 describe("readCsvRecords", () => {

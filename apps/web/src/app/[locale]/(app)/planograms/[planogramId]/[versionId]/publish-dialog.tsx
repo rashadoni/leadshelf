@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 export interface PublishTargetOption {
   formats: Array<{ id: string; name: string; storeCount: number }>
@@ -22,6 +23,7 @@ export function PublishDialog({
   onError: (message: string) => void
 }) {
   const t = useTranslations("planograms.publish")
+  const tc = useTranslations("common")
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<"FORMAT" | "STORES">("FORMAT")
   const [formatId, setFormatId] = useState(options.formats[0]?.id ?? "")
@@ -32,7 +34,7 @@ export function PublishDialog({
 
   async function submit() {
     setPending(true)
-    const res = await fetch(publishUrl, {
+    const res = await fetchApiResponse(publishUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -49,7 +51,11 @@ export function PublishDialog({
       setOpen(false)
       onPublished(body.resolvedStoreCount as number)
     } else {
-      onError(body.message ?? body.error ?? `HTTP ${res.status}`)
+      onError(formatResponseError(
+        res,
+        body.message ?? body.error ?? `HTTP ${res.status}`,
+        (value) => tc("supportCode", { value }),
+      ))
     }
   }
 

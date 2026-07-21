@@ -4,6 +4,11 @@ import * as FileSystem from "expo-file-system/legacy"
 import * as Sharing from "expo-sharing"
 import type { FieldDocumentDraft } from "../db/local-store"
 import { tokenStore } from "../auth/token-store"
+import {
+  FIELD_DOCUMENT_MEDIA_DIR,
+  persistEncryptedMedia,
+  withDecryptedMedia,
+} from "../media/encrypted-media-store"
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: "application/pdf",
@@ -54,10 +59,10 @@ export async function pickFieldDocument(input?: {
   if (!FileSystem.documentDirectory) throw new Error("Хранилище устройства недоступно")
   const [organizationSlug, agentId] = await Promise.all([tokenStore.getOrgSlug(), tokenStore.getUserId()])
   const scope = `${organizationSlug ?? "unknown"}-${agentId ?? "unknown"}`.replace(/[^A-Za-z0-9._-]+/g, "_")
-  const directory = `${FileSystem.documentDirectory}mtm-documents/${scope}/`
+  const directory = `${FIELD_DOCUMENT_MEDIA_DIR}${scope}/`
   await FileSystem.makeDirectoryAsync(directory, { intermediates: true })
   const target = `${directory}${Crypto.randomUUID()}-${fileName}`
-  await FileSystem.copyAsync({ from: asset.uri, to: target })
+  await persistEncryptedMedia(asset.uri, target, { deletePlaintextSource: true })
   return {
     title: input?.title?.trim() || fileName,
     fileName,
@@ -73,10 +78,10 @@ export async function openLocalDocument(uri: string, mimeType: string): Promise<
   if (!await Sharing.isAvailableAsync()) {
     throw new Error("На этом устройстве просмотр файла недоступен")
   }
-  await Sharing.shareAsync(uri, {
+  await withDecryptedMedia(uri, (temporaryUri) => Sharing.shareAsync(temporaryUri, {
     mimeType,
     dialogTitle: "Открыть локальный файл",
-  })
+  }))
 }
 
 export function formatFileSize(bytes: number): string {

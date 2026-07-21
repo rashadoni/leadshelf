@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 
 export function ProofDecisionActions({
   taskId,
@@ -20,12 +21,13 @@ export function ProofDecisionActions({
   const router = useRouter()
   const t = useTranslations("tasks.detail")
   const tReviews = useTranslations("reviews")
+  const tc = useTranslations("common")
   const [pending, setPending] = useState<"accept" | "reject" | "retake" | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function requireOk(request: Promise<Response>) {
     const response = await request
-    if (!response.ok && response.status !== 409) throw new Error(String(response.status))
+    requireApiResponse(response, [409])
   }
 
   async function decide(action: "accept" | "reject" | "retake") {
@@ -58,8 +60,8 @@ export function ProofDecisionActions({
         }))
       }
       router.refresh()
-    } catch {
-      setError(t("decisionFailed"))
+    } catch (error) {
+      setError(formatApiError(error, t("decisionFailed"), (value) => tc("supportCode", { value })))
     } finally {
       setPending(null)
     }

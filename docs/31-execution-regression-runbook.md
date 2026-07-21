@@ -1,24 +1,31 @@
 # Execution regression runbook
 
-Обновлено: 2026-07-10.
+Обновлено: 2026-07-18.
 
 ## Web responsive screenshots
 
-`@playwright/test` используется только как dev-инструмент. Тест логинится в
-готовый demo tenant, открывает tasks, Field Force и orders при 390, 768 и
-1440 px, проверяет горизонтальный overflow и сохраняет девять full-page PNG
-в `apps/web/test-results`. CI загружает `playwright-report` и `test-results`
-как artifact.
+`@playwright/test` используется только как dev-инструмент. Responsive smoke
+логинится в готовый demo tenant, открывает tasks, Field Force и orders при 390,
+768 и 1440 px, проверяет horizontal overflow и сохраняет screenshots.
+Отдельный RU/AZ accessibility smoke проверяет `html[lang]`, accessible names,
+Tab order и видимый focus. Оба набора запускаются в Chromium, Firefox и WebKit;
+CI загружает `playwright-report` и `test-results` как artifact.
 
 Локально после build и `pnpm --filter @leadshelf/db seed:demo`:
 
 ```bash
-PLAYWRIGHT_CHANNEL=chrome pnpm --filter @leadshelf/web test:e2e:responsive
+pnpm --filter @leadshelf/web test:e2e:responsive
 ```
 
-CI устанавливает pinned Chromium через Playwright CLI. Перед browser run
-seed обязан завершиться строкой readiness; без целостного demo baseline
-shell не показывает зелёный badge, а тесты не получают ожидаемые данные.
+CI устанавливает pinned Playwright Chromium/Firefox/WebKit. Перед browser run
+seed обязан завершиться строкой readiness; без целостного demo baseline shell
+не показывает зелёный badge, а responsive-тесты не получают ожидаемые данные.
+
+Локальный/CI standalone использует единый origin `http://localhost:3100`.
+Production build сохраняет Secure cookies; только Playwright webServer передаёт
+точный `LEADSHELF_E2E_HTTP_ORIGIN` для HTTP loopback. Произвольный origin и
+production deploy не отключают Secure. Полный свежий прогон 2026-07-18: 15/15.
+Локально можно ограничить проект флагом `--project=chromium`.
 
 ## Frozen mobile protocol
 

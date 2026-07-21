@@ -33,7 +33,34 @@ describe("mobile sentry envelope + capture", () => {
     expect(header.event_id).toBe("e1")
     expect(item).toEqual({ type: "event" })
     expect(event.platform).toBe("javascript")
-    expect(event.exception.values[0]).toMatchObject({ type: "Error", value: "boom" })
+    expect(event.exception.values[0]).toMatchObject({ type: "Error", value: "Unhandled Error" })
+    expect(event.extra).toMatchObject({ telemetry_data_policy: "raw_error_redacted", has_stack: true })
+    expect(env).not.toContain("boom")
+  })
+
+  it("drops raw mobile errors, stacks, PII and non-allowlisted context", () => {
+    const secret = "Bearer mobile.private.token"
+    const error = new RangeError(`person@example.test pin=1234 ${secret}`)
+    error.stack = `/data/user/0/private/session.ts ${secret}`
+    const env = buildSentryEnvelope(DSN, {
+      eventId: "e2",
+      error,
+      environment: "production secret=bad",
+      context: {
+        isFatal: true,
+        component: "mobile-sync",
+        email: "person@example.test",
+        token: secret,
+        route: "/sync?token=private",
+      },
+    })
+    const event = JSON.parse(env.trim().split("\n")[2]!)
+    expect(event.exception.values[0]).toEqual({ type: "RangeError", value: "Unhandled RangeError" })
+    expect(event.extra).toMatchObject({ isFatal: true, component: "mobile-sync" })
+    expect(event).not.toHaveProperty("environment")
+    for (const forbidden of ["person@example.test", "1234", secret, "/data/user", "session.ts", "token="]) {
+      expect(env).not.toContain(forbidden)
+    }
   })
 
   it("no-ops without a DSN and posts when set", async () => {
@@ -43,5 +70,10 @@ describe("mobile sentry envelope + capture", () => {
 
     expect(await captureToSentry({ dsn: DSN, eventId: "x", error: new Error("y"), fetchImpl })).toBe(true)
     expect(fetchImpl.mock.calls[0]![0]).toContain("/api/99/envelope/")
+  })
+
+  it("returns false when the ingest endpoint rejects the envelope", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false })
+    expect(await captureToSentry({ dsn: DSN, eventId: "x", error: new Error("y"), fetchImpl })).toBe(false)
   })
 })

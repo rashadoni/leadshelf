@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatApiError, requireApiResponse } from "@/client/api-error"
 
 interface Summary {
   batchId: string
@@ -9,6 +10,14 @@ interface Summary {
   errorRows: number
   importedRows: number
   status: string
+  reconciliation?: {
+    status: "MATCH" | "MISMATCH"
+    sourceRows: number
+    importedRows: number
+    errorRows: number
+    sourceChecksum: string
+    mismatches: string[]
+  } | null
 }
 
 interface ImportError {
@@ -22,8 +31,32 @@ interface ImportError {
 
 const ENTITIES = ["products", "prices", "stock", "sales", "assortment"] as const
 
+const TERMINAL_IMPORT_STATUSES = new Set(["COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED"])
+
+async function waitForQueuedImport(batchId: string): Promise<Summary> {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const response = await fetchApiResponse(`/api/v1/catalog/imports/${batchId}`, { cache: "no-store" })
+    requireApiResponse(response)
+    const body = await response.json()
+    if (TERMINAL_IMPORT_STATUSES.has(body.status)) {
+      return {
+        batchId,
+        totalRows: body.totalRows,
+        errorRows: body.errorRows,
+        importedRows: body.reconciliation?.importedRows
+          ?? Math.max(0, body.totalRows - body.errorRows),
+        status: body.status,
+        reconciliation: body.reconciliation ?? null,
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+  }
+  throw new Error("import_status_timeout")
+}
+
 export function ImportForm() {
   const t = useTranslations("catalog.import")
+  const tc = useTranslations("common")
   const [pending, setPending] = useState(false)
   const [summary, setSummary] = useState<Summary | null>(null)
   const [errors, setErrors] = useState<ImportError[]>([])
@@ -36,20 +69,27 @@ export function ImportForm() {
     setErrors([])
     setFailMessage(null)
 
-    const form = new FormData(e.currentTarget)
-    const res = await fetch("/api/v1/catalog/imports", { method: "POST", body: form })
-    setPending(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setFailMessage(body.error ?? `HTTP ${res.status}`)
-      return
-    }
-    const s: Summary = await res.json()
-    setSummary(s)
-    const errRes = await fetch(`/api/v1/catalog/imports/${s.batchId}/errors?limit=100`)
-    if (errRes.ok) {
+    try {
+      const form = new FormData(e.currentTarget)
+      const res = await fetchApiResponse("/api/v1/catalog/imports", { method: "POST", body: form })
+      requireApiResponse(res)
+      const initial = await res.json()
+      const s: Summary = initial.queued
+        ? await waitForQueuedImport(initial.batchId)
+        : initial
+      setSummary(s)
+      const errRes = await fetchApiResponse(`/api/v1/catalog/imports/${s.batchId}/errors?limit=100`)
+      requireApiResponse(errRes)
       const body = await errRes.json()
       setErrors(body.errors)
+    } catch (error) {
+      setFailMessage(formatApiError(
+        error,
+        tc("actionFailed"),
+        (value) => tc("supportCode", { value }),
+      ))
+    } finally {
+      setPending(false)
     }
   }
 
@@ -119,6 +159,25 @@ export function ImportForm() {
               {t("errorRows")}: <b>{summary.errorRows}</b>
             </span>
           </div>
+
+          {summary.reconciliation && (
+            <div className={`mt-4 rounded-lg border p-3 text-sm ${
+              summary.reconciliation.status === "MATCH"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-red-200 bg-red-50 text-red-800"
+            }`}>
+              <div className="font-medium">
+                {t("reconciliationStatus")}: {t(summary.reconciliation.status === "MATCH"
+                  ? "reconciliationMatch"
+                  : "reconciliationMismatch")}
+              </div>
+              <div className="mt-1 text-xs">
+                {t("checksum")}: <code title={summary.reconciliation.sourceChecksum}>
+                  {summary.reconciliation.sourceChecksum.slice(0, 16)}…
+                </code>
+              </div>
+            </div>
+          )}
 
           {errors.length > 0 && (
             <div className="mt-4">

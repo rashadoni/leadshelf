@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 export function NewPlanogramForm({
   templates,
@@ -9,6 +10,7 @@ export function NewPlanogramForm({
   templates: Array<{ id: string; name: string; dims: string }>
 }) {
   const t = useTranslations("planograms.new")
+  const tc = useTranslations("common")
   const locale = useLocale()
   const [name, setName] = useState("")
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "")
@@ -19,7 +21,7 @@ export function NewPlanogramForm({
     e.preventDefault()
     setPending(true)
     setError(null)
-    const res = await fetch("/api/v1/planograms", {
+    const res = await fetchApiResponse("/api/v1/planograms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, equipmentTemplateId: templateId }),
@@ -29,7 +31,7 @@ export function NewPlanogramForm({
       window.location.assign(`/${locale}/planograms/${body.planogramId}/${body.versionId}`)
     } else {
       setPending(false)
-      setError(`HTTP ${res.status}`)
+      setError(formatResponseError(res, `HTTP ${res.status}`, (value) => tc("supportCode", { value })))
     }
   }
 

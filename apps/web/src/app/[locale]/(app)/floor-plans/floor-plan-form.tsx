@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 interface Option {
   id: string
@@ -56,6 +57,7 @@ export function FloorPlanForm({
   planograms: Option[]
 }) {
   const t = useTranslations("floorPlans.form")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [targetType, setTargetType] = useState<"store" | "format">(initial?.targetType ?? "store")
   const [targetId, setTargetId] = useState(initial?.targetId ?? stores[0]?.id ?? formats[0]?.id ?? "")
@@ -91,7 +93,7 @@ export function FloorPlanForm({
     event.preventDefault()
     setPending(true)
     setError(null)
-    const response = await fetch(floorPlanId ? `/api/v1/floor-plans/${floorPlanId}` : "/api/v1/floor-plans", {
+    const response = await fetchApiResponse(floorPlanId ? `/api/v1/floor-plans/${floorPlanId}` : "/api/v1/floor-plans", {
       method: floorPlanId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -111,7 +113,11 @@ export function FloorPlanForm({
     setPending(false)
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
-      setError(body.error ?? `HTTP ${response.status}`)
+      setError(formatResponseError(
+        response,
+        body.error ?? `HTTP ${response.status}`,
+        (value) => tc("supportCode", { value }),
+      ))
       return
     }
     if (!floorPlanId) {

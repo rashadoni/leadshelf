@@ -1,0 +1,308 @@
+rule_files:
+  - leadshelf-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="leadshelf-web",instance="web:3000"}'
+        values: '0x8'
+      - series: 'leadshelf_object_storage_ready{instance="web:3000"}'
+        values: '0x8'
+      - series: 'leadshelf_import_oldest_pending_seconds{instance="web:3000"}'
+        values: '1000x8'
+      - series: 'leadshelf_import_failures_recent{instance="web:3000"}'
+        values: '1x8'
+      - series: 'leadshelf_import_full_sync_oldest_waiting_approval_seconds{instance="web:3000"}'
+        values: '4000x20'
+      - series: 'leadshelf_import_full_sync_cleanup_required{instance="web:3000"}'
+        values: '1x8'
+      - series: 'leadshelf_proof_analysis_oldest_pending_seconds{instance="web:3000"}'
+        values: '1000x8'
+      - series: 'leadshelf_notification_oldest_pending_seconds{instance="web:3000"}'
+        values: '1000x8'
+      - series: 'leadshelf_sync_conflicts_unresolved{instance="web:3000"}'
+        values: '0 1 2 3 4 12 15 18 20 22 24 26 28 30 32 34 36 38 40 42 44'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LeadShelfWebTargetDown
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              job: leadshelf-web
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf web metrics target is down
+              description: The web target has been unreachable for two minutes; check readiness, database, storage and the proxy.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 3m
+        alertname: LeadShelfObjectStorageUnavailable
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf object storage is unavailable
+              description: The application cannot reach its object storage dependency; uploads and media reads are unsafe.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfImportQueueStalled
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf import queue exceeds its 15-minute SLO
+              description: The oldest pending or processing import has exceeded 15 minutes for five consecutive minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfImportFailures
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf imports are failing
+              description: At least one import queue job failed within the rolling 15-minute window.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 16m
+        alertname: LeadShelfFullSyncApprovalWaiting
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf full-sync approval has waited over one hour
+              description: A protected full-sync source has remained unapproved for at least one hour and fifteen minutes; approve or cancel it through the ERP runbook.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfFullSyncCleanupRequired
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: erp
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf full-sync cancellation cleanup is incomplete
+              description: A cancelled full-sync still has protected source or approval artifacts; rerun the controlled cancellation procedure.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/ERP_IMPORT_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfProofAnalysisStalled
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf proof analysis queue is stalled
+              description: The oldest pending or processing proof analysis has exceeded the initial 15-minute operational baseline.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfNotificationQueueStalled
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf notification queue is stalled
+              description: The oldest pending or sending notification has exceeded the initial 15-minute operational baseline.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 20m
+        alertname: LeadShelfSyncConflictsGrowing
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf unresolved sync conflicts are growing
+              description: More than ten net unresolved conflicts were added within 15 minutes and the growth persisted for five minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+
+  - interval: 1m
+    input_series:
+      - series: 'leadshelf_object_storage_ready{instance="web:3000"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LeadShelfWebTargetMissing
+        exp_alerts:
+          - exp_labels:
+              job: leadshelf-web
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf web metrics target is missing
+              description: Prometheus service discovery has produced no LeadShelf web target for two minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+
+  - interval: 1m
+    input_series:
+      - series: 'leadshelf_object_storage_inventory_ready{instance="web:3000"}'
+        values: '0x20'
+      - series: 'leadshelf_object_storage_inventory_age_seconds{instance="web:3000"}'
+        values: '2000x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: LeadShelfStorageInventoryStale
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf storage inventory is stale
+              description: Object count and byte-capacity evidence has been unavailable or stale for at least 15 minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+
+  - interval: 1m
+    input_series:
+      - series: 'leadshelf_mobile_outbox_failures_recent{instance="web:3000"}'
+        values: '1x8'
+      - series: 'leadshelf_proof_analysis_failures_recent{instance="web:3000"}'
+        values: '1x8'
+      - series: 'leadshelf_notification_failures_recent{instance="web:3000"}'
+        values: '1x8'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: LeadShelfMobileOutboxFailures
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf mobile operations are failing
+              description: At least one persisted mobile operation failed within the rolling 15-minute window.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfProofAnalysisFailures
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf proof analysis is failing
+              description: At least one proof analysis failed within the rolling 15-minute window; human review must remain available.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 6m
+        alertname: LeadShelfNotificationFailures
+        exp_alerts:
+          - exp_labels:
+              instance: web:3000
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf notifications are failing
+              description: At least one notification delivery failed within the rolling 15-minute window.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+
+  - interval: 1m
+    input_series:
+      - series: 'caddy_http_request_duration_seconds_count{handler="reverse_proxy",code="200"}'
+        values: '0+99x25'
+      - series: 'caddy_http_request_duration_seconds_count{handler="reverse_proxy",code="500"}'
+        values: '0+1x25'
+      - series: 'caddy_http_request_duration_seconds_bucket{handler="reverse_proxy",le="0.5"}'
+        values: '0x25'
+      - series: 'caddy_http_request_duration_seconds_bucket{handler="reverse_proxy",le="1"}'
+        values: '0+100x25'
+      - series: 'caddy_http_request_duration_seconds_bucket{handler="reverse_proxy",le="+Inf"}'
+        values: '0+100x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: LeadShelfServerErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf 5xx ratio exceeds 0.5 percent
+              description: The reverse-proxy server error ratio has breached the initial SLO for 15 minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 20m
+        alertname: LeadShelfWebP95LatencyHigh
+        exp_alerts:
+          - exp_labels:
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf web P95 latency exceeds 500 milliseconds
+              description: Aggregate reverse-proxy P95 has breached the initial web SLO for 15 minutes; segment media routes during triage.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="host:9100",mountpoint="/",fstype="ext4"}'
+        values: '10x1700'
+      - series: 'node_filesystem_size_bytes{instance="host:9100",mountpoint="/",fstype="ext4"}'
+        values: '100x1700'
+      - series: 'probe_ssl_earliest_cert_expiry{instance="https://leadshelf.example",job="leadshelf-tls"}'
+        values: '1000000x1700'
+      - series: 'node_systemd_timer_last_trigger_seconds{name="leadshelf-backup.timer",instance="host:9100"}'
+        values: '0x1700'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: LeadShelfDiskSpaceLow
+        exp_alerts:
+          - exp_labels:
+              fstype: ext4
+              instance: host:9100
+              mountpoint: /
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf host disk has less than 15 percent free
+              description: Root filesystem free capacity has remained below 15 percent for 15 minutes.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 2h
+        alertname: LeadShelfCertificateExpiring
+        exp_alerts:
+          - exp_labels:
+              instance: https://leadshelf.example
+              job: leadshelf-tls
+              owner_role: infrastructure
+              service: leadshelf
+              severity: warning
+            exp_annotations:
+              summary: LeadShelf TLS certificate expires within 14 days
+              description: Blackbox TLS monitoring reports less than 14 days before certificate expiry.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md
+      - eval_time: 27h
+        alertname: LeadShelfBackupMissed
+        exp_alerts:
+          - exp_labels:
+              instance: host:9100
+              name: leadshelf-backup.timer
+              owner_role: infrastructure
+              service: leadshelf
+              severity: critical
+            exp_annotations:
+              summary: LeadShelf production backup is overdue
+              description: The systemd backup timer has not triggered within the 26-hour RPO guard window.
+              runbook_url: https://github.com/rashadrahimov/leadshelf/blob/main/deploy/OPERATIONS_RUNBOOK.md

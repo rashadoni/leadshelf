@@ -301,7 +301,7 @@ export default async function TasksPage({
                     <td colSpan={8} className="px-3 py-3">
                       <details className="group">
                         <summary className="cursor-pointer text-xs font-medium text-neutral-700 hover:text-neutral-950">
-                          {t("detail.open")} · <Link href={`/tasks/${task.id}`}>{t("detail.openPage")}</Link>
+                          {t("detail.open")}
                         </summary>
                         <div className="mt-3 grid gap-3 md:grid-cols-4">
                           <div className="rounded-lg border border-neutral-200 bg-white p-3">

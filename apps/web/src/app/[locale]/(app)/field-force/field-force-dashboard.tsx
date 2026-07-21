@@ -20,6 +20,7 @@ import {
 import type { RouteStop } from "@/components/field-force/live-map"
 import type { MtmDashboardAgent as AgentLocation } from "@/components/field-force/mtm-types"
 import { formatLocaleDate } from "@/i18n/format"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 
 const FieldForceLiveMap = dynamic(
   () => import("@/components/field-force/live-map").then((mod) => mod.FieldForceLiveMap),
@@ -78,6 +79,7 @@ function pickDisplayRoute(routes: any[]) {
 
 export function FieldForceDashboard() {
   const t = useTranslations("fieldForce.live")
+  const tc = useTranslations("common")
   const locale = useLocale()
   const [agents, setAgents] = useState<AgentLocation[]>([])
   const [statusCounts, setStatusCounts] = useState({ total: 0, checkedIn: 0, onRoad: 0, late: 0, offline: 0 })
@@ -92,6 +94,7 @@ export function FieldForceDashboard() {
   const [showHeatmap, setShowHeatmap] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [agentRoute, setAgentRoute] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
   const selectedAgentRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -102,36 +105,40 @@ export function FieldForceDashboard() {
     try {
       const today = formatLocalDate(new Date())
       const res = await fetch(`/api/v1/field-force/routes?agentId=${agentId}&date=${today}`)
+      requireApiResponse(res)
       const json = await res.json()
       if (json.success && json.data?.routes?.length > 0) {
         setAgentRoute(pickDisplayRoute(json.data.routes))
       } else {
         const fallbackRes = await fetch(`/api/v1/field-force/routes?agentId=${agentId}&limit=10`)
+        requireApiResponse(fallbackRes)
         const fallbackJson = await fallbackRes.json()
         setAgentRoute(fallbackJson.success ? pickDisplayRoute(fallbackJson.data?.routes ?? []) : null)
       }
-    } catch {
+    } catch (caught) {
       setAgentRoute(null)
+      setError(formatApiError(caught, tc("actionFailed"), (value) => tc("supportCode", { value })))
     }
-  }, [])
+  }, [tc])
 
-  const fetchLocations = useCallback(() => {
-    fetch("/api/v1/field-force/locations")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setAgents(json.data.agentLocations || [])
-          setStatusCounts(json.data.statusCounts || { total: 0, checkedIn: 0, onRoad: 0, late: 0, offline: 0 })
-          setLiveFeed(json.data.liveFeed || [])
-          setLastUpdate(new Date())
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        setLoading(false)
-        if (selectedAgentRef.current) fetchAgentRoute(selectedAgentRef.current)
-      })
-  }, [fetchAgentRoute])
+  const fetchLocations = useCallback(async () => {
+    try {
+      const response = await fetch("/api/v1/field-force/locations")
+      requireApiResponse(response)
+      const json = await response.json()
+      if (!json.success) throw new Error("locations_failed")
+      setAgents(json.data.agentLocations || [])
+      setStatusCounts(json.data.statusCounts || { total: 0, checkedIn: 0, onRoad: 0, late: 0, offline: 0 })
+      setLiveFeed(json.data.liveFeed || [])
+      setLastUpdate(new Date())
+      setError(null)
+    } catch (caught) {
+      setError(formatApiError(caught, tc("actionFailed"), (value) => tc("supportCode", { value })))
+    } finally {
+      setLoading(false)
+      if (selectedAgentRef.current) fetchAgentRoute(selectedAgentRef.current)
+    }
+  }, [fetchAgentRoute, tc])
 
   useEffect(() => {
     fetchLocations()
@@ -142,11 +149,15 @@ export function FieldForceDashboard() {
   const handleReplay = async (agentId: string) => {
     try {
       const res = await fetch(`/api/v1/field-force/locations?agentId=${agentId}`)
+      requireApiResponse(res)
       const json = await res.json()
-      if (!res.ok || !json.success) return
+      if (!json.success) throw new Error("location_history_failed")
       setReplayAgent(agentId)
       setReplayTrack(json.data.locations || [])
-    } catch {}
+      setError(null)
+    } catch (caught) {
+      setError(formatApiError(caught, tc("actionFailed"), (value) => tc("supportCode", { value })))
+    }
   }
 
   const handleAgentClick = (agentId: string) => {
@@ -244,6 +255,11 @@ export function FieldForceDashboard() {
           </button>
         </div>
       </div>
+      {error ? (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-1.5">
         <button className={`rounded-md px-3 py-1.5 text-sm ${activeFilter === "all" ? "bg-indigo-600 text-white" : "border border-neutral-300 bg-white"}`} onClick={() => setActiveFilter("all")}>

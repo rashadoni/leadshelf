@@ -105,6 +105,7 @@ export interface LocalStore {
   bumpPhotoAttempts(clientPhotoIds: string[], reason?: string): Promise<void>
   quarantinePhoto(clientPhotoId: string, reason: string): Promise<void>
   quarantinedPhotoCount(): Promise<number>
+  cleanupUploadedPhotoFiles?(): Promise<number>
   pendingCommercialMedia(): Promise<CommercialMediaQueueRow[]>
   markCommercialMediaUploaded(
     clientMediaId: string,

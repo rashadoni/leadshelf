@@ -5,6 +5,7 @@ import { hash } from "@node-rs/argon2"
 import { Prisma } from "@prisma/client"
 import { calculateShelfCompliance, compareShelf } from "@leadshelf/core"
 import { createSystemClient, createTenantClient, persistShelfMetricSnapshot } from "../src/index.ts"
+import { buildDemoSeedFailureLog, buildDemoSeedReadyLog } from "../src/demo-seed-log.ts"
 
 const ARGON_OPTS = { memoryCost: 19456, timeCost: 2, parallelism: 1 }
 const DEMO_PASSWORD = "demo1234"
@@ -1752,16 +1753,19 @@ async function main() {
   const ready = stores === 1 && productsCount >= 6 && floorPlans > 0 && planograms > 0 && tasks === 1 && freshProofTasks === 1 && reviews >= 2 && agents >= 5 && routes >= 5 && visits > 0 && sales > 0 && stocks > 0 && prices > 0 && e2eRoutes === 0 && e2eTasks === 0
   if (!ready) throw new Error(`Demo readiness-check failed: ${JSON.stringify(readiness)}`)
 
-  console.log(`Удалены e2e artifacts: routes=${cleanup.routes}, tasks=${cleanup.tasks}`)
-  console.log(`Demo tenant готов: org=${org.slug} (${org.id})`)
-  console.log(`Логины (пароль у всех: ${DEMO_PASSWORD}):`)
-  for (const [email, , role] of USERS) console.log(`  ${email}  [${role}]`)
-  console.log(`Мобильный вход: org=demo, employeeCode=M-001, PIN=${MOBILE_PIN}`)
+  console.log(buildDemoSeedReadyLog({
+    organizationId: org.id,
+    organizationSlug: org.slug,
+    userCount: USERS.length,
+    mobileUserCount: 1,
+    removedE2eRoutes: cleanup.routes,
+    removedE2eTasks: cleanup.tasks,
+  }))
 }
 
 main()
   .catch((e) => {
-    console.error(e)
+    console.error(buildDemoSeedFailureLog(e))
     process.exitCode = 1
   })
   .finally(() => prisma.$disconnect())

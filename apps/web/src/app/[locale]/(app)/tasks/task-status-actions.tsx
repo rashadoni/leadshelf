@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { formatApiError, requireApiResponse } from "@/client/api-error"
 
 // FSM переходов (зеркало repo): терминальные без действий.
 const NEXT: Record<string, string[]> = {
@@ -17,6 +18,7 @@ const NEXT: Record<string, string[]> = {
 export function TaskStatusActions({ taskId, status }: { taskId: string; status: string }) {
   const t = useTranslations("tasks.actions")
   const tConfirm = useTranslations("tasks.confirm")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,10 +37,10 @@ export function TaskStatusActions({ taskId, status }: { taskId: string; status: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expectedStatus: status, toStatus }),
       })
-      if (!res.ok && res.status !== 409) throw new Error(String(res.status))
+      requireApiResponse(res, [409])
       router.refresh()
-    } catch {
-      setError(t("actionFailed"))
+    } catch (error) {
+      setError(formatApiError(error, t("actionFailed"), (value) => tc("supportCode", { value })))
     } finally {
       setPending(false)
     }

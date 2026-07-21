@@ -30,7 +30,7 @@ describe("trusted Field BFF photo upload route", () => {
     expect(handleMobilePhotoUpload).not.toHaveBeenCalled()
   })
 
-  it("reuses the legacy upload handler with the server-mapped mobile session", async () => {
+  it("uses the shared guarded upload handler with the server-mapped mobile session", async () => {
     const session = { org: "org-1", sub: "user-1", did: "device-1", role: "FIELD_AGENT" }
     const stored = NextResponse.json({ photoId: "photo-1" }, { status: 201 })
     requireFieldBffSession.mockResolvedValue({ ok: true, session })

@@ -10,6 +10,7 @@ test-results/
 .env.*
 !.env.example
 *.log
+!.env.*.example
 tmp/
 temp/
 .cache/

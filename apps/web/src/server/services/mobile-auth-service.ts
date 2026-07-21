@@ -21,8 +21,8 @@ export async function mobileLogin(input: {
   pin: string
   device: MobileDeviceInput
 }) {
-  const org = await authDb.organization.findUnique({
-    where: { slug: input.orgSlug },
+  const org = await authDb.organization.findFirst({
+    where: { slug: { equals: input.orgSlug.trim(), mode: "insensitive" } },
     select: { id: true },
   })
   if (!org) return null
@@ -30,7 +30,7 @@ export async function mobileLogin(input: {
   const user = await authDb.user.findFirst({
     where: {
       organizationId: org.id,
-      employeeCode: input.employeeCode.trim(),
+      employeeCode: { equals: input.employeeCode.trim(), mode: "insensitive" },
       isActive: true,
     },
   })

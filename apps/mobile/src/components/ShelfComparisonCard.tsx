@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react"
-import { Image, Pressable, StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
 import type { MobileShelfComparisonResult } from "@leadshelf/api-contracts/mobile/v1"
 import { t, type MessageKey } from "../i18n"
 import { cardShadow, colors, radii } from "../theme"
+import { EncryptedMediaImage } from "./EncryptedMediaImage"
 
 type Tab = "scheme" | "photo" | "result"
 
@@ -94,7 +95,7 @@ export function ShelfComparisonCard({
         <View style={[styles.body, styles.photoBody]}>
           {photoUri ? (
             <View style={styles.photoFrame}>
-              <Image source={{ uri: photoUri }} resizeMode="contain" style={styles.photo} />
+              <EncryptedMediaImage uri={photoUri} resizeMode="contain" style={styles.photo} />
               {result.detections.filter((detection) => detection.bbox != null).map((detection) => {
                 const bbox = detection.bbox!
                 const selected = detection.placementId != null && detection.placementId === selectedPlacementId

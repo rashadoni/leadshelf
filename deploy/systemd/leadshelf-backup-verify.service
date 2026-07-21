@@ -1,0 +1,13 @@
+[Unit]
+Description=Verify LeadShelf backup freshness and repository integrity
+After=network-online.target
+Wants=network-online.target
+OnFailure=leadshelf-operations-alert@backup-verification-failed.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/opt/leadshelf/prod/app/deploy/scripts/verify-production-backup.sh
+TimeoutStartSec=3h

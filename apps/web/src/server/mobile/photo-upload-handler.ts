@@ -12,7 +12,10 @@ import {
 import { protocolMismatchFromHeader } from "@/server/mobile/protocol"
 import { emitProductEvent, resolveCaptureRetakesForStep } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
-import { putObject } from "@/server/storage/s3"
+import { deleteObject, putObject } from "@/server/storage/s3"
+import { matchesDeclaredMediaType } from "@/server/security/media-signature"
+import { attemptObjectWrite, persistWithObjectCleanup } from "@/server/storage/object-compensation"
+import { acquireMediaUploadAdmission } from "@/server/mobile/media-upload-admission"
 
 export type MobilePhotoSession = {
   org: string
@@ -117,6 +120,15 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
   const mismatch = protocolMismatchFromHeader(req)
   if (mismatch) return mismatch
 
+  const admission = await acquireMediaUploadAdmission("mobile-upload", session.did, {
+    max: 30,
+    windowMs: 10 * 60_000,
+  })
+  if (!admission.ok) return admission.response
+  return handleUpload(req, session).finally(admission.release)
+}
+
+async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
   if (!(file instanceof File)) return NextResponse.json({ error: "file_required" }, { status: 400 })
@@ -140,6 +152,10 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
   }
   const maxSize = uploadType.mediaType === "video" ? MAX_VIDEO_SIZE : MAX_PHOTO_SIZE
   if (file.size > maxSize) return NextResponse.json({ error: "too_large" }, { status: 413 })
+  const bytes = Buffer.from(await file.arrayBuffer())
+  if (!matchesDeclaredMediaType(bytes, file.type)) {
+    return NextResponse.json({ error: "content_signature_mismatch" }, { status: 415 })
+  }
   if (uploadType.mediaType === "video" && parsed.data.durationMs == null) {
     return NextResponse.json({ error: "video_duration_required" }, { status: 400 })
   }
@@ -210,9 +226,7 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
   })
   if (!task) return NextResponse.json({ error: "task_not_found_or_not_assigned" }, { status: 404 })
 
-  const key = `${uploadType.mediaType === "video" ? "videos" : "photos"}/${session.org}/${task.id}/${parsed.data.clientPhotoId}.${uploadType.ext}`
-  const bytes = Buffer.from(await file.arrayBuffer())
-  await putObject(key, bytes, file.type)
+  const key = `${uploadType.mediaType === "video" ? "videos" : "photos"}/${session.org}/${task.id}/${parsed.data.clientPhotoId}-${crypto.randomUUID()}.${uploadType.ext}`
 
   let exif: object | undefined
   try {
@@ -269,78 +283,88 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
     qualityCheck: qualityDetails,
   }
 
-  const { photo, reviewId, queuedVisionReviewId } = await workerDb.$transaction(async (tx) => {
-    const photo = await tx.photoSubmission.create({
-      data: {
-        organizationId: session.org,
-        storeId: task.storeId,
-        taskId: task.id,
-        userId: session.sub,
-        url: key,
-        mediaType: uploadType.mediaType === "video" ? "VIDEO" : "PHOTO",
-        mimeType: file.type,
-        fileSizeBytes: file.size,
-        durationMs: parsed.data.durationMs ?? null,
-        captureScenarioId: captureStep?.scenarioId ?? proofMetadata.capture.scenarioId,
-        captureStepId: captureStep?.stepId ?? proofMetadata.capture.stepId,
-        captureStepKind: captureStep?.stepKind ?? proofMetadata.capture.stepKind,
-        captureStepSequence: captureStep?.sequence ?? null,
-        captureRequired: captureStep?.required ?? proofMetadata.capture.required,
-        captureMediaKind: captureStep?.mediaKind ?? proofMetadata.capture.mediaKind,
-        captureMinDurationSeconds: captureStep?.minDurationSeconds ?? null,
-        captureMaxDurationSeconds: captureStep?.maxDurationSeconds ?? null,
-        clientPhotoId: parsed.data.clientPhotoId,
-        takenAt: new Date(parsed.data.takenAt),
-        exif: exifWithQuality,
-        captureFlags: captureFlags ?? undefined,
-        captureTelemetry: captureTelemetry ?? undefined,
-        qualityScore: combinedQualityScore,
-      },
-    })
-    // equipmentMismatch всегда получает human review: полка снята «как есть»
-    // и офис должен увидеть расхождение с базой оборудования (docs/24).
-    const qualityReview =
-      combinedQualityStatus === "GOOD" && proofMetadata.status === "PASS" && !equipmentMismatch
-        ? null
-        : await tx.humanReview.create({
-            data: {
-              organizationId: session.org,
-              reason: "PHOTO_QUALITY",
-              taskId: task.id,
-              photoSubmissionId: photo.id,
-              score: combinedQualityScore,
-              findings: {
-                qualityCheck: exifWithQuality.qualityCheck,
-                ...(captureFlags ? { captureFlags } : {}),
-              },
-              ...(equipmentMismatch
-                ? { note: "Field agent flagged that the physical equipment does not match the planned one." }
-                : {}),
-            },
-            select: { id: true },
-          })
-    const queuedVisionReview = await tx.humanReview.create({
-      data: {
-        organizationId: session.org,
-        reason: "VISION_COMPLIANCE",
-        status: "PENDING",
-        taskId: task.id,
-        photoSubmissionId: photo.id,
-        planogramVersionId: task.planogramVersionId,
-        findings: {
-          vision: {
-            workerStatus: "queued",
-            mediaType: uploadType.mediaType,
-            framePlan: framePlan as unknown as JsonValue,
-            queuedAt: new Date().toISOString(),
-            warnings: ["proof_waiting_analysis_worker"],
-          },
+  const stored = await attemptObjectWrite(() => putObject(key, bytes, file.type))
+  if (!stored) {
+    return NextResponse.json(
+      { error: "storage_unavailable" },
+      { status: 503, headers: { "Retry-After": "5" } },
+    )
+  }
+  const { photo, reviewId, queuedVisionReviewId } = await persistWithObjectCleanup({
+    persist: () => workerDb.$transaction(async (tx) => {
+      const photo = await tx.photoSubmission.create({
+        data: {
+          organizationId: session.org,
+          storeId: task.storeId,
+          taskId: task.id,
+          userId: session.sub,
+          url: key,
+          mediaType: uploadType.mediaType === "video" ? "VIDEO" : "PHOTO",
+          mimeType: file.type,
+          fileSizeBytes: file.size,
+          durationMs: parsed.data.durationMs ?? null,
+          captureScenarioId: captureStep?.scenarioId ?? proofMetadata.capture.scenarioId,
+          captureStepId: captureStep?.stepId ?? proofMetadata.capture.stepId,
+          captureStepKind: captureStep?.stepKind ?? proofMetadata.capture.stepKind,
+          captureStepSequence: captureStep?.sequence ?? null,
+          captureRequired: captureStep?.required ?? proofMetadata.capture.required,
+          captureMediaKind: captureStep?.mediaKind ?? proofMetadata.capture.mediaKind,
+          captureMinDurationSeconds: captureStep?.minDurationSeconds ?? null,
+          captureMaxDurationSeconds: captureStep?.maxDurationSeconds ?? null,
+          clientPhotoId: parsed.data.clientPhotoId,
+          takenAt: new Date(parsed.data.takenAt),
+          exif: exifWithQuality,
+          captureFlags: captureFlags ?? undefined,
+          captureTelemetry: captureTelemetry ?? undefined,
+          qualityScore: combinedQualityScore,
         },
-        note: "Proof queued for persist-first shelf analysis worker.",
-      },
-      select: { id: true },
-    })
-    return { photo, reviewId: qualityReview?.id ?? null, queuedVisionReviewId: queuedVisionReview?.id ?? null }
+      })
+      // equipmentMismatch всегда получает human review: полка снята «как есть»
+      // и офис должен увидеть расхождение с базой оборудования (docs/24).
+      const qualityReview =
+        combinedQualityStatus === "GOOD" && proofMetadata.status === "PASS" && !equipmentMismatch
+          ? null
+          : await tx.humanReview.create({
+              data: {
+                organizationId: session.org,
+                reason: "PHOTO_QUALITY",
+                taskId: task.id,
+                photoSubmissionId: photo.id,
+                score: combinedQualityScore,
+                findings: {
+                  qualityCheck: exifWithQuality.qualityCheck,
+                  ...(captureFlags ? { captureFlags } : {}),
+                },
+                ...(equipmentMismatch
+                  ? { note: "Field agent flagged that the physical equipment does not match the planned one." }
+                  : {}),
+              },
+              select: { id: true },
+            })
+      const queuedVisionReview = await tx.humanReview.create({
+        data: {
+          organizationId: session.org,
+          reason: "VISION_COMPLIANCE",
+          status: "PENDING",
+          taskId: task.id,
+          photoSubmissionId: photo.id,
+          planogramVersionId: task.planogramVersionId,
+          findings: {
+            vision: {
+              workerStatus: "queued",
+              mediaType: uploadType.mediaType,
+              framePlan: framePlan as unknown as JsonValue,
+              queuedAt: new Date().toISOString(),
+              warnings: ["proof_waiting_analysis_worker"],
+            },
+          },
+          note: "Proof queued for persist-first shelf analysis worker.",
+        },
+        select: { id: true },
+      })
+      return { photo, reviewId: qualityReview?.id ?? null, queuedVisionReviewId: queuedVisionReview?.id ?? null }
+    }),
+    cleanup: () => deleteObject(key),
   })
   // Новое фото шага закрывает открытый запрос пересъемки офиса (docs/23).
   const submittedStepId = captureStep?.stepId ?? proofMetadata.capture.stepId

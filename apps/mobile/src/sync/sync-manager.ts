@@ -203,6 +203,10 @@ export class SyncManager {
         }
       }
 
+      // Удаляем локальный media-файл только после тройного подтверждения:
+      // upload завершён, photo.submit applied, server submission пришёл pull-ом.
+      await this.deps.store.cleanupUploadedPhotoFiles?.()
+
       const now = (this.deps.now?.() ?? new Date()).toISOString()
       this.patch({ phase: "idle", lastSyncAt: now, error: null, lastDurationMs: Date.now() - startedAt })
       await this.refreshCounters()

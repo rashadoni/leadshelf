@@ -25,6 +25,7 @@ export async function GET(
     totalRows: batch.totalRows,
     errorRows: batch.errorRows,
     startedAt: batch.startedAt?.toISOString() ?? null,
+    reconciliation: batch.reconciliation,
     finishedAt: batch.finishedAt?.toISOString() ?? null,
     createdAt: batch.createdAt.toISOString(),
     queueJob: batch.queueJob
@@ -34,6 +35,7 @@ export async function GET(
           attempts: batch.queueJob.attempts,
           error: batch.queueJob.error,
           createdAt: batch.queueJob.createdAt.toISOString(),
+          availableAt: batch.queueJob.availableAt.toISOString(),
           startedAt: batch.queueJob.startedAt?.toISOString() ?? null,
           finishedAt: batch.queueJob.finishedAt?.toISOString() ?? null,
         }

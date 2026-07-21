@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { fetchApiResponse, formatResponseError } from "@/client/api-error"
 
 interface Dims {
   widthMm: number | null
@@ -13,9 +14,11 @@ interface Dims {
 
 export function DimensionsEditor({ productId, dims }: { productId: string; dims: Dims }) {
   const t = useTranslations("catalog.dims")
+  const tc = useTranslations("common")
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [values, setValues] = useState({
     widthMm: dims.widthMm?.toString() ?? "",
     heightMm: dims.heightMm?.toString() ?? "",
@@ -40,8 +43,9 @@ export function DimensionsEditor({ productId, dims }: { productId: string; dims:
 
   async function save() {
     setPending(true)
+    setError(null)
     const toInt = (s: string) => (s.trim() === "" ? null : Number.parseInt(s, 10))
-    const res = await fetch(`/api/v1/catalog/products/${productId}`, {
+    const res = await fetchApiResponse(`/api/v1/catalog/products/${productId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -55,6 +59,8 @@ export function DimensionsEditor({ productId, dims }: { productId: string; dims:
     if (res.ok) {
       setEditing(false)
       router.refresh()
+    } else {
+      setError(formatResponseError(res, tc("actionFailed"), (value) => tc("supportCode", { value })))
     }
   }
 
@@ -91,6 +97,7 @@ export function DimensionsEditor({ productId, dims }: { productId: string; dims:
       >
         {t("cancel")}
       </button>
+      {error ? <span role="alert" className="basis-full text-xs text-red-700">{error}</span> : null}
     </div>
   )
 }

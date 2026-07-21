@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic LeadShelf backup verification
+
+[Timer]
+OnCalendar=*-*-* 08:00:00 UTC
+Persistent=true
+Unit=leadshelf-backup-verify.service
+
+[Install]
+WantedBy=timers.target

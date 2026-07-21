@@ -2,13 +2,14 @@ import {
   CreateBucketCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   DeleteObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3"
 
-// S3-совместимое хранилище (dev: MinIO из docker-compose; прод: MinIO на
-// VPS, позже R2 — API тот же, см. docs/12). Ключи ВСЕГДА начинаются с
+// S3-совместимое хранилище (dev: MinIO из docker-compose; production:
+// поддерживаемый внешний S3/R2 provider). Ключи ВСЕГДА начинаются с
 // products/{organizationId}/ — media-proxy сверяет префикс с сессией.
 
 function required(name: string): string {
@@ -37,11 +38,88 @@ function bucket(): string {
   return process.env.S3_BUCKET ?? "leadshelf-media"
 }
 
+export interface ObjectStorageInventory {
+  objects: number
+  bytes: number
+  collectedAtMs: number
+}
+
+interface ObjectStorageInventoryPage {
+  objects: Array<{ size?: number }>
+  isTruncated: boolean
+  nextToken?: string
+}
+
+export async function collectObjectStorageInventory(
+  listPage: (continuationToken?: string) => Promise<ObjectStorageInventoryPage>,
+): Promise<{ objects: number; bytes: number }> {
+  let continuationToken: string | undefined
+  let objects = 0
+  let bytes = 0
+  const seenTokens = new Set<string>()
+
+  do {
+    const page = await listPage(continuationToken)
+    for (const object of page.objects) {
+      objects += 1
+      bytes += Number.isFinite(object.size) && (object.size ?? 0) > 0
+        ? Math.floor(object.size!)
+        : 0
+    }
+    if (!page.isTruncated) break
+    const next = page.nextToken
+    if (!next || seenTokens.has(next)) throw new Error("object_storage_inventory_cursor_invalid")
+    seenTokens.add(next)
+    continuationToken = next
+  } while (true)
+
+  return { objects, bytes }
+}
+
+let inventoryCache: ObjectStorageInventory | null = null
+let inventoryInFlight: Promise<ObjectStorageInventory> | null = null
+
+function inventoryCacheMs(): number {
+  const parsed = Number(process.env.S3_INVENTORY_CACHE_MS)
+  return Number.isInteger(parsed) && parsed >= 60_000 && parsed <= 24 * 60 * 60_000
+    ? parsed
+    : 15 * 60_000
+}
+
+export async function getObjectStorageInventory(nowMs = Date.now()): Promise<ObjectStorageInventory> {
+  if (inventoryCache && nowMs - inventoryCache.collectedAtMs < inventoryCacheMs()) {
+    return inventoryCache
+  }
+  if (inventoryInFlight) return inventoryInFlight
+
+  inventoryInFlight = collectObjectStorageInventory(async (continuationToken) => {
+    const page = await s3().send(new ListObjectsV2Command({
+      Bucket: bucket(),
+      ContinuationToken: continuationToken,
+    }))
+    return {
+      objects: (page.Contents ?? []).map((object) => ({ size: object.Size })),
+      isTruncated: page.IsTruncated === true,
+      nextToken: page.NextContinuationToken,
+    }
+  }).then((inventory) => {
+    inventoryCache = { ...inventory, collectedAtMs: nowMs }
+    return inventoryCache
+  }).finally(() => {
+    inventoryInFlight = null
+  })
+  return inventoryInFlight
+}
+
+export async function checkObjectStorage(): Promise<void> {
+  await s3().send(new HeadBucketCommand({ Bucket: bucket() }))
+}
+
 let bucketReady = false
 async function ensureBucket(): Promise<void> {
   if (bucketReady) return
   try {
-    await s3().send(new HeadBucketCommand({ Bucket: bucket() }))
+    await checkObjectStorage()
   } catch {
     await s3()
       .send(new CreateBucketCommand({ Bucket: bucket() }))

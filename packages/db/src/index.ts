@@ -8,7 +8,63 @@ export {
   TENANT_MODELS,
   type TenantClient,
 } from "./tenant-client.ts"
+export {
+  previewTenantOffboarding,
+  deleteTenantData,
+  type TenantOffboardingPreview,
+  type DeleteTenantDataInput,
+  type DeleteTenantDataResult,
+} from "./tenant-offboarding.ts"
+export {
+  previewRetention,
+  executeRetention,
+  redactLocationData,
+  type RetentionPolicyInput,
+  type RetentionPreview,
+  type ExecuteRetentionInput,
+  type RetentionResult,
+} from "./retention.ts"
+export {
+  previewDsarExport,
+  executeDsarExport,
+  encryptDsarBundle,
+  type DsarInventoryInput,
+  type DsarPreview,
+  type ExecuteDsarExportInput,
+  type DsarExportResult,
+} from "./dsar.ts"
 export { listImportErrorsForBatch } from "./repos/import.ts"
+export {
+  consumeDurableRateLimit,
+  opaqueRateLimitKey,
+  type RateLimitQuery,
+  type RateLimitResult,
+  type RateLimitRule,
+  type RateLimitRow,
+} from "./rate-limit.ts"
+export {
+  clearAuthenticationFailures,
+  authenticationLockoutScope,
+  getAuthenticationLockout,
+  mobileAuthenticationLockoutKey,
+  recordAuthenticationFailure,
+  validateAuthenticationLockoutPolicy,
+  webAuthenticationLockoutKey,
+  type AuthenticationChannel,
+  type AuthenticationLockoutExecute,
+  type AuthenticationLockoutPolicy,
+  type AuthenticationLockoutQuery,
+  type AuthenticationLockoutState,
+} from "./auth-lockout.ts"
+export {
+  previewManualAuthenticationUnlock,
+  executeManualAuthenticationUnlock,
+  type ManualAuthenticationUnlockPreviewInput,
+  type ManualAuthenticationUnlockPreview,
+  type ExecuteManualAuthenticationUnlockInput,
+  type ManualAuthenticationUnlockResult,
+} from "./manual-auth-unlock.ts"
+export { readManualAuthUnlockRequestFile } from "./manual-auth-unlock-file.ts"
 export {
   createTemplateWithVersion,
   saveVersion,
@@ -101,6 +157,7 @@ export {
   claimPendingNotificationDeliveries,
   markNotificationDeliverySent,
   markNotificationDeliveryFailed,
+  recoverStaleNotificationDeliveries,
   detectStockGapAlerts,
   type NotificationDeliveryJob,
   type EmitProductEventInput,

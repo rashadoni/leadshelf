@@ -12,7 +12,15 @@ import {
   selectProofVideoFrameTimestamps,
   type ShelfExpectedPlacement,
 } from "@leadshelf/core"
-import { finishShelfAnalysisRun, persistShelfMetricSnapshot, startShelfAnalysisRun } from "@leadshelf/db"
+import {
+  consumeDurableRateLimit,
+  finishShelfAnalysisRun,
+  persistShelfMetricSnapshot,
+  startShelfAnalysisRun,
+  type RateLimitResult,
+  type RateLimitRule,
+  type RateLimitRow,
+} from "@leadshelf/db"
 import {
   analyzeSelectedProofFrames,
   configuredProofAnalysisIdentity,
@@ -41,6 +49,11 @@ export interface ProcessProofVideoAnalysisDeps {
   analysisIdentity?: ProofAnalysisIdentity
   now?: () => Date
   organizationId?: string
+  consumeAiBudget?: (
+    prisma: PrismaClient,
+    organizationId: string,
+    now: Date,
+  ) => Promise<RateLimitResult>
 }
 
 export type ProcessProofVideoAnalysisResult =
@@ -60,6 +73,32 @@ function asJsonObject(value: unknown): Prisma.JsonObject {
 function truncateError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   return message.slice(0, 1000)
+}
+
+function boundedInteger(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback
+}
+
+export function proofAiRateLimitRule(env: NodeJS.ProcessEnv = process.env): RateLimitRule {
+  return {
+    max: boundedInteger(env.LEADSHELF_PROOF_AI_MAX_PER_WINDOW, 100, 1, 100_000),
+    windowMs: boundedInteger(env.LEADSHELF_PROOF_AI_WINDOW_MS, 60 * 60_000, 60_000, 24 * 60 * 60_000),
+  }
+}
+
+export function consumeProofAiBudget(
+  prisma: PrismaClient,
+  organizationId: string,
+  now: Date,
+): Promise<RateLimitResult> {
+  return consumeDurableRateLimit(
+    (strings, ...values) => prisma.$queryRaw<RateLimitRow[]>(strings, ...values),
+    "proof-ai",
+    organizationId,
+    proofAiRateLimitRule(),
+    now,
+  )
 }
 
 function stableInputHash(value: unknown): string {
@@ -500,10 +539,39 @@ export async function processNextProofAnalysisJob(
       taskId: true,
       analysisAttempts: true,
       exif: true,
-      task: { select: { planogramVersionId: true } },
+      user: { select: { organizationId: true } },
+      store: { select: { organizationId: true } },
+      visit: { select: { organizationId: true } },
+      task: {
+        select: {
+          organizationId: true,
+          planogramVersionId: true,
+          planogramVersion: {
+            select: { planogram: { select: { organizationId: true } } },
+          },
+        },
+      },
     },
   })
   if (!photo) return { status: "failed", photoSubmissionId, error: "photo_not_found_after_claim" }
+  const boundaryViolation =
+    photo.user.organizationId !== photo.organizationId ||
+    photo.store.organizationId !== photo.organizationId ||
+    (photo.visit != null && photo.visit.organizationId !== photo.organizationId) ||
+    (photo.task != null && photo.task.organizationId !== photo.organizationId) ||
+    (photo.task?.planogramVersion != null &&
+      photo.task.planogramVersion.planogram.organizationId !== photo.organizationId)
+  if (boundaryViolation) {
+    await prisma.photoSubmission.updateMany({
+      where: { id: photo.id, organizationId: photo.organizationId, analysisStatus: "PROCESSING" },
+      data: {
+        analysisStatus: "FAILED",
+        analysisError: "tenant_boundary_violation",
+        analysisFinishedAt: now,
+      },
+    })
+    return { status: "failed", photoSubmissionId, error: "tenant_boundary_violation" }
+  }
   const planogramVersionId = photo.task?.planogramVersionId ?? null
 
   try {
@@ -547,6 +615,27 @@ export async function processNextProofAnalysisJob(
         now,
       })
       return { status: "skipped", photoSubmissionId, reason: "active_golden_reference_has_no_slots" }
+    }
+
+    if (identity.provider === "openai" || identity.provider === "gemini") {
+      const budget = await (deps.consumeAiBudget ?? consumeProofAiBudget)(
+        prisma,
+        photo.organizationId,
+        now,
+      )
+      if (!budget.allowed) {
+        await markSkipped(prisma, {
+          photoSubmissionId,
+          organizationId: photo.organizationId,
+          taskId: photo.taskId,
+          planogramVersionId,
+          attempt: photo.analysisAttempts,
+          identity,
+          reason: "proof_ai_rate_limited",
+          now,
+        })
+        return { status: "skipped", photoSubmissionId, reason: "proof_ai_rate_limited" }
+      }
     }
 
     const proof = await storage.getObjectBuffer(photo.url)

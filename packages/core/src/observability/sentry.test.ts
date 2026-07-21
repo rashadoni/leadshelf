@@ -44,15 +44,41 @@ describe("sentry envelope", () => {
     expect(header.event_id).toBe("0123456789abcdef0123456789abcdef")
     expect(header.dsn).toBe(DSN)
     expect(item).toEqual({ type: "event" })
-    expect(event.exception.values[0]).toMatchObject({ type: "Error", value: "boom" })
+    expect(event.exception.values[0]).toMatchObject({ type: "Error", value: "Unhandled Error" })
+    expect(event.extra).toMatchObject({ telemetry_data_policy: "raw_error_redacted", has_stack: true })
     expect(event.level).toBe("error")
     expect(event.environment).toBe("test")
     expect(event.timestamp).toBe(1_700_000_000)
   })
 
-  it("normalizes string and non-error throwables", () => {
-    const env = buildSentryEnvelope(DSN, { eventId: "x", error: "just a string" })
-    expect(JSON.parse(env.trim().split("\n")[2]!).exception.values[0].value).toBe("just a string")
+  it("never serializes raw error, stack, secret metadata or arbitrary context", () => {
+    const secret = "Bearer eyJhbGciOiJIUzI1NiJ9.private.signature"
+    const error = new TypeError(`failed for person@example.test password=hunter2 ${secret}`)
+    error.stack = `/home/customer/private.ts:1 ${secret}`
+    const env = buildSentryEnvelope(DSN, {
+      eventId: "safe-event",
+      error,
+      environment: "production secret=bad",
+      release: "release-42",
+      serverName: "worker@example.test",
+      context: {
+        component: "proof-worker",
+        isFatal: true,
+        email: "person@example.test",
+        token: secret,
+        nested: { password: "hunter2" },
+        route: "/api/v1/mobile/sync?token=private",
+      },
+    })
+    const event = JSON.parse(env.trim().split("\n")[2]!)
+    expect(event.exception.values[0]).toEqual({ type: "TypeError", value: "Unhandled TypeError" })
+    expect(event.extra).toMatchObject({ component: "proof-worker", isFatal: true })
+    expect(event).not.toHaveProperty("environment")
+    expect(event.release).toBe("release-42")
+    expect(event).not.toHaveProperty("server_name")
+    for (const forbidden of ["person@example.test", "hunter2", secret, "/home/customer", "private.ts", "nested", "token="]) {
+      expect(env).not.toContain(forbidden)
+    }
   })
 })
 
@@ -70,7 +96,12 @@ describe("captureToSentry", () => {
     const [url, init] = fetchImpl.mock.calls[0]!
     expect(url).toContain("/api/99/envelope/?sentry_key=abc123")
     expect(init.method).toBe("POST")
-    expect(init.body).toContain("crash")
+    expect(init.body).not.toContain("crash")
+  })
+
+  it("reports an unsuccessful ingest response as failure", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false })
+    expect(await captureToSentry({ dsn: DSN, eventId: "abc", error: new Error("crash"), fetchImpl })).toBe(false)
   })
 
   it("swallows transport errors", async () => {

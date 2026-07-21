@@ -1,0 +1,10 @@
+# Keep the official PostgreSQL image/entrypoint, but rebuild its gosu helper
+# on patched Go. Upstream postgres:16-alpine bundled gosu with Go 1.24.6.
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS gosu-builder
+ARG GOSU_VERSION=1.19
+ENV CGO_ENABLED=0
+RUN apk add --no-cache git \
+    && go install -trimpath -ldflags="-s -w" github.com/tianon/gosu@${GOSU_VERSION}
+
+FROM postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+COPY --from=gosu-builder /go/bin/gosu /usr/local/bin/gosu

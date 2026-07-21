@@ -187,6 +187,18 @@ describe("SyncManager", () => {
     expect(store.calls.indexOf("applyPull")).toBeLessThan(store.calls.indexOf("setCursors"))
   })
 
+  test("очистка подтверждённых media-файлов запускается после push", async () => {
+    const cleanup = vi.fn(async () => 1)
+    const store = makeStore({ cleanupUploadedPhotoFiles: cleanup })
+    const api = makeApi()
+    const m = new SyncManager({ api, store })
+
+    const s = await m.runSync()
+
+    expect(s.phase).toBe("idle")
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
   test("упавший apply НЕ доводит до ack (курсор не потерян)", async () => {
     const store = makeStore({
       applyPull: async () => {

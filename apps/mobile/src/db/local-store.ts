@@ -4,6 +4,8 @@
 
 import * as SQLite from "expo-sqlite"
 import * as Crypto from "expo-crypto"
+import * as FileSystem from "expo-file-system/legacy"
+import * as SecureStore from "expo-secure-store"
 import {
   mobilePhotoSubmitPayloadSchema,
   mobileLocationUpdatePayloadSchema,
@@ -59,6 +61,19 @@ import {
   type LocalPlanogramBundleRow,
   type LocalPlanogramLibrary,
 } from "../planogram/local-library"
+import { calculateLocalDatabaseCapacity, type LocalDatabaseCapacity } from "./capacity"
+import {
+  buildEncryptedAttachSql,
+  bytesToHex,
+  DATABASE_KEY_NAME,
+  ENCRYPTED_DATABASE_NAME,
+  ENCRYPTION_MARKER_TABLE,
+  encryptedDatabaseBootstrapPlan,
+  LEGACY_DATABASE_NAME,
+  normalizeSqlCipherKey,
+  quoteSqliteIdentifier,
+  sqlCipherKeyLiteral,
+} from "./sqlite-encryption"
 import {
   parseFieldRouteCreatePayload,
   parseFieldRouteChangeRequestPayload,
@@ -129,9 +144,186 @@ import {
   updateOptimisticAgentTask,
   type FieldTaskCustomerPreview,
 } from "../field/task-cache"
+import { bootstrapEncryptedMediaStorage } from "../media/encrypted-media-store"
 
-const db = SQLite.openDatabaseSync("leadshelf.db")
+let db!: SQLite.SQLiteDatabase
+let initPromise: Promise<void> | null = null
 export const COMMERCIAL_CACHE_KEY = "shelf.commercial.snapshot.v1"
+
+const DATABASE_KEY_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+}
+
+function databasePath(name: string): string {
+  const directory = SQLite.defaultDatabaseDirectory
+  if (!directory) throw new Error("[mobile-db] native database directory is unavailable")
+  return `${directory.replace(/\/$/, "")}/${name}`
+}
+
+async function databaseExists(name: string): Promise<boolean> {
+  return (await FileSystem.getInfoAsync(`file://${databasePath(name)}`)).exists
+}
+
+function readOrCreateDatabaseKey(allowCreate: boolean): string {
+  const existing = SecureStore.getItem(DATABASE_KEY_NAME, DATABASE_KEY_OPTIONS)
+  if (existing) return normalizeSqlCipherKey(existing)
+  if (!allowCreate) throw new Error("[mobile-db] encrypted database key is unavailable; approved local wipe is required")
+  const created = bytesToHex(Crypto.getRandomBytes(32))
+  SecureStore.setItem(DATABASE_KEY_NAME, created, DATABASE_KEY_OPTIONS)
+  return created
+}
+
+function openEncryptedDatabase(key: string): SQLite.SQLiteDatabase {
+  const opened = SQLite.openDatabaseSync(ENCRYPTED_DATABASE_NAME, { useNewConnection: true })
+  try {
+    opened.execSync(`PRAGMA key = ${sqlCipherKeyLiteral(key)}; PRAGMA cipher_memory_security = ON;`)
+    const version = opened.getFirstSync<{ cipher_version: string }>("PRAGMA cipher_version")?.cipher_version
+    if (!version) throw new Error("[mobile-db] SQLCipher is not present in this native build")
+    return opened
+  } catch (error) {
+    opened.closeSync()
+    throw error
+  }
+}
+
+type DatabaseInventory = {
+  rows: Record<string, number>
+  schema: string[]
+}
+
+function databaseInventory(database: SQLite.SQLiteDatabase): DatabaseInventory {
+  const tables = database.getAllSync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+  )
+  const rows = Object.fromEntries(tables
+    .filter(({ name }) => name !== ENCRYPTION_MARKER_TABLE)
+    .map(({ name }) => {
+      const row = database.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM ${quoteSqliteIdentifier(name)}`,
+      )
+      return [name, row?.count ?? 0]
+    }))
+  const schema = database.getAllSync<{ type: string; name: string; tableName: string; sql: string }>(
+    `SELECT type, name, tbl_name AS tableName, sql
+     FROM sqlite_master
+     WHERE sql IS NOT NULL AND name <> ?
+     ORDER BY type, name`,
+    [ENCRYPTION_MARKER_TABLE],
+  ).map((row) => JSON.stringify(row))
+  return { rows, schema }
+}
+
+function legacyDatabaseInventory(): DatabaseInventory {
+  const legacy = SQLite.openDatabaseSync(LEGACY_DATABASE_NAME, { useNewConnection: true })
+  try {
+    return databaseInventory(legacy)
+  } finally {
+    legacy.closeSync()
+  }
+}
+
+function assertEncryptedDatabase(
+  database: SQLite.SQLiteDatabase,
+  expected?: DatabaseInventory,
+  fullIntegrityCheck = false,
+): void {
+  const marker = database.getFirstSync<{ version: number }>(
+    `SELECT version FROM ${quoteSqliteIdentifier(ENCRYPTION_MARKER_TABLE)} WHERE id=1`,
+  )
+  if (marker?.version !== 1) throw new Error("[mobile-db] encryption migration marker is missing")
+  if (fullIntegrityCheck) {
+    const integrity = database.getAllSync<Record<string, string>>("PRAGMA cipher_integrity_check")
+    const values = integrity.flatMap((row) => Object.values(row))
+    if (values.length === 0 || values.some((value) => value.toLowerCase() !== "ok")) {
+      throw new Error("[mobile-db] SQLCipher integrity check failed")
+    }
+  }
+  if (expected && JSON.stringify(databaseInventory(database)) !== JSON.stringify(expected)) {
+    throw new Error("[mobile-db] plaintext migration row inventory mismatch")
+  }
+}
+
+async function migrateLegacyDatabase(key: string): Promise<SQLite.SQLiteDatabase> {
+  const legacy = SQLite.openDatabaseSync(LEGACY_DATABASE_NAME, { useNewConnection: true })
+  const expected = databaseInventory(legacy)
+  let migrationError: unknown
+  try {
+    legacy.execSync(`
+      ${buildEncryptedAttachSql(databasePath(ENCRYPTED_DATABASE_NAME), key)}
+      SELECT sqlcipher_export('encrypted');
+      CREATE TABLE encrypted.${quoteSqliteIdentifier(ENCRYPTION_MARKER_TABLE)} (
+        id INTEGER PRIMARY KEY CHECK (id=1), version INTEGER NOT NULL, migratedAt TEXT NOT NULL
+      );
+      INSERT INTO encrypted.${quoteSqliteIdentifier(ENCRYPTION_MARKER_TABLE)} (id, version, migratedAt)
+      VALUES (1, 1, '${new Date().toISOString()}');
+      DETACH DATABASE encrypted;
+    `)
+  } catch (error) {
+    migrationError = error
+  } finally {
+    legacy.closeSync()
+  }
+  if (migrationError) {
+    await SQLite.deleteDatabaseAsync(ENCRYPTED_DATABASE_NAME).catch(() => undefined)
+    throw migrationError
+  }
+  const encrypted = openEncryptedDatabase(key)
+  try {
+    assertEncryptedDatabase(encrypted, expected, true)
+    await SQLite.deleteDatabaseAsync(LEGACY_DATABASE_NAME)
+    return encrypted
+  } catch (error) {
+    encrypted.closeSync()
+    throw error
+  }
+}
+
+async function bootstrapEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
+  const [encryptedDatabaseExists, legacyDatabaseExists] = await Promise.all([
+    databaseExists(ENCRYPTED_DATABASE_NAME),
+    databaseExists(LEGACY_DATABASE_NAME),
+  ])
+  const storedKey = SecureStore.getItem(DATABASE_KEY_NAME, DATABASE_KEY_OPTIONS)
+  const plan = encryptedDatabaseBootstrapPlan({
+    encryptedDatabaseExists,
+    legacyDatabaseExists,
+    keyExists: Boolean(storedKey),
+  })
+  if (plan === "missing-key") {
+    throw new Error("[mobile-db] encrypted database key is unavailable; approved local wipe is required")
+  }
+  const key = readOrCreateDatabaseKey(true)
+  if (plan === "migrate-legacy") return migrateLegacyDatabase(key)
+  let encrypted: SQLite.SQLiteDatabase | null = null
+  try {
+    encrypted = openEncryptedDatabase(key)
+    if (plan === "create-encrypted") {
+      encrypted.execSync(`
+        CREATE TABLE ${quoteSqliteIdentifier(ENCRYPTION_MARKER_TABLE)} (
+          id INTEGER PRIMARY KEY CHECK (id=1), version INTEGER NOT NULL, migratedAt TEXT NOT NULL
+        );
+        INSERT INTO ${quoteSqliteIdentifier(ENCRYPTION_MARKER_TABLE)} (id, version, migratedAt)
+        VALUES (1, 1, '${new Date().toISOString()}');
+      `)
+    }
+    const expectedLegacyInventory = legacyDatabaseExists ? legacyDatabaseInventory() : undefined
+    assertEncryptedDatabase(
+      encrypted,
+      expectedLegacyInventory,
+      plan === "create-encrypted" || Boolean(expectedLegacyInventory),
+    )
+    if (legacyDatabaseExists) {
+      await SQLite.deleteDatabaseAsync(LEGACY_DATABASE_NAME)
+    }
+    return encrypted
+  } catch (error) {
+    encrypted?.closeSync()
+    if (plan === "create-encrypted") {
+      await SQLite.deleteDatabaseAsync(ENCRYPTED_DATABASE_NAME).catch(() => undefined)
+    }
+    throw error
+  }
+}
 
 function resetRecoverablePhotoSubmit(clientPhotoId: string): void {
   const rows = db.getAllSync<{ clientOpId: string }>(
@@ -152,7 +344,18 @@ function resetRecoverablePhotoSubmit(clientPhotoId: string): void {
   }
 }
 
-export function initDb(): void {
+export function initDb(): Promise<void> {
+  if (!initPromise) {
+    initPromise = (async () => {
+      db = await bootstrapEncryptedDatabase()
+      initializeSchema()
+      await bootstrapEncryptedMediaStorage()
+    })()
+  }
+  return initPromise
+}
+
+function initializeSchema(): void {
   db.execSync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS tasks (
@@ -1153,6 +1356,29 @@ export const localStore: LocalStore = {
     return row?.n ?? 0
   },
 
+  async cleanupUploadedPhotoFiles() {
+    const rows = db.getAllSync<{ clientPhotoId: string; fileUri: string }>(
+      `SELECT DISTINCT p.clientPhotoId, p.fileUri
+       FROM photo_queue p
+       JOIN outbox_ops o
+         ON o.kind='photo.submit'
+        AND o.status='applied'
+        AND json_extract(o.payload, '$.clientPhotoId')=p.clientPhotoId
+       JOIN server_photo_submissions s ON s.clientPhotoId=p.clientPhotoId
+       WHERE p.uploaded=1 AND p.fileUri IS NOT NULL`,
+    )
+    let removed = 0
+    for (const row of rows) {
+      try {
+        await FileSystem.deleteAsync(row.fileUri, { idempotent: true })
+        db.runSync("UPDATE photo_queue SET fileUri=NULL WHERE clientPhotoId=?", [row.clientPhotoId])
+        removed++
+      } catch {
+        // Оставляем URI: очистка повторится после следующей синхронизации.
+      }
+    }
+    return removed
+  },
   async pendingCommercialMedia() {
     return db.getAllSync<{
       clientMediaId: string
@@ -1331,6 +1557,46 @@ export function detachCommercialMedia(clientMediaId: string): { fileUri: string;
 }
 
 // --- локальные чтения/записи для UI ---
+
+export function getLogoutDataSummary(): {
+  unsyncedOperations: number
+  unsyncedPhotos: number
+} {
+  const operations = db.getFirstSync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM outbox_ops WHERE status IS NULL OR status!='applied'",
+  )
+  const photos = db.getFirstSync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM photo_queue WHERE uploaded=0",
+  )
+  return {
+    unsyncedOperations: operations?.n ?? 0,
+    unsyncedPhotos: photos?.n ?? 0,
+  }
+}
+
+export function purgeLocalOperationalData(): void {
+  db.withTransactionSync(() => {
+    db.execSync(`
+      DELETE FROM outbox_ops;
+      DELETE FROM photo_queue;
+      DELETE FROM server_photo_submissions;
+      DELETE FROM visits;
+      DELETE FROM route_stops;
+      DELETE FROM routes;
+      DELETE FROM planogram_bundles;
+      DELETE FROM tasks;
+      DELETE FROM stores;
+      DELETE FROM cursors;
+    `)
+  })
+}
+
+export function getLocalDatabaseCapacity(): LocalDatabaseCapacity {
+  const pageCount = db.getFirstSync<{ page_count: number }>("PRAGMA page_count")?.page_count ?? 0
+  const pageSize = db.getFirstSync<{ page_size: number }>("PRAGMA page_size")?.page_size ?? 0
+  const freePageCount = db.getFirstSync<{ freelist_count: number }>("PRAGMA freelist_count")?.freelist_count ?? 0
+  return calculateLocalDatabaseCapacity({ pageCount, pageSize, freePageCount })
+}
 
 type TaskDbRow = Omit<TaskRow, "locationHint" | "captureTemplate" | "captureRetakes"> & {
   locationHint?: string | null

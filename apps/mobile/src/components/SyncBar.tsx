@@ -7,13 +7,16 @@ import { colors, radii } from "../theme"
 export function SyncBar() {
   const { status, sync } = useSync()
   const queued = status.pendingOps + status.pendingPhotos
-  const running = !["idle", "offline", "error", "upgradeRequired"].includes(status.phase)
+  const running = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
   const canRetry =
+    status.phase !== "authLost" &&
     status.phase !== "upgradeRequired" &&
     (queued > 0 || status.phase === "offline" || status.phase === "error")
 
   const label =
-    status.phase === "offline"
+    status.phase === "authLost"
+      ? t("sessionRevoked")
+      : status.phase === "offline"
       ? t("syncOffline")
       : status.phase === "upgradeRequired"
         ? t("upgradeTitle")
@@ -28,7 +31,7 @@ export function SyncBar() {
           : t("syncRunning")
 
   const color =
-    status.phase === "offline" || status.phase === "error" || status.phase === "upgradeRequired"
+    status.phase === "offline" || status.phase === "error" || status.phase === "authLost" || status.phase === "upgradeRequired"
       ? colors.warning
       : status.rejectedOps > 0
         ? colors.danger

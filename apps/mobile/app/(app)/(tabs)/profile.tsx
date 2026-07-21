@@ -1,18 +1,26 @@
 // Вкладка «Профиль»: агент, язык интерфейса, синхронизация, выход.
 import { useEffect, useState } from "react"
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router } from "expo-router"
 import { SyncBar } from "../../../src/components/SyncBar"
 import { SectionHint } from "../../../src/components/SectionHint"
 import { mobileLogout } from "../../../src/api/mobile-client"
 import { tokenStore } from "../../../src/auth/token-store"
+import { requiresLogoutConfirmation } from "../../../src/auth/logout-policy"
+import { getLocalDatabaseCapacity, getLogoutDataSummary, purgeLocalOperationalData } from "../../../src/db/local-store"
+import { formatCapacityBytes, photoCapacityLevel } from "../../../src/db/capacity"
+import { readPhotoOutboxUsage } from "../../../src/photos/photo-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useField } from "../../../src/field/field-context"
 import { stopWorkdayTracking } from "../../../src/location/workday-tracking"
+import {
+  deleteAllEncryptedMedia,
+  readEncryptedMediaUsage,
+} from "../../../src/media/encrypted-media-store"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
@@ -22,22 +30,73 @@ export default function ProfileTab() {
   const field = useField()
   const [userName, setUserName] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [capacity, setCapacity] = useState<{
+    databaseBytes: number
+    photoFiles: number
+    photoBytes: number
+    photoLevel: ReturnType<typeof photoCapacityLevel>
+  } | null>(null)
+
+  async function refreshCapacity() {
+    const database = getLocalDatabaseCapacity()
+    const [photos, media] = await Promise.all([
+      readPhotoOutboxUsage(),
+      readEncryptedMediaUsage(),
+    ])
+    setCapacity({
+      databaseBytes: database.allocatedBytes,
+      photoFiles: media.files,
+      photoBytes: media.bytes,
+      photoLevel: photoCapacityLevel(photos),
+    })
+  }
 
   useEffect(() => {
     void tokenStore.getUserName().then((name) => setUserName(name))
+    void refreshCapacity()
   }, [])
 
   async function onSyncNow() {
     setSyncing(true)
-    await Promise.all([sync(), field.refresh()])
-    setSyncing(false)
+    try {
+      await Promise.all([sync(), field.refresh()])
+      await refreshCapacity()
+    } finally {
+      setSyncing(false)
+    }
   }
 
-  async function logout() {
-    await stopWorkdayTracking().catch(() => {})
-    await mobileLogout().catch(() => {})
-    await tokenStore.clearSession()
-    router.replace("/(auth)/login" as never)
+  async function completeLogout() {
+    try {
+      await stopWorkdayTracking().catch(() => {})
+      await mobileLogout() // best-effort отзыв refresh-сессии на сервере
+      // Сначала удаляем чувствительные media-файлы; при ошибке сессия остаётся,
+      // чтобы пользователь мог повторить безопасную очистку.
+      await deleteAllEncryptedMedia()
+      purgeLocalOperationalData()
+      await tokenStore.clearSession()
+      router.replace("/(auth)/login" as never)
+    } catch {
+      Alert.alert(t("logoutFailed"))
+    }
+  }
+
+  function logout() {
+    const summary = getLogoutDataSummary()
+    if (!requiresLogoutConfirmation(summary)) {
+      void completeLogout()
+      return
+    }
+    Alert.alert(
+      t("logoutUnsyncedTitle"),
+      t("logoutUnsyncedBody")
+        .replace("{operations}", String(summary.unsyncedOperations))
+        .replace("{photos}", String(summary.unsyncedPhotos)),
+      [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("logoutDiscard"), style: "destructive", onPress: () => void completeLogout() },
+      ],
+    )
   }
 
   const agent = field.profile?.agent
@@ -170,6 +229,30 @@ export default function ProfileTab() {
           </Pressable>
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t("profileStorage")}</Text>
+          <View style={styles.metricsGrid}>
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>{t("profileSqliteSize")}</Text>
+              <Text style={styles.metricValue}>{capacity ? formatCapacityBytes(capacity.databaseBytes) : "—"}</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>{t("profileOfflineMedia")}</Text>
+              <Text style={[
+                styles.metricValue,
+                capacity && capacity.photoLevel !== "ok" && styles.metricWarning,
+              ]}>
+                {capacity
+                  ? `${capacity.photoFiles} · ${formatCapacityBytes(capacity.photoBytes)}`
+                  : "—"}
+              </Text>
+            </View>
+          </View>
+          {capacity && capacity.photoLevel !== "ok" ? (
+            <Text style={styles.capacityHint}>{t("profileStorageWarning")}</Text>
+          ) : null}
+        </View>
+
         <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]}>
           <Text style={styles.logoutText}>{t("logout")}</Text>
         </Pressable>
@@ -255,6 +338,7 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 11, color: colors.muted },
   metricValue: { marginTop: 5, fontSize: 13, fontWeight: "800", color: colors.text },
   metricWarning: { color: colors.warning },
+  capacityHint: { marginTop: 10, fontSize: 12, lineHeight: 17, color: colors.warning },
   recoveryButton: { minHeight: 50, marginTop: 12, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, flexDirection: "row", alignItems: "center", gap: 9 },
   recoveryMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   recoveryMarkText: { color: colors.dangerPressed, fontSize: 14, fontWeight: "900" },

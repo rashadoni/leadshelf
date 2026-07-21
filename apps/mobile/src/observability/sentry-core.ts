@@ -33,33 +33,58 @@ export interface SentryEventInput {
   nowMs?: number
 }
 
-function normalizeError(error: unknown): { type: string; value: string; stack?: string } {
-  if (error instanceof Error) {
-    return { type: error.name || "Error", value: error.message || String(error), stack: error.stack }
+const SAFE_METADATA = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/
+const SAFE_ERROR_TYPE = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/
+const SAFE_CONTEXT_KEYS = new Set([
+  "attempt", "component", "correlationId", "deviceId", "isFatal",
+  "operation", "organizationId", "route", "runtime", "source",
+  "statusCode", "taskId", "opId",
+])
+
+function safeMetadata(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim()
+  return normalized && SAFE_METADATA.test(normalized) ? normalized : undefined
+}
+
+function normalizeErrorType(error: unknown): string {
+  const candidate = error instanceof Error ? error.name : "Error"
+  return SAFE_ERROR_TYPE.test(candidate) ? candidate : "Error"
+}
+
+function safeContext(context: Record<string, unknown> | undefined): Record<string, string | number | boolean> {
+  const result: Record<string, string | number | boolean> = {}
+  for (const [key, value] of Object.entries(context ?? {}).slice(0, 24)) {
+    if (!SAFE_CONTEXT_KEYS.has(key)) continue
+    if (typeof value === "boolean") result[key] = value
+    else if (typeof value === "number" && Number.isFinite(value)) result[key] = value
+    else if (typeof value === "string") {
+      const normalized = safeMetadata(value)
+      if (normalized) result[key] = normalized
+    }
   }
-  if (typeof error === "string") return { type: "Error", value: error }
-  try {
-    return { type: "Error", value: JSON.stringify(error) }
-  } catch {
-    return { type: "Error", value: String(error) }
-  }
+  return result
 }
 
 export function buildSentryEnvelope(dsnString: string, input: SentryEventInput): string {
   const nowMs = input.nowMs ?? Date.now()
-  const normalized = normalizeError(input.error)
+  const errorType = normalizeErrorType(input.error)
+  const context = safeContext(input.context)
+  const environment = safeMetadata(input.environment)
+  const release = safeMetadata(input.release)
   const header = { event_id: input.eventId, sent_at: new Date(nowMs).toISOString(), dsn: dsnString }
   const event = {
     event_id: input.eventId,
     timestamp: nowMs / 1000,
     platform: "javascript",
     level: "error",
-    ...(input.environment ? { environment: input.environment } : {}),
-    ...(input.release ? { release: input.release } : {}),
-    exception: { values: [{ type: normalized.type, value: normalized.value }] },
-    ...(normalized.stack || input.context
-      ? { extra: { ...(normalized.stack ? { stack: normalized.stack } : {}), ...(input.context ?? {}) } }
-      : {}),
+    ...(environment ? { environment } : {}),
+    ...(release ? { release } : {}),
+    exception: { values: [{ type: errorType, value: `Unhandled ${errorType}` }] },
+    extra: {
+      telemetry_data_policy: "raw_error_redacted",
+      has_stack: Boolean(input.error instanceof Error && input.error.stack),
+      ...context,
+    },
   }
   return [JSON.stringify(header), JSON.stringify({ type: "event" }), JSON.stringify(event)].join("\n") + "\n"
 }
@@ -67,7 +92,7 @@ export function buildSentryEnvelope(dsnString: string, input: SentryEventInput):
 type MinimalFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body: string },
-) => Promise<unknown>
+) => Promise<{ ok?: boolean }>
 
 export async function captureToSentry(options: {
   dsn: string | undefined | null
@@ -82,7 +107,7 @@ export async function captureToSentry(options: {
   const doFetch = options.fetchImpl ?? (globalThis.fetch as unknown as MinimalFetch | undefined)
   if (!doFetch) return false
   try {
-    await doFetch(sentryEnvelopeUrl(parsed), {
+    const response = await doFetch(sentryEnvelopeUrl(parsed), {
       method: "POST",
       headers: { "Content-Type": "application/x-sentry-envelope" },
       body: buildSentryEnvelope(options.dsn as string, {
@@ -92,7 +117,7 @@ export async function captureToSentry(options: {
         context: options.context,
       }),
     })
-    return true
+    return response.ok !== false
   } catch {
     return false
   }

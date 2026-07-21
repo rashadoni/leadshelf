@@ -163,6 +163,34 @@ model AuthSession {
   @@map("auth_sessions")
 }
 
+model RateLimitBucket {
+  scope           String
+  keyHash         String
+  count           Int
+  windowStartedAt DateTime
+  expiresAt       DateTime
+  updatedAt       DateTime @updatedAt
+
+  @@id([scope, keyHash])
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
+
+model AuthenticationLockout {
+  scope             String
+  keyHash           String
+  failureCount      Int
+  windowStartedAt   DateTime
+  windowExpiresAt   DateTime
+  lockedUntil       DateTime?
+  updatedAt         DateTime @updatedAt
+
+  @@id([scope, keyHash])
+  @@index([lockedUntil])
+  @@index([windowExpiresAt])
+  @@map("authentication_lockouts")
+}
+
 // Trusted server-to-server identity link. The unified field app authenticates
 // against LeadDrive once; LeadDrive's Field BFF then addresses the matching
 // LeadShelf user through this explicit mapping. No LeadShelf token or service
@@ -653,6 +681,7 @@ model ImportBatch {
   status         ImportStatus @default(PENDING)
   totalRows      Int          @default(0)
   errorRows      Int          @default(0)
+  reconciliation Json?
   startedAt      DateTime?
   finishedAt     DateTime?
   createdById    String?
@@ -666,26 +695,34 @@ model ImportBatch {
 }
 
 model ImportQueueJob {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  batchId        String       @unique
-  batch          ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  entityType     String
-  source         String
-  fileName       String
-  storagePath    String
-  encoding       String?
-  delimiter      String?
-  status         ImportStatus @default(PENDING)
-  attempts       Int          @default(0)
-  error          String?
-  createdById    String?
-  createdAt      DateTime     @default(now())
-  startedAt      DateTime?
-  finishedAt     DateTime?
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batchId          String       @unique
+  batch            ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  entityType       String
+  source           String
+  fileName         String
+  storagePath      String
+  encoding         String?
+  delimiter        String?
+  expectedRows     Int?
+  expectedChecksum String?
+  expectedTotals   Json?
+  syncMode         String       @default("delta")
+  fullSyncApprovalPath String?
+  fullSyncApprovedAt DateTime?
+  status           ImportStatus @default(PENDING)
+  attempts         Int          @default(0)
+  error            String?
+  createdById      String?
+  createdAt        DateTime     @default(now())
+  availableAt      DateTime     @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
 
   @@index([organizationId, status, createdAt])
+  @@index([status, availableAt, createdAt])
   @@map("import_queue_jobs")
 }
 
@@ -946,14 +983,14 @@ model PlanogramVersion {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
-  equipment        PlanogramEquipment[]
-  zones            PlanogramZone[]
-  placements       PlanogramPlacement[]
-  assignments      PlanogramAssignment[]
-  tasks            Task[]
-  goldenReferences GoldenReference[]
-  humanReviews     HumanReview[]
-  shelfAnalysisRuns ShelfAnalysisRun[]
+  equipment            PlanogramEquipment[]
+  zones                PlanogramZone[]
+  placements           PlanogramPlacement[]
+  assignments          PlanogramAssignment[]
+  tasks                Task[]
+  goldenReferences     GoldenReference[]
+  humanReviews         HumanReview[]
+  shelfAnalysisRuns    ShelfAnalysisRun[]
   shelfMetricSnapshots ShelfMetricSnapshot[]
 
   @@unique([planogramId, versionNumber])
@@ -1042,6 +1079,7 @@ model PlanogramPlacement {
   goldenReferenceSlots GoldenReferenceSlot[]
 
   @@index([planogramVersionId])
+  @@index([planogramVersionId, productId, sortOrder, id])
   @@index([productId])
   @@map("planogram_placements")
 }
@@ -1118,6 +1156,7 @@ model Task {
   captureRetakeRequests CaptureRetakeRequest[]
 
   @@index([organizationId, status, dueAt])
+  @@index([organizationId, assigneeId, updatedAt, id])
   @@index([storeId, status])
   @@index([assigneeId, status])
   @@map("tasks")
@@ -1193,11 +1232,12 @@ model PhotoSubmission {
   analysisFinishedAt        DateTime?
   createdAt                 DateTime            @default(now())
 
-  goldenReferences GoldenReference[]
-  humanReviews     HumanReview[]
+  goldenReferences  GoldenReference[]
+  humanReviews      HumanReview[]
   shelfAnalysisRuns ShelfAnalysisRun[]
 
   @@unique([organizationId, clientPhotoId])
+  @@index([organizationId, taskId, createdAt, id])
   @@index([organizationId, storeId, takenAt])
   @@index([organizationId, mediaType, analysisStatus, createdAt])
   @@index([taskId])
@@ -1334,8 +1374,8 @@ model GoldenReference {
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
-  slots        GoldenReferenceSlot[]
-  humanReviews HumanReview[]
+  slots             GoldenReferenceSlot[]
+  humanReviews      HumanReview[]
   shelfAnalysisRuns ShelfAnalysisRun[]
 
   @@index([organizationId, planogramVersionId, status])
@@ -1613,6 +1653,7 @@ model Route {
   stops RouteStop[]
 
   @@index([organizationId, agentId])
+  @@index([organizationId, agentId, isActive, updatedAt, id])
   @@map("routes")
 }
 
@@ -1666,6 +1707,7 @@ model Visit {
   salesReturns SalesReturn[]
 
   @@index([organizationId, agentId, checkInAt])
+  @@index([organizationId, agentId, updatedAt, id])
   @@index([storeId, checkInAt])
   @@map("visits")
 }
@@ -2124,11 +2166,16 @@ model NotificationDelivery {
   body           String
   payload        Json?
   status         String        @default("PENDING") // PENDING | SENDING | SENT | FAILED
+  attempts       Int           @default(0)
+  availableAt    DateTime      @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
   error          String?
   sentAt         DateTime?
   createdAt      DateTime      @default(now())
 
   @@unique([deviceId, eventId])
   @@index([organizationId, status, createdAt])
+  @@index([status, availableAt, createdAt])
   @@map("notification_deliveries")
 }

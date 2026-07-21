@@ -14,10 +14,15 @@ const targets = [
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/ru/login")
+  await page.getByRole("textbox", { name: "Код организации" }).fill(process.env.E2E_ORGANIZATION_SLUG ?? "demo")
   await page.getByRole("textbox", { name: "E-mail" }).fill(process.env.E2E_EMAIL ?? "admin@leadshelf.com")
   await page.getByRole("textbox", { name: "Пароль" }).fill(process.env.E2E_PASSWORD ?? "demo1234")
+  const loginResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/login") && response.request().method() === "POST",
+  )
   await page.getByRole("button", { name: "Войти" }).click()
-  await page.waitForURL((url) => !url.pathname.includes("/login"))
+  expect((await loginResponse).status(), "demo login HTTP status").toBe(200)
+  await page.waitForURL((url) => !url.pathname.includes("/login"), { waitUntil: "domcontentloaded", timeout: 15_000 })
 }
 
 for (const viewport of viewports) {

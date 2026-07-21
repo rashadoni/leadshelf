@@ -38,6 +38,7 @@ export interface NotificationDeliveryJob {
   title: string
   body: string
   payload: unknown
+  attempts: number
 }
 
 function defaultDedupeKey(input: EmitProductEventInput): string {
@@ -240,31 +241,69 @@ export async function enqueueOfficeMorningDigest(
 export async function claimPendingNotificationDeliveries(
   prisma: PrismaClient,
   organizationId: string,
-  input: { limit?: number } = {},
+  input: { limit?: number; now?: Date; maxAttempts?: number; staleAfterMs?: number } = {},
 ): Promise<NotificationDeliveryJob[]> {
   const limit = Math.min(Math.max(input.limit ?? 100, 1), 500)
+  const now = input.now ?? new Date()
+  const maxAttempts = Math.min(Math.max(input.maxAttempts ?? 3, 1), 20)
+  await recoverStaleNotificationDeliveries(prisma, organizationId, {
+    now,
+    maxAttempts,
+    staleAfterMs: input.staleAfterMs,
+  })
   const candidates = await prisma.notificationDelivery.findMany({
-    where: { organizationId, status: "PENDING" },
+    where: { organizationId, status: "PENDING", availableAt: { lte: now }, attempts: { lt: maxAttempts } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,
       eventId: true,
       alertId: true,
+      device: { select: { user: { select: { organizationId: true } } } },
+      event: { select: { organizationId: true } },
+      alert: { select: { organizationId: true } },
       pushToken: true,
       title: true,
       body: true,
       payload: true,
+      attempts: true,
     },
   })
 
   const claimed: NotificationDeliveryJob[] = []
   for (const delivery of candidates) {
+    const boundaryViolation =
+      delivery.device.user.organizationId !== organizationId ||
+      (delivery.event != null && delivery.event.organizationId !== organizationId) ||
+      (delivery.alert != null && delivery.alert.organizationId !== organizationId)
+    if (boundaryViolation) {
+      await prisma.notificationDelivery.updateMany({
+        where: {
+          id: delivery.id,
+          organizationId,
+          status: "PENDING",
+          attempts: delivery.attempts,
+        },
+        data: { status: "FAILED", finishedAt: now, error: "tenant_boundary_violation" },
+      })
+      continue
+    }
     const updated = await prisma.notificationDelivery.updateMany({
-      where: { id: delivery.id, organizationId, status: "PENDING" },
-      data: { status: "SENDING", error: null },
+      where: { id: delivery.id, organizationId, status: "PENDING", availableAt: { lte: now }, attempts: delivery.attempts },
+      data: { status: "SENDING", attempts: { increment: 1 }, startedAt: now, finishedAt: null, error: null },
     })
-    if (updated.count === 1) claimed.push(delivery)
+    if (updated.count === 1) {
+      claimed.push({
+        id: delivery.id,
+        eventId: delivery.eventId,
+        alertId: delivery.alertId,
+        pushToken: delivery.pushToken,
+        title: delivery.title,
+        body: delivery.body,
+        payload: delivery.payload,
+        attempts: delivery.attempts + 1,
+      })
+    }
   }
   return claimed
 }
@@ -277,7 +316,7 @@ export async function markNotificationDeliverySent(
 ): Promise<boolean> {
   const updated = await prisma.notificationDelivery.updateMany({
     where: { id: deliveryId, organizationId, status: "SENDING" },
-    data: { status: "SENT", sentAt: input.sentAt ?? new Date(), error: null },
+    data: { status: "SENT", sentAt: input.sentAt ?? new Date(), finishedAt: input.sentAt ?? new Date(), error: null },
   })
   return updated.count === 1
 }
@@ -286,13 +325,38 @@ export async function markNotificationDeliveryFailed(
   prisma: PrismaClient,
   organizationId: string,
   deliveryId: string,
-  input: { error?: string | null } = {},
+  input: { error?: string | null; retryAt?: Date | null; failedAt?: Date } = {},
 ): Promise<boolean> {
+  const retryAt = input.retryAt ?? null
   const updated = await prisma.notificationDelivery.updateMany({
     where: { id: deliveryId, organizationId, status: "SENDING" },
-    data: { status: "FAILED", error: input.error?.slice(0, 1000) ?? null },
+    data: retryAt
+      ? { status: "PENDING", availableAt: retryAt, startedAt: null, finishedAt: null, error: input.error?.slice(0, 1000) ?? null }
+      : { status: "FAILED", finishedAt: input.failedAt ?? new Date(), error: input.error?.slice(0, 1000) ?? null },
   })
   return updated.count === 1
+}
+
+export async function recoverStaleNotificationDeliveries(
+  prisma: PrismaClient,
+  organizationId: string,
+  input: { now?: Date; maxAttempts?: number; staleAfterMs?: number } = {},
+): Promise<{ retried: number; failed: number }> {
+  const now = input.now ?? new Date()
+  const maxAttempts = Math.min(Math.max(input.maxAttempts ?? 3, 1), 20)
+  const staleAfterMs = Math.max(60_000, input.staleAfterMs ?? 15 * 60_000)
+  const staleBefore = new Date(now.getTime() - staleAfterMs)
+  const [retried, failed] = await prisma.$transaction([
+    prisma.notificationDelivery.updateMany({
+      where: { organizationId, status: "SENDING", startedAt: { lte: staleBefore }, attempts: { lt: maxAttempts } },
+      data: { status: "PENDING", availableAt: now, startedAt: null, finishedAt: null, error: "worker_lease_expired" },
+    }),
+    prisma.notificationDelivery.updateMany({
+      where: { organizationId, status: "SENDING", startedAt: { lte: staleBefore }, attempts: { gte: maxAttempts } },
+      data: { status: "FAILED", finishedAt: now, error: "worker_lease_expired_max_attempts" },
+    }),
+  ])
+  return { retried: retried.count, failed: failed.count }
 }
 
 export async function detectStockGapAlerts(

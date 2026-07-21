@@ -9,8 +9,11 @@ import { nextBackoffMs } from "./backoff"
 import type { SyncStatus } from "./ports"
 import { syncApi } from "../api/mobile-client"
 import { localStore } from "../db/local-store"
+import { purgeLocalOperationalData } from "../db/local-store"
 import { tokenStore } from "../auth/token-store"
+import { wipeRevokedSession } from "../auth/revocation-wipe"
 import { stopWorkdayTracking } from "../location/workday-tracking"
+import { deleteAllEncryptedMedia } from "../media/encrypted-media-store"
 
 const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
 
@@ -27,6 +30,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>(manager.getStatus())
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const consecutiveErrors = useRef(0)
+  const revocationWipe = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     const clearRetry = () => {
@@ -39,14 +43,21 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setStatus(next)
       // Backoff-ретрай только после реальной ошибки; успех/offline/upgrade
       // отменяют его (offline восстановится по NetInfo, docs/26 §2).
-      if (next.phase === "upgradeRequired") {
+      if (next.phase === "authLost") {
         clearRetry()
-        router.replace("/upgrade-required" as never)
-      } else if (next.phase === "authLost") {
-        clearRetry()
-        void stopWorkdayTracking().catch(() => {}).then(() => tokenStore.clearSession()).finally(() => {
+        revocationWipe.current ??= wipeRevokedSession({
+          deleteMedia: async () => {
+            await stopWorkdayTracking().catch(() => {})
+            await deleteAllEncryptedMedia()
+          },
+          purgeOperationalData: () => purgeLocalOperationalData(),
+          clearSession: () => tokenStore.clearSession(),
+        }).then(() => {
           router.replace("/(auth)/login" as never)
         })
+      } else if (next.phase === "upgradeRequired") {
+        clearRetry()
+        router.replace("/upgrade-required" as never)
       } else if (next.phase === "error") {
         consecutiveErrors.current += 1
         clearRetry()

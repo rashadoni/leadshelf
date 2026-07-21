@@ -5,7 +5,9 @@ Build slice 1 as a frozen, narrow mobile backend contract. No Expo UI, no CRM sp
 
 **Stress-Test**
 Roles converge on: employee-code auth, bearer mobile JWT, assigned-task scoping, strict idempotency, server-won conflicts, multipart-through-app for pilot.
-Main dissent: presigned upload is architecturally cleaner, but prod MinIO is not public, so it is not realistic for this slice.
+Historical decision (superseded 2026-07-18): multipart-through-app remains the
+mobile contract, but production storage is maintained external S3/R2; embedded
+MinIO is prohibited.
 Confidence: High. External Codex peer pass was unavailable because the MCP call was cancelled.
 
 **Key Decisions**
@@ -23,7 +25,8 @@ Confidence: High. External Codex peer pass was unavailable because the MCP call 
    Cursor token should be server-issued `{updatedAt,id}` encoded per collection. Persist only on `/sync/ack`.
 
 5. Photos: use multipart upload through app API for pilot.
-   App server streams to internal MinIO. Later switch to presigned when R2/public object endpoint exists.
+   App server streams through tenant guards to external S3/R2. Presigned upload
+   remains optional only after equivalent tenant/size/MIME controls are proven.
 
 **Routes**
 All `/api/v1/mobile/*` require `protocolVersion=1` via header/body/query and return `426` if missing/unsupported, except `/protocol`.

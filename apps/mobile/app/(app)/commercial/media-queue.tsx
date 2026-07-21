@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Alert,
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, radii } from "../../../src/theme"
+import { EncryptedMediaImage } from "../../../src/components/EncryptedMediaImage"
 
 function purposeLabel(purpose: CommercialMediaRecoveryRow["purpose"]): string {
   return purpose === "PROMOTION_PROOF" ? t("commercialMediaPromotion") : t("commercialMediaReturn")
@@ -160,7 +160,7 @@ export default function CommercialMediaQueueScreen() {
               return (
                 <View key={row.clientMediaId} style={[styles.card, quarantined && styles.cardAttention]}>
                   <View style={styles.cardTop}>
-                    <Image source={{ uri: row.fileUri }} style={styles.preview} />
+                    <EncryptedMediaImage uri={row.fileUri} style={styles.preview} />
                     <View style={styles.cardBody}>
                       <Text style={styles.cardTitle}>{purposeLabel(row.purpose)}</Text>
                       <Text style={styles.cardDate}>{formatShortDateTime(row.takenAt, locale)}</Text>

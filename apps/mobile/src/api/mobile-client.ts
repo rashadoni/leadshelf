@@ -14,6 +14,12 @@ import {
 import { File } from "expo-file-system"
 import * as FileSystem from "expo-file-system/legacy"
 import { Platform } from "react-native"
+import {
+  FIELD_DOCUMENT_MEDIA_DIR,
+  persistEncryptedMedia,
+  withDecryptedMedia,
+  withTemporaryPlaintextMedia,
+} from "../media/encrypted-media-store"
 import { tokenStore } from "../auth/token-store"
 import { prepareMobileSessionScope } from "../db/local-store"
 import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
@@ -252,44 +258,48 @@ export const fieldApi = {
     request<unknown>(`/api/v1/mtm/mobile/visits/${encodeURIComponent(id)}/workspace`)
       .then(parseFieldVisitWorkspace),
   uploadVisitPhoto: async (input: FieldVisitPhotoPayload) => {
-    const form = new FormData()
-    form.append("file", new File(input.fileUri), `${input.clientPhotoId}.jpg`)
-    form.append("clientPhotoId", input.clientPhotoId)
-    form.append("agentId", input.agentId)
-    form.append("visitId", input.visitId)
-    if (input.category) form.append("category", input.category)
-    if (input.latitude != null) form.append("latitude", String(input.latitude))
-    if (input.longitude != null) form.append("longitude", String(input.longitude))
-    const body = await request<{ success?: boolean; data?: unknown }>("/api/v1/mtm/photos", {
-      method: "POST",
-      body: form,
+    return withDecryptedMedia(input.fileUri, async (temporaryUri) => {
+      const form = new FormData()
+      form.append("file", new File(temporaryUri), `${input.clientPhotoId}.jpg`)
+      form.append("clientPhotoId", input.clientPhotoId)
+      form.append("agentId", input.agentId)
+      form.append("visitId", input.visitId)
+      if (input.category) form.append("category", input.category)
+      if (input.latitude != null) form.append("latitude", String(input.latitude))
+      if (input.longitude != null) form.append("longitude", String(input.longitude))
+      const body = await request<{ success?: boolean; data?: unknown }>("/api/v1/mtm/photos", {
+        method: "POST",
+        body: form,
+      })
+      const photo = body.data && typeof body.data === "object" && !Array.isArray(body.data)
+        ? body.data as Record<string, unknown>
+        : null
+      if (body.success !== true || !photo || typeof photo.id !== "string" || typeof photo.url !== "string") {
+        throw new Error("Invalid visit photo response")
+      }
+      return photo
     })
-    const photo = body.data && typeof body.data === "object" && !Array.isArray(body.data)
-      ? body.data as Record<string, unknown>
-      : null
-    if (body.success !== true || !photo || typeof photo.id !== "string" || typeof photo.url !== "string") {
-      throw new Error("Invalid visit photo response")
-    }
-    return photo
   },
   uploadDocument: async (input: FieldDocumentUploadPayload) => {
-    const form = new FormData()
-    form.append("file", new File(input.fileUri), input.fileName)
-    form.append("clientDocumentId", input.clientDocumentId)
-    if (input.title) form.append("title", input.title)
-    if (input.visitId) form.append("visitId", input.visitId)
-    if (input.taskId) form.append("taskId", input.taskId)
-    const body = await request<{ success?: boolean; data?: unknown }>(
-      "/api/v1/mtm/mobile/documents/upload",
-      { method: "POST", body: form },
-    )
-    const document = body.data && typeof body.data === "object" && !Array.isArray(body.data)
-      ? body.data as Record<string, unknown>
-      : null
-    if (body.success !== true || !document || typeof document.id !== "string") {
-      throw new Error("Invalid mobile document upload response")
-    }
-    return document
+    return withDecryptedMedia(input.fileUri, async (temporaryUri) => {
+      const form = new FormData()
+      form.append("file", new File(temporaryUri), input.fileName)
+      form.append("clientDocumentId", input.clientDocumentId)
+      if (input.title) form.append("title", input.title)
+      if (input.visitId) form.append("visitId", input.visitId)
+      if (input.taskId) form.append("taskId", input.taskId)
+      const body = await request<{ success?: boolean; data?: unknown }>(
+        "/api/v1/mtm/mobile/documents/upload",
+        { method: "POST", body: form },
+      )
+      const document = body.data && typeof body.data === "object" && !Array.isArray(body.data)
+        ? body.data as Record<string, unknown>
+        : null
+      if (body.success !== true || !document || typeof document.id !== "string") {
+        throw new Error("Invalid mobile document upload response")
+      }
+      return document
+    })
   },
   downloadDocument: async (input: { documentId: string; fileName: string; downloadUrl?: string }) => {
     const [access, deviceId, organizationSlug, agentId] = await Promise.all([
@@ -300,27 +310,31 @@ export const fieldApi = {
     ])
     const safeName = input.fileName.replace(/[^A-Za-z0-9._ -]+/g, "_").slice(0, 180) || "document"
     const scope = `${organizationSlug ?? "unknown"}-${agentId ?? "unknown"}`.replace(/[^A-Za-z0-9._-]+/g, "_")
-    const directory = `${FileSystem.documentDirectory ?? ""}mtm-documents/${scope}/`
+    const directory = `${FIELD_DOCUMENT_MEDIA_DIR}${scope}/`
     if (!FileSystem.documentDirectory) throw new Error("Device document storage is unavailable")
     await FileSystem.makeDirectoryAsync(directory, { intermediates: true })
     const destination = `${directory}${input.documentId}-${safeName}`
-    const result = await FileSystem.downloadAsync(
-      `${API_URL}${input.downloadUrl ?? `/api/v1/mtm/mobile/documents/${encodeURIComponent(input.documentId)}/download`}`,
-      destination,
-      {
-        headers: {
-          "x-leadshelf-protocol": String(PROTOCOL_VERSION),
-          ...(deviceId ? { "x-field-device-id": deviceId } : {}),
-          "x-field-device-platform": Platform.OS,
-          ...(access ? { Authorization: `Bearer ${access}` } : {}),
+    const extension = safeName.split(".").at(-1) ?? "bin"
+    return withTemporaryPlaintextMedia(extension, async (temporaryUri) => {
+      const result = await FileSystem.downloadAsync(
+        `${API_URL}${input.downloadUrl ?? `/api/v1/mtm/mobile/documents/${encodeURIComponent(input.documentId)}/download`}`,
+        temporaryUri,
+        {
+          headers: {
+            "x-leadshelf-protocol": String(PROTOCOL_VERSION),
+            ...(deviceId ? { "x-field-device-id": deviceId } : {}),
+            "x-field-device-platform": Platform.OS,
+            ...(access ? { Authorization: `Bearer ${access}` } : {}),
+          },
         },
-      },
-    )
-    if (result.status === 401) throw new AuthLostError()
-    if (result.status < 200 || result.status >= 300) {
-      throw new HttpError(result.status, "Document download failed")
-    }
-    return result.uri
+      )
+      if (result.status === 401) throw new AuthLostError()
+      if (result.status < 200 || result.status >= 300) {
+        throw new HttpError(result.status, "Document download failed")
+      }
+      await persistEncryptedMedia(result.uri, destination, { deletePlaintextSource: true })
+      return destination
+    })
   },
   markNotificationsRead: async (input: { ids?: string[]; all?: boolean; isRead: boolean }) => {
     await request("/api/v1/mtm/mobile/notifications", {
@@ -512,37 +526,41 @@ export const syncApi: SyncApi = {
     )
   },
   uploadPhoto: async (photo) => {
-    const form = new FormData()
     const mediaType = photo.mediaType ?? "photo"
     const fileExtension = mediaType === "video" ? "mp4" : "jpg"
     // Expo 57 / RN 0.86 fetch принимает Blob/File. Старый RN-объект
     // { uri, name, type } теперь падает до запроса с
     // "Unsupported FormDataPart implementation".
-    form.append("file", new File(photo.fileUri), `${photo.clientPhotoId}.${fileExtension}`)
-    form.append("clientPhotoId", photo.clientPhotoId)
-    form.append("taskId", photo.taskId)
-    form.append("takenAt", photo.takenAt)
-    form.append("mediaType", mediaType)
-    if (photo.durationMs != null) form.append("durationMs", String(photo.durationMs))
-    if (photo.captureStepJson) form.append("captureStepJson", photo.captureStepJson)
-    if (photo.exifJson) form.append("exifJson", photo.exifJson)
-    if (photo.captureFlagsJson) form.append("captureFlagsJson", photo.captureFlagsJson)
-    if (photo.captureTelemetryJson) form.append("captureTelemetryJson", photo.captureTelemetryJson)
-    return request("/api/v1/mtm/mobile/shelf/photos/upload", {
-      method: "POST",
-      body: form,
-    }).then((body) => mobilePhotoUploadResponseSchema.parse(body))
+    return withDecryptedMedia(photo.fileUri, async (temporaryUri) => {
+      const form = new FormData()
+      form.append("file", new File(temporaryUri), `${photo.clientPhotoId}.${fileExtension}`)
+      form.append("clientPhotoId", photo.clientPhotoId)
+      form.append("taskId", photo.taskId)
+      form.append("takenAt", photo.takenAt)
+      form.append("mediaType", mediaType)
+      if (photo.durationMs != null) form.append("durationMs", String(photo.durationMs))
+      if (photo.captureStepJson) form.append("captureStepJson", photo.captureStepJson)
+      if (photo.exifJson) form.append("exifJson", photo.exifJson)
+      if (photo.captureFlagsJson) form.append("captureFlagsJson", photo.captureFlagsJson)
+      if (photo.captureTelemetryJson) form.append("captureTelemetryJson", photo.captureTelemetryJson)
+      return request("/api/v1/mtm/mobile/shelf/photos/upload", {
+        method: "POST",
+        body: form,
+      }).then((body) => mobilePhotoUploadResponseSchema.parse(body))
+    })
   },
   uploadCommercialMedia: async (media) => {
-    const form = new FormData()
-    form.append("file", new File(media.fileUri), `${media.clientMediaId}.jpg`)
-    form.append("clientMediaId", media.clientMediaId)
-    form.append("purpose", media.purpose)
-    form.append("takenAt", media.takenAt)
-    return request("/api/v1/mtm/mobile/shelf/commercial-media/upload", {
-      method: "POST",
-      body: form,
-    }).then((body) => mobileCommercialMediaUploadResponseSchema.parse(body))
+    return withDecryptedMedia(media.fileUri, async (temporaryUri) => {
+      const form = new FormData()
+      form.append("file", new File(temporaryUri), `${media.clientMediaId}.jpg`)
+      form.append("clientMediaId", media.clientMediaId)
+      form.append("purpose", media.purpose)
+      form.append("takenAt", media.takenAt)
+      return request("/api/v1/mtm/mobile/shelf/commercial-media/upload", {
+        method: "POST",
+        body: form,
+      }).then((body) => mobileCommercialMediaUploadResponseSchema.parse(body))
+    })
   },
   cleanupCommercialMedia: async (media) => {
     await FileSystem.deleteAsync(media.fileUri, { idempotent: true }).catch(() => {})

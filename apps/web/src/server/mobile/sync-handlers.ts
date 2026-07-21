@@ -14,6 +14,7 @@ import {
 } from "@leadshelf/db"
 import { workerDb } from "@/server/db/client"
 import { protocolMismatch } from "@/server/mobile/protocol"
+import { writeMobileOperationLogs } from "@/server/observability/mobile-operation-log"
 
 export type MobileExecutionSession = {
   org: string
@@ -46,7 +47,11 @@ export async function handleMobilePull(body: unknown, session: MobileExecutionSe
   return NextResponse.json({ ...changes, tasks })
 }
 
-export async function handleMobilePush(body: unknown, session: MobileExecutionSession) {
+export async function handleMobilePush(
+  body: unknown,
+  session: MobileExecutionSession,
+  logContext: { correlationId?: string | null; sink?: (line: string) => void } = {},
+) {
   const parsed = mobileSyncPushRequestSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 })
   const mismatch = protocolMismatch(parsed.data.protocolVersion)
@@ -58,6 +63,12 @@ export async function handleMobilePush(body: unknown, session: MobileExecutionSe
     session.sub,
     session.did,
     parsed.data.operations as PushOperation[],
+  )
+  writeMobileOperationLogs(
+    parsed.data.operations as PushOperation[],
+    results,
+    { organizationId: session.org, deviceId: session.did, correlationId: logContext.correlationId },
+    logContext.sink,
   )
   return NextResponse.json({ results })
 }

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { ACCESS_COOKIE } from "../auth/cookies"
 import { verifyAccessToken, type AccessClaims } from "../auth/jwt"
+import { writeApiContextLog } from "../observability/api-context-log"
 
 // Guard для route handlers: middleware до /api не дотягивается (осознанно),
 // каждый API-роут проверяет access-токен сам.
@@ -13,7 +14,9 @@ export async function requireApiSession(req: NextRequest): Promise<AccessClaims 
     : req.cookies.get(ACCESS_COOKIE)?.value
   if (!token) return null
   try {
-    return await verifyAccessToken(token)
+    const claims = await verifyAccessToken(token)
+    writeApiContextLog(req, claims)
+    return claims
   } catch {
     return null
   }

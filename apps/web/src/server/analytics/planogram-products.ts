@@ -338,6 +338,24 @@ function assignAbcClasses(rows: AbcRow[], metric: AbcMetric): void {
 }
 
 type TenantDb = ReturnType<typeof tenantDb>
+const ANALYTICS_SNAPSHOT_PAGE_SIZE = 2_000
+
+async function collectSnapshotPages<T extends { id: string }>(
+  fetchPage: (cursor: string | undefined, take: number) => Promise<T[]>,
+): Promise<T[]> {
+  const result: T[] = []
+  let cursor: string | undefined
+  while (true) {
+    const page = await fetchPage(cursor, ANALYTICS_SNAPSHOT_PAGE_SIZE)
+    result.push(...page)
+    if (page.length < ANALYTICS_SNAPSHOT_PAGE_SIZE) break
+    const nextCursor = page.at(-1)?.id
+    if (!nextCursor || nextCursor === cursor) throw new Error("analytics_snapshot_cursor_stalled")
+    cursor = nextCursor
+  }
+  return result
+}
+
 type PlanogramPlacementDb = {
   planogramPlacement: {
     findMany(args: unknown): Promise<unknown[]>
@@ -357,6 +375,7 @@ type PlanogramAssignmentDb = {
 const OPEN_TASK_STATUSES = new Set(["NEW", "IN_PROGRESS", "PHOTO_SUBMITTED"])
 
 type PlanogramProductPlacement = {
+  id: string
   planogramVersionId: string
   productId: string
   facingsX: number
@@ -369,6 +388,7 @@ type PlanogramProductPlacement = {
   rotationY: number
   rotationZ: number
   compressionX: number
+  sortOrder: number
   planogramVersion: {
     id: string
     versionNumber: number
@@ -383,6 +403,32 @@ type PlanogramProductPlacement = {
     brand: { name: string } | null
     supplier: { name: string } | null
   }
+}
+
+function productRowFromPlacement(placement: PlanogramProductPlacement): ProductRow {
+  return {
+    key: `${placement.planogramVersionId}:${placement.productId}`,
+    productId: placement.productId,
+    planogramId: placement.planogramVersion.planogram.id,
+    versionId: placement.planogramVersion.id,
+    planogramName: placement.planogramVersion.planogram.name,
+    versionNumber: placement.planogramVersion.versionNumber,
+    state: placement.planogramVersion.state,
+    sku: placement.product.sku,
+    productName: placement.product.name,
+    category: placement.product.category?.name ?? null,
+    brand: placement.product.brand?.name ?? null,
+    supplier: placement.product.supplier?.name ?? null,
+    placements: 1,
+    units: placement.facingsX * placement.facingsY * placement.facingsZ,
+    linearMm: placementWidthMm({ xMm: 0, ...placement }),
+  }
+}
+
+function mergeProductRow(target: ProductRow, placement: PlanogramProductPlacement): void {
+  target.placements += 1
+  target.units += placement.facingsX * placement.facingsY * placement.facingsZ
+  target.linearMm += placementWidthMm({ xMm: 0, ...placement })
 }
 
 type ActiveAssignment = {
@@ -517,7 +563,9 @@ function dateKey(date: Date): string {
 export async function getPlanogramProductRows(
   db: PlanogramPlacementDb,
   organizationId: string,
+  options: { limit?: number | null } = {},
 ): Promise<ProductRow[]> {
+  const limit = options.limit === undefined ? 2000 : options.limit
   const placements = (await db.planogramPlacement.findMany({
     where: {
       planogramVersion: {
@@ -545,39 +593,19 @@ export async function getPlanogramProductRows(
         },
       },
     },
-    orderBy: [{ planogramVersionId: "asc" }, { productId: "asc" }, { sortOrder: "asc" }],
-    take: 2000,
+    orderBy: [{ planogramVersionId: "asc" }, { productId: "asc" }, { sortOrder: "asc" }, { id: "asc" }],
+    ...(limit == null ? {} : { take: limit }),
   })) as PlanogramProductPlacement[]
 
   const rowsByKey = new Map<string, ProductRow>()
   for (const placement of placements) {
     const key = `${placement.planogramVersionId}:${placement.productId}`
-    const units = placement.facingsX * placement.facingsY * placement.facingsZ
-    const linearMm = placementWidthMm({ xMm: 0, ...placement })
     const existing = rowsByKey.get(key)
     if (existing) {
-      existing.placements += 1
-      existing.units += units
-      existing.linearMm += linearMm
+      mergeProductRow(existing, placement)
       continue
     }
-    rowsByKey.set(key, {
-      key,
-      productId: placement.productId,
-      planogramId: placement.planogramVersion.planogram.id,
-      versionId: placement.planogramVersion.id,
-      planogramName: placement.planogramVersion.planogram.name,
-      versionNumber: placement.planogramVersion.versionNumber,
-      state: placement.planogramVersion.state,
-      sku: placement.product.sku,
-      productName: placement.product.name,
-      category: placement.product.category?.name ?? null,
-      brand: placement.product.brand?.name ?? null,
-      supplier: placement.product.supplier?.name ?? null,
-      placements: 1,
-      units,
-      linearMm,
-    })
+    rowsByKey.set(key, productRowFromPlacement(placement))
   }
 
   return [...rowsByKey.values()].sort((a, b) => {
@@ -585,6 +613,64 @@ export async function getPlanogramProductRows(
     if (planogram !== 0) return planogram
     return a.sku.localeCompare(b.sku)
   })
+}
+
+export async function* iteratePlanogramProductRows(
+  db: PlanogramPlacementDb,
+  organizationId: string,
+  options: { batchSize?: number } = {},
+): AsyncGenerator<ProductRow> {
+  const batchSize = Math.min(Math.max(options.batchSize ?? 5_000, 100), 5_000)
+  let cursor: string | undefined
+  let pending: ProductRow | null = null
+
+  while (true) {
+    const placements = (await db.planogramPlacement.findMany({
+      where: {
+        planogramVersion: {
+          state: { in: ["DRAFT", "PUBLISHED"] },
+          planogram: { organizationId },
+        },
+      },
+      include: {
+        planogramVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            state: true,
+            planogram: { select: { id: true, name: true } },
+          },
+        },
+        product: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            category: { select: { name: true } },
+            brand: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ planogramVersionId: "asc" }, { productId: "asc" }, { sortOrder: "asc" }, { id: "asc" }],
+      take: batchSize,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    })) as PlanogramProductPlacement[]
+    if (placements.length === 0) break
+
+    for (const placement of placements) {
+      const key = `${placement.planogramVersionId}:${placement.productId}`
+      if (pending?.key === key) {
+        mergeProductRow(pending, placement)
+      } else {
+        if (pending) yield pending
+        pending = productRowFromPlacement(placement)
+      }
+    }
+    cursor = placements.at(-1)!.id
+    if (placements.length < batchSize) break
+  }
+  if (pending) yield pending
 }
 
 export async function getBasicDashboardSummary(
@@ -652,11 +738,13 @@ export async function getBasicDashboardSummary(
   }
   const sales =
     activeProductIds.size > 0
-      ? await db.salesSnapshot.findMany({
+      ? await collectSnapshotPages((cursor, take) => db.salesSnapshot.findMany({
           where: { productId: { in: [...activeProductIds] } },
-          select: { revenue: true, profit: true },
-          take: 10000,
-        })
+          select: { id: true, revenue: true, profit: true },
+          orderBy: [{ id: "asc" }],
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          take,
+        }))
       : []
   const turnover = sales.reduce((sum, row) => sum + Number(row.revenue), 0)
   const profit = sales.reduce((sum, row) => sum + (row.profit == null ? 0 : Number(row.profit)), 0)
@@ -673,7 +761,7 @@ export async function getBasicDashboardSummary(
 }
 
 export async function getAbcRows(db: TenantDb): Promise<AbcRow[]> {
-  const sales = await db.salesSnapshot.findMany({
+  const sales = await collectSnapshotPages((cursor, take) => db.salesSnapshot.findMany({
     include: {
       product: {
         select: {
@@ -685,9 +773,10 @@ export async function getAbcRows(db: TenantDb): Promise<AbcRow[]> {
         },
       },
     },
-    orderBy: [{ date: "desc" }, { productId: "asc" }],
-    take: 5000,
-  })
+    orderBy: [{ date: "desc" }, { productId: "asc" }, { id: "asc" }],
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    take,
+  }))
 
   const rowsByProduct = new Map<string, AbcRow>()
   for (const sale of sales) {
@@ -734,12 +823,13 @@ export async function getLikeForLikeSummary(
   const currentStart = addDays(currentEnd, -days)
   const previousEnd = currentStart
   const previousStart = addDays(previousEnd, -days)
-  const sales = await db.salesSnapshot.findMany({
+  const sales = await collectSnapshotPages((cursor, take) => db.salesSnapshot.findMany({
     where: { date: { gte: previousStart, lt: currentEnd } },
-    select: { date: true, quantity: true, revenue: true, profit: true },
-    orderBy: [{ date: "asc" }],
-    take: 10000,
-  })
+    select: { id: true, date: true, quantity: true, revenue: true, profit: true },
+    orderBy: [{ date: "asc" }, { id: "asc" }],
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    take,
+  }))
 
   const current = { turnover: 0, profit: 0, quantity: 0 }
   const previous = { turnover: 0, profit: 0, quantity: 0 }
@@ -839,9 +929,10 @@ export async function getLikeForLikeBreakdown(
   const currentStart = addDays(currentEnd, -days)
   const previousStart = addDays(currentStart, -days)
   const [sales, assignments] = await Promise.all([
-    db.salesSnapshot.findMany({
+    collectSnapshotPages((cursor, take) => db.salesSnapshot.findMany({
       where: { date: { gte: previousStart, lt: currentEnd }, storeId: { not: null } },
       select: {
+        id: true,
         date: true,
         productId: true,
         quantity: true,
@@ -856,9 +947,10 @@ export async function getLikeForLikeBreakdown(
           },
         },
       },
-      orderBy: [{ date: "asc" }],
-      take: 15000,
-    }),
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take,
+    })),
     parentDb.planogramAssignment.findMany({
       where: { planogramVersion: { planogram: { organizationId } } },
       include: {
@@ -962,18 +1054,20 @@ export async function getStockCoverageByProduct(
   if (productIds.length === 0) return new Map()
   const uniqueProductIds = [...new Set(productIds)]
   const [stockSnapshots, salesSnapshots] = await Promise.all([
-    db.stockSnapshot.findMany({
+    collectSnapshotPages((cursor, take) => db.stockSnapshot.findMany({
       where: { productId: { in: uniqueProductIds } },
-      select: { productId: true, date: true, quantity: true },
-      orderBy: [{ date: "desc" }, { productId: "asc" }],
-      take: 5000,
-    }),
-    db.salesSnapshot.findMany({
+      select: { id: true, productId: true, date: true, quantity: true },
+      orderBy: [{ date: "desc" }, { productId: "asc" }, { id: "asc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take,
+    })),
+    collectSnapshotPages((cursor, take) => db.salesSnapshot.findMany({
       where: { productId: { in: uniqueProductIds } },
-      select: { productId: true, date: true, quantity: true },
-      orderBy: [{ date: "desc" }, { productId: "asc" }],
-      take: 5000,
-    }),
+      select: { id: true, productId: true, date: true, quantity: true },
+      orderBy: [{ date: "desc" }, { productId: "asc" }, { id: "asc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take,
+    })),
   ])
 
   const latestStockByProduct = new Map<string, number>()

@@ -11,6 +11,7 @@ import {
 import { emitProductEvent } from "@leadshelf/db"
 import { loadRefMaps, resolveProductId, type RefMaps } from "./resolve-refs"
 import type { ImportSummary } from "./execute-products-import"
+import { buildImportReconciliation, buildSnapshotSourceTotals } from "./reconciliation"
 
 // Снапшоты пишутся raw INSERT ... ON CONFLICT: их natural keys — это
 // UNIQUE NULLS NOT DISTINCT констрейнты (raw SQL миграции, Prisma их не
@@ -164,6 +165,9 @@ export interface SnapshotsImportInput {
   source?: string
   createdById?: string
   batchId?: string
+  expectedRows?: number
+  expectedChecksum?: string
+  expectedTotals?: Record<string, string>
 }
 
 export async function executeSnapshotsImport(
@@ -257,10 +261,21 @@ export async function executeSnapshotsImport(
       })
     }
 
-    const status = errorRows > 0 ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
+    const sourceTotals = buildSnapshotSourceTotals(entityType, rows)
+    const reconciliation = buildImportReconciliation({
+      rows,
+      processedRows: totalRows,
+      importedRows,
+      errorRows,
+      expectedRows: input.expectedRows,
+      expectedChecksum: input.expectedChecksum,
+      sourceTotals,
+      expectedTotals: input.expectedTotals,
+    })
+    const status = errorRows > 0 || reconciliation.status === "MISMATCH" ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
     await prisma.importBatch.update({
       where: { id: batch.id },
-      data: { status, finishedAt: new Date() },
+      data: { status, finishedAt: new Date(), reconciliation },
     })
     if (errorRows > 0) {
       await emitProductEvent(prisma, organizationId, {
@@ -272,7 +287,7 @@ export async function executeSnapshotsImport(
         payload: { title: `${input.entityType} import errors`, count: errorRows, source: input.source ?? null },
       })
     }
-    return { batchId: batch.id, totalRows, errorRows, importedRows, status }
+    return { batchId: batch.id, totalRows, errorRows, importedRows, status, reconciliation }
   } catch (err) {
     await prisma.importBatch.update({
       where: { id: batch.id },

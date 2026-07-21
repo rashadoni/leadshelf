@@ -81,3 +81,16 @@ enforce'ить изоляцию тенанта scoped Prisma-клиентом в
 - Overlap-констрейнты на validity-окна `assortment_matrix`/`store_assortment`
   (EXCLUDE USING gist) — v0 держит одну актуальную строку на пару, история
   через AuditLog.
+
+## 7. Full-sync approval state
+
+Миграция `20260719055000_import_full_sync_approval` добавляет в durable import
+queue `syncMode`, путь к owner-only approval token и timestamp attach. Raw SQL
+CHECK допускает только `delta|full`, требует атомарную пару path/timestamp и
+запрещает approval на delta jobs. Partial index обслуживает операторский список
+full-sync jobs, ожидающих approval. Bearer token и signing key в БД не хранятся.
+Следующая миграция `20260719060000_product_tenant_write_lock` ставит transaction-
+level advisory lock по organization ID на каждый `products` INSERT/UPDATE/DELETE.
+Full-sync consumer берёт тот же lock до пересчёта active set, поэтому concurrent
+delta/API writer того же tenant не может изменить каталог между approval check
+и deactivation; другой tenant использует иной lock key.

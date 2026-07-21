@@ -1,9 +1,28 @@
+{
+	# Статическая конфигурация: admin API не нужен. Prometheus histograms
+	# включают round-trip latency, TTFB, status и request/response sizes.
+	admin off
+	metrics
+}
+
+:2019 {
+	metrics
+}
+
 # Основной домен: hermescrm.xyz (за Cloudflare-прокси).
 # sslip.io оставлен как запасной прямой вход (без CF).
 hermescrm.xyz, www.hermescrm.xyz {
+	log {
+		output stdout
+		format json
+	}
 	reverse_proxy web:3000
 }
 
 157-90-227-191.sslip.io {
+	log {
+		output stdout
+		format json
+	}
 	reverse_proxy web:3000
 }
