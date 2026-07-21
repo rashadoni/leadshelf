@@ -473,6 +473,14 @@ Definition of Done:
   approve/reject API, auto-enqueue poor/review photo quality uploads]`
 - Model/data quality dashboard. `[сделано: KPI cards в /reviews по
   pending/approved/rejected, avg score и reason breakdown]`
+- NVIDIA LocateAnything-3B research spike. `[реализован evaluation-only
+  two-stage localizer adapter + localhost GPU-worker wrapper + fail-closed
+  non-commercial acknowledgement, HTTPS/token guard для remote worker и
+  unit/typecheck coverage. Не подключён к production /v1/scan или Compose.
+  Реальный inference не проверен: в текущем окружении нет NVIDIA GPU;
+  публичные веса запрещены для commercial use, не поддерживают visual prompt
+  out of the box и не дают calibrated confidence. Нужны GPU-host и 20-50+
+  реальных размеченных proof для метрик.]`
 
 Рекомендация:
 

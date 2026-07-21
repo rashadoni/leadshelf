@@ -55,8 +55,10 @@ oracle_boxes` feeds the human-annotated boxes to the SKU recognizer, so
 localization is an oracle (=1.0 by construction) and `skuAccuracyOnLocalized`
 becomes a pure classification measurement. Candidate SKUs come from the golden
 sample only — answers outside the candidate list are forced to `null` with a
-warning. A `two_stage` (localizer -> recognizer) mode exists at the runner
-level for wiring tests until a real localization provider lands.
+warning. `--mode two_stage` connects the evaluation-only NVIDIA
+LocateAnything localizer to the configured SKU recognizer. It requires the
+separate local GPU worker and explicit non-commercial evaluation
+acknowledgement documented in `../README.md`; it is not a production provider.
 
 ## Accuracy claims
 

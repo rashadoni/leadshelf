@@ -7,6 +7,7 @@ import {
   type VisionEvalSplit,
 } from "./evaluation"
 import { runVisionEval, type VisionEvalMode } from "./eval-runner"
+import { createConfiguredLocateAnythingLocalizer } from "./locate-anything"
 import { createConfiguredSkuRecognizer, createConfiguredVisionProvider } from "./provider"
 
 function argument(name: string): string | undefined {
@@ -63,8 +64,7 @@ function resolveSplits(): VisionEvalSplit[] {
 
 function resolveMode(): VisionEvalMode {
   const raw = argument("--mode") ?? "end_to_end"
-  // two_stage остаётся runner-only wiring'ом, пока нет реального localizer.
-  if (raw !== "end_to_end" && raw !== "oracle_boxes") {
+  if (raw !== "end_to_end" && raw !== "oracle_boxes" && raw !== "two_stage") {
     throw new Error(`invalid_or_unsupported_mode:${raw}`)
   }
   return raw
@@ -74,7 +74,7 @@ async function main() {
   const manifestPathArg = argument("--manifest")
   if (!manifestPathArg) {
     throw new Error(
-      "Usage: pnpm --filter @leadshelf/vision eval -- --manifest <path> [--env <path>] [--output <path>] [--mode end_to_end|oracle_boxes] [--split a,b] [--include-test] [--allow-external]",
+      "Usage: pnpm --filter @leadshelf/vision eval -- --manifest <path> [--env <path>] [--output <path>] [--mode end_to_end|oracle_boxes|two_stage] [--split a,b] [--include-test] [--allow-external]",
     )
   }
   const manifestPath = resolve(manifestPathArg)
@@ -91,7 +91,8 @@ async function main() {
     manifest,
     mode,
     provider: mode === "end_to_end" ? createConfiguredVisionProvider() : undefined,
-    recognizer: mode === "oracle_boxes" ? createConfiguredSkuRecognizer() : undefined,
+    recognizer: mode !== "end_to_end" ? createConfiguredSkuRecognizer() : undefined,
+    localizer: mode === "two_stage" ? createConfiguredLocateAnythingLocalizer() : undefined,
     splits: resolveSplits(),
     allowExternal: hasFlag("--allow-external"),
     resolvePhotoRef: async (photoRef) => {

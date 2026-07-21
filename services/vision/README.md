@@ -96,6 +96,60 @@ JSON object wrapped in Markdown/prose because Gemini may ignore
 normalized to 0..100 percentages and emit `bbox_unit_interval_normalized` for
 auditability.
 
+### NVIDIA LocateAnything-3B evaluation localizer
+
+LocateAnything is connected only to the private `two_stage` evaluation mode:
+
+```text
+LocateAnything localizer -> configured SKU recognizer -> eval metrics
+```
+
+It is deliberately absent from `createConfiguredVisionProvider`, `/v1/scan`
+and production Compose. The public NVIDIA weights permit non-commercial
+research/evaluation only. The adapter fails closed unless the operator sets:
+
+```bash
+LOCATEANYTHING_NONCOMMERCIAL_EVALUATION_ONLY=1
+```
+
+Run the GPU worker on a Linux host with a supported NVIDIA GPU. Install the
+official package rather than copying its implementation into LeadShelf:
+
+```bash
+git clone https://github.com/NVlabs/Eagle.git /opt/eagle
+python -m venv /opt/eagle/.venv
+/opt/eagle/.venv/bin/pip install -e /opt/eagle/Embodied
+
+LOCATEANYTHING_NONCOMMERCIAL_EVALUATION_ONLY=1 \
+  /opt/eagle/.venv/bin/python services/vision/locateanything/worker.py
+```
+
+The worker binds to `127.0.0.1:8091` by default, accepts inline JPEG/PNG/WebP
+only and never fetches image URLs. A non-loopback worker requires an
+authenticated TLS boundary; the LeadShelf client rejects plaintext or
+tokenless remote URLs.
+
+Run localization with the existing evaluator. `VISION_PROVIDER` selects only
+the second-stage SKU recognizer; use `stub` to measure localization wiring
+without sending photos to an external recognizer:
+
+```bash
+LOCATEANYTHING_NONCOMMERCIAL_EVALUATION_ONLY=1 \
+LOCATEANYTHING_WORKER_URL=http://127.0.0.1:8091 \
+VISION_PROVIDER=stub \
+node --import tsx src/eval-cli.ts \
+  --manifest /private/path/dataset/manifest.json \
+  --mode two_stage \
+  --output /private/path/dataset/reports/locateanything.json
+```
+
+The released checkpoint does not support visual-prompt inference out of the
+box, so catalog reference crops cannot yet be used as prompts. Its public box
+output also has no calibrated probability. The adapter records a configurable
+fallback confidence (`LOCATEANYTHING_UNCALIBRATED_CONFIDENCE`, default `0.5`);
+do not use its threshold sweep as production calibration. Real accuracy claims
+remain gated by the evaluator's real validation/test sample minimum.
+
 ### Local Apple Vision OCR baseline (macOS only)
 
 When external photo upload is unavailable, the repository includes a local

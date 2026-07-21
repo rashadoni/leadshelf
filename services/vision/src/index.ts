@@ -51,6 +51,14 @@ export {
 } from "./dataset"
 export type { AddSampleInput, AddSampleResult, SplitRatios } from "./dataset"
 export {
+  createConfiguredLocateAnythingLocalizer,
+  DEFAULT_LOCATE_ANYTHING_MODEL,
+  DEFAULT_LOCATE_ANYTHING_QUERY,
+  LOCATE_ANYTHING_PROVIDER,
+  LocateAnythingLocalizer,
+} from "./locate-anything"
+export type { LocateAnythingLocalizerConfig } from "./locate-anything"
+export {
   runVisionEval,
   type RunVisionEvalInput,
   type VisionEvalMode,
