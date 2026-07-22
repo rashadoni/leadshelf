@@ -7,14 +7,14 @@ RUN go install -trimpath -ldflags="-s -w" github.com/caddyserver/caddy/v2/cmd/ca
 
 FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 RUN apk add --no-cache ca-certificates libcap mailcap \
-    && addgroup -S caddy \
-    && adduser -S caddy -G caddy \
     && mkdir -p /config/caddy /data/caddy /etc/caddy /srv \
-    && chown -R caddy:caddy /config /data /etc/caddy /srv
+    && chmod 1777 /config/caddy /data/caddy
 COPY --from=builder /go/bin/caddy /usr/bin/caddy
 RUN setcap cap_net_bind_service=+ep /usr/bin/caddy
 
-USER caddy
+# Match the official Caddy image's runtime identity and volume permissions.
+# Existing Caddy volumes contain root-owned ACME account keys and certificates;
+# switching to an arbitrary image-local UID makes TLS fail after an upgrade.
 WORKDIR /srv
 ENV XDG_CONFIG_HOME=/config \
     XDG_DATA_HOME=/data
