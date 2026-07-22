@@ -107,7 +107,17 @@ legal hold и incident notification. Отдельно утверждаются:
 
 Face blur до persistence сейчас не реализован. До утверждения и проверки blur
 съёмка должна организационно исключать покупателей; AI/CV не отправляет фото
-внешнему провайдеру. Этот риск нельзя считать закрытым feature flag самого AI.
+внешнему провайдеру. Для такого режима production runtime обязан иметь:
+
+- `LEADSHELF_PROOF_PRIVACY_MODE=no_people_in_frame_attestation`;
+- `LEADSHELF_PROOF_PRIVACY_APPROVAL=<privacy/legal evidence id>`.
+
+Approval — это идентификатор решения/тикета, не секрет. Без этих значений
+`/api/ready` возвращает 503, а proof media upload возвращает retryable
+privacy-safe отказ до записи в S3/БД. Штатный guided mobile capture добавляет
+attestation в `captureFlagsJson`, но это не доказывает отсутствие покупателей
+на кадре и не заменяет pre-persistence blur. Этот риск нельзя считать закрытым
+feature flag самого AI.
 
 ## Mobile at-rest baseline
 
