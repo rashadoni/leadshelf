@@ -989,10 +989,14 @@ Definition of Done: двухнедельный прогон не теряет д
   fail-closed до S3/БД без mobile privacy attestation
   no_people_in_frame + operator confirmation; штатный guided mobile capture
   всегда добавляет attestation в captureFlagsJson, а серверный regression
-  доказывает 400 без object/database I/O при отсутствии attestation. Это
-  не является face blur и не доказывает отсутствие покупателей на кадре.
-  BLOCKED — privacy/legal решение о режиме либо утверждённый CV provider/
-  dataset для настоящего pre-store blur]`
+  доказывает 400 без object/database I/O при отсутствии attestation. Добавлен
+  единый production privacy policy gate: /api/ready и upload handler требуют
+  LEADSHELF_PROOF_PRIVACY_MODE=no_people_in_frame_attestation +
+  LEADSHELF_PROOF_PRIVACY_APPROVAL в production, иначе readiness/upload
+  fail-closed privacy-safe. Web tests 53 files/168 tests и typecheck PASS.
+  Это не является face blur и не доказывает отсутствие покупателей на кадре.
+  BLOCKED — privacy/legal approval receipt для выбранного режима либо
+  утверждённый CV provider/dataset для настоящего pre-store blur]`
 
 Definition of Done: нет открытых critical/high; доказано, что tenant A не
 читает и не изменяет данные или медиа tenant B.

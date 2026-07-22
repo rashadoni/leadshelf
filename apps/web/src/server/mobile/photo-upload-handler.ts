@@ -16,6 +16,10 @@ import { deleteObject, putObject } from "@/server/storage/s3"
 import { matchesDeclaredMediaType } from "@/server/security/media-signature"
 import { attemptObjectWrite, persistWithObjectCleanup } from "@/server/storage/object-compensation"
 import { acquireMediaUploadAdmission } from "@/server/mobile/media-upload-admission"
+import {
+  configuredProofPrivacyPolicy,
+  hasProofPrivacyAttestation,
+} from "@/server/security/proof-privacy-policy"
 
 export type MobilePhotoSession = {
   org: string
@@ -71,16 +75,6 @@ function parseJsonObjectField(raw: string | undefined): JsonObject | null | "inv
   } catch {
     return "invalid"
   }
-}
-
-function hasProofPrivacyAttestation(captureFlags: JsonObject | null): boolean {
-  const privacy = asObjectRecord(captureFlags?.privacy)
-  return (
-    privacy.bystanderPolicy === "no_people_in_frame" &&
-    privacy.operatorAttestedNoPeople === true &&
-    typeof privacy.attestedAt === "string" &&
-    privacy.attestedAt.length > 0
-  )
 }
 
 async function ensureQueuedVisionReview(input: {
@@ -139,6 +133,15 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
 }
 
 async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
+  try {
+    configuredProofPrivacyPolicy()
+  } catch {
+    return NextResponse.json(
+      { error: "privacy_policy_not_configured" },
+      { status: 503, headers: { "Retry-After": "60" } },
+    )
+  }
+
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
   if (!(file instanceof File)) return NextResponse.json({ error: "file_required" }, { status: 400 })
