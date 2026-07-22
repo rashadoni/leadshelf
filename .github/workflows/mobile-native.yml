@@ -2,6 +2,19 @@ name: Mobile native compile
 
 on:
   workflow_dispatch:
+    inputs:
+      architecture:
+        description: "Android ABI for the debug APK"
+        required: true
+        type: choice
+        options: [arm64-v8a, x86_64]
+        default: arm64-v8a
+      backend:
+        description: "Backend embedded into the debug APK"
+        required: true
+        type: choice
+        options: [live-demo, local-emulator]
+        default: live-demo
   pull_request:
     paths:
       - ".github/workflows/mobile-native.yml"
@@ -18,6 +31,10 @@ jobs:
   android-debug-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      LEADSHELF_ANDROID_ARCH: ${{ inputs.architecture || 'arm64-v8a' }}
+      LEADSHELF_API_PROFILE: ${{ inputs.backend || 'live-demo' }}
+      EXPO_PUBLIC_API_URL: ${{ inputs.backend == 'local-emulator' && 'http://10.0.2.2:3200' || 'https://hermescrm.xyz' }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -44,14 +61,11 @@ jobs:
         working-directory: apps/mobile
         env:
           CI: "true"
-          EXPO_PUBLIC_API_URL: http://10.0.2.2:3200
         run: pnpm exec expo prebuild --platform android --no-install
 
-      - name: Compile emulator APK
+      - name: Compile selectable emulator APK
         working-directory: apps/mobile/android
-        env:
-          EXPO_PUBLIC_API_URL: http://10.0.2.2:3200
-        run: ./gradlew app:assembleDebug --no-daemon -PreactNativeArchitectures=x86_64
+        run: ./gradlew app:assembleDebug --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
 
       - name: Record compile evidence
         run: |
@@ -59,12 +73,13 @@ jobs:
           apk=apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           test -s "$apk"
           sha256sum "$apk" > mobile-native-SHA256SUMS
-          printf 'commit=%s\nkind=debug-emulator-evidence\nproduction_signed=false\n' "$GITHUB_SHA" > mobile-native-evidence.txt
+          printf 'commit=%s\nkind=debug-emulator-evidence\narchitecture=%s\napi_profile=%s\nproduction_signed=false\n' \
+            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_API_PROFILE" > mobile-native-evidence.txt
 
       - name: Upload emulator APK evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mobile-android-debug-${{ github.sha }}
+          name: mobile-android-debug-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
           path: |
             apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
             mobile-native-SHA256SUMS
