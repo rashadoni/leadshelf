@@ -1,0 +1,64 @@
+name: Deploy disposable test environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledgement:
+        description: "Type DISPOSABLE to acknowledge that current test data may be lost"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-test:
+    if: inputs.acknowledgement == 'DISPOSABLE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    concurrency:
+      group: deploy-disposable-test
+      cancel-in-progress: false
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Validate disposable test target
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.acknowledgement }}" = DISPOSABLE ]
+          [ -n "$SSH_KEY" ]
+          [[ "$HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$ ]]
+          [[ "$GITHUB_REF" == refs/heads/main ]]
+
+      - name: Deploy exact SHA to disposable test host
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # This workflow is explicitly limited to the disposable test host.
+          # The protected production workflow requires a separately verified,
+          # pinned DEPLOY_KNOWN_HOSTS value and never uses TOFU.
+          ssh-keyscan -t ed25519 "$HOST" > ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+          scp -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key deploy/scripts/deploy-disposable-test.sh \
+            "root@$HOST:/tmp/leadshelf-deploy-disposable-test.sh"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key "root@$HOST" \
+            "chmod 700 /tmp/leadshelf-deploy-disposable-test.sh && LEADSHELF_TEST_DEPLOY_ACK=DISPOSABLE /tmp/leadshelf-deploy-disposable-test.sh '$RELEASE_SHA'; status=\$?; rm -f /tmp/leadshelf-deploy-disposable-test.sh; exit \$status"
+
+      - name: Public smoke
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 https://hermescrm.xyz/api/health
+          curl --fail --silent --show-error --max-time 20 https://hermescrm.xyz/api/ready
+          metrics_status="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' https://hermescrm.xyz/api/metrics)"
+          [ "$metrics_status" = 401 ] || [ "$metrics_status" = 200 ]
