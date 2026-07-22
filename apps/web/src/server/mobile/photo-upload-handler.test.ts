@@ -31,7 +31,10 @@ import { handleMobilePhotoUpload } from "./photo-upload-handler"
 
 const session = { org: "org-1", sub: "agent-1", did: "device-1", role: "FIELD_AGENT" }
 
-function request(bytes: Uint8Array = new Uint8Array([0xff, 0xd8, 0xff, 0x00])) {
+function request(
+  bytes: Uint8Array = new Uint8Array([0xff, 0xd8, 0xff, 0x00]),
+  options: { includePrivacyAttestation?: boolean } = {},
+) {
   const form = new FormData()
   const fileBytes = new ArrayBuffer(bytes.byteLength)
   new Uint8Array(fileBytes).set(bytes)
@@ -40,6 +43,16 @@ function request(bytes: Uint8Array = new Uint8Array([0xff, 0xd8, 0xff, 0x00])) {
   form.append("taskId", "task-1")
   form.append("takenAt", "2026-07-19T10:00:00.000Z")
   form.append("mediaType", "photo")
+  if (options.includePrivacyAttestation !== false) {
+    form.append("captureFlagsJson", JSON.stringify({
+      privacy: {
+        bystanderPolicy: "no_people_in_frame",
+        operatorAttestedNoPeople: true,
+        attestedAt: "2026-07-19T10:00:00.000Z",
+        source: "guided_shelf_proof_capture",
+      },
+    }))
+  }
   return new NextRequest("http://localhost/api/v1/mobile/photos/upload", {
     method: "POST",
     headers: { "x-leadshelf-protocol": "1" },
@@ -94,6 +107,19 @@ describe("shared mobile photo upload handler", () => {
     expect(await response.json()).toEqual({ error: "content_signature_mismatch" })
     expect(putObject).not.toHaveBeenCalled()
     expect(workerDb.photoSubmission.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("rejects proof media without privacy attestation before database or object storage I/O", async () => {
+    const response = await handleMobilePhotoUpload(
+      request(new Uint8Array([0xff, 0xd8, 0xff, 0x00]), { includePrivacyAttestation: false }),
+      session,
+    )
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: "privacy_attestation_required" })
+    expect(putObject).not.toHaveBeenCalled()
+    expect(workerDb.photoSubmission.findFirst).not.toHaveBeenCalled()
+    expect(workerDb.task.findFirst).not.toHaveBeenCalled()
   })
 
   it("returns a privacy-safe retryable response when object storage fails", async () => {

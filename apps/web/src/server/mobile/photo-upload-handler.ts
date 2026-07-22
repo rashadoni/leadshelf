@@ -73,6 +73,16 @@ function parseJsonObjectField(raw: string | undefined): JsonObject | null | "inv
   }
 }
 
+function hasProofPrivacyAttestation(captureFlags: JsonObject | null): boolean {
+  const privacy = asObjectRecord(captureFlags?.privacy)
+  return (
+    privacy.bystanderPolicy === "no_people_in_frame" &&
+    privacy.operatorAttestedNoPeople === true &&
+    typeof privacy.attestedAt === "string" &&
+    privacy.attestedAt.length > 0
+  )
+}
+
 async function ensureQueuedVisionReview(input: {
   organizationId: string
   taskId: string | null
@@ -171,6 +181,9 @@ async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
   const captureTelemetry = parseJsonObjectField(parsed.data.captureTelemetryJson)
   if (captureTelemetry === "invalid") {
     return NextResponse.json({ error: "invalid_capture_telemetry" }, { status: 400 })
+  }
+  if (!hasProofPrivacyAttestation(captureFlags)) {
+    return NextResponse.json({ error: "privacy_attestation_required" }, { status: 400 })
   }
   const equipmentMismatch = captureFlags?.equipmentMismatch === true
 

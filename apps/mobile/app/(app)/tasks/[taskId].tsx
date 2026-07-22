@@ -64,6 +64,16 @@ import type { TaskRow } from "../../../src/sync/ports"
 
 const EXCEPTION_REASONS = ["no_access", "equipment_missing", "obstruction", "other"] as const
 
+function buildProofPrivacyAttestation(appVersion: string | null): Record<string, unknown> {
+  return {
+    bystanderPolicy: "no_people_in_frame",
+    operatorAttestedNoPeople: true,
+    attestedAt: new Date().toISOString(),
+    source: "guided_shelf_proof_capture",
+    appVersion,
+  }
+}
+
 const BARCODE_TYPES: BarcodeType[] = [
   "ean13",
   "ean8",
@@ -317,6 +327,10 @@ export default function TaskDetailScreen() {
       deviceLocation,
       captureStep: captureStepMetadata,
     })
+    const flagsWithPrivacy = {
+      ...(captureFlags ?? {}),
+      privacy: buildProofPrivacyAttestation(Constants.expoConfig?.version ?? null),
+    }
     await persistAndQueuePhoto({
       taskId: task!.id,
       sourceUri,
@@ -326,7 +340,7 @@ export default function TaskDetailScreen() {
       durationMs,
       captureStepJson: JSON.stringify(captureStepMetadata),
       exifJson,
-      captureFlagsJson: captureFlags ? JSON.stringify(captureFlags) : null,
+      captureFlagsJson: JSON.stringify(flagsWithPrivacy),
       captureTelemetryJson: captureTelemetry ? JSON.stringify(captureTelemetry) : null,
     })
     hasCapturedRef.current = true
