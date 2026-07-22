@@ -45,7 +45,7 @@ jobs:
         env:
           CI: "true"
           EXPO_PUBLIC_API_URL: http://10.0.2.2:3200
-        run: pnpm exec expo prebuild --platform android --no-install --pnpm
+        run: pnpm exec expo prebuild --platform android --no-install
 
       - name: Compile emulator APK
         working-directory: apps/mobile/android
