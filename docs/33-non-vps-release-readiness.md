@@ -7,7 +7,9 @@ mobile artifacts и release media. Никаких SSH/deploy/изменений 
 
 - Добавлен отдельный `Mobile native compile`: чистый Expo prebuild, Android
   x86_64 debug compile и 14-дневный APK/checksum artifact. Это compile evidence,
-  а не production-подпись.
+  а не production-подпись. Clean GitHub runner `29906911181` прошёл за 20m43s;
+  artifact `8524754435` проверен повторным скачиванием, APK SHA-256:
+  `bb6f52402f7d8e20a2f22161414b432d20543316a816859f3210336f21aeabe6`.
 - Добавлен ручной fail-closed `Mobile signed release`: только exact `main`,
   protected `mobile-release` environment, явное `SIGNED-RELEASE`, pinned EAS
   CLI/action, frozen credentials, mobile tests + frozen protocol до build,
@@ -20,6 +22,9 @@ mobile artifacts и release media. Никаких SSH/deploy/изменений 
 - GitHub `main` защищён: PR обязателен, ветка должна быть актуальна, checks
   `ci` и `Secret and production-image scan` обязательны, force-push/delete
   запрещены, review conversations должны быть разрешены.
+- Caddy 2.11.4 пересобирается с patched `grpc-go`/`x/crypto`/`x/net`/`x/text`;
+  remote run `29906911165` повторно подтвердил ноль High/Critical для web,
+  workers, Caddy и PostgreSQL images, а также чистый secret scan.
 - Environment `mobile-release` создан и допускает deployments только из
   `main`. Required reviewer недоступен на текущем private-repo billing plan;
   поэтому этот организационный gate нельзя считать закрытым.
@@ -33,9 +38,10 @@ mobile artifacts и release media. Никаких SSH/deploy/изменений 
 3. Для Apple нужны team/ASC/TestFlight access и macOS/device evidence.
 4. Полная device matrix требует физические/выделенные Android и iOS устройства;
    GitHub debug APK не подменяет подписанный on-device acceptance.
-5. Локальный Android compile на этой машине дважды остановлен только из-за
-   заполнения диска на D8/dex merge; исходники дошли до native/dex стадий без
-   compile error. Авторитетный результат должен дать чистый GitHub runner.
+
+Локальный Android compile на этой машине дважды остановился из-за заполнения
+диска на D8/dex merge; этот локальный инфраструктурный сбой закрыт указанным
+выше успешным compile и проверенным artifact на чистом GitHub runner.
 
 ## Как завершить signed release без VPS
 

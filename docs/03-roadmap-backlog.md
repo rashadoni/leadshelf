@@ -788,7 +788,10 @@ Definition of Done: БД и медиа восстановлены в чисто�
   ручной fail-closed workflow выпускает preview/production через pinned EAS
   только из exact main, после mobile/protocol tests, с frozen credentials и
   checksum artifact. GitHub environment mobile-release ограничен main;
-  preview/production EAS profiles явно используют HTTPS API origin. BLOCKED —
+  preview/production EAS profiles явно используют HTTPS API origin. Clean
+  runner `29906911181` собрал debug APK за 20m43s; повторно скачанный artifact
+  `8524754435` совпал с сохранённым SHA-256. Это compile evidence, не подпись.
+  BLOCKED —
   environment secret EXPO_TOKEN отсутствует, EAS signing credentials и
   distribution/release-owner access не предоставлены, поэтому подписанный
   artifact честно не заявляется. Required reviewer также недоступен на
@@ -914,7 +917,10 @@ Definition of Done: двухнедельный прогон не теряет д
   `29669623000`;
   draft PR #19 CLEAN, remote `ci` SUCCESS, TruffleHog и High/Critical scans
   web/worker/Caddy/PostgreSQL SUCCESS, deploy SKIPPED; три пользовательских
-  удаления video исключены. BLOCKED — rollout/deployed-environment evidence.
+  удаления video исключены. Повтор 2026-07-22 на run `29906911165` также
+  SUCCESS после пересборки Caddy 2.11.4 с patched grpc-go/x-модулями: secret
+  scan и Grype web/worker/Caddy/PostgreSQL High/Critical=0. BLOCKED —
+  rollout/deployed-environment evidence.
   Read-only production
   login headers 2026-07-18 не содержат CSP/HSTS/frame/nosniff и всё ещё имеют
   `x-powered-by: Next.js`; это старый runtime, а не опровержение локального
