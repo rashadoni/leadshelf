@@ -61,4 +61,6 @@ jobs:
           curl --fail --silent --show-error --max-time 20 https://hermescrm.xyz/api/health
           curl --fail --silent --show-error --max-time 20 https://hermescrm.xyz/api/ready
           metrics_status="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' https://hermescrm.xyz/api/metrics)"
-          [ "$metrics_status" = 401 ] || [ "$metrics_status" = 200 ]
+          # Metrics deliberately conceal the endpoint from unauthenticated
+          # callers. The authenticated scrape is verified on-host above.
+          [ "$metrics_status" = 404 ]

@@ -9,7 +9,7 @@ release_sha="$1"
 [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]] || fail "release SHA must be an exact lowercase 40-character commit SHA"
 [[ "${LEADSHELF_TEST_DEPLOY_ACK:-}" == "DISPOSABLE" ]] || fail "LEADSHELF_TEST_DEPLOY_ACK=DISPOSABLE is required"
 
-for command_name in curl date docker flock git install openssl stat; do
+for command_name in curl date docker flock git grep install openssl stat; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required command is missing: $command_name"
 done
 
@@ -120,6 +120,10 @@ wait_for_public_endpoint() {
 
 wait_for_public_endpoint https://hermescrm.xyz/api/health
 wait_for_public_endpoint https://hermescrm.xyz/api/ready
+metrics_payload="$(curl --fail --silent --show-error --max-time 20 \
+  --header "Authorization: Bearer $METRICS_BEARER_TOKEN" \
+  https://hermescrm.xyz/api/metrics)"
+grep -q '^# HELP leadshelf_database_size_bytes ' <<<"$metrics_payload"
 printf 'release_sha=%s\nprevious_sha=%s\ndeployed_at=%s\nbackup_dir=%s\n' \
   "$release_sha" "$previous_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$backup_dir" \
   > "$prod_root/LAST_TEST_RELEASE"
