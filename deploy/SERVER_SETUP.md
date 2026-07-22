@@ -90,6 +90,11 @@ range 1..32) и ограничивает одновременную буфери
 `AUTH_LOCKOUT_WINDOW_SECONDS`, `AUTH_LOCKOUT_DURATION_SECONDS` и не менее чем
 32-символьный `AUTH_LOCKOUT_PEPPER` из secret manager; отсутствие или частичная
 policy делает `/api/ready` красным намеренно.
+Proof media privacy policy тоже fail-closed: до pilot/production owner задаёт
+`LEADSHELF_PROOF_PRIVACY_MODE=no_people_in_frame_attestation` и
+`LEADSHELF_PROOF_PRIVACY_APPROVAL=<privacy/legal evidence id>`. Approval — это
+идентификатор решения/тикета, не секрет. Без него `/api/ready` и upload proof
+media возвращают безопасный отказ до записи в S3/БД.
 
 Секреты:
 

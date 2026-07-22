@@ -985,10 +985,18 @@ Definition of Done: двухнедельный прогон не теряет д
   infrastructure owners; approved delivery/decrypt/delete DSAR drill требует
   privacy/security owners]`
 - [ ] Face blur до персистентности либо согласованный режим без покупателей.
-  `[не реализовано: runbook требует организационно исключать покупателей до
-  появления проверенного pre-persistence blur либо письменного legal режима;
-  AI flag сам по себе этот privacy-риск не закрывает. BLOCKED — privacy/legal
-  решение о режиме либо утверждённый CV provider/dataset для pre-store blur]`
+  `[частично реализовано/проверено 2026-07-22: proof media upload теперь
+  fail-closed до S3/БД без mobile privacy attestation
+  no_people_in_frame + operator confirmation; штатный guided mobile capture
+  всегда добавляет attestation в captureFlagsJson, а серверный regression
+  доказывает 400 без object/database I/O при отсутствии attestation. Добавлен
+  единый production privacy policy gate: /api/ready и upload handler требуют
+  LEADSHELF_PROOF_PRIVACY_MODE=no_people_in_frame_attestation +
+  LEADSHELF_PROOF_PRIVACY_APPROVAL в production, иначе readiness/upload
+  fail-closed privacy-safe. Web tests 53 files/168 tests и typecheck PASS.
+  Это не является face blur и не доказывает отсутствие покупателей на кадре.
+  BLOCKED — privacy/legal approval receipt для выбранного режима либо
+  утверждённый CV provider/dataset для настоящего pre-store blur]`
 
 Definition of Done: нет открытых critical/high; доказано, что tenant A не
 читает и не изменяет данные или медиа tenant B.

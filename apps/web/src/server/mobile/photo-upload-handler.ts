@@ -16,6 +16,10 @@ import { deleteObject, putObject } from "@/server/storage/s3"
 import { matchesDeclaredMediaType } from "@/server/security/media-signature"
 import { attemptObjectWrite, persistWithObjectCleanup } from "@/server/storage/object-compensation"
 import { acquireMediaUploadAdmission } from "@/server/mobile/media-upload-admission"
+import {
+  configuredProofPrivacyPolicy,
+  hasProofPrivacyAttestation,
+} from "@/server/security/proof-privacy-policy"
 
 export type MobilePhotoSession = {
   org: string
@@ -129,6 +133,15 @@ export async function handleMobilePhotoUpload(req: NextRequest, session: MobileP
 }
 
 async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
+  try {
+    configuredProofPrivacyPolicy()
+  } catch {
+    return NextResponse.json(
+      { error: "privacy_policy_not_configured" },
+      { status: 503, headers: { "Retry-After": "60" } },
+    )
+  }
+
   const form = await req.formData().catch(() => null)
   const file = form?.get("file")
   if (!(file instanceof File)) return NextResponse.json({ error: "file_required" }, { status: 400 })
@@ -171,6 +184,9 @@ async function handleUpload(req: NextRequest, session: MobilePhotoSession) {
   const captureTelemetry = parseJsonObjectField(parsed.data.captureTelemetryJson)
   if (captureTelemetry === "invalid") {
     return NextResponse.json({ error: "invalid_capture_telemetry" }, { status: 400 })
+  }
+  if (!hasProofPrivacyAttestation(captureFlags)) {
+    return NextResponse.json({ error: "privacy_attestation_required" }, { status: 400 })
   }
   const equipmentMismatch = captureFlags?.equipmentMismatch === true
 

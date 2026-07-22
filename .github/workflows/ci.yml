@@ -33,6 +33,8 @@ jobs:
       AUTH_LOCKOUT_DURATION_SECONDS: "1800"
       AUTH_LOCKOUT_PEPPER: "ci-only-lockout-pepper-not-a-secret"
       LEADSHELF_RUNTIME_PROFILE: "client"
+      LEADSHELF_PROOF_PRIVACY_MODE: "no_people_in_frame_attestation"
+      LEADSHELF_PROOF_PRIVACY_APPROVAL: "ci-only-proof-privacy-policy"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -69,6 +71,9 @@ jobs:
 
       - name: Validate fail-closed production release evidence gate
         run: pnpm release-preflight:test
+
+      - name: Validate production env contract
+        run: pnpm production-env:test
 
       - name: Validate credential-safe post-deploy smoke
         run: pnpm post-deploy-smoke:test
