@@ -2,8 +2,20 @@
 # with Go 1.26.3 and contained curl; neither is needed by this runtime.
 FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
 ARG CADDY_VERSION=v2.11.4
+ARG GRPC_VERSION=v1.82.1
+ARG X_CRYPTO_VERSION=v0.53.0
+ARG X_NET_VERSION=v0.56.0
+ARG X_TEXT_VERSION=v0.39.0
 ENV CGO_ENABLED=0
-RUN go install -trimpath -ldflags="-s -w" github.com/caddyserver/caddy/v2/cmd/caddy@${CADDY_VERSION}
+WORKDIR /build
+RUN go mod init leadshelf/caddy-build \
+    && go get github.com/caddyserver/caddy/v2/cmd/caddy@${CADDY_VERSION} \
+    && go get google.golang.org/grpc@${GRPC_VERSION} \
+        golang.org/x/crypto@${X_CRYPTO_VERSION} \
+        golang.org/x/net@${X_NET_VERSION} \
+        golang.org/x/text@${X_TEXT_VERSION} \
+    && go build -trimpath -ldflags="-s -w" -o /go/bin/caddy \
+        github.com/caddyserver/caddy/v2/cmd/caddy
 
 FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 RUN apk add --no-cache ca-certificates libcap mailcap \
