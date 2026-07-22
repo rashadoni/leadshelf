@@ -783,8 +783,16 @@ Definition of Done: БД и медиа восстановлены в чисто�
 
 - [ ] Подписанные preview/production APK/AAB и IPA; build/runtime/protocol
   compatibility, internal distribution, обязательное обновление и rollback.
-  `[BLOCKED — external signing/distribution access и release owner: кодовый
-  protocol/426 guard покрыт, но подписанные artifacts ещё не выпущены]`
+  `[частично реализовано/проверено 2026-07-22: PR workflow собирает чистый
+  Android x86_64 debug APK и сохраняет checksum/compile evidence; отдельный
+  ручной fail-closed workflow выпускает preview/production через pinned EAS
+  только из exact main, после mobile/protocol tests, с frozen credentials и
+  checksum artifact. GitHub environment mobile-release ограничен main;
+  preview/production EAS profiles явно используют HTTPS API origin. BLOCKED —
+  environment secret EXPO_TOKEN отсутствует, EAS signing credentials и
+  distribution/release-owner access не предоставлены, поэтому подписанный
+  artifact честно не заявляется. Required reviewer также недоступен на
+  текущем private-repo billing plan]`
 - [ ] Device matrix: iOS, актуальный Android и low-end Android.
   `[BLOCKED — physical devices и signed build]`
 - [ ] Сквозной smoke: login/refresh -> route -> check-in -> planogram -> barcode

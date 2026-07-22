@@ -30,6 +30,9 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
           ls -la assets
 
+      - name: Validate exact bilingual media package
+        run: scripts/validate-help-video-assets.sh assets
+
       - name: Upload to leadshelf-1
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}

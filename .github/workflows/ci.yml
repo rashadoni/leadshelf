@@ -73,6 +73,9 @@ jobs:
       - name: Validate credential-safe post-deploy smoke
         run: pnpm post-deploy-smoke:test
 
+      - name: Validate help-video release package contract
+        run: pnpm help-video-assets:test
+
       - name: Typecheck
         run: pnpm -r typecheck
 
