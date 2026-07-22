@@ -99,8 +99,27 @@ docker compose up -d --wait --wait-timeout 300 \
   web caddy worker-import worker-notifications worker-proof-analysis vision
 docker compose ps
 
-curl --fail --silent --show-error --max-time 20 https://hermescrm.xyz/api/health >/dev/null
-curl --fail --silent --show-error --max-time 20 https://hermescrm.xyz/api/ready >/dev/null
+wait_for_public_endpoint() {
+  local url="$1"
+  local attempts=18
+  local delay_seconds=5
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if curl --fail --silent --show-error --max-time 20 "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( attempt < attempts )); then
+      echo "[test-deploy] waiting for public TLS endpoint ($attempt/$attempts)"
+      sleep "$delay_seconds"
+    fi
+  done
+
+  fail "public endpoint did not become ready: $url"
+}
+
+wait_for_public_endpoint https://hermescrm.xyz/api/health
+wait_for_public_endpoint https://hermescrm.xyz/api/ready
 printf 'release_sha=%s\nprevious_sha=%s\ndeployed_at=%s\nbackup_dir=%s\n' \
   "$release_sha" "$previous_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$backup_dir" \
   > "$prod_root/LAST_TEST_RELEASE"
