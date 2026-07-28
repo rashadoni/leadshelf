@@ -1,16 +1,16 @@
-name: Mobile native compile
+name: Mobile standalone preview APK
 
 on:
   workflow_dispatch:
     inputs:
       architecture:
-        description: "Android ABI for the debug APK"
+        description: "Android ABI for the standalone preview APK"
         required: true
         type: choice
         options: [arm64-v8a, x86_64]
         default: arm64-v8a
       backend:
-        description: "Backend embedded into the debug APK"
+        description: "Backend embedded into the standalone preview APK"
         required: true
         type: choice
         options: [live-demo, local-emulator]
@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 jobs:
-  android-debug-apk:
+  android-standalone-preview-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -57,32 +57,51 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Validate mobile contracts
+        run: |
+          pnpm --filter @leadshelf/mobile typecheck
+          pnpm --filter @leadshelf/mobile test
+          pnpm --filter @leadshelf/web test:protocol
+
       - name: Generate native Android project
         working-directory: apps/mobile
         env:
           CI: "true"
         run: pnpm exec expo prebuild --platform android --no-install
 
-      - name: Compile selectable emulator APK
+      - name: Compile standalone preview APK
         working-directory: apps/mobile/android
-        run: ./gradlew app:assembleDebug --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
+        run: ./gradlew app:assembleRelease --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
 
-      - name: Record compile evidence
+      - name: Verify and record standalone evidence
         run: |
           set -euo pipefail
-          apk=apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          mapfile -t apks < <(find apps/mobile/android/app/build/outputs/apk/release \
+            -maxdepth 1 -type f -name '*.apk' -print)
+          [ "${#apks[@]}" -eq 1 ] || {
+            echo "expected exactly one release APK, found ${#apks[@]}" >&2
+            exit 2
+          }
+          apk="${apks[0]}"
           test -s "$apk"
+          unzip -Z1 "$apk" | grep -Fx 'assets/index.android.bundle'
+          unzip -p "$apk" assets/index.android.bundle |
+            grep -aF "$EXPO_PUBLIC_API_URL" >/dev/null
+          jarsigner -verify "$apk" >/dev/null
           sha256sum "$apk" > mobile-native-SHA256SUMS
-          printf 'commit=%s\nkind=debug-emulator-evidence\narchitecture=%s\napi_profile=%s\nproduction_signed=false\n' \
-            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_API_PROFILE" > mobile-native-evidence.txt
+          printf '%s\n' "$apk" > mobile-native-artifact-name
+          printf 'commit=%s\nkind=standalone-preview-apk\narchitecture=%s\napi_profile=%s\napi_origin=%s\nembedded_bundle=true\nstandalone=true\nsigning=android-debug-key\nproduction_signed=false\n' \
+            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_API_PROFILE" \
+            "$EXPO_PUBLIC_API_URL" > mobile-native-evidence.txt
 
-      - name: Upload emulator APK evidence
+      - name: Upload standalone preview APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mobile-android-debug-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
+          name: mobile-android-standalone-preview-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
           path: |
-            apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/mobile/android/app/build/outputs/apk/release/*.apk
             mobile-native-SHA256SUMS
             mobile-native-evidence.txt
+            mobile-native-artifact-name
           retention-days: 14
           if-no-files-found: error
