@@ -36,10 +36,16 @@ Developer defaults отсутствуют. Неполная/невалидная
 mobile используют разные tenant-qualified HMAC-SHA-256 keys без email,
 employeeCode, organization slug или IP в persistence/logs. Web login всегда
 требует `organizationSlug + email + password`; одинаковый email в двух tenants
-не разделяет login/lockout/rate-limit state. Ответ locked и неверный credential
+не разделяет login/lockout state. Ответ locked и неверный credential
 одинаков (`invalid_credentials` + одинаковый короткий `Retry-After`); новые
 атаки не продлевают действующий lock и точный остаток duration клиенту не
 раскрывается.
+
+**Web login не имеет attempt-count rate limit** (снят по решению владельца
+продукта 2026-07-28). Единственная защита office-входа от перебора пароля —
+`AUTH_LOCKOUT_*`; при отсутствующей policy `/api/ready` возвращает 503, поэтому
+production не может работать одновременно без lockout и без rate limit. Mobile
+login durable rate limit сохранён.
 Pepper не хранится в БД и не выводится в логи; его ротация инвалидирует текущие
 lockout rows и поэтому выполняется только по утверждённой incident procedure.
 Успешная проверка после окончания duration очищает failures. До утверждения

@@ -9,11 +9,7 @@ import {
   cookieOptions,
 } from "@/server/auth/cookies"
 
-import {
-  clientAddress,
-  consumeRateLimit,
-  opaqueRateLimitKey,
-} from "@/server/security/rate-limit"
+import { clientAddress, opaqueRateLimitKey } from "@/server/security/rate-limit"
 
 import { writeSecurityAudit } from "@/server/security/audit"
 import {
@@ -33,7 +29,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 })
   }
 
-  const key = opaqueRateLimitKey([
+  // Attempt-count throttling is deliberately absent on this route; the opaque
+  // key stays tenant-qualified so audit rows never share a principal between
+  // two organizations that use the same email address.
+  const principalKey = opaqueRateLimitKey([
     parsed.data.organizationSlug.toLowerCase(),
     parsed.data.email.toLowerCase(),
     clientAddress(req),
@@ -46,14 +45,6 @@ export async function POST(req: NextRequest) {
         lockoutPolicy.pepper,
       )
     : null
-  const limit = await consumeRateLimit("web-login", key, { max: 10, windowMs: 15 * 60_000 })
-  if (!limit.allowed) {
-    writeSecurityAudit("authentication_rate_limited", { channel: "web", principalKey: key })
-    return NextResponse.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
-    )
-  }
 
   if (lockoutPolicy && accountKey) {
     const lockout = await accountLockoutState("web", accountKey)
@@ -73,7 +64,7 @@ export async function POST(req: NextRequest) {
     req.headers.get("user-agent") ?? undefined,
   )
   if (!result) {
-    writeSecurityAudit("authentication_failed", { channel: "web", principalKey: key })
+    writeSecurityAudit("authentication_failed", { channel: "web", principalKey })
     if (lockoutPolicy && accountKey) {
       const lockout = await recordAccountAuthenticationFailure("web", accountKey, lockoutPolicy)
       if (lockout.locked) {

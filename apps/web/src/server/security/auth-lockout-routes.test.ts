@@ -74,11 +74,10 @@ describe("login route account lockout", () => {
       password: "not-a-real-password",
     }))
     expect(response.status).toBe(400)
-    expect(mocks.consumeRateLimit).not.toHaveBeenCalled()
     expect(mocks.login).not.toHaveBeenCalled()
   })
 
-  it("does not share the web login rate-limit key between tenants with the same email", async () => {
+  it("does not share the web login audit principal between tenants with the same email", async () => {
     mocks.configuredAuthLockoutPolicy.mockReturnValue(null)
     mocks.login.mockResolvedValue(null)
     await webLoginPost(request("/api/auth/login", {
@@ -91,9 +90,26 @@ describe("login route account lockout", () => {
       email: "shared@example.test",
       password: "not-a-real-password",
     }))
-    const keys = mocks.consumeRateLimit.mock.calls.map((call) => call[1])
+    const keys = mocks.writeSecurityAudit.mock.calls
+      .filter((call) => call[0] === "authentication_failed")
+      .map((call) => call[1].principalKey)
     expect(keys).toHaveLength(2)
     expect(keys[0]).not.toBe(keys[1])
+  })
+
+  it("never throttles repeated web login attempts", async () => {
+    mocks.configuredAuthLockoutPolicy.mockReturnValue(null)
+    mocks.login.mockResolvedValue(null)
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      const response = await webLoginPost(request("/api/auth/login", {
+        organizationSlug: "tenant-a",
+        email: "agent@example.test",
+        password: "not-a-real-password",
+      }))
+      expect(response.status).toBe(401)
+      expect(await response.json()).toEqual({ error: "invalid_credentials" })
+    }
+    expect(mocks.consumeRateLimit).not.toHaveBeenCalled()
   })
 
   it("rejects a locked web account generically before password verification", async () => {
