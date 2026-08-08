@@ -53,6 +53,12 @@ export function sqliteFileUri(databasePath: string): string {
   return `file://${databasePath}`
 }
 
+export function assertSqlCipherIntegrity(integrityErrors: string[]): void {
+  if (integrityErrors.length > 0) {
+    throw new Error("[mobile-db] SQLCipher integrity check failed")
+  }
+}
+
 export function buildEncryptedAttachSql(databasePath: string, key: string): string {
   return `ATTACH DATABASE ${quoteSqliteString(databasePath)} AS encrypted KEY ${sqlCipherKeyLiteral(key)};`
 }

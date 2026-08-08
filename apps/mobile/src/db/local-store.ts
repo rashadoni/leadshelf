@@ -63,6 +63,7 @@ import {
 } from "../planogram/local-library"
 import { calculateLocalDatabaseCapacity, type LocalDatabaseCapacity } from "./capacity"
 import {
+  assertSqlCipherIntegrity,
   buildEncryptedAttachSql,
   bytesToHex,
   DATABASE_KEY_NAME,
@@ -235,9 +236,7 @@ function assertEncryptedDatabase(
   if (fullIntegrityCheck) {
     const integrity = database.getAllSync<Record<string, string>>("PRAGMA cipher_integrity_check")
     const values = integrity.flatMap((row) => Object.values(row))
-    if (values.length === 0 || values.some((value) => value.toLowerCase() !== "ok")) {
-      throw new Error("[mobile-db] SQLCipher integrity check failed")
-    }
+    assertSqlCipherIntegrity(values)
   }
   if (expected && JSON.stringify(databaseInventory(database)) !== JSON.stringify(expected)) {
     throw new Error("[mobile-db] plaintext migration row inventory mismatch")

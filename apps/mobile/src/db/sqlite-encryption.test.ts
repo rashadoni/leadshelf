@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import {
+  assertSqlCipherIntegrity,
   buildEncryptedAttachSql,
   bytesToHex,
   encryptedDatabaseBootstrapPlan,
@@ -55,5 +56,11 @@ describe("mobile SQLCipher bootstrap safeguards", () => {
       .toBe("file:///data/user/0/com.leadshelf.mobile/databases/leadshelf.db")
     expect(sqliteFileUri("file:///data/user/0/com.leadshelf.mobile/databases/leadshelf.db"))
       .toBe("file:///data/user/0/com.leadshelf.mobile/databases/leadshelf.db")
+  })
+
+  it("accepts an empty SQLCipher integrity result and rejects reported page errors", () => {
+    expect(() => assertSqlCipherIntegrity([])).not.toThrow()
+    expect(() => assertSqlCipherIntegrity(["HMAC verification failed for page 4"]))
+      .toThrow("SQLCipher integrity check failed")
   })
 })
