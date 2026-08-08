@@ -72,6 +72,7 @@ import {
   LEGACY_DATABASE_NAME,
   normalizeSqlCipherKey,
   quoteSqliteIdentifier,
+  sqliteFileUri,
   sqlCipherKeyLiteral,
 } from "./sqlite-encryption"
 import {
@@ -161,7 +162,7 @@ function databasePath(name: string): string {
 }
 
 async function databaseExists(name: string): Promise<boolean> {
-  return (await FileSystem.getInfoAsync(`file://${databasePath(name)}`)).exists
+  return (await FileSystem.getInfoAsync(sqliteFileUri(databasePath(name)))).exists
 }
 
 function readOrCreateDatabaseKey(allowCreate: boolean): string {

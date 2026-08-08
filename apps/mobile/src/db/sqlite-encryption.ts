@@ -48,6 +48,11 @@ export function quoteSqliteIdentifier(value: string): string {
   return `"${value}"`
 }
 
+export function sqliteFileUri(databasePath: string): string {
+  if (/^file:\/\//i.test(databasePath)) return databasePath
+  return `file://${databasePath}`
+}
+
 export function buildEncryptedAttachSql(databasePath: string, key: string): string {
   return `ATTACH DATABASE ${quoteSqliteString(databasePath)} AS encrypted KEY ${sqlCipherKeyLiteral(key)};`
 }
