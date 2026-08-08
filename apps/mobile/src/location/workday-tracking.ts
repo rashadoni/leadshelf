@@ -85,7 +85,7 @@ export async function startWorkdayTracking(
           showsBackgroundLocationIndicator: true,
           activityType: Location.ActivityType.OtherNavigation,
           foregroundService: {
-            notificationTitle: "LeadDrive Field",
+            notificationTitle: "LeadShelf",
             notificationBody: "Active workday · GPS tracking",
             killServiceOnDestroy: false,
           },

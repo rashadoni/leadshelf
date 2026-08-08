@@ -25,11 +25,14 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
           height: tabBarMetrics.height,
-          paddingTop: 6,
+          paddingTop: 8,
           paddingBottom: tabBarMetrics.paddingBottom,
+          elevation: 0,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarItemStyle: { paddingBottom: 2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
         tabBarBadgeStyle: {
           backgroundColor: colors.danger,
           color: colors.headerText,
