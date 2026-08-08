@@ -1,0 +1,19 @@
+# Grype config for the production-image scan (deploy/Dockerfile.web worker/web
+# targets). CI runs `anchore/scan-action` with `severity-cutoff: high`.
+#
+# The single ignore below is a documented false positive, not a waiver of a real
+# fix. brace-expansion CVE-2025-5889 (GHSA-mh99-v99m-4gvg) was backported per
+# major line — 1.1.12, 2.0.2, 3.0.1, 4.0.1, 5.0.8. This tree already ships the
+# patched 1.1.16, 2.1.3 and 5.0.8 (see the brace-expansion overrides in
+# pnpm-workspace.yaml). Grype's vuln DB records a single "fixed-in 5.0.8", so it
+# still flags the patched 1.1.16 / 2.1.3 that minimatch@3/9 require. Those
+# consumers call brace-expansion as a function; v5 exports a named { expand }
+# object and is API-incompatible, so they cannot move to 5.x. Scope the ignore
+# tightly to that package so no other advisory is suppressed.
+ignore:
+  - vulnerability: GHSA-mh99-v99m-4gvg
+    package:
+      name: brace-expansion
+  - vulnerability: CVE-2025-5889
+    package:
+      name: brace-expansion

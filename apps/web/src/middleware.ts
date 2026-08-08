@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { routing } from "./i18n/routing"
 import { ACCESS_COOKIE } from "./server/auth/cookies"
 import { verifyAccessToken } from "./server/auth/jwt"
-import { isTrustedMutationOrigin } from "./server/security/request-origin"
+import {
+  forwardedRequestOrigin,
+  isTrustedMutationOrigin,
+} from "./server/security/request-origin"
 import { resolveCorrelationId } from "./server/security/correlation-id"
 
 // Edge runtime: только jose. Никакого Prisma/Argon2 здесь (docs/12).
@@ -21,7 +24,11 @@ export default async function middleware(req: NextRequest) {
       .filter(Boolean)
     const trusted = isTrustedMutationOrigin({
       method: req.method,
-      requestOrigin: req.nextUrl.origin,
+      requestOrigin: forwardedRequestOrigin({
+        fallbackOrigin: req.nextUrl.origin,
+        forwardedProto: req.headers.get("x-forwarded-proto"),
+        forwardedHost: req.headers.get("x-forwarded-host"),
+      }),
       originHeader: req.headers.get("origin"),
       authorizationHeader: req.headers.get("authorization"),
       allowedOrigins,
