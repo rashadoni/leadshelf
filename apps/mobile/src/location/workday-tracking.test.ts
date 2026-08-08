@@ -94,6 +94,7 @@ describe("workday tracking permission and recovery state", () => {
 
   it("keeps a truthful foreground fallback when background permission is blocked", async () => {
     locationMocks.getBackgroundPermissionsAsync.mockResolvedValue({ granted: false, canAskAgain: false })
+    locationMocks.requestBackgroundPermissionsAsync.mockResolvedValue({ granted: false, canAskAgain: false })
 
     await expect(startWorkdayTracking(30)).resolves.toMatchObject({
       mode: "foreground",
