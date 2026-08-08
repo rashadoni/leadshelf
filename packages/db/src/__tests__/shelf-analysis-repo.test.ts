@@ -157,8 +157,12 @@ describe("shelf analysis repository", () => {
       runId: auto.run.id,
       status: "COMPLETED",
       result: { status: "FAIL", structuralScore: 0 },
+      finishedAt: new Date("2026-08-11T08:03:00.000Z"),
     })
-    expect(finishedAuto.isCanonical).toBe(false)
+    expect(finishedAuto).toMatchObject({
+      isCanonical: false,
+      latencyMs: 2_147_483_647,
+    })
 
     const latest = await readLatestShelfAnalysis(prisma, organizationId, photoSubmissionId)
     expect(latest).toMatchObject({
