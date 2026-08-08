@@ -69,8 +69,17 @@ RUN apk add --no-cache build-base nasm \
       --disable-ffplay \
       --disable-ffprobe \
       --disable-shared \
+      --disable-everything \
       --enable-static \
       --enable-small \
+      --enable-protocol=file,pipe \
+      --enable-demuxer=mov,matroska \
+      --enable-decoder=h264,hevc,mpeg4,vp8,vp9,av1,mjpeg,png \
+      --enable-parser=h264,hevc,mpeg4video,vp8,vp9,av1,mjpeg \
+      --enable-encoder=mjpeg \
+      --enable-muxer=image2 \
+      --enable-filter=scale \
+      --enable-swscale \
     && make -j2 \
     && make install \
     && /opt/ffmpeg/bin/ffmpeg -version
