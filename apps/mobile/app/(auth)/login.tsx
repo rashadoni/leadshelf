@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,22 +20,23 @@ import { colors, radii } from "../../src/theme"
 
 export default function LoginScreen() {
   const locale = useLocale()
+  const scrollRef = useRef<ScrollView>(null)
   const [orgSlug, setOrgSlug] = useState("demo")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [employeeCode, setEmployeeCode] = useState("")
+  const [pin, setPin] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  // Предзаполняем организацию и email с прошлого входа — не заставляем
+  // Предзаполняем организацию и код с прошлого входа — не заставляем
   // печатать заново (docs/28 «запомнить меня»).
   useEffect(() => {
     void (async () => {
-      const [savedOrg, savedEmail] = await Promise.all([
+      const [savedOrg, savedEmployeeCode] = await Promise.all([
         tokenStore.getOrgSlug(),
-        tokenStore.getLastEmail(),
+        tokenStore.getLastEmployeeCode(),
       ])
       if (savedOrg) setOrgSlug(savedOrg)
-      if (savedEmail) setEmail(savedEmail)
+      if (savedEmployeeCode) setEmployeeCode(savedEmployeeCode)
     })()
   }, [])
 
@@ -43,11 +44,11 @@ export default function LoginScreen() {
     setPending(true)
     setError(null)
     try {
-      const normalizedEmail = email.trim().toLowerCase()
+      const normalizedEmployeeCode = employeeCode.trim().toUpperCase()
       const res = await mobileLogin({
         orgSlug: orgSlug.trim().toLowerCase(),
-        email: normalizedEmail,
-        password,
+        employeeCode: normalizedEmployeeCode,
+        pin,
       })
       if (res) {
         router.replace("/(app)/(tabs)" as never)
@@ -67,15 +68,20 @@ export default function LoginScreen() {
     }
   }
 
-  const canSubmit = Boolean(orgSlug.trim() && email.trim() && password && !pending)
+  const canSubmit = Boolean(orgSlug.trim() && employeeCode.trim() && pin && !pending)
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.keyboard}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.scroll}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.topbar}>
             <BrandMark />
             <View style={styles.localeRow}>
@@ -115,25 +121,27 @@ export default function LoginScreen() {
               />
             </View>
             <View style={styles.field}>
-              <Text style={styles.label}>{t("email")}</Text>
+              <Text style={styles.label}>{t("employeeCode")}</Text>
               <TextInput
                 style={styles.input}
-                autoCapitalize="none"
+                autoCapitalize="characters"
                 autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                value={email}
-                onChangeText={setEmail}
+                value={employeeCode}
+                onChangeText={setEmployeeCode}
               />
             </View>
             <View style={styles.field}>
-              <Text style={styles.label}>{t("password")}</Text>
+              <Text style={styles.label}>{t("pin")}</Text>
               <TextInput
                 style={styles.input}
                 secureTextEntry
                 textContentType="password"
-                value={password}
-                onChangeText={setPassword}
+                keyboardType="number-pad"
+                value={pin}
+                onChangeText={setPin}
+                onFocus={() => {
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120)
+                }}
                 onSubmitEditing={() => canSubmit && void onLogin()}
               />
             </View>
@@ -166,7 +174,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   keyboard: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: 26 },
+  scroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingTop: 26, paddingBottom: 40 },
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 52 },
   localeRow: { flexDirection: "row", gap: 4, padding: 3, backgroundColor: colors.card, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   localeBtn: { minWidth: 38, alignItems: "center", paddingHorizontal: 8, paddingVertical: 7, borderRadius: 7 },
