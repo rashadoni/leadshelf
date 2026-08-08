@@ -3,6 +3,13 @@ import { Prisma, type PrismaClient, type ShelfAnalysisRun, type ShelfAnalysisRun
 import { compareShelf, SHELF_COMPARISON_VERSION, type ShelfBBox } from "@leadshelf/core"
 import { persistShelfMetricSnapshot } from "./shelf-analytics.ts"
 
+const POSTGRES_INT_MAX = 2_147_483_647
+
+function normalizeLatencyMs(value: number | null): number | null {
+  if (value === null) return null
+  return Math.min(POSTGRES_INT_MAX, Math.max(0, Math.trunc(value)))
+}
+
 export class ShelfAnalysisRepoError extends Error {
   constructor(public code: "analysis_reference_not_found" | "analysis_run_not_found") {
     super(code)
@@ -192,7 +199,9 @@ export async function finishShelfAnalysisRun(
         warnings: input.warnings === null ? Prisma.JsonNull : input.warnings,
         error: input.error ?? null,
         humanReviewId: input.humanReviewId ?? existing.humanReviewId,
-        latencyMs: input.latencyMs ?? (existing.startedAt ? Math.max(0, finishedAt.getTime() - existing.startedAt.getTime()) : null),
+        latencyMs: normalizeLatencyMs(
+          input.latencyMs ?? (existing.startedAt ? finishedAt.getTime() - existing.startedAt.getTime() : null),
+        ),
         inputTokens: input.inputTokens ?? null,
         outputTokens: input.outputTokens ?? null,
         costMicros: input.costMicros ?? null,

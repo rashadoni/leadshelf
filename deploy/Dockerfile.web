@@ -1,5 +1,5 @@
 # Прод-образ web + одноразовый migrate-target. Контекст сборки — корень репо.
-FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS base
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
 RUN corepack enable
 WORKDIR /app
 
@@ -29,7 +29,7 @@ WORKDIR /app
 CMD ["pnpm", "--filter", "@leadshelf/db", "seed:demo"]
 
 # --- рантайм ---
-FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS runner
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # Сервер запускается напрямую через node. npm/corepack в runtime не нужны и
@@ -46,17 +46,55 @@ EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
 CMD ["node", "apps/web/server.js"]
 
+# FFmpeg distro packages temporarily carry unfixed HIGH CVEs. Build the
+# upstream-patched source at an immutable commit and copy only the executable
+# into the worker runtime. Network/device inputs are unnecessary: proof videos
+# are always read from a tenant-scoped local temporary file.
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS ffmpeg-builder
+ARG FFMPEG_COMMIT=f944afd04097178b7e3c0d6c7f4e524a9e8f6063
+ARG FFMPEG_ARCHIVE_SHA256=8af9d494814124d2ad6eb2324f2d955e06a183242daee4d4c7e24df6d3b4ea0e
+RUN apk add --no-cache build-base nasm \
+    && wget -qO /tmp/ffmpeg.tar.gz "https://github.com/FFmpeg/FFmpeg/archive/${FFMPEG_COMMIT}.tar.gz" \
+    && echo "${FFMPEG_ARCHIVE_SHA256}  /tmp/ffmpeg.tar.gz" | sha256sum -c - \
+    && mkdir /tmp/ffmpeg-src \
+    && tar -xzf /tmp/ffmpeg.tar.gz --strip-components=1 -C /tmp/ffmpeg-src \
+    && cd /tmp/ffmpeg-src \
+    && ./configure \
+      --prefix=/opt/ffmpeg \
+      --disable-doc \
+      --disable-debug \
+      --disable-network \
+      --disable-devices \
+      --disable-avdevice \
+      --disable-ffplay \
+      --disable-ffprobe \
+      --disable-shared \
+      --disable-everything \
+      --enable-static \
+      --enable-small \
+      --enable-protocol=file,pipe \
+      --enable-demuxer=mov,matroska \
+      --enable-decoder=h264,hevc,mpeg4,vp8,vp9,av1,mjpeg,png \
+      --enable-parser=h264,hevc,mpeg4video,vp8,vp9,av1,mjpeg \
+      --enable-encoder=mjpeg \
+      --enable-muxer=image2 \
+      --enable-filter=scale \
+      --enable-swscale \
+    && make -j2 \
+    && make install \
+    && /opt/ffmpeg/bin/ffmpeg -version
+
 # --- фоновые worker-задачи ---
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.
 # Runtime начинается с чистого образа, чтобы build-only pnpm/corepack caches из
 # builder не попадали в production SBOM и не расширяли поверхность атаки.
-FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS worker
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS worker
 WORKDIR /app
 ENV NODE_ENV=production
 # TSX остаётся локальной runtime-зависимостью, package-manager CLI не нужен.
 # /app/.data создаётся до mount, чтобы новый named volume наследовал owner.
-RUN apk add --no-cache ffmpeg \
-    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+COPY --from=ffmpeg-builder /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
     && addgroup -S app \
     && adduser -S app -G app \
