@@ -6,9 +6,47 @@ import { enqueueFieldLocation, localStore } from "../db/local-store"
 import { workdayLocationPayload } from "./workday-location"
 
 export const WORKDAY_LOCATION_TASK = "leadshelf-workday-location-v1"
-export type WorkdayTrackingMode = "background" | "foreground" | "denied"
+export type WorkdayTrackingMode = "background" | "foreground" | "denied" | "services_disabled" | "unavailable"
+export type WorkdayTrackingIssue =
+  | "none"
+  | "services_disabled"
+  | "foreground_permission_required"
+  | "foreground_permission_blocked"
+  | "background_permission_required"
+  | "background_permission_blocked"
+  | "background_unavailable"
+  | "tracking_start_failed"
+export type WorkdayTrackingRecovery = "none" | "request_permission" | "open_settings" | "retry_tracking"
+
+export interface WorkdayTrackingState {
+  mode: WorkdayTrackingMode | "stopped"
+  issue: WorkdayTrackingIssue
+  recovery: WorkdayTrackingRecovery
+  observedAt: string
+}
+
+export function stoppedWorkdayTrackingState(): WorkdayTrackingState {
+  return {
+    mode: "stopped",
+    issue: "none",
+    recovery: "none",
+    observedAt: new Date().toISOString(),
+  }
+}
 
 let foregroundSubscription: Location.LocationSubscription | null = null
+
+function trackingState(
+  mode: WorkdayTrackingState["mode"],
+  issue: WorkdayTrackingIssue = "none",
+  recovery: WorkdayTrackingRecovery = "none",
+): WorkdayTrackingState {
+  return { mode, issue, recovery, observedAt: new Date().toISOString() }
+}
+
+function permissionRecovery(canAskAgain: boolean | undefined): WorkdayTrackingRecovery {
+  return canAskAgain === false ? "open_settings" : "request_permission"
+}
 
 function localStatus(result: PushResult): "applied" | "conflict" | "rejected" {
   if (result.status === "applied" || result.status === "already_applied") return "applied"
@@ -55,17 +93,38 @@ export async function stopWorkdayTracking(): Promise<void> {
 
 export async function startWorkdayTracking(
   intervalSeconds: number,
-  requestBackgroundPermission = true,
-): Promise<WorkdayTrackingMode> {
+  options: { requestForegroundPermission?: boolean; requestBackgroundPermission?: boolean } = {},
+): Promise<WorkdayTrackingState> {
+  const requestForegroundPermission = options.requestForegroundPermission ?? true
+  const requestBackgroundPermission = options.requestBackgroundPermission ?? true
+  const servicesEnabled = await Location.hasServicesEnabledAsync().catch(() => true)
+  if (!servicesEnabled) {
+    await stopWorkdayTracking()
+    return trackingState("services_disabled", "services_disabled", "open_settings")
+  }
+
   const foreground = await Location.getForegroundPermissionsAsync()
   const foregroundPermission = foreground.granted
     ? foreground
-    : await Location.requestForegroundPermissionsAsync()
-  if (!foregroundPermission.granted) return "denied"
+    : requestForegroundPermission
+      ? await Location.requestForegroundPermissionsAsync()
+      : foreground
+  if (!foregroundPermission.granted) {
+    await stopWorkdayTracking()
+    return trackingState(
+      "denied",
+      foregroundPermission.canAskAgain === false
+        ? "foreground_permission_blocked"
+        : "foreground_permission_required",
+      permissionRecovery(foregroundPermission.canAskAgain),
+    )
+  }
 
   await stopForegroundFallback()
   const interval = Math.max(15, Math.round(intervalSeconds || 30))
   const taskAvailable = await TaskManager.isAvailableAsync().catch(() => false)
+  let foregroundIssue: WorkdayTrackingIssue = taskAvailable ? "none" : "background_unavailable"
+  let foregroundRecovery: WorkdayTrackingRecovery = "none"
   if (taskAvailable) {
     const background = await Location.getBackgroundPermissionsAsync()
     const backgroundPermission = background.granted
@@ -74,44 +133,59 @@ export async function startWorkdayTracking(
         ? await Location.requestBackgroundPermissionsAsync()
         : background
     if (backgroundPermission.granted) {
-      const running = await Location.hasStartedLocationUpdatesAsync(WORKDAY_LOCATION_TASK).catch(() => false)
-      if (!running) {
-        await Location.startLocationUpdatesAsync(WORKDAY_LOCATION_TASK, {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: interval * 1_000,
-          distanceInterval: 20,
-          deferredUpdatesInterval: interval * 1_000,
-          pausesUpdatesAutomatically: false,
-          showsBackgroundLocationIndicator: true,
-          activityType: Location.ActivityType.OtherNavigation,
-          foregroundService: {
-            notificationTitle: "LeadDrive Field",
-            notificationBody: "Active workday · GPS tracking",
-            killServiceOnDestroy: false,
-          },
-        })
+      try {
+        const running = await Location.hasStartedLocationUpdatesAsync(WORKDAY_LOCATION_TASK).catch(() => false)
+        if (!running) {
+          await Location.startLocationUpdatesAsync(WORKDAY_LOCATION_TASK, {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: interval * 1_000,
+            distanceInterval: 20,
+            deferredUpdatesInterval: interval * 1_000,
+            pausesUpdatesAutomatically: false,
+            showsBackgroundLocationIndicator: true,
+            activityType: Location.ActivityType.OtherNavigation,
+            foregroundService: {
+              notificationTitle: "LeadDrive Field",
+              notificationBody: "Active workday · GPS tracking",
+              killServiceOnDestroy: false,
+            },
+          })
+        }
+        return trackingState("background")
+      } catch {
+        foregroundIssue = "tracking_start_failed"
+        foregroundRecovery = "retry_tracking"
       }
-      return "background"
+    } else {
+      foregroundIssue = backgroundPermission.canAskAgain === false
+        ? "background_permission_blocked"
+        : "background_permission_required"
+      foregroundRecovery = permissionRecovery(backgroundPermission.canAskAgain)
     }
   }
 
-  foregroundSubscription = await Location.watchPositionAsync({
-    accuracy: Location.Accuracy.Balanced,
-    timeInterval: interval * 1_000,
-    distanceInterval: 20,
-  }, (location) => { void queueAndTryUpload(location) })
-  return "foreground"
+  try {
+    foregroundSubscription = await Location.watchPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      timeInterval: interval * 1_000,
+      distanceInterval: 20,
+    }, (location) => { void queueAndTryUpload(location) })
+    return trackingState("foreground", foregroundIssue, foregroundRecovery)
+  } catch {
+    return trackingState("unavailable", "tracking_start_failed", "retry_tracking")
+  }
 }
 
 export async function reconcileWorkdayTracking(
   status: "STARTED" | "PAUSED" | "COMPLETED" | null,
   intervalSeconds: number,
-): Promise<WorkdayTrackingMode | "stopped"> {
+): Promise<WorkdayTrackingState> {
   if (status !== "STARTED") {
     await stopWorkdayTracking()
-    return "stopped"
+    return stoppedWorkdayTrackingState()
   }
-  const foreground = await Location.getForegroundPermissionsAsync()
-  if (!foreground.granted) return "denied"
-  return startWorkdayTracking(intervalSeconds, false)
+  return startWorkdayTracking(intervalSeconds, {
+    requestForegroundPermission: false,
+    requestBackgroundPermission: false,
+  })
 }

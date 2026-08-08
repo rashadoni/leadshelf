@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -36,14 +38,16 @@ import { workdayLocationPayload } from "../../src/location/workday-location"
 import {
   reconcileWorkdayTracking,
   startWorkdayTracking,
+  stoppedWorkdayTrackingState,
   stopWorkdayTracking,
-  type WorkdayTrackingMode,
+  type WorkdayTrackingIssue,
+  type WorkdayTrackingRecovery,
+  type WorkdayTrackingState,
 } from "../../src/location/workday-tracking"
 import { useSync } from "../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../src/theme"
 
 type DisplayStatus = FieldWorkdayStatus | "NOT_STARTED"
-type TrackingState = WorkdayTrackingMode | "stopped"
 
 const statusKeys: Record<DisplayStatus, MessageKey> = {
   NOT_STARTED: "workdayStatus_NOT_STARTED",
@@ -66,11 +70,30 @@ const eventKeys: Record<FieldWorkdayAction, MessageKey> = {
   FINISH: "workdayEvent_FINISH",
 }
 
-const trackingKeys: Record<TrackingState, MessageKey> = {
+const trackingKeys: Record<WorkdayTrackingState["mode"], MessageKey> = {
   background: "workdayTracking_background",
   foreground: "workdayTracking_foreground",
   denied: "workdayTracking_denied",
+  services_disabled: "workdayTracking_servicesDisabled",
+  unavailable: "workdayTracking_unavailable",
   stopped: "workdayTracking_stopped",
+}
+
+const trackingIssueHintKeys: Record<WorkdayTrackingIssue, MessageKey | null> = {
+  none: null,
+  services_disabled: "workdayTrackingHintServicesDisabled",
+  foreground_permission_required: "workdayTrackingHintForegroundPermission",
+  foreground_permission_blocked: "workdayTrackingHintForegroundBlocked",
+  background_permission_required: "workdayTrackingHintBackgroundPermission",
+  background_permission_blocked: "workdayTrackingHintBackgroundBlocked",
+  background_unavailable: "workdayTrackingHintBackgroundUnavailable",
+  tracking_start_failed: "workdayTrackingHintUnavailable",
+}
+
+const trackingRecoveryKeys: Record<Exclude<WorkdayTrackingRecovery, "none">, MessageKey> = {
+  request_permission: "workdayTrackingRequestPermission",
+  open_settings: "workdayTrackingOpenSettings",
+  retry_tracking: "workdayTrackingRetry",
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -163,7 +186,8 @@ export default function WorkdayScreen() {
   const { sync, status: syncStatus } = useSync()
   const [busyAction, setBusyAction] = useState<FieldWorkdayAction | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [tracking, setTracking] = useState<TrackingState>("stopped")
+  const [tracking, setTracking] = useState<WorkdayTrackingState>(() => stoppedWorkdayTrackingState())
+  const [trackingBusy, setTrackingBusy] = useState(false)
   const [feedback, setFeedback] = useState<MessageKey | null>(null)
   const [nowMs, setNowMs] = useState(Date.now())
 
@@ -188,14 +212,39 @@ export default function WorkdayScreen() {
     void field.refreshActivity()
   }, [field.refreshActivity]))
 
+  const refreshTracking = useCallback(async () => {
+    const state = await reconcileWorkdayTracking(workday?.status ?? null, intervalSeconds)
+      .catch((): WorkdayTrackingState => ({
+        mode: "unavailable",
+        issue: "tracking_start_failed",
+        recovery: "retry_tracking",
+        observedAt: new Date().toISOString(),
+      }))
+    setTracking(state)
+  }, [intervalSeconds, workday?.status])
+
   useEffect(() => {
     if (busyAction) return
     let active = true
     void reconcileWorkdayTracking(workday?.status ?? null, intervalSeconds)
-      .then((mode) => { if (active) setTracking(mode) })
-      .catch(() => { if (active) setTracking("denied") })
+      .then((state) => { if (active) setTracking(state) })
+      .catch(() => {
+        if (active) setTracking({
+          mode: "unavailable",
+          issue: "tracking_start_failed",
+          recovery: "retry_tracking",
+          observedAt: new Date().toISOString(),
+        })
+      })
     return () => { active = false }
   }, [busyAction, intervalSeconds, workday?.status])
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && !busyAction && !trackingBusy) void refreshTracking()
+    })
+    return () => subscription.remove()
+  }, [busyAction, refreshTracking, trackingBusy])
 
   async function refresh() {
     setRefreshing(true)
@@ -257,16 +306,23 @@ export default function WorkdayScreen() {
 
       if (action === "START" || action === "RESUME") {
         try {
-          const mode = await startWorkdayTracking(intervalSeconds)
-          setTracking(mode)
-          if (mode === "denied") setFeedback("workdayTrackingPermissionNeeded")
+          const state = await startWorkdayTracking(intervalSeconds)
+          setTracking(state)
+          if (state.mode === "denied" || state.mode === "services_disabled" || state.mode === "unavailable") {
+            setFeedback("workdayTrackingPermissionNeeded")
+          }
         } catch {
-          setTracking("denied")
+          setTracking({
+            mode: "unavailable",
+            issue: "tracking_start_failed",
+            recovery: "retry_tracking",
+            observedAt: new Date().toISOString(),
+          })
           setFeedback("workdayTrackingPermissionNeeded")
         }
       } else {
         await stopWorkdayTracking().catch(() => {})
-        setTracking("stopped")
+        setTracking(stoppedWorkdayTrackingState())
       }
 
       await sync()
@@ -296,6 +352,33 @@ export default function WorkdayScreen() {
     ])
   }
 
+  async function recoverTracking() {
+    if (tracking.recovery === "none" || trackingBusy) return
+    setTrackingBusy(true)
+    setFeedback(null)
+    try {
+      if (tracking.recovery === "open_settings") {
+        await Linking.openSettings()
+        setFeedback("workdayTrackingSettingsOpened")
+        return
+      }
+      const next = await startWorkdayTracking(intervalSeconds)
+      setTracking(next)
+      if (next.mode === "background" || next.mode === "foreground") {
+        setFeedback("workdayTrackingRecovered")
+      }
+    } catch {
+      setTracking({
+        mode: "unavailable",
+        issue: "tracking_start_failed",
+        recovery: "retry_tracking",
+        observedAt: new Date().toISOString(),
+      })
+    } finally {
+      setTrackingBusy(false)
+    }
+  }
+
   const statusTone = displayStatus === "STARTED"
     ? styles.statusStarted
     : displayStatus === "PAUSED"
@@ -310,13 +393,23 @@ export default function WorkdayScreen() {
       : displayStatus === "COMPLETED"
         ? colors.primary
         : colors.faint
-  const trackingHint = tracking === "background"
-    ? t("workdayTrackingHintBackground")
-    : tracking === "foreground"
-      ? t("workdayTrackingHintForeground")
-      : tracking === "denied"
-        ? t("workdayTrackingHintDenied")
-        : t("workdayTrackingHintStopped")
+  const issueHintKey = trackingIssueHintKeys[tracking.issue]
+  const trackingHint = issueHintKey
+    ? t(issueHintKey)
+    : tracking.mode === "background"
+      ? t("workdayTrackingHintBackground")
+      : tracking.mode === "foreground"
+        ? t("workdayTrackingHintForeground")
+        : tracking.mode === "denied"
+          ? t("workdayTrackingHintDenied")
+          : tracking.mode === "services_disabled"
+            ? t("workdayTrackingHintServicesDisabled")
+            : tracking.mode === "unavailable"
+              ? t("workdayTrackingHintUnavailable")
+              : t("workdayTrackingHintStopped")
+  const trackingRecoveryKey = tracking.recovery === "none"
+    ? null
+    : trackingRecoveryKeys[tracking.recovery]
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
@@ -406,13 +499,29 @@ export default function WorkdayScreen() {
         ) : null}
 
         <View style={styles.trackingCard}>
-          <View style={[styles.trackingIcon, tracking === "background" ? styles.trackingIconOn : tracking === "denied" ? styles.trackingIconWarn : styles.trackingIconOff]}>
+          <View style={[styles.trackingIcon, tracking.mode === "background" ? styles.trackingIconOn : tracking.mode === "denied" || tracking.mode === "services_disabled" || tracking.mode === "unavailable" ? styles.trackingIconWarn : styles.trackingIconOff]}>
             <Text style={styles.trackingIconText}>⌖</Text>
           </View>
           <View style={styles.trackingBody}>
             <Text style={styles.cardEyebrow}>{t("workdayTracking")}</Text>
-            <Text style={styles.cardTitle}>{t(trackingKeys[tracking])}</Text>
+            <Text style={styles.cardTitle}>{t(trackingKeys[tracking.mode])}</Text>
             <Text style={styles.cardHint}>{trackingHint}</Text>
+            <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt) })}</Text>
+            {trackingRecoveryKey && workday?.status === "STARTED" ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t(trackingRecoveryKey)}
+                disabled={trackingBusy}
+                onPress={() => void recoverTracking()}
+                style={({ pressed }) => [styles.trackingRecovery, pressed && styles.pressed, trackingBusy && styles.disabled]}
+              >
+                {trackingBusy ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.trackingRecoveryText}>{t(trackingRecoveryKey)}</Text>
+                )}
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -511,6 +620,9 @@ const styles = StyleSheet.create({
   cardEyebrow: { color: colors.faint, fontSize: 9, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
   cardHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  trackingObserved: { color: colors.faint, fontSize: 9, lineHeight: 13, marginTop: 5 },
+  trackingRecovery: { alignSelf: "flex-start", minHeight: 40, justifyContent: "center", borderRadius: 12, backgroundColor: colors.primarySoft, paddingHorizontal: 13, marginTop: 10 },
+  trackingRecoveryText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 24, marginBottom: 9, paddingHorizontal: 2 },
   sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
   sectionHint: { color: colors.muted, fontSize: 10, marginTop: 3 },
