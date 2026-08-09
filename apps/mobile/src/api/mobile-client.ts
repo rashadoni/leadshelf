@@ -12,6 +12,7 @@ import {
   mobileSyncPushResponseSchema,
   mobileTokenPairSchema,
 } from "@leadshelf/api-contracts/mobile/v1"
+import { File } from "expo-file-system"
 import { fetch } from "expo/fetch"
 import * as FileSystem from "expo-file-system/legacy"
 import { Platform } from "react-native"
