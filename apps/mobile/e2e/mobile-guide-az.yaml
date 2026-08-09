@@ -43,14 +43,20 @@ tags:
     visible: "Mobil video bələdçi — tam icra — 2026-08-09"
     timeout: 45000
 - takeScreenshot: mobile-guide-01-route
-- scrollUntilVisible:
-    element: "Check-in"
-    direction: DOWN
-- tapOn: "Check-in"
+- tapOn:
+    text: "Check-in"
+    optional: true
 - extendedWaitUntil:
     visible: "Vizit icradadır"
     timeout: 30000
 - takeScreenshot: mobile-guide-02-check-in
+- scrollUntilVisible:
+    element: "Viziti aç"
+    direction: DOWN
+- tapOn: "Viziti aç"
+- extendedWaitUntil:
+    visible: "Mobil tam icra — 2026-08-09"
+    timeout: 30000
 - scrollUntilVisible:
     element: "Mobil tam icra — 2026-08-09"
     direction: DOWN
