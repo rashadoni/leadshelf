@@ -163,6 +163,7 @@ jobs:
             adb shell pm grant com.leadshelf.mobile android.permission.CAMERA || true
             adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_FINE_LOCATION || true
             adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_COARSE_LOCATION || true
+            adb shell pm disable-user --user 0 com.google.android.apps.messaging || true
             MAESTRO_CLI_NO_ANALYTICS=true MAESTRO_DRIVER_STARTUP_TIMEOUT=180000 "$GITHUB_WORKSPACE/.maestro-bin/maestro/bin/maestro" --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml --format junit --output mobile-guide-results.xml --test-output-dir mobile-guide-results
 
       - name: Collect mobile guide recording
