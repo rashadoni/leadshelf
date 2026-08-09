@@ -110,6 +110,9 @@ tags:
     timeout: 30000
 - takeScreenshot: mobile-guide-08-complete
 - tapOn: "Növbəti"
+- tapOn:
+    text: "Yenidən yoxla"
+    optional: true
 - extendedWaitUntil:
     visible: "Hər şey saxlandı"
     timeout: 180000
@@ -119,6 +122,9 @@ tags:
     visible: "Bitir"
     timeout: 30000
 - tapOn: "Bitir"
+- tapOn:
+    text: "Yenidən yoxla"
+    optional: true
 - extendedWaitUntil:
     visible: "Aktiv vizit yoxdur"
     timeout: 30000

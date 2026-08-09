@@ -25,7 +25,9 @@ export function SyncBar() {
           ? t("syncWriteError")
           : t("syncReadError")
         : status.phase === "idle"
-          ? status.conflictOps + status.rejectedOps > 0
+          ? queued > 0
+            ? t("syncWriteError")
+            : status.conflictOps + status.rejectedOps > 0
             ? t("syncNeedsAttention")
             : t("syncIdle")
           : t("syncRunning")
@@ -38,7 +40,9 @@ export function SyncBar() {
         : status.conflictOps > 0 || status.quarantinedPhotos > 0
           ? colors.warning
       : status.phase === "idle"
-        ? colors.success
+        ? queued > 0
+          ? colors.warning
+          : colors.success
         : colors.muted
 
   return (

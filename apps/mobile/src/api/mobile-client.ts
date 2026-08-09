@@ -13,6 +13,7 @@ import {
   mobileTokenPairSchema,
 } from "@leadshelf/api-contracts/mobile/v1"
 import { File } from "expo-file-system"
+import { fetch } from "expo/fetch"
 import * as FileSystem from "expo-file-system/legacy"
 import { Platform } from "react-native"
 import {
@@ -541,9 +542,8 @@ export const syncApi: SyncApi = {
   uploadPhoto: async (photo) => {
     const mediaType = photo.mediaType ?? "photo"
     const fileExtension = mediaType === "video" ? "mp4" : "jpg"
-    // Expo 57 / RN 0.86 fetch принимает Blob/File. Старый RN-объект
-    // { uri, name, type } теперь падает до запроса с
-    // "Unsupported FormDataPart implementation".
+    // Expo 57 File реализует Blob для expo/fetch. Глобальный React Native
+    // fetch не гарантирует поддержку этого FormDataPart на Android.
     return withDecryptedMedia(photo.fileUri, async (temporaryUri) => {
       const form = new FormData()
       form.append("file", new File(temporaryUri), `${photo.clientPhotoId}.${fileExtension}`)
