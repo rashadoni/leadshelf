@@ -62,13 +62,9 @@ tags:
     direction: DOWN
 - tapOn: "Mobil tam icra — 2026-08-09"
 - extendedWaitUntil:
-    visible: "Başla"
+    visible: "Addım-addım rəf sübutu"
     timeout: 30000
 - takeScreenshot: mobile-guide-03-task
-- tapOn: "Başla"
-- scrollUntilVisible:
-    element: "Addım-addım rəf sübutu"
-    direction: DOWN
 - takeScreenshot: mobile-guide-04-guided-proof
 - tapOn:
     text: "Çək"
