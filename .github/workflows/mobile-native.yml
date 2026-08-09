@@ -15,6 +15,11 @@ on:
         type: choice
         options: [live-demo, local-emulator]
         default: live-demo
+      record_guide:
+        description: "Run the AZ full-flow guide in an Android phone emulator"
+        required: false
+        type: boolean
+        default: false
   pull_request:
     paths:
       - ".github/workflows/mobile-native.yml"
@@ -72,6 +77,72 @@ jobs:
       - name: Compile standalone preview APK
         working-directory: apps/mobile/android
         run: ./gradlew app:assembleRelease --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
+
+      - name: Install pinned Maestro CLI
+        if: ${{ inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
+          mkdir -p "$GITHUB_WORKSPACE/.maestro-bin"
+          curl -fsSL \
+            https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.8.0/maestro.zip \
+            -o "$GITHUB_WORKSPACE/.maestro-bin/maestro.zip"
+          echo "b3e561161904fb391875ca5834d5b22cf0b01c052dd1b408ad83e30d8f8951b3  $GITHUB_WORKSPACE/.maestro-bin/maestro.zip" \
+            | sha256sum -c -
+          unzip -q "$GITHUB_WORKSPACE/.maestro-bin/maestro.zip" \
+            -d "$GITHUB_WORKSPACE/.maestro-bin"
+
+      - name: Run AZ full-flow guide in phone emulator
+        if: ${{ inputs.record_guide }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated
+          disable-animations: false
+          emulator-boot-timeout: 600
+          script: |
+            set -euo pipefail
+            apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            test -s "$apk"
+            adb install -r "$apk"
+            adb shell pm grant com.leadshelf.mobile android.permission.CAMERA || true
+            adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_FINE_LOCATION || true
+            adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_COARSE_LOCATION || true
+            export PATH="$GITHUB_WORKSPACE/.maestro-bin/maestro/bin:$PATH"
+            export MAESTRO_CLI_NO_ANALYTICS=true
+            export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
+            maestro --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml \
+              --format junit \
+              --output mobile-guide-results.xml \
+              --test-output-dir mobile-guide-results
+
+      - name: Collect mobile guide recording
+        if: ${{ always() && inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          mkdir -p mobile-guide-artifact
+          find "$GITHUB_WORKSPACE" "$HOME/.maestro" \
+            -type f \( -name 'mobile-guide-az-raw*.mp4' -o -name 'mobile-guide-*.png' \) \
+            -exec cp -n {} mobile-guide-artifact/ \; || true
+          if [ -d mobile-guide-results ]; then
+            cp -R mobile-guide-results mobile-guide-artifact/results
+          fi
+          if [ -f mobile-guide-results.xml ]; then
+            cp mobile-guide-results.xml mobile-guide-artifact/
+          fi
+          find mobile-guide-artifact -maxdepth 3 -type f -print
+
+      - name: Upload mobile guide recording
+        if: ${{ always() && inputs.record_guide }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-guide-az-raw-${{ github.sha }}
+          path: mobile-guide-artifact
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Verify and record standalone evidence
         run: |

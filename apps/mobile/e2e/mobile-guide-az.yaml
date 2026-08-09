@@ -1,0 +1,100 @@
+appId: com.leadshelf.mobile
+name: LeadShelf mobile full execution guide (AZ)
+tags:
+  - guide
+  - android
+  - az
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- setLocation:
+    latitude: 40.3777
+    longitude: 49.8920
+- startRecording: mobile-guide-az-raw
+- tapOn: "Əməkdaş kodu"
+- inputText: "M-001"
+- tapOn: "PIN"
+- inputText: "1234"
+- hideKeyboard
+- tapOn: "Daxil ol"
+- extendedWaitUntil:
+    visible: "Mobil video bələdçi — tam icra — 2026-08-09"
+    timeout: 45000
+- takeScreenshot: mobile-guide-01-route
+- scrollUntilVisible:
+    element: "Check-in"
+    direction: DOWN
+- tapOn: "Check-in"
+- extendedWaitUntil:
+    visible: "Vizit icradadır"
+    timeout: 30000
+- takeScreenshot: mobile-guide-02-check-in
+- scrollUntilVisible:
+    element: "Mobil tam icra — 2026-08-09"
+    direction: DOWN
+- tapOn: "Mobil tam icra — 2026-08-09"
+- extendedWaitUntil:
+    visible: "Başla"
+    timeout: 30000
+- takeScreenshot: mobile-guide-03-task
+- tapOn: "Başla"
+- scrollUntilVisible:
+    element: "Addım-addım rəf sübutu"
+    direction: DOWN
+- takeScreenshot: mobile-guide-04-guided-proof
+- tapOn:
+    text: "Çək"
+    index: 0
+- extendedWaitUntil:
+    visible: "Bu addımı çək"
+    timeout: 20000
+- takeScreenshot: mobile-guide-05-front-camera
+- tapOn: "Bu addımı çək"
+- tapOn:
+    text: "Belə istifadə et"
+    optional: true
+- extendedWaitUntil:
+    visible: "2. Sol dərinlik"
+    timeout: 30000
+- tapOn:
+    text: "Çək"
+    index: 0
+- extendedWaitUntil:
+    visible: "Bu addımı çək"
+    timeout: 20000
+- takeScreenshot: mobile-guide-06-left-camera
+- tapOn: "Bu addımı çək"
+- tapOn:
+    text: "Belə istifadə et"
+    optional: true
+- extendedWaitUntil:
+    visible: "3. Sağ dərinlik"
+    timeout: 30000
+- tapOn:
+    text: "Çək"
+    index: 0
+- extendedWaitUntil:
+    visible: "Bu addımı çək"
+    timeout: 20000
+- takeScreenshot: mobile-guide-07-right-camera
+- tapOn: "Bu addımı çək"
+- tapOn:
+    text: "Belə istifadə et"
+    optional: true
+- extendedWaitUntil:
+    visible: "Əla! Rəf yoxlanıldı"
+    timeout: 30000
+- takeScreenshot: mobile-guide-08-complete
+- tapOn: "Növbəti"
+- back
+- extendedWaitUntil:
+    visible: "Bitir"
+    timeout: 30000
+- tapOn: "Bitir"
+- extendedWaitUntil:
+    visible: "Aktiv vizit yoxdur"
+    timeout: 30000
+- takeScreenshot: mobile-guide-09-check-out
+- stopRecording
