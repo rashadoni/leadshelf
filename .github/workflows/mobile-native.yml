@@ -158,20 +158,12 @@ jobs:
           disable-animations: false
           emulator-boot-timeout: 600
           script: |
-            set -eu
-            apk="$GUIDE_APK_PATH"
-            test -s "$apk"
-            adb install -r "$apk"
+            test -s "$GUIDE_APK_PATH"
+            adb install -r "$GUIDE_APK_PATH"
             adb shell pm grant com.leadshelf.mobile android.permission.CAMERA || true
             adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_FINE_LOCATION || true
             adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_COARSE_LOCATION || true
-            export PATH="$GITHUB_WORKSPACE/.maestro-bin/maestro/bin:$PATH"
-            export MAESTRO_CLI_NO_ANALYTICS=true
-            export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
-            maestro --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml \
-              --format junit \
-              --output mobile-guide-results.xml \
-              --test-output-dir mobile-guide-results
+            MAESTRO_CLI_NO_ANALYTICS=true MAESTRO_DRIVER_STARTUP_TIMEOUT=180000 "$GITHUB_WORKSPACE/.maestro-bin/maestro/bin/maestro" --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml --format junit --output mobile-guide-results.xml --test-output-dir mobile-guide-results
 
       - name: Collect mobile guide recording
         if: ${{ always() && inputs.record_guide }}
