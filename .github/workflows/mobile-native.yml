@@ -132,6 +132,19 @@ jobs:
           unzip -q "$GITHUB_WORKSPACE/.maestro-bin/maestro.zip" \
             -d "$GITHUB_WORKSPACE/.maestro-bin"
 
+      - name: Enable KVM acceleration for Android emulator
+        if: ${{ inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
       - name: Run AZ full-flow guide in phone emulator
         if: ${{ inputs.record_guide }}
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
@@ -141,6 +154,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated
+          disable-linux-hw-accel: false
           disable-animations: false
           emulator-boot-timeout: 600
           script: |
