@@ -13,12 +13,15 @@ tags:
     latitude: 40.3777
     longitude: 49.8920
 - startRecording: mobile-guide-az-raw
-- tapOn: "Əməkdaş kodu"
+- tapOn:
+    point: "50%,58%"
 - inputText: "M-001"
-- tapOn: "PIN"
+- tapOn:
+    point: "50%,67%"
 - inputText: "1234"
 - hideKeyboard
-- tapOn: "Daxil ol"
+- tapOn:
+    point: "50%,76%"
 - extendedWaitUntil:
     visible: "Mobil video bələdçi — tam icra — 2026-08-09"
     timeout: 45000
