@@ -1,16 +1,16 @@
 "use client"
 
-/**
- * Header trigger for the help-video launcher: always visible, re-opens the
- * player even after the floating thumbnail was dismissed (the launcher
- * listens for `leadshelf:open-help-video`).
- */
 import { useLocale } from "next-intl"
 import { Video } from "lucide-react"
+import { usePathname } from "@/i18n/navigation"
+import { getHelpVideoForPath, normalizeHelpVideoLocale } from "@/content/help/video-assets"
 
 export function HelpVideoButton() {
-  const locale = useLocale()
-  const label = locale === "ru" ? "Видео-гид" : "Video bələdçi"
+  const locale = normalizeHelpVideoLocale(useLocale())
+  const pathname = usePathname()
+  const entry = locale ? getHelpVideoForPath(pathname, locale) : null
+
+  if (!entry) return null
 
   return (
     <button
@@ -19,7 +19,7 @@ export function HelpVideoButton() {
       className="hidden items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 md:inline-flex"
     >
       <Video className="h-3.5 w-3.5" />
-      {label}
+      Video bələdçi
     </button>
   )
 }

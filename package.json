@@ -14,7 +14,9 @@
     "release-preflight:test": "deploy/scripts/verify-release-approval.test.sh",
     "post-deploy-smoke:test": "deploy/scripts/post-deploy-smoke.test.sh",
     "production-env:test": "bash scripts/check-production-env-contract.test.sh",
-    "help-video-assets:test": "scripts/validate-help-video-assets.test.sh",
+    "help-video:sync": "node scripts/sync-help-video-availability.mjs",
+    "help-video:check": "node scripts/sync-help-video-availability.mjs --check",
+    "help-video-assets:test": "scripts/validate-help-video-assets.test.sh && node scripts/sync-help-video-availability.mjs --check",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"

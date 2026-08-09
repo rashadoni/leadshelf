@@ -97,6 +97,7 @@ export function ImportForm() {
     <div className="max-w-3xl space-y-6">
       <form
         onSubmit={onSubmit}
+        data-tour-id="catalog-import-form"
         className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6"
       >
         <p className="text-sm text-neutral-500">{t("hint")}</p>
@@ -105,6 +106,7 @@ export function ImportForm() {
             <span className="text-neutral-600">{t("entityType")}</span>
             <select
               name="entityType"
+              data-tour-id="catalog-import-entity"
               className="block rounded-md border border-neutral-300 px-3 py-1.5"
             >
               {ENTITIES.map((e) => (
@@ -118,6 +120,7 @@ export function ImportForm() {
             <span className="text-neutral-600">{t("encoding")}</span>
             <select
               name="encoding"
+              data-tour-id="catalog-import-encoding"
               className="block rounded-md border border-neutral-300 px-3 py-1.5"
             >
               <option value="utf-8">UTF-8</option>
@@ -130,6 +133,7 @@ export function ImportForm() {
           <input
             type="file"
             name="file"
+            data-tour-id="catalog-import-file"
             accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             required
             className="block text-sm"
@@ -138,6 +142,7 @@ export function ImportForm() {
         <button
           type="submit"
           disabled={pending}
+          data-tour-id="catalog-import-submit"
           className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {pending ? t("running") : t("submit")}

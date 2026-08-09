@@ -11,24 +11,31 @@ for command_name in ffprobe find grep sha256sum sort stat; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required command is missing: $command_name"
 done
 
-expected=(
-  overview.az.VOICE.mp4
-  overview.az.poster.jpg
-  overview.ru.VOICE.mp4
-  overview.ru.poster.jpg
+mapfile -t media_files < <(
+  find "$asset_dir" -maxdepth 1 -type f ! -name '.*' ! -name SHA256SUMS -printf '%f\n' | sort
 )
+((${#media_files[@]} > 0)) || fail "no Azerbaijani help-video assets found"
 
-mapfile -t actual < <(find "$asset_dir" -maxdepth 1 -type f -printf '%f\n' | sort)
-mapfile -t wanted < <(printf '%s\n' "${expected[@]}" | sort)
-[[ "${actual[*]}" == "${wanted[*]}" ]] || {
-  printf '[help-video-assets] expected exactly:\n%s\n' "$(printf '  %s\n' "${wanted[@]}")" >&2
-  printf '[help-video-assets] found:\n%s\n' "$(printf '  %s\n' "${actual[@]:-<none>}")" >&2
-  exit 1
-}
+declare -A video_by_slug=()
+declare -A poster_by_slug=()
+for file in "${media_files[@]}"; do
+  if [[ "$file" =~ ^([a-z0-9-]+)\.az\.VOICE\.mp4$ ]]; then
+    video_by_slug["${BASH_REMATCH[1]}"]="$file"
+  elif [[ "$file" =~ ^([a-z0-9-]+)\.az\.poster\.jpg$ ]]; then
+    poster_by_slug["${BASH_REMATCH[1]}"]="$file"
+  else
+    fail "unsupported asset (Azerbaijani-only package): $file"
+  fi
+done
 
-for locale in az ru; do
-  video="$asset_dir/overview.$locale.VOICE.mp4"
-  poster="$asset_dir/overview.$locale.poster.jpg"
+mapfile -t slugs < <(printf '%s\n' "${!video_by_slug[@]}" "${!poster_by_slug[@]}" | sort -u)
+for slug in "${slugs[@]}"; do
+  video_name="${video_by_slug[$slug]:-}"
+  poster_name="${poster_by_slug[$slug]:-}"
+  [[ -n "$video_name" && -n "$poster_name" ]] || fail "incomplete media pair for $slug.az"
+
+  video="$asset_dir/$video_name"
+  poster="$asset_dir/$poster_name"
   [[ ! -L "$video" && ! -L "$poster" ]] || fail "symlink assets are forbidden"
   (( $(stat -c '%s' -- "$video") >= 1048576 )) || fail "$video is unexpectedly small"
   (( $(stat -c '%s' -- "$poster") >= 10240 )) || fail "$poster is unexpectedly small"
@@ -47,7 +54,7 @@ done
 
 (
   cd "$asset_dir"
-  sha256sum "${expected[@]}" | sort
+  sha256sum "${media_files[@]}" | sort
 ) > "$asset_dir/SHA256SUMS"
 
-echo "[help-video-assets] PASS"
+echo "[help-video-assets] PASS (${#slugs[@]} AZ guide(s))"

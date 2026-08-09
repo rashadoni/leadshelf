@@ -10,19 +10,20 @@
  *    auto-refresh → the recorder RE-LOGINS every SESSION_REFRESH_MS and pushes
  *    fresh cookies into the LIVE browser context between scenes (a full film
  *    runs 25-30 min).
- *  - LOCALES: az/ru only; routes are locale-prefixed (`/az/...`, `/ru/...`).
+ *  - LOCALE: Azerbaijani only; routes are locale-prefixed (`/az/...`).
  *  - SCENARIOS: video/scenarios/overrides.mjs ONLY (no browser-guided.json).
- *  - No product tours / help widget in LeadShelf → no dismiss/collapse logic.
+ *  - HELP UI: hides both the ported in-flow widget and the legacy production
+ *    launcher so a guide never records its own help controls.
  *  - Helpers gain `ensureCursor()` — scenes navigate by real clicks and must
  *    re-inject the cursor overlay after each navigation.
  *
- * VOICE ENGINES (same policy): az → Gemini native TTS (Kore; keys rotate on
- * daily quota), ru → Azure Speech (ru-RU-DmitryNeural). NO local fallback.
+ * VOICE ENGINE: az → Gemini native TTS (Kore; keys rotate on daily quota).
+ * There is no Azure/local fallback and this producer rejects non-AZ runs.
  *
  * USAGE
  *   node scripts/produce-guides.mjs <BASE_URL> [langs] [section ...]
  *     BASE_URL   e.g. https://hermescrm.xyz (default HELP_VIDEO_BASE_URL)
- *     langs      "az" or "az,ru" (default "az,ru")
+ *     langs      "az" (default and only supported value)
  *     section…   scenario keys to limit the run (default: all)
  *
  * FLAGS (env): FORCE=1 re-record; CLEAN=1 delete targets first (implied by
@@ -31,8 +32,8 @@
  * own safety (this repo's film only fills-without-submit and hovers mutators).
  *
  * PREREQS: ffmpeg+ffprobe, `playwright` dep (workspace root), keys in
- * apps/web/.env — GEMINI_API_KEY (comma-separated list ok) + AZURE_SPEECH_KEY /
- * AZURE_SPEECH_REGION. HELP_VIDEO_EMAIL/PASSWORD override demo credentials.
+ * apps/web/.env — GEMINI_API_KEY (comma-separated list ok).
+ * HELP_VIDEO_EMAIL/PASSWORD override demo credentials.
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -54,8 +55,11 @@ loadProjectEnv();
 // ── CLI + flags ────────────────────────────────────────────────────────────
 const positionals = process.argv.slice(2).filter((v) => !v.startsWith("-"));
 const baseUrl = (positionals[0] || process.env.HELP_VIDEO_BASE_URL || "http://127.0.0.1:3100").replace(/\/$/, "");
-const langs = (positionals[1] || process.env.GUIDE_LANGS || "az,ru")
+const langs = (positionals[1] || process.env.GUIDE_LANGS || "az")
   .split(",").map((v) => v.trim()).filter(Boolean);
+if (langs.length !== 1 || langs[0] !== "az") {
+  throw new Error('LeadShelf guides are Azerbaijani-only. Use the language argument "az".');
+}
 const requestedSections = positionals.slice(2);
 
 const FORCE = envFlag("FORCE");
@@ -67,18 +71,21 @@ const isRemoteTarget = !/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])
 const READONLY = envFlag("READONLY")
   || ((isRemoteTarget || process.env.NODE_ENV === "production") && !envFlag("ALLOW_MUTATIONS"));
 
-// Voice-per-language routing (az → Gemini quota, ru → Azure fast/uncapped).
+// Azerbaijani voice routing. No other language or fallback is permitted.
 const forcedEngine = process.env.TTS_ENGINE || null;
 const ENGINE = {
   az: forcedEngine || process.env.ENGINE_AZ || "gemini",
-  ru: forcedEngine || process.env.ENGINE_RU || "azure",
 };
+if (ENGINE.az !== "gemini") {
+  throw new Error('LeadShelf Azerbaijani guides require TTS_ENGINE="gemini".');
+}
 
 // Timing knobs: voice starts first, cursor follows LEAD ms later.
 const LEAD_MS = Number(process.env.GUIDE_LEAD_MS || 650);
 const TAIL_MS = Number(process.env.GUIDE_TAIL_MS || 700);
 const END_PAD_MS = Number(process.env.GUIDE_END_PAD_MS || 1200);
 const PREROLL_SETTLE_MS = Number(process.env.GUIDE_PREROLL_MS || 900);
+const MIN_GUIDE_DURATION_SEC = Number(process.env.GUIDE_MIN_DURATION_SEC || 120);
 // ls_access TTL is 15 min; refresh the session well inside it.
 const SESSION_REFRESH_MS = Number(process.env.GUIDE_SESSION_REFRESH_MS || 8 * 60 * 1000);
 
@@ -86,8 +93,13 @@ const SESSION_REFRESH_MS = Number(process.env.GUIDE_SESSION_REFRESH_MS || 8 * 60
 const videoSize = { width: 1280, height: 720 };
 const viewport = { ...videoSize };
 
-// Cursor + click-pulse styles (LeadShelf has no tour/help widget to hide).
+// Cursor + click-pulse styles. The help card must never appear inside its own
+// recording, so hide the explicit widget hook ported with the launcher.
 const GUIDE_CSS = [
+  "[data-help-video-widget]{display:none!important}",
+  "header button.border-indigo-200.bg-indigo-50,aside.fixed.bottom-4.right-4.z-50{display:none!important}",
+  "html:after{content:'';position:fixed;z-index:2147483644;left:0;right:0;bottom:0;height:10px;pointer-events:none;background:#1d4ed8;animation:ldGuideMotionGuard 3s steps(1,end) infinite;}",
+  "@keyframes ldGuideMotionGuard{0%,49%{background:#1d4ed8}50%,100%{background:#bfdbfe}}",
   "#ld-pilot-cursor{position:fixed;z-index:2147483647;width:28px;height:28px;left:0;top:0;pointer-events:none;transform:translate(-100px,-100px);transition:transform .12s linear;filter:drop-shadow(0 10px 14px rgba(15,23,42,.25));}",
   "#ld-pilot-cursor:before{content:'';position:absolute;left:7px;top:1px;width:0;height:0;border-right:18px solid transparent;border-bottom:25px solid #fff;transform:rotate(-24deg);}",
   "#ld-pilot-cursor:after{content:'';position:absolute;left:8px;top:3px;width:0;height:0;border-right:13px solid transparent;border-bottom:19px solid #111827;transform:rotate(-24deg);}",
@@ -115,17 +127,6 @@ const geminiVoice = process.env.GEMINI_TTS_VOICE || "Kore";
 const geminiMaxRetries = Number(process.env.GEMINI_MAX_RETRIES || 10);
 const geminiWindowMs = Number(process.env.GEMINI_WINDOW_MS || 60000);
 
-// Azure Speech (ru).
-const azureKey = firstEnv("AZURE_SPEECH_KEY", "SPEECH_KEY", "AZURE_AI_SPEECH_KEY");
-const azureRegion = firstEnv("AZURE_SPEECH_REGION", "SPEECH_REGION", "AZURE_AI_SPEECH_REGION");
-const azureEndpoint = firstEnv("AZURE_SPEECH_ENDPOINT", "SPEECH_ENDPOINT").replace(/\/$/, "");
-const azureFormat = process.env.AZURE_SPEECH_OUTPUT_FORMAT || "audio-24khz-160kbitrate-mono-mp3";
-const azureVoices = {
-  az: process.env.AZURE_SPEECH_VOICE_AZ || "az-AZ-BabekNeural",
-  ru: process.env.AZURE_SPEECH_VOICE_RU || "ru-RU-DmitryNeural",
-};
-const azureLangs = { az: "az-AZ", ru: "ru-RU" };
-
 // ── Scenarios: hand-authored overrides are the ONLY source in LeadShelf ─────
 const overridesPath = resolve(repoRoot, "video/scenarios/overrides.mjs");
 if (!existsSync(overridesPath)) throw new Error(`No scenarios: ${overridesPath} missing`);
@@ -147,12 +148,6 @@ mkdirSync(audioRoot, { recursive: true });
 const neededEngines = new Set(langs.map((l) => ENGINE[l]));
 if (neededEngines.has("gemini") && !geminiKeys.length) {
   throw new Error("GEMINI_API_KEY is required for the az voice. Set it in apps/web/.env — do not commit it.");
-}
-if (neededEngines.has("azure") && !azureKey) {
-  throw new Error("AZURE_SPEECH_KEY is required for the ru voice. Set it in apps/web/.env.");
-}
-if (neededEngines.has("azure") && !azureRegion && !azureEndpoint) {
-  throw new Error("AZURE_SPEECH_REGION or AZURE_SPEECH_ENDPOINT is required for the ru voice.");
 }
 
 console.log(`▶ base=${baseUrl}  langs=${langs.join(",")}  sections=${sections.length}  FORCE=${FORCE}`);
@@ -206,7 +201,10 @@ async function produceLanguage(lang) {
   // 2) Login once, then record; the session is re-freshed between scenes.
   const api = await request.newContext({ baseURL: baseUrl });
   await loginWithRetry(api);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+  });
   const context = await browser.newContext({
     storageState: await api.storageState(),
     viewport,
@@ -420,7 +418,6 @@ async function ensureSceneAudio(slug, lang) {
 async function tts(text, lang, outMp3) {
   const engine = ENGINE[lang];
   if (engine === "gemini") return geminiTTS(text, outMp3);
-  if (engine === "azure") return azureTTS(text, lang, outMp3);
   throw new Error(`No TTS engine mapped for lang "${lang}"`);
 }
 
@@ -497,42 +494,6 @@ async function geminiTTS(text, outMp3) {
     return;
   }
   throw new Error(`Gemini TTS exhausted ${maxAttempts} attempts across ${nKeys} key(s)`);
-}
-
-async function azureTTS(text, lang, outMp3) {
-  const voice = azureVoices[lang] || azureVoices.ru;
-  const xmlLang = azureLangs[lang] || "ru-RU";
-  const url = azureEndpoint
-    ? `${azureEndpoint}/tts/cognitiveservices/v1`
-    : `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
-  const ssml = [
-    `<speak version="1.0" xml:lang="${xmlLang}" xmlns="http://www.w3.org/2001/10/synthesis">`,
-    `  <voice name="${voice}"><prosody rate="-4%">${escapeXml(text)}</prosody></voice>`,
-    "</speak>",
-  ].join("\n");
-  const delays = [0, 2000, 6000, 12000];
-  let lastErr;
-  for (let attempt = 0; attempt < delays.length; attempt += 1) {
-    if (delays[attempt]) await sleep(delays[attempt]);
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Ocp-Apim-Subscription-Key": azureKey,
-        "Content-Type": "application/ssml+xml",
-        "X-Microsoft-OutputFormat": azureFormat,
-        "User-Agent": "leadshelf-produce-guides",
-      },
-      body: ssml,
-      signal: AbortSignal.timeout(45000),
-    }).catch((e) => ({ ok: false, status: 0, text: async () => e.message }));
-    if (res.ok) {
-      writeFileSync(outMp3, Buffer.from(await res.arrayBuffer()));
-      return;
-    }
-    lastErr = new Error(`Azure Speech ${res.status}: ${String(await res.text?.().catch(() => "")).slice(0, 200)}`);
-    console.warn(`      ⚠ ${lastErr.message} (retry ${attempt + 1}/${delays.length})`);
-  }
-  throw lastErr;
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -679,7 +640,7 @@ function isValidRender(mp4, poster) {
     const v = meta.streams?.find((s) => s.codec_type === "video");
     const hasAudio = meta.streams?.some((s) => s.codec_type === "audio");
     return Boolean(hasAudio) && v?.width === videoSize.width && v?.height === videoSize.height
-      && Number(meta.format?.duration || 0) >= 6;
+      && Number(meta.format?.duration || 0) >= MIN_GUIDE_DURATION_SEC;
   } catch { return false; }
 }
 
@@ -711,7 +672,7 @@ function reportNavCoverage() {
 function localized(value, lang) {
   if (value == null) return "";
   if (typeof value === "string") return value;
-  return value[lang] || value.az || value.ru || "";
+  return value[lang] || value.az || "";
 }
 
 function parseRetrySeconds(res, body) {
@@ -727,16 +688,6 @@ function rel(p) { return p.replace(`${repoRoot}/`, ""); }
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function log(msg) { if (process.env.GUIDE_VERBOSE) console.log(msg); }
 function envFlag(name) { return ["1", "true", "yes"].includes(String(process.env[name] || "").toLowerCase()); }
-
-function escapeXml(v) {
-  return String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
-}
-
-function firstEnv(...names) {
-  for (const n of names) { if (process.env[n]) return process.env[n]; }
-  return "";
-}
 
 function loadProjectEnv() {
   for (const name of [".env.local", ".env", "apps/web/.env.local", "apps/web/.env"]) {

@@ -1,0 +1,43 @@
+{
+  "slug": "mobile-execution",
+  "language": "az",
+  "voice": "Kore",
+  "scenes": [
+    {
+      "id": "login",
+      "voice": "Bu bələdçidə LeadShelf mobil tətbiqində mağaza ziyarətinin tam icrasını göstərəcəyik. Şirkət kodu demo, əməkdaş kodu M-001 və şəxsi PIN daxil edilir. Tətbiq əməkdaşı doğru təşkilata bağlayır, icazələri yoxlayır və yalnız ona təyin olunmuş marşrutları, tapşırıqları və planogramları telefona sinxronlaşdırır."
+    },
+    {
+      "id": "route",
+      "voice": "Girişdən sonra Marşrut ekranı açılır. Burada bu gün üçün hazırlanmış Mobil video bələdçi marşrutu, Nizami mağazası, planlaşdırılmış vaxt və həmin nöqtədəki tapşırıqlar görünür. Yuxarıdakı sinxronlaşdırma göstəricisi telefonun serverlə əlaqəsini göstərir. İnternet müvəqqəti kəsilsə belə, əvvəl yüklənmiş işlər cihazda qalır."
+    },
+    {
+      "id": "checkin",
+      "voice": "Mağazaya çatanda Check-in düyməsinə toxunuruq. Telefon cari GPS koordinatını götürür və mağazanın geozonası ilə müqayisə edir. Uğurlu check-in aktiv ziyarət yaradır, görüləcək işləri açır və ofisə əməkdaşın həqiqətən doğru nöqtədə olduğunu sübut edən vaxt və məkan izi göndərir."
+    },
+    {
+      "id": "task",
+      "voice": "İndi Mobil video bələdçisi — yekun flow tapşırığını açırıq. Tapşırıq administrasiya hissəsində əvvəlcədən həmin mağazaya və M-001 əməkdaşına təyin edilib. Ekranda mağaza, son tarix, avadanlıq, rəfdəki yerləşmə və yayımlanmış planogram görünür. İlk məcburi foto addımına keçəndə tətbiq işi avtomatik icraya keçirir və statusu həm telefonda, həm də serverdə yeniləyir."
+    },
+    {
+      "id": "guided-proof",
+      "voice": "Addım-addım rəf sübutu bölməsi foto çəkilişini standartlaşdırır. Bu nümunədə üç məcburi rakurs var: ön görünüş, sol dərinlik və sağ dərinlik. Dördüncü detal şəkli yalnız ehtiyac olduqda çəkilir. Hər addım ekranda ayrıca izah olunur, buna görə əməkdaş hansı bucaqdan və nəyi çəkməli olduğunu səhvsiz görür."
+    },
+    {
+      "id": "front-photo",
+      "voice": "Birinci addımda bütün rəf ön tərəfdən kadrda görünməlidir. Ekrandakı kontur telefonu düz saxlamağa və avadanlığı düzgün çərçivələməyə kömək edir. Tətbiq bir neçə kadrdan ibarət qısa seriya çəkir, texniki baxımdan ən yaxşı şəkli seçir və insanları kadra salmamaq barədə məxfilik qaydasını sübut məlumatına əlavə edir."
+    },
+    {
+      "id": "left-photo",
+      "voice": "İkinci addım sol dərinlik rakursudur. Telefon rəfin sol tərəfinə bucaq altında yönəldilir ki, məhsulların arxa sıraları və doluluq dərinliyi görünsün. Bu şəkil yalnız vizual sübut deyil; sonradan ofis əməkdaşı və analitika ön fasinq ilə real ehtiyat dərinliyi arasındakı fərqi daha düzgün qiymətləndirə bilir."
+    },
+    {
+      "id": "right-photo",
+      "voice": "Üçüncü məcburi addım sağ dərinlik rakursudur. Eyni qayda əks tərəfdən tətbiq olunur və beləliklə rəfin hər iki kənarı sənədləşdirilir. Şəkil telefonda şifrəli saxlanılır, göndərmə növbəsinə düşür və bağlantı olduqda avtomatik yüklənir. Bütün məcburi addımlar tamamlananda tətbiq rəfin yoxlanıldığını aydın şəkildə təsdiqləyir."
+    },
+    {
+      "id": "checkout",
+      "voice": "Sonda tapşırığın foto sübutu və yenilənmiş statusu sinxronlaşdırılır, sonra marşrut ekranına qayıdıb Bitir düyməsi ilə check-out edirik. Ziyarətin başlanma və bitmə vaxtı, koordinatlar, tapşırıq statusu və foto sübutlar administrasiya hissəsinə çatır. Beləliklə rəhbər yalnız hesabat deyil, mağazada həqiqətən görülmüş işin izlənilə bilən tam tarixçəsini alır."
+    }
+  ]
+}

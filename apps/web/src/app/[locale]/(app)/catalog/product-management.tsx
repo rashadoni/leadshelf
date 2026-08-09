@@ -126,10 +126,15 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
   }
 
   return (
-    <form onSubmit={submit} className="mb-4 grid gap-2 border-y border-neutral-200 bg-white py-3">
+    <form
+      onSubmit={submit}
+      data-tour-id="catalog-create-form"
+      className="mb-4 grid gap-2 border-y border-neutral-200 bg-white py-3"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <input
           required
+          data-tour-id="catalog-create-sku"
           value={values.sku}
           onChange={(event) => set("sku", event.target.value)}
           placeholder={t("sku")}
@@ -137,12 +142,14 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
         />
         <input
           required
+          data-tour-id="catalog-create-name"
           value={values.name}
           onChange={(event) => set("name", event.target.value)}
           placeholder={t("name")}
           className="w-64 rounded-md border border-neutral-300 px-2 py-1 text-xs"
         />
         <input
+          data-tour-id="catalog-create-barcode"
           value={values.barcode}
           onChange={(event) => set("barcode", event.target.value)}
           placeholder={t("barcode")}
@@ -183,7 +190,11 @@ export function ProductCreateForm({ refs }: { refs: CatalogRefs }) {
           />
           {t("isSoftPack")}
         </label>
-        <button disabled={pending} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs text-white disabled:opacity-50">
+        <button
+          disabled={pending}
+          data-tour-id="catalog-create-submit"
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+        >
           {pending ? t("saving") : t("create")}
         </button>
         {error && <span role="alert" className="text-xs text-red-600">{error}</span>}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { getTranslations } from "next-intl/server"
 import { HelpVideoButton } from "@/components/help/help-video-button"
+import { HelpVideoLauncher } from "@/components/help/help-video-launcher"
 import { LocaleSwitcher } from "./locale-switcher"
 import { ShellBreadcrumbs, ShellNav } from "./shell-navigation"
 import { UserMenu } from "./user-menu"
@@ -32,7 +33,10 @@ export async function DashboardShell({
             <UserMenu email={userEmail} />
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          <HelpVideoLauncher />
+          {children}
+        </main>
       </div>
     </div>
   )

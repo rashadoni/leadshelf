@@ -8,7 +8,7 @@ fail() { echo "[production-deploy] $*" >&2; exit 1; }
 release_sha="$1"
 [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]] || fail "release SHA must be an exact lowercase 40-character commit SHA"
 
-for command_name in date docker flock git install stat; do
+for command_name in basename date docker find flock git install stat; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required command is missing: $command_name"
 done
 
@@ -37,6 +37,25 @@ git fetch --depth=1 origin "$release_sha"
 git checkout --detach "$release_sha"
 [ "$(git rev-parse HEAD)" = "$release_sha" ] || fail "checkout SHA mismatch"
 [ -z "$(git status --porcelain)" ] || fail "release checkout is not clean"
+
+# Approved help videos are versioned with the same release as the UI and its
+# generated availability manifest. Copy only the final Azerbaijani pairs into
+# the persistent directory mounted read-only by the web container. Older files
+# may remain on disk, but the manifest prevents the UI from requesting them.
+tracked_help_video_dir="$app_root/video/player"
+deployed_help_video_dir="$prod_root/help-videos/player"
+install -d -m 755 "$deployed_help_video_dir"
+if [[ -d "$tracked_help_video_dir" && ! -L "$tracked_help_video_dir" ]]; then
+  copied_help_video_count=0
+  while IFS= read -r -d '' help_video_file; do
+    install -m 644 "$help_video_file" "$deployed_help_video_dir/$(basename "$help_video_file")"
+    copied_help_video_count=$((copied_help_video_count + 1))
+  done < <(
+    find "$tracked_help_video_dir" -maxdepth 1 -type f \
+      \( -name '*.az.VOICE.mp4' -o -name '*.az.poster.jpg' \) -print0
+  )
+  printf 'help_video_assets_copied=%s\n' "$copied_help_video_count"
+fi
 
 install -m 644 deploy/docker-compose.prod.yml "$prod_root/docker-compose.yml"
 install -m 644 deploy/Caddyfile "$prod_root/Caddyfile"

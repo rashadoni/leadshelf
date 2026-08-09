@@ -7,9 +7,9 @@ import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 
 export const runtime = "nodejs"
 
-// Only recorder-produced assets: <slug>.<az|ru>.VOICE.mp4 / .poster.jpg —
+// Only recorder-produced Azerbaijani assets: <slug>.az.VOICE.mp4 / .poster.jpg —
 // everything else 404s before touching the filesystem (no traversal surface).
-const FILE_PATTERN = /^[a-z0-9-]+\.(az|ru)\.(VOICE\.mp4|poster\.jpg)$/
+const FILE_PATTERN = /^[a-z0-9-]+\.az\.(VOICE\.mp4|poster\.jpg)$/
 
 // Dev: apps/web cwd → repo-root video/player (recorder output).
 // Prod (docker): a read-only volume mounted by deploy/docker-compose.prod.yml.

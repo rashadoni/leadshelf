@@ -85,7 +85,7 @@ export default async function CatalogPage({
       <CatalogTabs active="products" />
       <ProductCreateForm refs={refs} />
 
-      <form method="get" className="mb-4 flex flex-wrap items-center gap-2">
+      <form method="get" data-tour-id="catalog-filters" className="mb-4 flex flex-wrap items-center gap-2">
         <input
           type="search"
           name="q"
@@ -128,7 +128,7 @@ export default async function CatalogPage({
           {t("table.empty")}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+        <div data-tour-id="catalog-table" className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
           <table className="min-w-[1180px] text-sm">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-xs uppercase text-neutral-500">
