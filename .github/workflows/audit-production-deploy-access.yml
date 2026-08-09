@@ -1,0 +1,62 @@
+name: Audit production deploy access (one-time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledgement:
+        description: "Type AUDIT-LEADSHELF-DEPLOY-ACCESS"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: inputs.acknowledgement == 'AUDIT-LEADSHELF-DEPLOY-ACCESS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Read non-secret deploy-user capabilities
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [ -n "$SSH_KEY" ]
+          [ -n "$DEPLOY_KNOWN_HOSTS" ]
+          [[ "$HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+          [ "$DEPLOY_USER" != root ]
+
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i ~/.ssh/deploy_key "$DEPLOY_USER@$HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          printf 'remote-user=%s\n' "$(id -un)"
+          printf '%s\n' 'sudo-capabilities:'
+          sudo -n -l
+          printf '%s\n' 'release-path-metadata:'
+          for path in \
+            /usr/local/sbin/leadshelf-deploy-approved-release \
+            /usr/local/sbin/leadshelf-verify-release-approval \
+            /opt/leadshelf/prod/release-evidence \
+            /opt/leadshelf/prod/release-evidence/production.env
+          do
+            if [ -e "$path" ] || [ -L "$path" ]; then
+              stat --format='%A %U:%G %F %n' -- "$path" || true
+            else
+              printf 'missing %s\n' "$path"
+            fi
+          done
+          REMOTE
