@@ -12,10 +12,15 @@ tags:
 - setLocation:
     latitude: 40.3777
     longitude: 49.8920
+- extendedWaitUntil:
+    visible: "Hesaba giriş"
+    timeout: 30000
+- waitForAnimationToEnd
 - startRecording: mobile-guide-az-raw
 - tapOn:
     point: "50%,58%"
 - inputText: "M-001"
+- assertVisible: "M-001"
 - tapOn:
     point: "50%,67%"
 - inputText: "1234"
