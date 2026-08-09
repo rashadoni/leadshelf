@@ -50,7 +50,8 @@ tags:
 - assertVisible: "Mobil video bələdçisi — yekun 1902 marşrut"
 - takeScreenshot: mobile-guide-01-route
 - tapOn:
-    point: "84%,61%"
+    text: "Check-in"
+    index: 0
 - extendedWaitUntil:
     visible: "Vizit icradadır"
     timeout: 30000
