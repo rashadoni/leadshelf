@@ -40,7 +40,7 @@ tags:
     timeout: 30000
 - tapOn: "Ticarət icra marşrutu"
 - extendedWaitUntil:
-    visible: "Mobil video bələdçi — sinxron icra — 2026-08-09"
+    visible: "Mobil video bələdçisi — yekun marşrut"
     timeout: 45000
 - takeScreenshot: mobile-guide-01-route
 - tapOn:
@@ -55,12 +55,12 @@ tags:
     direction: DOWN
 - tapOn: "Viziti aç"
 - extendedWaitUntil:
-    visible: "Mobil sinxron icra — 2026-08-09"
+    visible: "Mobil video bələdçisi — yekun icra"
     timeout: 30000
 - scrollUntilVisible:
-    element: "Mobil sinxron icra — 2026-08-09"
+    element: "Mobil video bələdçisi — yekun icra"
     direction: DOWN
-- tapOn: "Mobil sinxron icra — 2026-08-09"
+- tapOn: "Mobil video bələdçisi — yekun icra"
 - extendedWaitUntil:
     visible: "Addım-addım rəf sübutu"
     timeout: 30000
