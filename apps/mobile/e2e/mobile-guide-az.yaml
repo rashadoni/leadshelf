@@ -22,7 +22,7 @@ tags:
 - inputText: "M-001"
 - assertVisible: "M-001"
 - tapOn:
-    point: "50%,67%"
+    point: "50%,61%"
 - inputText: "1234"
 - hideKeyboard
 - tapOn:
