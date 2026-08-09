@@ -40,14 +40,14 @@ tags:
     timeout: 30000
 - tapOn: "Ticarət icra marşrutu"
 - scrollUntilVisible:
-    element: "Mobil video bələdçisi — tam marşrut"
+    element: "Mobil video bələdçisi — yekun 1902 marşrut"
     direction: DOWN
     timeout: 45000
 - swipe:
     start: "50%,82%"
     end: "50%,34%"
     duration: 800
-- assertVisible: "Mobil video bələdçisi — tam marşrut"
+- assertVisible: "Mobil video bələdçisi — yekun 1902 marşrut"
 - takeScreenshot: mobile-guide-01-route
 - tapOn: "Check-in"
 - extendedWaitUntil:
@@ -59,12 +59,12 @@ tags:
     direction: DOWN
 - tapOn: "Viziti aç"
 - extendedWaitUntil:
-    visible: "Mobil video bələdçisi — final flow"
+    visible: "Mobil video bələdçisi — yekun flow"
     timeout: 30000
 - scrollUntilVisible:
-    element: "Mobil video bələdçisi — final flow"
+    element: "Mobil video bələdçisi — yekun flow"
     direction: DOWN
-- tapOn: "Mobil video bələdçisi — final flow"
+- tapOn: "Mobil video bələdçisi — yekun flow"
 - extendedWaitUntil:
     visible: "Addım-addım rəf sübutu"
     timeout: 30000
@@ -123,15 +123,15 @@ tags:
 - takeScreenshot: mobile-guide-08-synced
 - back
 - scrollUntilVisible:
-    element: "Check-out"
+    element: "Bitir"
     direction: DOWN
-    timeout: 30000
-- tapOn: "Check-out"
+    timeout: 45000
+- tapOn: "Bitir"
 - tapOn:
     text: "Yenidən yoxla"
     optional: true
 - extendedWaitUntil:
-    visible: "Vizit tamamlanıb"
+    visible: "Aktiv vizit yoxdur"
     timeout: 60000
 - extendedWaitUntil:
     visible: "Hər şey saxlandı"
