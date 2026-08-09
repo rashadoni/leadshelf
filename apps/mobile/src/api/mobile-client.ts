@@ -12,7 +12,6 @@ import {
   mobileSyncPushResponseSchema,
   mobileTokenPairSchema,
 } from "@leadshelf/api-contracts/mobile/v1"
-import { File } from "expo-file-system"
 import { fetch } from "expo/fetch"
 import * as FileSystem from "expo-file-system/legacy"
 import { Platform } from "react-native"
@@ -160,6 +159,51 @@ async function request<T>(
     throw new HttpError(res.status, message, body)
   }
   return (await res.json()) as T
+}
+
+async function uploadMultipartFile<T>(
+  path: string,
+  fileUri: string,
+  mimeType: string,
+  parameters: Record<string, string>,
+  retryOn401 = true,
+): Promise<T> {
+  const [access, deviceId] = await Promise.all([
+    tokenStore.getAccess(),
+    tokenStore.getDeviceId(),
+  ])
+  const response = await FileSystem.uploadAsync(`${API_URL}${path}`, fileUri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "file",
+    mimeType,
+    parameters,
+    headers: {
+      "x-leadshelf-protocol": String(PROTOCOL_VERSION),
+      ...(deviceId ? { "x-field-device-id": deviceId } : {}),
+      "x-field-device-platform": Platform.OS,
+      ...(access ? { Authorization: `Bearer ${access}` } : {}),
+    },
+  })
+  if (response.status === 426) throw new UpgradeRequiredError()
+  if (response.status === 401 && retryOn401) {
+    if (await refreshTokens()) {
+      return uploadMultipartFile<T>(path, fileUri, mimeType, parameters, false)
+    }
+    throw new AuthLostError()
+  }
+  let body: unknown = {}
+  try {
+    body = JSON.parse(response.body)
+  } catch {
+    body = {}
+  }
+  if (response.status < 200 || response.status >= 300) {
+    const message = (body as { message?: string; error?: string }).message ??
+      (body as { error?: string }).error
+    throw new HttpError(response.status, message, body)
+  }
+  return body as T
 }
 
 function json(body: unknown): RequestInit {
@@ -541,38 +585,43 @@ export const syncApi: SyncApi = {
   },
   uploadPhoto: async (photo) => {
     const mediaType = photo.mediaType ?? "photo"
-    const fileExtension = mediaType === "video" ? "mp4" : "jpg"
-    // Expo 57 File реализует Blob для expo/fetch. Глобальный React Native
-    // fetch не гарантирует поддержку этого FormDataPart на Android.
+    const mimeType = mediaType === "video" ? "video/mp4" : "image/jpeg"
+    // Native multipart reads the file:// URI directly. This avoids the
+    // Android FormData/Blob bridge, which can leave valid offline photos
+    // permanently queued even though JSON sync still works.
     return withDecryptedMedia(photo.fileUri, async (temporaryUri) => {
-      const form = new FormData()
-      form.append("file", new File(temporaryUri), `${photo.clientPhotoId}.${fileExtension}`)
-      form.append("clientPhotoId", photo.clientPhotoId)
-      form.append("taskId", photo.taskId)
-      form.append("takenAt", photo.takenAt)
-      form.append("mediaType", mediaType)
-      if (photo.durationMs != null) form.append("durationMs", String(photo.durationMs))
-      if (photo.captureStepJson) form.append("captureStepJson", photo.captureStepJson)
-      if (photo.exifJson) form.append("exifJson", photo.exifJson)
-      if (photo.captureFlagsJson) form.append("captureFlagsJson", photo.captureFlagsJson)
-      if (photo.captureTelemetryJson) form.append("captureTelemetryJson", photo.captureTelemetryJson)
-      return request("/api/v1/mobile/photos/upload", {
-        method: "POST",
-        body: form,
-      }).then((body) => mobilePhotoUploadResponseSchema.parse(body))
+      const body = await uploadMultipartFile(
+        "/api/v1/mobile/photos/upload",
+        temporaryUri,
+        mimeType,
+        {
+          clientPhotoId: photo.clientPhotoId,
+          taskId: photo.taskId,
+          takenAt: photo.takenAt,
+          mediaType,
+          ...(photo.durationMs != null ? { durationMs: String(photo.durationMs) } : {}),
+          ...(photo.captureStepJson ? { captureStepJson: photo.captureStepJson } : {}),
+          ...(photo.exifJson ? { exifJson: photo.exifJson } : {}),
+          ...(photo.captureFlagsJson ? { captureFlagsJson: photo.captureFlagsJson } : {}),
+          ...(photo.captureTelemetryJson ? { captureTelemetryJson: photo.captureTelemetryJson } : {}),
+        },
+      )
+      return mobilePhotoUploadResponseSchema.parse(body)
     })
   },
   uploadCommercialMedia: async (media) => {
     return withDecryptedMedia(media.fileUri, async (temporaryUri) => {
-      const form = new FormData()
-      form.append("file", new File(temporaryUri), `${media.clientMediaId}.jpg`)
-      form.append("clientMediaId", media.clientMediaId)
-      form.append("purpose", media.purpose)
-      form.append("takenAt", media.takenAt)
-      return request("/api/v1/mobile/commercial-media/upload", {
-        method: "POST",
-        body: form,
-      }).then((body) => mobileCommercialMediaUploadResponseSchema.parse(body))
+      const body = await uploadMultipartFile(
+        "/api/v1/mobile/commercial-media/upload",
+        temporaryUri,
+        "image/jpeg",
+        {
+          clientMediaId: media.clientMediaId,
+          purpose: media.purpose,
+          takenAt: media.takenAt,
+        },
+      )
+      return mobileCommercialMediaUploadResponseSchema.parse(body)
     })
   },
   cleanupCommercialMedia: async (media) => {
