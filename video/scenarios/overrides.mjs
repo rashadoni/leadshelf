@@ -1104,4 +1104,59 @@ scenarios.catalog = {
   ],
 };
 
+// Split the already source-reviewed full-cycle chapters into independent
+// section scenarios. Each starts on its own real route; later recording phases
+// must still run the live clickability probe and duration gate before approval.
+const fullCycleScenes = scenarios.overview.scenes;
+scenarios.overview = {
+  route: "/",
+  title: { az: "LeadShelf paneli və tam iş dövrü" },
+  scenes: [fullCycleScenes[0], fullCycleScenes[1], fullCycleScenes[49]],
+};
+scenarios["equipment-library"] = {
+  route: "/equipment-library",
+  title: { az: "Avadanlıq kitabxanası və konstruktor" },
+  scenes: fullCycleScenes.slice(7, 11),
+};
+scenarios.stores = {
+  route: "/stores",
+  title: { az: "Satış nöqtələri və mağaza hazırlığı" },
+  scenes: fullCycleScenes.slice(11, 15),
+};
+scenarios["floor-plans"] = {
+  route: "/floor-plans",
+  title: { az: "Zal planları və avadanlığın yerləşdirilməsi" },
+  scenes: fullCycleScenes.slice(15, 18),
+};
+scenarios.planograms = {
+  route: "/planograms",
+  title: { az: "Planoqram redaktoru, etalon və nəşr" },
+  scenes: fullCycleScenes.slice(18, 28),
+};
+scenarios.tasks = {
+  route: "/tasks",
+  title: { az: "Tapşırıq dövrü və foto sübutlar" },
+  scenes: fullCycleScenes.slice(28, 32),
+};
+scenarios["field-force"] = {
+  route: "/field-force",
+  title: { az: "Sahə komandası, marşrutlar və mobil icra" },
+  scenes: fullCycleScenes.slice(32, 37),
+};
+scenarios.reviews = {
+  route: "/reviews",
+  title: { az: "Foto yoxlama və etalonla müqayisə" },
+  scenes: fullCycleScenes.slice(37, 42),
+};
+scenarios.orders = {
+  route: "/orders",
+  title: { az: "Sahədən gələn sifarişlər və sinxronizasiya" },
+  scenes: fullCycleScenes.slice(42, 45),
+};
+scenarios.analytics = {
+  route: "/analytics",
+  title: { az: "Rəf analitikası və biznes qərarları" },
+  scenes: fullCycleScenes.slice(45, 49),
+};
+
 export default scenarios;

@@ -84,6 +84,7 @@ const LEAD_MS = Number(process.env.GUIDE_LEAD_MS || 650);
 const TAIL_MS = Number(process.env.GUIDE_TAIL_MS || 700);
 const END_PAD_MS = Number(process.env.GUIDE_END_PAD_MS || 1200);
 const PREROLL_SETTLE_MS = Number(process.env.GUIDE_PREROLL_MS || 900);
+const MIN_GUIDE_DURATION_SEC = Number(process.env.GUIDE_MIN_DURATION_SEC || 120);
 // ls_access TTL is 15 min; refresh the session well inside it.
 const SESSION_REFRESH_MS = Number(process.env.GUIDE_SESSION_REFRESH_MS || 8 * 60 * 1000);
 
@@ -632,7 +633,7 @@ function isValidRender(mp4, poster) {
     const v = meta.streams?.find((s) => s.codec_type === "video");
     const hasAudio = meta.streams?.some((s) => s.codec_type === "audio");
     return Boolean(hasAudio) && v?.width === videoSize.width && v?.height === videoSize.height
-      && Number(meta.format?.duration || 0) >= 6;
+      && Number(meta.format?.duration || 0) >= MIN_GUIDE_DURATION_SEC;
   } catch { return false; }
 }
 
