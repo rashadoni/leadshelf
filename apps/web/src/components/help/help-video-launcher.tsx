@@ -13,12 +13,22 @@ import {
 type VideoMode = "expanded" | "thumbnail" | "hidden"
 
 const LABELS = {
-  eyebrow: "Video bələdçi",
-  subtitle: "Real addımları və nümunə məlumatları videoda izləyin.",
-  play: "Videonu aç",
-  minimize: "Kiçilt",
-  close: "Bağla",
-  unavailable: "Video hazırda açıla bilmir.",
+  az: {
+    eyebrow: "Video bələdçi",
+    subtitle: "Real addımları və nümunə məlumatları videoda izləyin.",
+    play: "Videonu aç",
+    minimize: "Kiçilt",
+    close: "Bağla",
+    unavailable: "Video hazırda açıla bilmir.",
+  },
+  ru: {
+    eyebrow: "Видео-гид на азербайджанском",
+    subtitle: "Посмотрите реальные действия и демонстрационные данные.",
+    play: "Открыть видео",
+    minimize: "Свернуть",
+    close: "Закрыть",
+    unavailable: "Видео сейчас недоступно.",
+  },
 } as const
 
 function storageKey(slug: string) {
@@ -27,18 +37,27 @@ function storageKey(slug: string) {
 
 export function HelpVideoLauncher() {
   const pathname = usePathname()
-  const locale = normalizeHelpVideoLocale(useLocale())
+  const uiLocale = useLocale()
+  const labels = uiLocale === "ru" ? LABELS.ru : LABELS.az
+  const locale = normalizeHelpVideoLocale(uiLocale)
   const entry = useMemo(
     () => (locale ? getHelpVideoForPath(pathname, locale) : null),
     [locale, pathname],
   )
   const assets = entry && locale ? getHelpVideoAsset(entry, locale) : null
-  const key = entry ? storageKey(entry.slug) : null
+  const title = uiLocale === "ru" ? entry?.titleRu ?? entry?.title : entry?.title
+  const key = entry?.dismissible === false ? null : entry ? storageKey(entry.slug) : null
   const [mode, setMode] = useState<VideoMode>("hidden")
   const [posterFailed, setPosterFailed] = useState(false)
   const [videoFailed, setVideoFailed] = useState(false)
 
   useEffect(() => {
+    if (entry?.dismissible === false) {
+      setMode("thumbnail")
+      setPosterFailed(false)
+      setVideoFailed(false)
+      return
+    }
     if (!key) {
       setMode("hidden")
       return
@@ -50,7 +69,7 @@ export function HelpVideoLauncher() {
     }
     setPosterFailed(false)
     setVideoFailed(false)
-  }, [key])
+  }, [entry?.dismissible, key])
 
   useEffect(() => {
     function handleOpen() {
@@ -80,7 +99,7 @@ export function HelpVideoLauncher() {
               type="button"
               onClick={() => setMode("expanded")}
               className="group relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg bg-neutral-100 text-left sm:w-40"
-              aria-label={LABELS.play}
+              aria-label={labels.play}
             >
               {posterFailed ? (
                 <span className="flex h-full w-full items-center justify-center text-indigo-600">
@@ -104,10 +123,10 @@ export function HelpVideoLauncher() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600">
                 <Video className="h-3.5 w-3.5" />
-                <span>{LABELS.eyebrow}</span>
+                <span>{labels.eyebrow}</span>
               </div>
-              <p className="mt-0.5 truncate text-sm font-semibold">{entry.title}</p>
-              <p className="mt-0.5 hidden truncate text-xs text-neutral-500 sm:block">{LABELS.subtitle}</p>
+              <p className="mt-0.5 truncate text-sm font-semibold">{title}</p>
+              <p className="mt-0.5 hidden truncate text-xs text-neutral-500 sm:block">{labels.subtitle}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <button
@@ -116,16 +135,18 @@ export function HelpVideoLauncher() {
                 className="hidden h-8 items-center gap-1.5 rounded-md border border-neutral-300 px-3 text-xs font-medium hover:bg-neutral-50 sm:inline-flex"
               >
                 <Play className="h-3.5 w-3.5 fill-current" />
-                {LABELS.play}
+                {labels.play}
               </button>
-              <button
-                type="button"
-                onClick={close}
-                aria-label={LABELS.close}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              {entry.dismissible !== false ? (
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label={labels.close}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -138,7 +159,7 @@ export function HelpVideoLauncher() {
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label={`${LABELS.eyebrow}: ${entry.title}`}
+      aria-label={`${labels.eyebrow}: ${title}`}
       onClick={() => setMode("thumbnail")}
     >
       <div
@@ -149,32 +170,34 @@ export function HelpVideoLauncher() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
               <Video className="h-3.5 w-3.5" />
-              <span>{LABELS.eyebrow}</span>
+              <span>{labels.eyebrow}</span>
             </div>
-            <h2 className="mt-1 text-sm font-semibold">{entry.title}</h2>
+            <h2 className="mt-1 text-sm font-semibold">{title}</h2>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setMode("thumbnail")}
-              aria-label={LABELS.minimize}
+              aria-label={labels.minimize}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
             >
               <Minimize2 className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={close}
-              aria-label={LABELS.close}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            {entry.dismissible !== false ? (
+              <button
+                type="button"
+                onClick={close}
+                aria-label={labels.close}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
         {videoFailed ? (
           <div className="flex aspect-video max-h-[75vh] items-center justify-center bg-neutral-100 px-6 text-center text-sm text-neutral-600">
-            {LABELS.unavailable}
+            {labels.unavailable}
           </div>
         ) : (
           <video

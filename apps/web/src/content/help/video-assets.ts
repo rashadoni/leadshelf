@@ -6,16 +6,24 @@ export interface HelpVideoEntry {
   slug: string
   routes: readonly string[]
   title: string
+  titleRu?: string
+  dismissible?: boolean
 }
 
 const HELP_VIDEO_BASE_PATH = process.env.NEXT_PUBLIC_HELP_VIDEO_BASE_URL ?? "/api/help-videos"
 
 // Bump this value whenever an existing media filename is replaced. The query
 // string prevents browsers/CDNs from continuing to serve the previous bytes.
-export const HELP_VIDEO_ASSET_VERSION = "20260809-az-section-guides-v1"
+export const HELP_VIDEO_ASSET_VERSION = "20260810-mobile-execution-v1"
 
 export const HELP_VIDEO_ENTRIES = [
-  { slug: "overview", routes: ["/"], title: "LeadShelf paneli" },
+  {
+    slug: "mobile-execution",
+    routes: ["/"],
+    title: "Mobil icra: tam iş axını",
+    titleRu: "Мобильное выполнение: полный процесс",
+    dismissible: false,
+  },
   { slug: "catalog", routes: ["/catalog"], title: "Məhsul kataloqu" },
   { slug: "catalog-import", routes: ["/catalog/import"], title: "Kataloq idxalı" },
   { slug: "catalog-quality", routes: ["/catalog/quality"], title: "Data keyfiyyəti" },
@@ -58,20 +66,25 @@ function routeMatches(pathname: string, route: string) {
 }
 
 export function normalizeHelpVideoLocale(locale: string): HelpVideoLocale | null {
-  return locale === "az" ? "az" : null
+  // The media library is intentionally Azerbaijani-only. The Russian dashboard
+  // still exposes the same AZ guide instead of pretending a RU voice-over exists.
+  return locale === "az" || locale === "ru" ? "az" : null
 }
 
 export function isHelpVideoAvailable(slug: string, locale: HelpVideoLocale = "az") {
   return AVAILABLE.has(`${slug}.${locale}`)
 }
 
-export function getHelpVideoForPath(pathname: string | null, locale: HelpVideoLocale = "az") {
+export function getHelpVideoForPath(
+  pathname: string | null,
+  locale: HelpVideoLocale = "az",
+): HelpVideoEntry | null {
   if (!pathname) return null
   const entry = getRegisteredHelpVideoForPath(pathname)
   return entry && isHelpVideoAvailable(entry.slug, locale) ? entry : null
 }
 
-export function getRegisteredHelpVideoForPath(pathname: string | null) {
+export function getRegisteredHelpVideoForPath(pathname: string | null): HelpVideoEntry | null {
   if (!pathname) return null
   const cleanPath = normalizePath(pathname)
   return ROUTED_ENTRIES.find((candidate) =>
@@ -79,7 +92,10 @@ export function getRegisteredHelpVideoForPath(pathname: string | null) {
   ) ?? null
 }
 
-export function getHelpVideoForSlug(slug: string, locale: HelpVideoLocale = "az") {
+export function getHelpVideoForSlug(
+  slug: string,
+  locale: HelpVideoLocale = "az",
+): HelpVideoEntry | null {
   const entry = HELP_VIDEO_ENTRIES.find((candidate) => candidate.slug === slug)
   return entry && isHelpVideoAvailable(entry.slug, locale) ? entry : null
 }

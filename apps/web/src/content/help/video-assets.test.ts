@@ -8,7 +8,7 @@ import {
 
 describe("LeadShelf help-video registry", () => {
   it.each([
-    ["/az", "overview"],
+    ["/az", "mobile-execution"],
     ["/az/catalog", "catalog"],
     ["/az/catalog/import", "catalog-import"],
     ["/az/catalog/quality", "catalog-quality"],
@@ -26,9 +26,13 @@ describe("LeadShelf help-video registry", () => {
     expect(getRegisteredHelpVideoForPath(path)?.slug).toBe(slug)
   })
 
-  it("does not offer a non-Azerbaijani guide locale", () => {
+  it("keeps the homepage mobile guide permanently available", () => {
+    expect(getRegisteredHelpVideoForPath("/az")?.dismissible).toBe(false)
+  })
+
+  it("uses the Azerbaijani guide in both supported dashboard locales", () => {
     expect(normalizeHelpVideoLocale("az")).toBe("az")
-    expect(normalizeHelpVideoLocale("ru")).toBeNull()
+    expect(normalizeHelpVideoLocale("ru")).toBe("az")
     expect(normalizeHelpVideoLocale("en")).toBeNull()
   })
 

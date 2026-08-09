@@ -12,7 +12,8 @@
  *    runs 25-30 min).
  *  - LOCALE: Azerbaijani only; routes are locale-prefixed (`/az/...`).
  *  - SCENARIOS: video/scenarios/overrides.mjs ONLY (no browser-guided.json).
- *  - No product tours / help widget in LeadShelf → no dismiss/collapse logic.
+ *  - HELP UI: hides both the ported in-flow widget and the legacy production
+ *    launcher so a guide never records its own help controls.
  *  - Helpers gain `ensureCursor()` — scenes navigate by real clicks and must
  *    re-inject the cursor overlay after each navigation.
  *
@@ -96,6 +97,9 @@ const viewport = { ...videoSize };
 // recording, so hide the explicit widget hook ported with the launcher.
 const GUIDE_CSS = [
   "[data-help-video-widget]{display:none!important}",
+  "header button.border-indigo-200.bg-indigo-50,aside.fixed.bottom-4.right-4.z-50{display:none!important}",
+  "html:after{content:'';position:fixed;z-index:2147483644;left:0;right:0;bottom:0;height:10px;pointer-events:none;background:#1d4ed8;animation:ldGuideMotionGuard 3s steps(1,end) infinite;}",
+  "@keyframes ldGuideMotionGuard{0%,49%{background:#1d4ed8}50%,100%{background:#bfdbfe}}",
   "#ld-pilot-cursor{position:fixed;z-index:2147483647;width:28px;height:28px;left:0;top:0;pointer-events:none;transform:translate(-100px,-100px);transition:transform .12s linear;filter:drop-shadow(0 10px 14px rgba(15,23,42,.25));}",
   "#ld-pilot-cursor:before{content:'';position:absolute;left:7px;top:1px;width:0;height:0;border-right:18px solid transparent;border-bottom:25px solid #fff;transform:rotate(-24deg);}",
   "#ld-pilot-cursor:after{content:'';position:absolute;left:8px;top:3px;width:0;height:0;border-right:13px solid transparent;border-bottom:19px solid #111827;transform:rotate(-24deg);}",
@@ -197,7 +201,10 @@ async function produceLanguage(lang) {
   // 2) Login once, then record; the session is re-freshed between scenes.
   const api = await request.newContext({ baseURL: baseUrl });
   await loginWithRetry(api);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+  });
   const context = await browser.newContext({
     storageState: await api.storageState(),
     viewport,

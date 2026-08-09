@@ -59,13 +59,13 @@ const OV_FLOW_REVIEW = ["main a[href$='/reviews']"];
 
 // ── catalog ──────────────────────────────────────────────────────────────────
 const CAT_SEARCH = ["main input[name='q']"];
-const CAT_CREATE_FORM = ["[data-tour-id='catalog-create-form']"];
-const CAT_CREATE_SKU_STABLE = ["[data-tour-id='catalog-create-sku']"];
-const CAT_CREATE_NAME_STABLE = ["[data-tour-id='catalog-create-name']"];
-const CAT_CREATE_BARCODE_STABLE = ["[data-tour-id='catalog-create-barcode']"];
-const CAT_CREATE_SUBMIT_STABLE = ["[data-tour-id='catalog-create-submit']"];
-const CAT_FILTERS = ["[data-tour-id='catalog-filters']"];
-const CAT_TABLE = ["[data-tour-id='catalog-table']"];
+const CAT_CREATE_FORM = ["[data-tour-id='catalog-create-form']", "main form:has(input[placeholder='SKU'])"];
+const CAT_CREATE_SKU_STABLE = ["[data-tour-id='catalog-create-sku']", "main form input[placeholder='SKU']"];
+const CAT_CREATE_NAME_STABLE = ["[data-tour-id='catalog-create-name']", "main form input[placeholder='Ad']"];
+const CAT_CREATE_BARCODE_STABLE = ["[data-tour-id='catalog-create-barcode']", "main form input[placeholder='Barkod']"];
+const CAT_CREATE_SUBMIT_STABLE = ["[data-tour-id='catalog-create-submit']", "main form:has(input[placeholder='SKU']) button"];
+const CAT_FILTERS = ["[data-tour-id='catalog-filters']", "main form:has(input[name='q'])"];
+const CAT_TABLE = ["[data-tour-id='catalog-table']", "main table"];
 const CAT_FILTER_DIMS = [
   "main label:has-text('Ölçüsüz')", "main label:has-text('Без размеров')",
   "main input[name='missingDimensions']",
@@ -81,16 +81,16 @@ const CAT_CREATE_NAME = ["main input[placeholder='Ad']", "main input[placeholder
 const CAT_CREATE_BTN = ["main button:has-text('Məhsul yarat')", "main button:has-text('Создать товар')"]; // hover only
 const CAT_TAB_IMPORT = ["main a:has-text('İdxal')", "main a:has-text('Импорт')"];
 const CAT_TAB_QUALITY = ["main a:has-text('Data keyfiyyəti')", "main a:has-text('Качество данных')"];
-const CAT_TAB_PRODUCTS_STABLE = ["[data-tour-id='catalog-tab-products']"];
-const CAT_TAB_IMPORT_STABLE = ["[data-tour-id='catalog-tab-import']"];
-const CAT_TAB_QUALITY_STABLE = ["[data-tour-id='catalog-tab-quality']"];
-const CAT_IMPORT_FORM = ["[data-tour-id='catalog-import-form']"];
-const CAT_IMPORT_ENTITY = ["[data-tour-id='catalog-import-entity']"];
-const CAT_IMPORT_ENCODING = ["[data-tour-id='catalog-import-encoding']"];
-const CAT_IMPORT_FILE = ["[data-tour-id='catalog-import-file']"];
-const CAT_IMPORT_SUBMIT = ["[data-tour-id='catalog-import-submit']"];
-const CAT_QUALITY_CARDS = ["[data-tour-id='catalog-quality-cards']"];
-const CAT_QUALITY_IMPORTS = ["[data-tour-id='catalog-quality-imports']"];
+const CAT_TAB_PRODUCTS_STABLE = ["[data-tour-id='catalog-tab-products']", "main a[href$='/catalog']"];
+const CAT_TAB_IMPORT_STABLE = ["[data-tour-id='catalog-tab-import']", "main a[href$='/catalog/import']"];
+const CAT_TAB_QUALITY_STABLE = ["[data-tour-id='catalog-tab-quality']", "main a[href$='/catalog/quality']"];
+const CAT_IMPORT_FORM = ["[data-tour-id='catalog-import-form']", "main form:has(input[name='file'])"];
+const CAT_IMPORT_ENTITY = ["[data-tour-id='catalog-import-entity']", "main select[name='entityType']"];
+const CAT_IMPORT_ENCODING = ["[data-tour-id='catalog-import-encoding']", "main select[name='encoding']"];
+const CAT_IMPORT_FILE = ["[data-tour-id='catalog-import-file']", "main input[name='file']"];
+const CAT_IMPORT_SUBMIT = ["[data-tour-id='catalog-import-submit']", "main form:has(input[name='file']) button[type='submit']"];
+const CAT_QUALITY_CARDS = ["[data-tour-id='catalog-quality-cards']", "main a[href*='missingDimensions']"];
+const CAT_QUALITY_IMPORTS = ["[data-tour-id='catalog-quality-imports']", "main h2 + div", "main table"];
 
 // ── equipment ────────────────────────────────────────────────────────────────
 const EQ_NEW = [
@@ -1019,11 +1019,11 @@ scenarios.catalog = {
         az: "Ölçünü düzəltmək üçün məhsulun sətrindəki ölçü xanasına klik edirəm. Dörd kiçik sahə açılır: en, hündürlük, dərinlik və çəki. Dəyərlər canonical olaraq millimetr və qramla saxlanır; buna görə avadanlıq və planoqram riyaziyyatı eyni vahidlərlə işləyir. Dəyişikliyi nümayiş etdirdim, amma saxlamıram. «Ləğv et» düyməsi sətri əvvəlki vəziyyətinə qaytarır.",
       },
       do: async (page, lang, h) => {
-        await h.click(["[data-tour-id='catalog-dimensions-edit']"]);
+        await h.click(["[data-tour-id='catalog-dimensions-edit']", "main button[title='Ölçüləri düzəlt']"]);
         await h.holdUntil(0.38);
         await h.moveTo(["main input[type='number']"]);
         await h.holdUntil(0.68);
-        await h.click(["[data-tour-id='catalog-dimensions-cancel']"]);
+        await h.click(["[data-tour-id='catalog-dimensions-cancel']", "main button:has-text('Ləğv et')"]);
         await h.holdUntil(0.88);
       },
     },
@@ -1032,13 +1032,13 @@ scenarios.catalog = {
         az: "Cədvəldə foto, SKU, ad, əsas barkod, kateqoriya, brend, təchizatçı, istehsalçı, ölçü vahidi və fiziki ölçülər bir sətirdə görünür. Bu məlumatın bütövlüyü vacibdir: foto mobil yoxlamada tanınmanı asanlaşdırır, barkod agentə skan etməyə imkan verir, kateqoriya və brend avtomatik yerləşdirmə qaydalarını qidalandırır, ölçülər isə rəfin real tutumunu hesablayır. Sağdakı redaktə əməliyyatları da məhsulu silmədən yeniləmək üçündür.",
       },
       do: async (page, lang, h) => {
-        await h.moveTo(["[data-tour-id='catalog-table'] thead"]);
+        await h.moveTo(["[data-tour-id='catalog-table'] thead", "main table thead"]);
         await h.holdUntil(0.3);
-        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:first-child"]);
+        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:first-child", "main table tbody tr:first-child td:first-child"]);
         await h.holdUntil(0.55);
-        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:nth-last-child(3)"]);
+        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:nth-last-child(3)", "main table tbody tr:first-child td:nth-last-child(3)"]);
         await h.holdUntil(0.75);
-        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:last-child"]);
+        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:last-child", "main table tbody tr:first-child td:last-child"]);
         await h.holdUntil(0.9);
       },
     },
