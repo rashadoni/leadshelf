@@ -49,7 +49,8 @@ tags:
     duration: 800
 - assertVisible: "Mobil video bələdçisi — yekun 1902 marşrut"
 - takeScreenshot: mobile-guide-01-route
-- tapOn: "Check-in"
+- tapOn:
+    point: "84%,61%"
 - extendedWaitUntil:
     visible: "Vizit icradadır"
     timeout: 30000
@@ -59,7 +60,7 @@ tags:
     direction: DOWN
 - tapOn: "Viziti aç"
 - extendedWaitUntil:
-    visible: "Mobil video bələdçisi — yekun flow"
+    visible: "Bu nöqtənin tapşırıqları"
     timeout: 30000
 - scrollUntilVisible:
     element: "Mobil video bələdçisi — yekun flow"
