@@ -15,6 +15,7 @@ export async function CatalogTabs({ active }: { active: (typeof TABS)[number]["k
         <Link
           key={tab.key}
           href={tab.href}
+          data-tour-id={`catalog-tab-${tab.key}`}
           className={`-mb-px border-b-2 px-4 py-2 text-sm ${
             tab.key === active
               ? "border-neutral-900 font-medium text-neutral-900"

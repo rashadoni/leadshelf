@@ -31,6 +31,7 @@ export function DimensionsEditor({ productId, dims }: { productId: string; dims:
     return (
       <button
         onClick={() => setEditing(true)}
+        data-tour-id="catalog-dimensions-edit"
         title={t("edit")}
         className={`rounded px-2 py-1 text-xs hover:bg-neutral-100 ${
           hasDims ? "text-neutral-700" : "text-amber-600"
@@ -93,6 +94,7 @@ export function DimensionsEditor({ productId, dims }: { productId: string; dims:
       </button>
       <button
         onClick={() => setEditing(false)}
+        data-tour-id="catalog-dimensions-cancel"
         className="rounded px-2 py-1 text-xs text-neutral-500"
       >
         {t("cancel")}

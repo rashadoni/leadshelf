@@ -59,6 +59,13 @@ const OV_FLOW_REVIEW = ["main a[href$='/reviews']"];
 
 // ── catalog ──────────────────────────────────────────────────────────────────
 const CAT_SEARCH = ["main input[name='q']"];
+const CAT_CREATE_FORM = ["[data-tour-id='catalog-create-form']"];
+const CAT_CREATE_SKU_STABLE = ["[data-tour-id='catalog-create-sku']"];
+const CAT_CREATE_NAME_STABLE = ["[data-tour-id='catalog-create-name']"];
+const CAT_CREATE_BARCODE_STABLE = ["[data-tour-id='catalog-create-barcode']"];
+const CAT_CREATE_SUBMIT_STABLE = ["[data-tour-id='catalog-create-submit']"];
+const CAT_FILTERS = ["[data-tour-id='catalog-filters']"];
+const CAT_TABLE = ["[data-tour-id='catalog-table']"];
 const CAT_FILTER_DIMS = [
   "main label:has-text('Ölçüsüz')", "main label:has-text('Без размеров')",
   "main input[name='missingDimensions']",
@@ -74,6 +81,16 @@ const CAT_CREATE_NAME = ["main input[placeholder='Ad']", "main input[placeholder
 const CAT_CREATE_BTN = ["main button:has-text('Məhsul yarat')", "main button:has-text('Создать товар')"]; // hover only
 const CAT_TAB_IMPORT = ["main a:has-text('İdxal')", "main a:has-text('Импорт')"];
 const CAT_TAB_QUALITY = ["main a:has-text('Data keyfiyyəti')", "main a:has-text('Качество данных')"];
+const CAT_TAB_PRODUCTS_STABLE = ["[data-tour-id='catalog-tab-products']"];
+const CAT_TAB_IMPORT_STABLE = ["[data-tour-id='catalog-tab-import']"];
+const CAT_TAB_QUALITY_STABLE = ["[data-tour-id='catalog-tab-quality']"];
+const CAT_IMPORT_FORM = ["[data-tour-id='catalog-import-form']"];
+const CAT_IMPORT_ENTITY = ["[data-tour-id='catalog-import-entity']"];
+const CAT_IMPORT_ENCODING = ["[data-tour-id='catalog-import-encoding']"];
+const CAT_IMPORT_FILE = ["[data-tour-id='catalog-import-file']"];
+const CAT_IMPORT_SUBMIT = ["[data-tour-id='catalog-import-submit']"];
+const CAT_QUALITY_CARDS = ["[data-tour-id='catalog-quality-cards']"];
+const CAT_QUALITY_IMPORTS = ["[data-tour-id='catalog-quality-imports']"];
 
 // ── equipment ────────────────────────────────────────────────────────────────
 const EQ_NEW = [
@@ -178,7 +195,7 @@ const settleNav = async (page, h) => {
   await h.ensureCursor();
 };
 
-export default {
+const scenarios = {
   overview: {
     route: "/",
     title: { az: "LeadShelf — tam dövrə: kataloqdan yoxlanılmış rəfə", ru: "LeadShelf — полный цикл: от каталога до проверенной полки" },
@@ -925,3 +942,166 @@ export default {
     ],
   },
 };
+
+// First per-section guide. It is intentionally independent from the legacy
+// full-cycle film above: it starts on the real catalog route, uses stable
+// data-tour-id anchors, demonstrates all three catalog tabs, and never saves.
+scenarios.catalog = {
+  route: "/catalog",
+  title: { az: "Məhsul kataloqu: gündəlik iş və data keyfiyyəti" },
+  scenes: [
+    {
+      voice: {
+        az: "Məhsul kataloqu LeadShelf-də bütün sonrakı işlərin başlanğıc nöqtəsidir. Buradakı real məhsul kartları avadanlıq konstruktorda, planoqramda, mobil tapşırıqda və analitikada eyni identifikatorla istifadə olunur. Ekranın yuxarısında yeni məhsul forması, onun altında axtarış və keyfiyyət filtrləri, daha aşağıda isə demo təşkilatının canlı məhsul cədvəli görünür. Əvvəlcə ekranın quruluşunu nəzərdən keçirək.",
+      },
+      do: async (page, lang, h) => {
+        await h.moveTo(["main h1"]);
+        await h.holdUntil(0.25);
+        await h.moveTo(CAT_CREATE_FORM);
+        await h.holdUntil(0.48);
+        await h.moveTo(CAT_FILTERS);
+        await h.holdUntil(0.68);
+        await h.moveTo(CAT_TABLE);
+        await h.holdUntil(0.88);
+      },
+    },
+    {
+      voice: {
+        az: "Yeni məhsul əlavə etmək üçün ayrıca pəncərə axtarmaq lazım deyil. Nümunə kimi SKU, məhsul adı və barkod sahələrini doldururam. Sonrakı sətirdə kateqoriya, brend, təchizatçı, istehsalçı və qablaşdırmanın millimetrlə ölçüləri seçilir. Yumşaq qablaşdırma işarəsi avtomatik sıxılma qaydalarında istifadə olunur. «Məhsul yarat» düyməsini yalnız göstərirəm; bu təlimatda heç nə saxlanılmır.",
+      },
+      do: async (page, lang, h) => {
+        await h.fill(CAT_CREATE_SKU_STABLE, "GUIDE-SKU-001");
+        await h.holdUntil(0.28);
+        await h.fill(CAT_CREATE_NAME_STABLE, "Nümunə məhsul");
+        await h.holdUntil(0.5);
+        await h.fill(CAT_CREATE_BARCODE_STABLE, "4760000000012");
+        await h.holdUntil(0.7);
+        await h.moveTo(CAT_CREATE_SUBMIT_STABLE);
+        await h.holdUntil(0.9);
+      },
+    },
+    {
+      voice: {
+        az: "İndi səhifəni ilkin vəziyyətə qaytardım və axtarışı real məlumat üzərində yoxlayıram. Axtarış sahəsi məhsul adı, SKU və barkodun başlanğıcı ilə işləyir. Məsələn, Pepsi yazıb «Tətbiq et» düyməsinə basdıqda server yalnız uyğun kartları qaytarır. Bu, minlərlə SKU olan kataloqda lazımi məhsulu tez tapmağa imkan verir. Sonra «Sıfırla» ilə bütün axtarış şərtlərini təmizləyirəm.",
+      },
+      do: async (page, lang, h) => {
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await settleNav(page, h);
+        await h.fill(CAT_SEARCH, "Pepsi");
+        await h.holdUntil(0.35);
+        await h.click(CAT_APPLY);
+        await settleNav(page, h);
+        await h.holdUntil(0.68);
+        await h.moveTo(CAT_TABLE);
+        await h.holdUntil(0.82);
+        await h.click(CAT_RESET);
+        await settleNav(page, h);
+      },
+    },
+    {
+      voice: {
+        az: "Kataloq sadəcə siyahı deyil, master-data nəzarət ekranıdır. «Ölçüsüz» filtrini seçib tətbiq edirəm. Nəticədə yalnız eni, hündürlüyü və ya dərinliyi çatışmayan məhsullar qalır. Belə SKU planoqrama təhlükəsiz yerləşdirilə bilməz, çünki sistem onun rəfə sığıb-sığmadığını hesablaya bilmir. Eyni qayda barkodsuz və şəkilsiz kartlar üçün də var. Filtrlər problemi gizlətmir, düzəldiləcək iş siyahısına çevirir.",
+      },
+      do: async (page, lang, h) => {
+        await h.click(CAT_FILTER_DIMS);
+        await h.holdUntil(0.3);
+        await h.click(CAT_APPLY);
+        await settleNav(page, h);
+        await h.holdUntil(0.62);
+        await h.moveTo(CAT_TABLE);
+        await h.holdUntil(0.82);
+        await h.click(CAT_RESET);
+        await settleNav(page, h);
+      },
+    },
+    {
+      voice: {
+        az: "Ölçünü düzəltmək üçün məhsulun sətrindəki ölçü xanasına klik edirəm. Dörd kiçik sahə açılır: en, hündürlük, dərinlik və çəki. Dəyərlər canonical olaraq millimetr və qramla saxlanır; buna görə avadanlıq və planoqram riyaziyyatı eyni vahidlərlə işləyir. Dəyişikliyi nümayiş etdirdim, amma saxlamıram. «Ləğv et» düyməsi sətri əvvəlki vəziyyətinə qaytarır.",
+      },
+      do: async (page, lang, h) => {
+        await h.click(["[data-tour-id='catalog-dimensions-edit']"]);
+        await h.holdUntil(0.38);
+        await h.moveTo(["main input[type='number']"]);
+        await h.holdUntil(0.68);
+        await h.click(["[data-tour-id='catalog-dimensions-cancel']"]);
+        await h.holdUntil(0.88);
+      },
+    },
+    {
+      voice: {
+        az: "Cədvəldə foto, SKU, ad, əsas barkod, kateqoriya, brend, təchizatçı, istehsalçı, ölçü vahidi və fiziki ölçülər bir sətirdə görünür. Bu məlumatın bütövlüyü vacibdir: foto mobil yoxlamada tanınmanı asanlaşdırır, barkod agentə skan etməyə imkan verir, kateqoriya və brend avtomatik yerləşdirmə qaydalarını qidalandırır, ölçülər isə rəfin real tutumunu hesablayır. Sağdakı redaktə əməliyyatları da məhsulu silmədən yeniləmək üçündür.",
+      },
+      do: async (page, lang, h) => {
+        await h.moveTo(["[data-tour-id='catalog-table'] thead"]);
+        await h.holdUntil(0.3);
+        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:first-child"]);
+        await h.holdUntil(0.55);
+        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:nth-last-child(3)"]);
+        await h.holdUntil(0.75);
+        await h.moveTo(["[data-tour-id='catalog-table'] tbody tr:first-child td:last-child"]);
+        await h.holdUntil(0.9);
+      },
+    },
+    {
+      voice: {
+        az: "Çoxlu məhsulu əl ilə yaratmaq əvəzinə «İdxal» vərəqinə keçirəm. Burada məhsullar, qiymətlər, qalıqlar, satışlar və assortiment üçün ayrı import növləri var. Mənbə UTF-8 və ya bir çox 1C ixracında istifadə olunan Windows-1251 kodlaşdırmasında ola bilər. Sistem CSV və XLSX faylını staging qatından keçirir, hər sətri sayır və səhvləri ayrıca saxlayır. Fayl seçmədən və göndərmədən formanın quruluşunu göstərirəm.",
+      },
+      do: async (page, lang, h) => {
+        await h.click(CAT_TAB_IMPORT_STABLE);
+        await settleNav(page, h);
+        await h.holdUntil(0.34);
+        await h.moveTo(CAT_IMPORT_ENTITY);
+        await h.holdUntil(0.52);
+        await h.moveTo(CAT_IMPORT_ENCODING);
+        await h.holdUntil(0.68);
+        await h.moveTo(CAT_IMPORT_FILE);
+        await h.holdUntil(0.82);
+        await h.moveTo(CAT_IMPORT_SUBMIT);
+        await h.holdUntil(0.9);
+      },
+    },
+    {
+      voice: {
+        az: "İdxal bitəndə nəticə bloku ümumi, uğurlu və səhv sətirlərin sayını göstərir. Reconciliation yoxlaması mənbə checksum-u ilə qəbul edilən sətirləri tutuşdurur; heç bir sətir səssizcə itmir. Səhv varsa, sətir nömrəsi, sahə, səbəb və təklif olunan düzəliş cədvəldə qalır. Bu yanaşma gündəlik ERP mübadiləsinin tam və təkrarolunan olmasını yoxlamağa imkan verir. İndi «Data keyfiyyəti» vərəqinə keçirəm.",
+      },
+      do: async (page, lang, h) => {
+        await h.moveTo(CAT_IMPORT_FORM);
+        await h.holdUntil(0.45);
+        await h.moveTo(CAT_IMPORT_SUBMIT);
+        await h.holdUntil(0.7);
+        await h.click(CAT_TAB_QUALITY_STABLE);
+        await settleNav(page, h);
+        await h.holdUntil(0.9);
+      },
+    },
+    {
+      voice: {
+        az: "Data keyfiyyəti ekranındakı kartlar demo tenantın real vəziyyətini xülasə edir: ümumi məhsul sayı, planoqrama hazır kartlar, ölçüsü, barkodu, şəkli və ya kateqoriyası çatışmayanlar. Problem kartına klik kataloqa uyğun filtrlə qayıdır. Aşağıdakı tarixçə son import paketlərini, statusu, ümumi və səhv sətir sayını göstərir. Beləliklə, menecer səhər bir baxışda gecə mübadiləsinin tam olub-olmadığını anlayır.",
+      },
+      do: async (page, lang, h) => {
+        await h.moveTo(CAT_QUALITY_CARDS);
+        await h.holdUntil(0.5);
+        await h.moveTo(CAT_QUALITY_IMPORTS);
+        await h.holdUntil(0.88);
+      },
+    },
+    {
+      voice: {
+        az: "Kataloq üzrə əsas gündəlik ardıcıllıq budur: əvvəl import nəticəsini və checksum-u yoxlayın, sonra data keyfiyyəti kartlarından çatışmazlıqları açın, ölçü və master-data səhvlərini düzəldin, yalnız bundan sonra məhsulları planoqramda istifadə edin. Məhsullar vərəqinə qayıdıram. Bu təlimatda heç bir kart yaradılmadı, dəyişdirilmədi və silinmədi; göstərilən bütün əməliyyatlar təhlükəsiz baxış və ləğv ilə tamamlandı.",
+      },
+      do: async (page, lang, h) => {
+        await h.moveTo(CAT_QUALITY_CARDS);
+        await h.holdUntil(0.3);
+        await h.click(CAT_TAB_PRODUCTS_STABLE);
+        await settleNav(page, h);
+        await h.holdUntil(0.62);
+        await h.moveTo(CAT_FILTERS);
+        await h.holdUntil(0.78);
+        await h.moveTo(CAT_TABLE);
+        await h.holdUntil(0.9);
+      },
+    },
+  ],
+};
+
+export default scenarios;

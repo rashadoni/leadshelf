@@ -1,241 +1,195 @@
 "use client"
 
-/**
- * Floating help-video launcher (ported from leaddrive-v2, trimmed to
- * LeadShelf's plain-tailwind style and az/ru locales).
- *
- * Shows a small poster thumbnail bottom-right; click → expanded player with
- * the section's guide video served by /api/help-videos. Dismissal is stored
- * per slug+locale in localStorage. The header button (help-video-button.tsx)
- * dispatches `leadshelf:open-help-video` to (re)open it even when dismissed.
- *
- * v1: every section maps to the "overview" full-cycle film; extend
- * VIDEO_BY_SECTION as per-section videos are recorded.
- */
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useLocale } from "next-intl"
 import { Minimize2, Play, Video, X } from "lucide-react"
 import { usePathname } from "@/i18n/navigation"
-
-const VIDEO_BY_SECTION: Record<string, string> = {
-  // "/catalog": "catalog", …per-section films land here later
-}
-const DEFAULT_SLUG = "overview"
-
-const LABELS = {
-  az: {
-    eyebrow: "Video bələdçi",
-    title: "LeadShelf — tam dövrə turu",
-    subtitle: "Lazım olanda açın — iş ekranını örtmür.",
-    play: "Videonu aç",
-    minimize: "Kiçilt",
-    close: "Bağla",
-    dismissTitle: "Videonu bir daha göstərməyək?",
-    dismissBody: "«Bəli» seçsəniz, videonu yuxarıdakı «Video bələdçi» düyməsi ilə yenidən aça bilərsiniz.",
-    dismissYes: "Bəli",
-    dismissNo: "Xeyr",
-  },
-  ru: {
-    eyebrow: "Видео-гид",
-    title: "LeadShelf — тур по полному циклу",
-    subtitle: "Откройте при необходимости — рабочий экран не перекрывается.",
-    play: "Открыть видео",
-    minimize: "Свернуть",
-    close: "Закрыть",
-    dismissTitle: "Больше не показывать видео?",
-    dismissBody: "Если выбрать «Да», видео всегда можно открыть кнопкой «Видео-гид» в шапке.",
-    dismissYes: "Да",
-    dismissNo: "Нет",
-  },
-} as const
+import {
+  getHelpVideoAsset,
+  getHelpVideoForPath,
+  normalizeHelpVideoLocale,
+} from "@/content/help/video-assets"
 
 type VideoMode = "expanded" | "thumbnail" | "hidden"
 
-function slugForPath(pathname: string | null): string {
-  if (!pathname) return DEFAULT_SLUG
-  const seg = `/${pathname.split("/").filter(Boolean)[0] ?? ""}`
-  return VIDEO_BY_SECTION[seg] ?? DEFAULT_SLUG
-}
+const LABELS = {
+  eyebrow: "Video bələdçi",
+  subtitle: "Real addımları və nümunə məlumatları videoda izləyin.",
+  play: "Videonu aç",
+  minimize: "Kiçilt",
+  close: "Bağla",
+  unavailable: "Video hazırda açıla bilmir.",
+} as const
 
-function storageKey(slug: string, locale: string) {
-  return `ls_help_video:v1:${slug}:${locale}`
+function storageKey(slug: string) {
+  return `ls_help_video:v2:${slug}:az`
 }
 
 export function HelpVideoLauncher() {
   const pathname = usePathname()
-  const rawLocale = useLocale()
-  const locale = rawLocale === "ru" ? "ru" : "az"
-  const labels = LABELS[locale]
-  const slug = slugForPath(pathname)
-  const key = storageKey(slug, locale)
-
-  // hidden until mounted: localStorage is browser-only, SSR must not flash.
+  const locale = normalizeHelpVideoLocale(useLocale())
+  const entry = useMemo(
+    () => (locale ? getHelpVideoForPath(pathname, locale) : null),
+    [locale, pathname],
+  )
+  const assets = entry && locale ? getHelpVideoAsset(entry, locale) : null
+  const key = entry ? storageKey(entry.slug) : null
   const [mode, setMode] = useState<VideoMode>("hidden")
-  const [confirming, setConfirming] = useState(false)
-  const [videoFailed, setVideoFailed] = useState(false)
   const [posterFailed, setPosterFailed] = useState(false)
+  const [videoFailed, setVideoFailed] = useState(false)
 
   useEffect(() => {
+    if (!key) {
+      setMode("hidden")
+      return
+    }
     try {
-      const dismissed = window.localStorage.getItem(key) === "dismissed"
-      setMode(dismissed ? "hidden" : "thumbnail")
+      setMode(window.localStorage.getItem(key) === "dismissed" ? "hidden" : "thumbnail")
     } catch {
       setMode("thumbnail")
     }
-    setConfirming(false)
-    setVideoFailed(false)
     setPosterFailed(false)
+    setVideoFailed(false)
   }, [key])
 
   useEffect(() => {
     function handleOpen() {
-      setConfirming(false)
-      setMode("expanded")
+      if (entry) setMode("expanded")
     }
     window.addEventListener("leadshelf:open-help-video", handleOpen)
     return () => window.removeEventListener("leadshelf:open-help-video", handleOpen)
-  }, [])
+  }, [entry])
 
-  if (mode === "hidden") return null
+  if (!entry || !assets || mode === "hidden") return null
 
-  const videoSrc = `/api/help-videos/${slug}.${locale}.VOICE.mp4`
-  const posterSrc = `/api/help-videos/${slug}.${locale}.poster.jpg`
-
-  function dismiss() {
-    try {
-      window.localStorage.setItem(key, "dismissed")
-    } catch {}
-    setConfirming(false)
+  function close() {
+    if (key) {
+      try {
+        window.localStorage.setItem(key, "dismissed")
+      } catch {}
+    }
     setMode("hidden")
   }
-
-  function hideForNow() {
-    setConfirming(false)
-    setMode("hidden")
-  }
-
-  const closeConfirmation = (
-    <div className="border-t border-neutral-200 bg-neutral-50 px-3 py-3">
-      <p className="text-xs font-semibold text-neutral-900">{labels.dismissTitle}</p>
-      <p className="mt-1 text-[11px] leading-4 text-neutral-500">{labels.dismissBody}</p>
-      <div className="mt-3 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={hideForNow}
-          className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-100"
-        >
-          {labels.dismissNo}
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs text-white hover:bg-neutral-700"
-        >
-          {labels.dismissYes}
-        </button>
-      </div>
-    </div>
-  )
 
   if (mode === "thumbnail") {
     return (
-      <aside className="fixed bottom-4 right-4 z-50 w-[min(220px,calc(100vw-2rem))]">
-        <div className="group overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl">
-          <button
-            type="button"
-            onClick={() => setMode("expanded")}
-            className="relative block aspect-video w-full overflow-hidden text-left"
-            aria-label={labels.play}
-          >
-            {posterFailed ? (
-              <span className="flex h-full w-full items-center justify-center bg-neutral-100 text-indigo-600">
-                <Video className="h-7 w-7" />
+      <aside className="mb-4" data-help-video-widget>
+        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 p-3 sm:gap-4">
+            <button
+              type="button"
+              onClick={() => setMode("expanded")}
+              className="group relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg bg-neutral-100 text-left sm:w-40"
+              aria-label={LABELS.play}
+            >
+              {posterFailed ? (
+                <span className="flex h-full w-full items-center justify-center text-indigo-600">
+                  <Video className="h-6 w-6" />
+                </span>
+              ) : (
+                <img
+                  src={assets.posterSrc}
+                  alt=""
+                  className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.03]"
+                  onError={() => setPosterFailed(true)}
+                />
+              )}
+              <span className="absolute inset-0 bg-black/15 transition group-hover:bg-black/25" />
+              <span className="absolute inset-0 flex items-center justify-center">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-neutral-950 shadow-sm">
+                  <Play className="h-4 w-4 fill-current" />
+                </span>
               </span>
-            ) : (
-              <img
-                src={posterSrc}
-                alt=""
-                onError={() => setPosterFailed(true)}
-                className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
-              />
-            )}
-            <span className="absolute inset-0 bg-black/20" aria-hidden="true" />
-            <span className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-neutral-900 shadow-sm">
-              <Play className="h-4 w-4 fill-current" />
-            </span>
-          </button>
-          {confirming ? (
-            closeConfirmation
-          ) : (
-            <div className="flex items-center justify-between gap-2 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold leading-4">{labels.eyebrow}</p>
-                <p className="line-clamp-2 break-words text-[11px] leading-4 text-neutral-500">{labels.title}</p>
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600">
+                <Video className="h-3.5 w-3.5" />
+                <span>{LABELS.eyebrow}</span>
               </div>
+              <p className="mt-0.5 truncate text-sm font-semibold">{entry.title}</p>
+              <p className="mt-0.5 hidden truncate text-xs text-neutral-500 sm:block">{LABELS.subtitle}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                onClick={() => setConfirming(true)}
-                aria-label={labels.close}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                onClick={() => setMode("expanded")}
+                className="hidden h-8 items-center gap-1.5 rounded-md border border-neutral-300 px-3 text-xs font-medium hover:bg-neutral-50 sm:inline-flex"
               >
-                <X className="h-3.5 w-3.5" />
+                <Play className="h-3.5 w-3.5 fill-current" />
+                {LABELS.play}
+              </button>
+              <button
+                type="button"
+                onClick={close}
+                aria-label={LABELS.close}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
+              >
+                <X className="h-4 w-4" />
               </button>
             </div>
-          )}
+          </div>
         </div>
       </aside>
     )
   }
 
   return (
-    <aside className="fixed bottom-5 right-5 z-50 w-[min(640px,calc(100vw-2rem))]">
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${LABELS.eyebrow}: ${entry.title}`}
+      onClick={() => setMode("thumbnail")}
+    >
+      <div
+        className="w-[min(960px,100%)] overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-4 py-3">
           <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-indigo-600">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
               <Video className="h-3.5 w-3.5" />
-              <span>{labels.eyebrow}</span>
+              <span>{LABELS.eyebrow}</span>
             </div>
-            <h2 className="line-clamp-2 break-words text-sm font-semibold leading-5">{labels.title}</h2>
-            <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">{labels.subtitle}</p>
+            <h2 className="mt-1 text-sm font-semibold">{entry.title}</h2>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setMode("thumbnail")}
-              aria-label={labels.minimize}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+              aria-label={LABELS.minimize}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
             >
               <Minimize2 className="h-4 w-4" />
             </button>
             <button
               type="button"
-              onClick={() => setConfirming(true)}
-              aria-label={labels.close}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+              onClick={close}
+              aria-label={LABELS.close}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
-        {confirming ? closeConfirmation : null}
         {videoFailed ? (
-          <div className="flex aspect-video max-h-[60vh] w-full items-center justify-center bg-neutral-100 px-6 text-center text-sm text-neutral-500">
-            {locale === "az" ? "Video hələ yüklənməyib." : "Видео ещё не загружено."}
+          <div className="flex aspect-video max-h-[75vh] items-center justify-center bg-neutral-100 px-6 text-center text-sm text-neutral-600">
+            {LABELS.unavailable}
           </div>
         ) : (
           <video
-            key={`${slug}.${locale}`}
-            className="aspect-video max-h-[60vh] w-full bg-neutral-950"
+            key={`${entry.slug}.az`}
+            className="aspect-video max-h-[75vh] w-full bg-neutral-950"
             controls
+            autoPlay
             playsInline
             preload="metadata"
-            poster={posterFailed ? undefined : posterSrc}
-            src={videoSrc}
+            poster={posterFailed ? undefined : assets.posterSrc}
+            src={assets.videoSrc}
             onError={() => setVideoFailed(true)}
           />
         )}
       </div>
-    </aside>
+    </div>
   )
 }

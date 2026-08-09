@@ -1,8 +1,6 @@
-# Delivers help-guide videos (recorder output, too heavy for git) to the prod
-# host. Flow: `gh release create help-videos-vN *.mp4 *.jpg` → this workflow
-# downloads the release assets and scp's them to /opt/leadshelf/prod/
-# help-videos/player, which deploy/docker-compose.prod.yml mounts read-only
-# into the web container (HELP_VIDEO_ASSET_DIR). Re-runnable: assets overwrite.
+# Legacy/manual delivery path for an owner-approved Azerbaijani media release.
+# Normal production deploys copy git-tracked video/player assets atomically
+# with the UI and generated availability manifest.
 name: Deploy help videos
 
 on:
@@ -21,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: deploy-help-videos
     steps:
+      - name: Checkout validation scripts
+        uses: actions/checkout@v4
+
       - name: Download release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -30,7 +31,7 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
           ls -la assets
 
-      - name: Validate exact bilingual media package
+      - name: Validate Azerbaijani media package
         run: scripts/validate-help-video-assets.sh assets
 
       - name: Upload to leadshelf-1

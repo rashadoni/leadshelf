@@ -28,9 +28,8 @@ services:
     environment:
       # Client production must never enable demo DB probes or synthetic media.
       LEADSHELF_RUNTIME_PROFILE: client
-      # Help-guide videos live OUTSIDE the image (too heavy for git/registry):
-      # recorder output is rsync'ed to /opt/leadshelf/prod/help-videos/player
-      # and mounted read-only below; /api/help-videos streams from this dir.
+      # Reviewed help-guide assets are copied from the approved git release to
+      # /opt/leadshelf/prod/help-videos/player and mounted read-only below.
       HELP_VIDEO_ASSET_DIR: /help-videos/player
     expose:
       - "3000"

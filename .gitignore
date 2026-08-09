@@ -26,7 +26,7 @@ apps/mobile/CLAUDE.md
 apps/mobile/LICENSE
 package-lock.json
 
-# help-video pipeline artifacts (heavy media lives on the prod server, not in git)
-video/player/
+# Recorder intermediates stay local. Approved final player assets are tracked
+# so a reviewed release and its UI manifest always ship atomically.
 video/.tmp-guides/
 .artifacts/

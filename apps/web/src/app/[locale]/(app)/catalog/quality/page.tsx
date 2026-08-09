@@ -50,7 +50,7 @@ export default async function CatalogQualityPage() {
       <h1 className="mb-4 text-2xl font-semibold">{tNav("catalog")}</h1>
       <CatalogTabs active="quality" />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div data-tour-id="catalog-quality-cards" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {cards.map((c) => (
           <Link
             key={c.label}
@@ -64,7 +64,7 @@ export default async function CatalogQualityPage() {
       </div>
 
       <h2 className="mb-2 mt-8 text-lg font-medium">{t("recentImports")}</h2>
-      <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+      <div data-tour-id="catalog-quality-imports" className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
         <table className="min-w-[860px] text-sm">
           <tbody>
             {recentBatches.map((b) => (
