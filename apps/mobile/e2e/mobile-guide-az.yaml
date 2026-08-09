@@ -40,7 +40,7 @@ tags:
     timeout: 30000
 - tapOn: "Ticarət icra marşrutu"
 - scrollUntilVisible:
-    element: "Mobil video bələdçisi — yekun marşrut"
+    element: "Mobil video bələdçisi — uğurlu marşrut"
     direction: DOWN
     timeout: 45000
 - takeScreenshot: mobile-guide-01-route
@@ -56,12 +56,12 @@ tags:
     direction: DOWN
 - tapOn: "Viziti aç"
 - extendedWaitUntil:
-    visible: "Mobil video bələdçisi — yekun icra"
+    visible: "Mobil video bələdçisi — uğurlu icra"
     timeout: 30000
 - scrollUntilVisible:
-    element: "Mobil video bələdçisi — yekun icra"
+    element: "Mobil video bələdçisi — uğurlu icra"
     direction: DOWN
-- tapOn: "Mobil video bələdçisi — yekun icra"
+- tapOn: "Mobil video bələdçisi — uğurlu icra"
 - extendedWaitUntil:
     visible: "Addım-addım rəf sübutu"
     timeout: 30000
