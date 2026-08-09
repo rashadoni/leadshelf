@@ -28,6 +28,10 @@ tags:
 - tapOn:
     point: "50%,76%"
 - extendedWaitUntil:
+    visible: "Marşrutu aç"
+    timeout: 45000
+- tapOn: "Marşrutu aç"
+- extendedWaitUntil:
     visible: "Mobil video bələdçi — tam icra — 2026-08-09"
     timeout: 45000
 - takeScreenshot: mobile-guide-01-route
