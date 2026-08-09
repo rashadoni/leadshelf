@@ -33,7 +33,7 @@ describe("LeadShelf help-video registry", () => {
   })
 
   it("keeps the generated availability list AZ-only and registry-backed", () => {
-    const slugs = new Set(HELP_VIDEO_ENTRIES.map((entry) => entry.slug))
+    const slugs = new Set<string>(HELP_VIDEO_ENTRIES.map((entry) => entry.slug))
     for (const item of HELP_VIDEO_AVAILABILITY as readonly string[]) {
       expect(item).toMatch(/^[a-z0-9-]+\.az$/)
       expect(slugs.has(item.replace(/\.az$/, ""))).toBe(true)
