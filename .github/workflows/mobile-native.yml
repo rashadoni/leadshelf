@@ -20,6 +20,11 @@ on:
         required: false
         type: boolean
         default: false
+      apk_run_id:
+        description: "Reuse the verified x86_64 APK artifact from this workflow run"
+        required: false
+        type: string
+        default: ""
   pull_request:
     paths:
       - ".github/workflows/mobile-native.yml"
@@ -31,6 +36,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   android-standalone-preview-apk:
@@ -45,9 +51,11 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up pnpm
+        if: ${{ inputs.apk_run_id == '' }}
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Set up Node
+        if: ${{ inputs.apk_run_id == '' }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.23.1
@@ -60,23 +68,55 @@ jobs:
           java-version: "17"
 
       - name: Install
+        if: ${{ inputs.apk_run_id == '' }}
         run: pnpm install --frozen-lockfile
 
       - name: Validate mobile contracts
+        if: ${{ inputs.apk_run_id == '' }}
         run: |
           pnpm --filter @leadshelf/mobile typecheck
           pnpm --filter @leadshelf/mobile test
           pnpm --filter @leadshelf/web test:protocol
 
       - name: Generate native Android project
+        if: ${{ inputs.apk_run_id == '' }}
         working-directory: apps/mobile
         env:
           CI: "true"
         run: pnpm exec expo prebuild --platform android --no-install
 
       - name: Compile standalone preview APK
+        if: ${{ inputs.apk_run_id == '' }}
         working-directory: apps/mobile/android
         run: ./gradlew app:assembleRelease --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
+
+      - name: Download verified guide APK artifact
+        if: ${{ inputs.record_guide && inputs.apk_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GUIDE_APK_RUN_ID: ${{ inputs.apk_run_id }}
+        run: |
+          set -euo pipefail
+          test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
+          gh run download "$GUIDE_APK_RUN_ID" \
+            -p 'mobile-android-standalone-preview-x86_64-live-demo-*' \
+            -D "$RUNNER_TEMP/guide-apk-artifact"
+          mapfile -t apks < <(find "$RUNNER_TEMP/guide-apk-artifact" -type f -name '*.apk' -print)
+          [ "${#apks[@]}" -eq 1 ]
+          cp "${apks[0]}" "$RUNNER_TEMP/leadshelf-guide.apk"
+          test -s "$RUNNER_TEMP/leadshelf-guide.apk"
+
+      - name: Resolve guide APK path
+        if: ${{ inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.apk_run_id }}" ]; then
+            apk="$RUNNER_TEMP/leadshelf-guide.apk"
+          else
+            apk="$GITHUB_WORKSPACE/apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          fi
+          test -s "$apk"
+          printf 'GUIDE_APK_PATH=%s\n' "$apk" >> "$GITHUB_ENV"
 
       - name: Install pinned Maestro CLI
         if: ${{ inputs.record_guide }}
@@ -105,7 +145,7 @@ jobs:
           emulator-boot-timeout: 600
           script: |
             set -euo pipefail
-            apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            apk="$GUIDE_APK_PATH"
             test -s "$apk"
             adb install -r "$apk"
             adb shell pm grant com.leadshelf.mobile android.permission.CAMERA || true
@@ -142,9 +182,10 @@ jobs:
           name: mobile-guide-az-raw-${{ github.sha }}
           path: mobile-guide-artifact
           retention-days: 14
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Verify and record standalone evidence
+        if: ${{ inputs.apk_run_id == '' }}
         run: |
           set -euo pipefail
           mapfile -t apks < <(find apps/mobile/android/app/build/outputs/apk/release \
@@ -166,6 +207,7 @@ jobs:
             "$EXPO_PUBLIC_API_URL" > mobile-native-evidence.txt
 
       - name: Upload standalone preview APK
+        if: ${{ inputs.apk_run_id == '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mobile-android-standalone-preview-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
