@@ -117,15 +117,27 @@ interface RouteFormPayload {
   storeIds?: string[]
 }
 
-interface AgentCreatePayload {
+interface ExistingAgentCreatePayload {
   userId: string
   teamId: string | null
   phone: string | null
 }
 
+interface NewAgentCreatePayload {
+  name: string
+  employeeCode: string
+  pin: string
+  role: "FIELD_AGENT" | "MERCHANDISER" | "STORE_STAFF"
+  teamId: string | null
+  phone: string | null
+}
+
+type AgentCreatePayload = ExistingAgentCreatePayload | NewAgentCreatePayload
+
 interface AgentUpdatePayload {
   teamId: string | null
   phone: string | null
+  pin?: string
 }
 
 interface ActionMessage {
@@ -1161,26 +1173,71 @@ function AgentsView({
   const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [agentForm, setAgentForm] = useState({ userId: "", teamId: "", phone: "" })
+  const [agentForm, setAgentForm] = useState({
+    accountMode: "new" as "new" | "existing",
+    userId: "",
+    name: "",
+    employeeCode: "",
+    pin: "",
+    role: "FIELD_AGENT" as "FIELD_AGENT" | "MERCHANDISER" | "STORE_STAFF",
+    teamId: "",
+    phone: "",
+  })
 
   const openCreate = () => {
     setFormMode("create")
     setEditingAgent(null)
     setFormError(null)
-    setAgentForm({ userId: userCandidates[0]?.id ?? "", teamId: "", phone: "" })
+    setAgentForm({
+      accountMode: "new",
+      userId: userCandidates[0]?.id ?? "",
+      name: "",
+      employeeCode: "",
+      pin: "",
+      role: "FIELD_AGENT",
+      teamId: "",
+      phone: "",
+    })
   }
 
   const openEdit = (agent: AgentItem) => {
     setFormMode("edit")
     setEditingAgent(agent)
     setFormError(null)
-    setAgentForm({ userId: agent.userId, teamId: agent.teamId ?? "", phone: agent.phone ?? "" })
+    setAgentForm({
+      accountMode: "existing",
+      userId: agent.userId,
+      name: agent.name,
+      employeeCode: agent.employeeCode ?? "",
+      pin: "",
+      role: agent.role === "MERCHANDISER" || agent.role === "STORE_STAFF" ? agent.role : "FIELD_AGENT",
+      teamId: agent.teamId ?? "",
+      phone: agent.phone ?? "",
+    })
   }
 
   const submitAgent = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (formMode === "create" && !agentForm.userId) {
+    if (formMode === "create" && agentForm.accountMode === "existing" && !agentForm.userId) {
       setFormError(tWork("agents.validation.user"))
+      return
+    }
+    if (formMode === "create" && agentForm.accountMode === "new") {
+      if (agentForm.name.trim().length < 2) {
+        setFormError(tWork("agents.validation.name"))
+        return
+      }
+      if (!/^[A-Za-z0-9._-]{2,64}$/.test(agentForm.employeeCode.trim())) {
+        setFormError(tWork("agents.validation.employeeCode"))
+        return
+      }
+      if (!/^\d{4,12}$/.test(agentForm.pin)) {
+        setFormError(tWork("agents.validation.pin"))
+        return
+      }
+    }
+    if (formMode === "edit" && agentForm.pin && !/^\d{4,12}$/.test(agentForm.pin)) {
+      setFormError(tWork("agents.validation.pin"))
       return
     }
     setSaving(true)
@@ -1190,10 +1247,20 @@ function AgentsView({
         await onUpdateAgent(editingAgent.id, {
           teamId: agentForm.teamId || null,
           phone: agentForm.phone.trim() || null,
+          ...(agentForm.pin ? { pin: agentForm.pin } : {}),
+        })
+      } else if (agentForm.accountMode === "existing") {
+        await onCreateAgent({
+          userId: agentForm.userId,
+          teamId: agentForm.teamId || null,
+          phone: agentForm.phone.trim() || null,
         })
       } else {
         await onCreateAgent({
-          userId: agentForm.userId,
+          name: agentForm.name.trim(),
+          employeeCode: agentForm.employeeCode.trim(),
+          pin: agentForm.pin,
+          role: agentForm.role,
           teamId: agentForm.teamId || null,
           phone: agentForm.phone.trim() || null,
         })
@@ -1233,7 +1300,6 @@ function AgentsView({
         <button
           className="inline-flex h-10 items-center gap-1 rounded-md bg-indigo-600 px-3 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={openCreate}
-          disabled={userCandidates.length === 0}
         >
           <Plus className="h-4 w-4" />
           {tWork("agents.add")}
@@ -1310,6 +1376,22 @@ function AgentsView({
             {formError ? <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{formError}</div> : null}
             {formMode === "create" ? (
               <label className="block">
+                <span className="text-sm font-medium">{tWork("agents.accountMode")}</span>
+                <select
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+                  value={agentForm.accountMode}
+                  onChange={(event) => setAgentForm((current) => ({
+                    ...current,
+                    accountMode: event.target.value as "new" | "existing",
+                  }))}
+                >
+                  <option value="new">{tWork("agents.createNew")}</option>
+                  <option value="existing" disabled={userCandidates.length === 0}>{tWork("agents.attachExisting")}</option>
+                </select>
+              </label>
+            ) : null}
+            {formMode === "create" && agentForm.accountMode === "existing" ? (
+              <label className="block">
                 <span className="text-sm font-medium">{tWork("user")}</span>
                 <select
                   className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
@@ -1323,6 +1405,67 @@ function AgentsView({
                     </option>
                   ))}
                 </select>
+              </label>
+            ) : null}
+            {formMode === "create" && agentForm.accountMode === "new" ? (
+              <>
+                <label className="block">
+                  <span className="text-sm font-medium">{tWork("agents.name")}</span>
+                  <input
+                    className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-indigo-600"
+                    value={agentForm.name}
+                    onChange={(event) => setAgentForm((current) => ({ ...current, name: event.target.value }))}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium">{tWork("agents.employeeCode")}</span>
+                  <input
+                    className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm uppercase outline-none focus:border-indigo-600"
+                    value={agentForm.employeeCode}
+                    onChange={(event) => setAgentForm((current) => ({ ...current, employeeCode: event.target.value }))}
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium">{tWork("agents.role")}</span>
+                  <select
+                    className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm"
+                    value={agentForm.role}
+                    onChange={(event) => setAgentForm((current) => ({
+                      ...current,
+                      role: event.target.value as NewAgentCreatePayload["role"],
+                    }))}
+                  >
+                    <option value="FIELD_AGENT">{tWork("agents.roles.FIELD_AGENT")}</option>
+                    <option value="MERCHANDISER">{tWork("agents.roles.MERCHANDISER")}</option>
+                    <option value="STORE_STAFF">{tWork("agents.roles.STORE_STAFF")}</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {formMode === "edit" && editingAgent?.employeeCode ? (
+              <div className="rounded-md bg-neutral-50 p-2 text-sm text-neutral-600">
+                {tWork("agents.employeeCode")}: <span className="font-medium text-neutral-900">{editingAgent.employeeCode}</span>
+              </div>
+            ) : null}
+            {((formMode === "create" && agentForm.accountMode === "new") || formMode === "edit") ? (
+              <label className="block">
+                <span className="text-sm font-medium">
+                  {formMode === "edit" ? tWork("agents.resetPin") : tWork("agents.pin")}
+                </span>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-indigo-600"
+                  value={agentForm.pin}
+                  onChange={(event) => setAgentForm((current) => ({ ...current, pin: event.target.value.replace(/\D/g, "") }))}
+                  autoComplete="new-password"
+                  placeholder={formMode === "edit" ? tWork("agents.pinOptional") : undefined}
+                />
+                <span className="mt-1 block text-xs text-neutral-500">{tWork("agents.pinHint")}</span>
               </label>
             ) : null}
             <label className="block">

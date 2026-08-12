@@ -1206,12 +1206,32 @@
         "editTitle": "Agenti redaktə et",
         "loading": "Agentlər yüklənir...",
         "emptyFilter": "Filtrə uyğun agent tapılmadı.",
+        "accountMode": "İstifadəçi hesabı",
+        "createNew": "Yeni əməkdaş yarat",
+        "attachExisting": "Mövcud istifadəçini bağla",
         "selectUser": "İstifadəçi seçin",
+        "name": "Əməkdaşın adı",
+        "employeeCode": "Əməkdaş kodu",
+        "pin": "Giriş PIN-i",
+        "resetPin": "Yeni PIN",
+        "pinOptional": "PIN dəyişmirsə, boş saxlayın",
+        "pinHint": "Yalnız rəqəmlər, 4–12 simvol. PIN yalnız qorunan heş kimi saxlanılır.",
+        "role": "Rol",
+        "roles": {
+          "FIELD_AGENT": "Sahə agenti",
+          "MERCHANDISER": "Merçendayzer",
+          "STORE_STAFF": "Mağaza əməkdaşı"
+        },
         "management": "Agent idarəetməsi",
-        "userHint": "Agent aktiv LeadShelf istifadəçisinə bağlanır.",
-        "editHint": "Komanda və telefon istifadəçini yenidən yaratmadan dəyişdirilir.",
+        "userHint": "Yeni əməkdaşı mobil giriş kodu və PIN ilə birbaşa burada yaratmaq olar.",
+        "editHint": "PIN sıfırlandıqda əməkdaşın bütün köhnə mobil sessiyaları ləğv olunur.",
         "noCandidates": "Bütün aktiv istifadəçilər artıq agent kimi təyin edilib.",
-        "validation": { "user": "İstifadəçi seçin." }
+        "validation": {
+          "user": "İstifadəçi seçin.",
+          "name": "Əməkdaşın adını daxil edin (ən azı 2 simvol).",
+          "employeeCode": "Kod 2–64 simvol olmalı, yalnız latın hərfləri, rəqəm, nöqtə, defis və ya alt xətdən ibarət olmalıdır.",
+          "pin": "PIN 4–12 rəqəmdən ibarət olmalıdır."
+        }
       },
       "leaderboard": {
         "title": "İcra reytinqi",
