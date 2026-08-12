@@ -4,8 +4,11 @@ import type { PushResult } from "../sync/ports"
 import { syncApi } from "../api/mobile-client"
 import { enqueueFieldLocation, localStore } from "../db/local-store"
 import { workdayLocationPayload } from "./workday-location"
+import { IS_LEADDRIVE_FIELD } from "../config/mobile-variant"
 
-export const WORKDAY_LOCATION_TASK = "leadshelf-workday-location-v1"
+export const WORKDAY_LOCATION_TASK = IS_LEADDRIVE_FIELD
+  ? "leaddrive-field-workday-location-v1"
+  : "leadshelf-workday-location-v1"
 export type WorkdayTrackingMode = "background" | "foreground" | "denied" | "services_disabled" | "unavailable"
 export type WorkdayTrackingIssue =
   | "none"

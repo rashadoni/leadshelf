@@ -21,6 +21,19 @@ Android APK with an embedded JavaScript bundle. It uses the Android debug key
 for internal demo distribution only and must not be presented as a production
 store-signed artifact.
 
+## Zeytunpharm / LeadDrive Field variant
+
+The same maintained Expo codebase also builds the Zeytunpharm field-agent APK:
+
+- `EXPO_PUBLIC_MOBILE_VARIANT=leaddrive-field`
+- `EXPO_PUBLIC_ORGANIZATION_SLUG=zeytun` (internal production tenant slug)
+- `EXPO_PUBLIC_API_URL=https://app.leaddrivecrm.org`
+- Android application id: `org.leaddrive.field.zeytunpharm`
+
+This variant signs in once through LeadDrive MTM. CRM/medical routes stay in
+LeadDrive, while shelf and commercial requests go through LeadDrive's trusted
+Field BFF. No LeadShelf service credential is stored in the APK.
+
 ## Local Commands
 
 ```sh

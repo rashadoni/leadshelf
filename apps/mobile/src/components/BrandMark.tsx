@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native"
 import Svg, { Path, Rect } from "react-native-svg"
 import { colors } from "../theme"
+import { IS_LEADDRIVE_FIELD, mobileVariant } from "../config/mobile-variant"
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   const size = compact ? 36 : 48
@@ -14,8 +15,8 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
       </View>
       {!compact ? (
         <View>
-          <Text style={styles.name}>LeadShelf</Text>
-          <Text style={styles.tagline}>RETAIL EXECUTION</Text>
+          <Text style={styles.name}>{mobileVariant.appName}</Text>
+          <Text style={styles.tagline}>{IS_LEADDRIVE_FIELD ? "ZEYTUNPHARM · MTM" : "RETAIL EXECUTION"}</Text>
         </View>
       ) : null}
     </View>

@@ -1,5 +1,6 @@
-// LeadShelf mobile API: bearer access token, rotating refresh token and
-// protocol-versioned shelf sync. CRM/LeadDrive endpoints do not belong here.
+// One native client, two server-authoritative variants. LeadShelf authenticates
+// directly; LeadDrive Field authenticates once against MTM and reaches shelf
+// execution only through the LeadDrive Field BFF.
 
 import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
 import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
@@ -16,6 +17,11 @@ import { File } from "expo-file-system"
 import { fetch } from "expo/fetch"
 import * as FileSystem from "expo-file-system/legacy"
 import { Platform } from "react-native"
+import {
+  IS_LEADDRIVE_FIELD,
+  mobileVariant,
+  shelfBffPath,
+} from "../config/mobile-variant"
 import {
   FIELD_DOCUMENT_MEDIA_DIR,
   persistEncryptedMedia,
@@ -83,7 +89,7 @@ import {
   type FieldVisitWorkspaceData,
 } from "../field/contracts"
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://hermescrm.xyz"
+export const API_URL = mobileVariant.apiUrl
 export const PROTOCOL_VERSION = MOBILE_PROTOCOL_VERSION
 
 export { AuthLostError } from "../sync/ports-error"
@@ -91,6 +97,7 @@ export { AuthLostError } from "../sync/ports-error"
 let refreshInFlight: Promise<boolean> | null = null
 
 async function refreshTokens(): Promise<boolean> {
+  if (IS_LEADDRIVE_FIELD) return false
   refreshInFlight ??= (async () => {
     try {
       const [refreshToken, deviceId] = await Promise.all([
@@ -215,13 +222,56 @@ function json(body: unknown): RequestInit {
   }
 }
 
-export async function mobileLogin(input: {
+type LeadShelfLoginInput = {
   orgSlug: string
   employeeCode: string
   pin: string
-}): Promise<{ user: { id?: string; name: string } } | null> {
+}
+
+type LeadDriveFieldLoginInput = {
+  orgSlug: string
+  email: string
+  password: string
+}
+
+export async function mobileLogin(
+  input: LeadShelfLoginInput | LeadDriveFieldLoginInput,
+): Promise<{ user: { id?: string; name: string } } | null> {
   const deviceId = await tokenStore.getDeviceId()
   if (!deviceId) throw new Error("Mobile device id is unavailable")
+  if (IS_LEADDRIVE_FIELD) {
+    if (!("email" in input)) throw new Error("LeadDrive Field credentials are required")
+    const res = await fetch(`${API_URL}/api/v1/mtm/mobile/auth`, {
+      ...json({
+        email: input.email.trim().toLowerCase(),
+        password: input.password,
+        organizationSlug: input.orgSlug.trim().toLowerCase(),
+      }),
+    })
+    if (res.status === 401) return null
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new HttpError(res.status, (error as { error?: string }).error, error)
+    }
+    const body = await res.json() as {
+      success?: boolean
+      data?: { token?: unknown; agent?: { id?: unknown; name?: unknown } }
+    }
+    const token = body.data?.token
+    const agent = body.data?.agent
+    if (body.success !== true || typeof token !== "string" || typeof agent?.id !== "string" || typeof agent.name !== "string") {
+      throw new Error("Invalid LeadDrive mobile auth response")
+    }
+    const scope = prepareMobileSessionScope(input.orgSlug, agent.id)
+    if (!scope.ok) throw new AccountSwitchBlockedError(scope.pendingOps, scope.pendingPhotos)
+    await tokenStore.setAccess(token)
+    await tokenStore.setUserId(agent.id)
+    await tokenStore.setUserName(agent.name)
+    await tokenStore.setOrgSlug(input.orgSlug)
+    await tokenStore.setLastEmail(input.email.trim().toLowerCase())
+    return { user: { id: agent.id, name: agent.name } }
+  }
+  if (!("employeeCode" in input)) throw new Error("LeadShelf credentials are required")
   const res = await fetch(`${API_URL}/api/v1/mobile/auth/login`, {
     ...json({
       protocolVersion: PROTOCOL_VERSION,
@@ -252,6 +302,7 @@ export async function mobileLogin(input: {
 }
 
 export async function mobileLogout(): Promise<void> {
+  if (IS_LEADDRIVE_FIELD) return
   const refreshToken = await tokenStore.getRefresh()
   await fetch(`${API_URL}/api/v1/mobile/auth/logout`, {
     ...json({ protocolVersion: PROTOCOL_VERSION, refreshToken: refreshToken ?? undefined }),
@@ -508,7 +559,7 @@ export const fieldApi = {
 export const syncApi: SyncApi = {
   pull: (cursors) =>
     request<PullResponse>(
-      "/api/v1/mobile/sync/pull",
+      shelfBffPath("pull"),
       json({ protocolVersion: PROTOCOL_VERSION, cursors }),
     ).then((body) => mobileSyncPullResponseSchema.parse(body)),
   push: async (operations: PushOperation[]) => {
@@ -567,7 +618,7 @@ export const syncApi: SyncApi = {
     await flushFieldExecution()
     if (shelfOperations.length > 0) {
       const shelf = await request<{ results: PushResult[] }>(
-        "/api/v1/mobile/sync/push",
+        shelfBffPath("push"),
         json({ protocolVersion: PROTOCOL_VERSION, operations: shelfOperations }),
       ).then((body) => mobileSyncPushResponseSchema.parse(body))
       results.push(...shelf.results)
@@ -580,7 +631,7 @@ export const syncApi: SyncApi = {
   },
   ack: async (appliedCursors) => {
     await request(
-      "/api/v1/mobile/sync/ack",
+      shelfBffPath("ack"),
       json({ protocolVersion: PROTOCOL_VERSION, appliedCursors }),
     )
   },
@@ -592,7 +643,7 @@ export const syncApi: SyncApi = {
     // permanently queued even though JSON sync still works.
     return withDecryptedMedia(photo.fileUri, async (temporaryUri) => {
       const body = await uploadMultipartFile(
-        "/api/v1/mobile/photos/upload",
+        shelfBffPath("photos"),
         temporaryUri,
         mimeType,
         {
@@ -613,7 +664,7 @@ export const syncApi: SyncApi = {
   uploadCommercialMedia: async (media) => {
     return withDecryptedMedia(media.fileUri, async (temporaryUri) => {
       const body = await uploadMultipartFile(
-        "/api/v1/mobile/commercial-media/upload",
+        shelfBffPath("commercialMedia"),
         temporaryUri,
         "image/jpeg",
         {

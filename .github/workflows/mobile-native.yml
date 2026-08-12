@@ -9,6 +9,12 @@ on:
         type: choice
         options: [arm64-v8a, x86_64]
         default: arm64-v8a
+      app_variant:
+        description: "Native application variant"
+        required: true
+        type: choice
+        options: [leadshelf, zeytunpharm]
+        default: leadshelf
       backend:
         description: "Backend embedded into the standalone preview APK"
         required: true
@@ -45,7 +51,10 @@ jobs:
     env:
       LEADSHELF_ANDROID_ARCH: ${{ inputs.architecture || 'arm64-v8a' }}
       LEADSHELF_API_PROFILE: ${{ inputs.backend || 'live-demo' }}
-      EXPO_PUBLIC_API_URL: ${{ inputs.backend == 'local-emulator' && 'http://10.0.2.2:3200' || 'https://hermescrm.xyz' }}
+      LEADSHELF_APP_VARIANT: ${{ inputs.app_variant || 'leadshelf' }}
+      EXPO_PUBLIC_MOBILE_VARIANT: ${{ inputs.app_variant == 'zeytunpharm' && 'leaddrive-field' || 'leadshelf' }}
+      EXPO_PUBLIC_ORGANIZATION_SLUG: ${{ inputs.app_variant == 'zeytunpharm' && 'zeytun' || '' }}
+      EXPO_PUBLIC_API_URL: ${{ inputs.app_variant == 'zeytunpharm' && 'https://app.leaddrivecrm.org' || (inputs.backend == 'local-emulator' && 'http://10.0.2.2:3200' || 'https://hermescrm.xyz') }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -107,7 +116,7 @@ jobs:
           test -s "$RUNNER_TEMP/leadshelf-guide.apk"
 
       - name: Resolve guide APK path
-        if: ${{ inputs.record_guide }}
+        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
         run: |
           set -euo pipefail
           if [ -n "${{ inputs.apk_run_id }}" ]; then
@@ -119,7 +128,7 @@ jobs:
           printf 'GUIDE_APK_PATH=%s\n' "$apk" >> "$GITHUB_ENV"
 
       - name: Install pinned Maestro CLI
-        if: ${{ inputs.record_guide }}
+        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
         run: |
           set -euo pipefail
           test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
@@ -133,7 +142,7 @@ jobs:
             -d "$GITHUB_WORKSPACE/.maestro-bin"
 
       - name: Enable KVM acceleration for Android emulator
-        if: ${{ inputs.record_guide }}
+        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
         run: |
           set -euo pipefail
           test -e /dev/kvm
@@ -146,7 +155,7 @@ jobs:
           test -w /dev/kvm
 
       - name: Run AZ full-flow guide in phone emulator
-        if: ${{ inputs.record_guide }}
+        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 35
@@ -167,7 +176,7 @@ jobs:
             MAESTRO_CLI_NO_ANALYTICS=true MAESTRO_DRIVER_STARTUP_TIMEOUT=180000 "$GITHUB_WORKSPACE/.maestro-bin/maestro/bin/maestro" --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml --format junit --output mobile-guide-results.xml --test-output-dir mobile-guide-results
 
       - name: Collect mobile guide recording
-        if: ${{ always() && inputs.record_guide }}
+        if: ${{ always() && inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
         run: |
           set -euo pipefail
           mkdir -p mobile-guide-artifact
@@ -183,7 +192,7 @@ jobs:
           find mobile-guide-artifact -maxdepth 3 -type f -print
 
       - name: Upload mobile guide recording
-        if: ${{ always() && inputs.record_guide }}
+        if: ${{ always() && inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mobile-guide-az-raw-${{ github.sha }}
@@ -209,15 +218,15 @@ jobs:
           jarsigner -verify "$apk" >/dev/null
           sha256sum "$apk" > mobile-native-SHA256SUMS
           printf '%s\n' "$apk" > mobile-native-artifact-name
-          printf 'commit=%s\nkind=standalone-preview-apk\narchitecture=%s\napi_profile=%s\napi_origin=%s\nembedded_bundle=true\nstandalone=true\nsigning=android-debug-key\nproduction_signed=false\n' \
-            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_API_PROFILE" \
+          printf 'commit=%s\nkind=standalone-preview-apk\narchitecture=%s\napp_variant=%s\napi_profile=%s\napi_origin=%s\nembedded_bundle=true\nstandalone=true\nsigning=android-debug-key\nproduction_signed=false\n' \
+            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_APP_VARIANT" "$LEADSHELF_API_PROFILE" \
             "$EXPO_PUBLIC_API_URL" > mobile-native-evidence.txt
 
       - name: Upload standalone preview APK
         if: ${{ inputs.apk_run_id == '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mobile-android-standalone-preview-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
+          name: mobile-android-standalone-preview-${{ inputs.app_variant || 'leadshelf' }}-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
           path: |
             apps/mobile/android/app/build/outputs/apk/release/*.apk
             mobile-native-SHA256SUMS

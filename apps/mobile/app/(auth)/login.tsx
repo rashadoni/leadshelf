@@ -17,11 +17,13 @@ import { tokenStore } from "../../src/auth/token-store"
 import { setLocale, t, useLocale } from "../../src/i18n"
 import { HttpError } from "../../src/sync/ports-error"
 import { colors, radii } from "../../src/theme"
+import { IS_LEADDRIVE_FIELD, mobileVariant } from "../../src/config/mobile-variant"
 
 export default function LoginScreen() {
   const locale = useLocale()
   const scrollRef = useRef<ScrollView>(null)
-  const [orgSlug, setOrgSlug] = useState("demo")
+  const [orgSlug, setOrgSlug] = useState(mobileVariant.organizationSlug ?? "demo")
+  const [email, setEmail] = useState("")
   const [employeeCode, setEmployeeCode] = useState("")
   const [pin, setPin] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -31,11 +33,13 @@ export default function LoginScreen() {
   // печатать заново (docs/28 «запомнить меня»).
   useEffect(() => {
     void (async () => {
-      const [savedOrg, savedEmployeeCode] = await Promise.all([
+      const [savedOrg, savedEmail, savedEmployeeCode] = await Promise.all([
         tokenStore.getOrgSlug(),
+        tokenStore.getLastEmail(),
         tokenStore.getLastEmployeeCode(),
       ])
-      if (savedOrg) setOrgSlug(savedOrg)
+      if (savedOrg && !mobileVariant.organizationSlug) setOrgSlug(savedOrg)
+      if (savedEmail) setEmail(savedEmail)
       if (savedEmployeeCode) setEmployeeCode(savedEmployeeCode)
     })()
   }, [])
@@ -44,16 +48,21 @@ export default function LoginScreen() {
     setPending(true)
     setError(null)
     try {
-      const normalizedEmployeeCode = employeeCode.trim().toUpperCase()
-      const res = await mobileLogin({
-        orgSlug: orgSlug.trim().toLowerCase(),
-        employeeCode: normalizedEmployeeCode,
-        pin,
-      })
+      const res = IS_LEADDRIVE_FIELD
+        ? await mobileLogin({
+            orgSlug: mobileVariant.organizationSlug ?? orgSlug.trim().toLowerCase(),
+            email: email.trim().toLowerCase(),
+            password: pin,
+          })
+        : await mobileLogin({
+            orgSlug: orgSlug.trim().toLowerCase(),
+            employeeCode: employeeCode.trim().toUpperCase(),
+            pin,
+          })
       if (res) {
         router.replace("/(app)/(tabs)" as never)
       } else {
-        setError(t("loginError"))
+        setError(t(IS_LEADDRIVE_FIELD ? "fieldLoginError" : "loginError"))
       }
     } catch (reason) {
       setError(
@@ -68,7 +77,8 @@ export default function LoginScreen() {
     }
   }
 
-  const canSubmit = Boolean(orgSlug.trim() && employeeCode.trim() && pin && !pending)
+  const identityReady = IS_LEADDRIVE_FIELD ? email.trim() : employeeCode.trim()
+  const canSubmit = Boolean(orgSlug.trim() && identityReady && pin && !pending)
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
@@ -104,12 +114,19 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.intro}>
-            <Text style={styles.eyebrow}>FIELD OPERATIONS</Text>
+            <Text style={styles.eyebrow}>{IS_LEADDRIVE_FIELD ? "ZEYTUNPHARM · FIELD OPERATIONS" : "FIELD OPERATIONS"}</Text>
             <Text style={styles.title}>{t("loginTitle")}</Text>
-            <Text style={styles.welcome}>{t("loginSecureHint")}</Text>
+            <Text style={styles.welcome}>{t(IS_LEADDRIVE_FIELD ? "fieldLoginSecureHint" : "loginSecureHint")}</Text>
           </View>
 
           <View style={styles.form}>
+            {IS_LEADDRIVE_FIELD ? (
+              <View style={styles.tenantBadge}>
+                <Text style={styles.tenantBadgeLabel}>{t("orgSlug")}</Text>
+                <Text style={styles.tenantBadgeValue}>Zeytunpharm</Text>
+              </View>
+            ) : null}
+            {!IS_LEADDRIVE_FIELD ? (
             <View style={styles.field}>
               <Text style={styles.label}>{t("orgSlug")}</Text>
               <TextInput
@@ -120,23 +137,26 @@ export default function LoginScreen() {
                 onChangeText={setOrgSlug}
               />
             </View>
+            ) : null}
             <View style={styles.field}>
-              <Text style={styles.label}>{t("employeeCode")}</Text>
+              <Text style={styles.label}>{IS_LEADDRIVE_FIELD ? t("email") : t("employeeCode")}</Text>
               <TextInput
                 style={styles.input}
-                autoCapitalize="characters"
+                autoCapitalize={IS_LEADDRIVE_FIELD ? "none" : "characters"}
                 autoCorrect={false}
-                value={employeeCode}
-                onChangeText={setEmployeeCode}
+                autoComplete={IS_LEADDRIVE_FIELD ? "email" : "off"}
+                keyboardType={IS_LEADDRIVE_FIELD ? "email-address" : "default"}
+                value={IS_LEADDRIVE_FIELD ? email : employeeCode}
+                onChangeText={IS_LEADDRIVE_FIELD ? setEmail : setEmployeeCode}
               />
             </View>
             <View style={styles.field}>
-              <Text style={styles.label}>{t("pin")}</Text>
+              <Text style={styles.label}>{IS_LEADDRIVE_FIELD ? t("password") : t("pin")}</Text>
               <TextInput
                 style={styles.input}
                 secureTextEntry
                 textContentType="password"
-                keyboardType="number-pad"
+                keyboardType={IS_LEADDRIVE_FIELD ? "default" : "number-pad"}
                 value={pin}
                 onChangeText={setPin}
                 onFocus={() => {
@@ -186,6 +206,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 34, lineHeight: 39, fontWeight: "900", color: colors.text, letterSpacing: -1.1 },
   welcome: { fontSize: 15, lineHeight: 22, color: colors.muted, marginTop: 8, maxWidth: 330 },
   form: { gap: 17 },
+  tenantBadge: { minHeight: 58, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
+  tenantBadgeLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
+  tenantBadgeValue: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
   field: { gap: 7 },
   label: { fontSize: 12, fontWeight: "800", color: colors.muted, letterSpacing: 0.2 },
   input: {
