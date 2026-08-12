@@ -19,6 +19,7 @@ import type {
   FieldPersonalKpiData,
 } from "../../src/field/contracts"
 import { cardShadow, colors, radii } from "../../src/theme"
+import { useResponsiveLayout } from "../../src/layout/responsive"
 
 type Period = "week" | "month"
 type Phase = "loading" | "ready" | "refreshing" | "stale" | "error"
@@ -92,6 +93,7 @@ export default function PersonalKpiScreen() {
   const [data, setData] = useState<FieldPersonalKpiData | null>(null)
   const [phase, setPhase] = useState<Phase>("loading")
   const [error, setError] = useState<string | null>(null)
+  const layout = useResponsiveLayout()
   const requestSequence = useRef(0)
 
   const load = useCallback(async (nextPeriod: Period) => {
@@ -211,10 +213,10 @@ export default function PersonalKpiScreen() {
 
             <SectionTitle title={t("kpiWorkQuality")} />
             <View style={styles.grid}>
-              <MetricCard label={t("kpiTasks")} value={`${data.tasks.completion.percentage}%`} detail={t("kpiOf", { done: data.tasks.completed, total: data.tasks.assigned })} warning={data.tasks.overdue > 0} />
-              <MetricCard label={t("kpiGpsDays")} value={`${data.gps.dayCoverage.percentage}%`} detail={t("kpiOf", { done: data.gps.workdaysWithGps, total: data.gps.workdays })} warning={data.gps.daysWithoutPoints.length > 0} />
-              <MetricCard label={t("kpiWorkedTime")} value={formatHours(data.gps.workedSeconds)} detail={`${t("kpiPoints")}: ${data.gps.points}`} />
-              <MetricCard label={t("kpiDistance")} value={formatDistance(data.gps.distanceMeters)} detail={`${t("kpiAverageAccuracy")}: ${data.gps.averageAccuracyMeters == null ? "—" : `${data.gps.averageAccuracyMeters} ${t("kpiMetersShort")}`}`} warning={data.gps.truncated} />
+              <MetricCard tablet={layout.isTablet} label={t("kpiTasks")} value={`${data.tasks.completion.percentage}%`} detail={t("kpiOf", { done: data.tasks.completed, total: data.tasks.assigned })} warning={data.tasks.overdue > 0} />
+              <MetricCard tablet={layout.isTablet} label={t("kpiGpsDays")} value={`${data.gps.dayCoverage.percentage}%`} detail={t("kpiOf", { done: data.gps.workdaysWithGps, total: data.gps.workdays })} warning={data.gps.daysWithoutPoints.length > 0} />
+              <MetricCard tablet={layout.isTablet} label={t("kpiWorkedTime")} value={formatHours(data.gps.workedSeconds)} detail={`${t("kpiPoints")}: ${data.gps.points}`} />
+              <MetricCard tablet={layout.isTablet} label={t("kpiDistance")} value={formatDistance(data.gps.distanceMeters)} detail={`${t("kpiAverageAccuracy")}: ${data.gps.averageAccuracyMeters == null ? "—" : `${data.gps.averageAccuracyMeters} ${t("kpiMetersShort")}`}`} warning={data.gps.truncated} />
             </View>
 
             <SectionTitle title={t("kpiCommercial")} hint={t("kpiCommercialHint")} />
@@ -275,8 +277,8 @@ function HeroStat({ label, value, warning }: { label: string; value: number; war
   return <View style={styles.heroStat}><Text style={styles.heroStatLabel}>{label}</Text><Text style={[styles.heroStatValue, warning && styles.heroStatWarning]}>{value}</Text></View>
 }
 
-function MetricCard({ label, value, detail, warning }: { label: string; value: string; detail: string; warning?: boolean }) {
-  return <View style={[styles.metricCard, warning && styles.metricCardWarning]}><Text style={styles.metricCardLabel}>{label}</Text><Text style={[styles.metricCardValue, warning && styles.warningText]}>{value}</Text><Text style={styles.metricCardDetail}>{detail}</Text></View>
+function MetricCard({ label, value, detail, warning, tablet }: { label: string; value: string; detail: string; warning?: boolean; tablet?: boolean }) {
+  return <View style={[styles.metricCard, tablet && styles.metricCardTablet, warning && styles.metricCardWarning]}><Text style={styles.metricCardLabel}>{label}</Text><Text style={[styles.metricCardValue, warning && styles.warningText]}>{value}</Text><Text style={styles.metricCardDetail}>{detail}</Text></View>
 }
 
 function ExceptionRow({ label, value, action, last }: { label: string; value: number; action: string; last?: boolean }) {
@@ -349,6 +351,7 @@ const styles = StyleSheet.create({
   fill: { height: "100%", borderRadius: 3 },
   grid: { marginHorizontal: 14, flexDirection: "row", flexWrap: "wrap", gap: 9 },
   metricCard: { width: "48%", minHeight: 116, borderRadius: radii.card, backgroundColor: colors.card, padding: 14, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  metricCardTablet: { width: "23.5%", flexGrow: 1 },
   metricCardWarning: { borderColor: colors.warning, backgroundColor: "#FFFBEB" },
   metricCardLabel: { color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: "700" },
   metricCardValue: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 8 },

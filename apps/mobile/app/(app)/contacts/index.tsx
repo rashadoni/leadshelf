@@ -7,6 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldContactListData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const CACHE_KEY = "field.contacts"
 
@@ -18,6 +19,7 @@ export default function ContactsScreen() {
   const [loading, setLoading] = useState(!cached)
   const [error, setError] = useState<string | null>(null)
   const sequence = useRef(0)
+  const layout = useResponsiveLayout()
 
   const load = useCallback(async (query = "") => {
     const request = ++sequence.current
@@ -63,11 +65,11 @@ export default function ContactsScreen() {
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
 
         {data?.contacts.length ? (
-          <View style={styles.list}>
+          <View style={[styles.list, layout.isTablet && styles.listTablet]}>
             {data.contacts.map((contact) => {
               const primary = contact.workplaces?.find((workplace) => workplace.isPrimary) ?? contact.workplaces?.[0]
               return (
-                <Pressable key={contact.id} onPress={() => router.push(`/(app)/contacts/${contact.id}` as never)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+                <Pressable key={contact.id} onPress={() => router.push(`/(app)/contacts/${contact.id}` as never)} style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.pressed]}>
                   <View style={styles.avatar}><Text style={styles.avatarText}>{contact.displayName.charAt(0).toUpperCase()}</Text></View>
                   <View style={styles.body}>
                     <Text style={styles.name}>{contact.displayName}</Text>
@@ -99,4 +101,6 @@ const styles = StyleSheet.create({
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" }, avatarText: { color: colors.holiday, fontSize: 17, fontWeight: "900" },
   body: { flex: 1, minWidth: 0 }, name: { color: colors.text, fontSize: 14, fontWeight: "900" }, meta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 }, workplace: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5 }, phone: { color: colors.successDark, fontSize: 10, fontWeight: "800", marginTop: 5 },
   arrow: { color: colors.faint, fontSize: 26, lineHeight: 29 }, empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" }, emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" }, pressed: { opacity: 0.7 },
+  listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
+  cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
 })

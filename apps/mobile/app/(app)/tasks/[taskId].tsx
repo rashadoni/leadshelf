@@ -61,6 +61,7 @@ import { EncryptedMediaImage } from "../../../src/components/EncryptedMediaImage
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import type { MobileTaskStatus } from "@leadshelf/api-contracts/mobile/v1"
 import type { TaskRow } from "../../../src/sync/ports"
+import { colors, radii } from "../../../src/theme"
 
 const EXCEPTION_REASONS = ["no_access", "equipment_missing", "obstruction", "other"] as const
 
@@ -608,7 +609,7 @@ export default function TaskDetailScreen() {
     return (
       <SafeAreaView style={styles.doneRoot} edges={["top", "bottom"]}>
         <View style={styles.doneCard}>
-          <Text style={styles.doneCheck}>✅</Text>
+          <Text style={styles.doneCheck}>✓</Text>
           <Text style={styles.doneTitle}>{t("doneTitle")}</Text>
           <Text style={styles.doneMeta} numberOfLines={2}>
             {t("doneMeta")}
@@ -765,7 +766,7 @@ export default function TaskDetailScreen() {
         </View>
       </View>
       <SyncBar />
-      <ScrollView contentContainerStyle={{ padding: 12, gap: 12 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }}>
         <View style={styles.proofSummaryCard}>
           <View style={styles.proofSummaryHeader}>
             <Text style={styles.proofSummaryTitle}>{t("photoProof")}</Text>
@@ -1139,14 +1140,14 @@ export default function TaskDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#fafaf9" },
-  proofRoot: { flex: 1, backgroundColor: "#171717" },
+  root: { flex: 1, backgroundColor: colors.bg },
+  proofRoot: { flex: 1, backgroundColor: "#07131F" },
   proofCamera: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   proofTop: {
-    margin: 12,
-    borderRadius: 10,
-    backgroundColor: "rgba(23, 23, 23, 0.78)",
-    padding: 12,
+    margin: 16,
+    borderRadius: radii.card,
+    backgroundColor: "rgba(7, 19, 31, 0.86)",
+    padding: 14,
     gap: 4,
   },
   proofEyebrow: { color: "#d6d3d1", fontSize: 11, fontWeight: "700" },
@@ -1245,12 +1246,12 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: 13, fontWeight: "700", color: "#737373" },
   proofBottom: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
-    borderRadius: 10,
-    backgroundColor: "rgba(23, 23, 23, 0.78)",
-    padding: 12,
+    left: 16,
+    right: 16,
+    bottom: 16,
+    borderRadius: radii.card,
+    backgroundColor: "rgba(7, 19, 31, 0.88)",
+    padding: 14,
     gap: 10,
   },
   proofActions: { flexDirection: "row", gap: 12, alignItems: "center" },
@@ -1259,7 +1260,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: radii.inner,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.35)",
   },
@@ -1269,64 +1270,68 @@ const styles = StyleSheet.create({
     minHeight: 64,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
-    backgroundColor: "white",
+    borderRadius: radii.inner,
+    backgroundColor: colors.headerText,
   },
   proofCaptureText: { color: "#171717", fontSize: 18, fontWeight: "900" },
   doneRoot: {
     flex: 1,
-    backgroundColor: "#052e16",
+    backgroundColor: colors.navy,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
     gap: 24,
   },
   doneCard: { alignItems: "center", gap: 10 },
-  doneCheck: { fontSize: 96 },
+  doneCheck: { width: 88, height: 88, borderRadius: 44, color: colors.navy, backgroundColor: colors.accent, fontSize: 54, lineHeight: 84, fontWeight: "900", textAlign: "center", overflow: "hidden" },
   doneTitle: { color: "white", fontSize: 26, fontWeight: "900", textAlign: "center" },
-  doneMeta: { color: "#bbf7d0", fontSize: 15, fontWeight: "600", textAlign: "center" },
+  doneMeta: { color: colors.headerSubtext, fontSize: 15, fontWeight: "600", textAlign: "center" },
   doneButton: {
     minHeight: 64,
     alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
-    backgroundColor: "#22c55e",
+    borderRadius: radii.inner,
+    backgroundColor: colors.accent,
   },
-  doneButtonText: { color: "#052e16", fontSize: 18, fontWeight: "900" },
+  doneButtonText: { color: colors.navy, fontSize: 17, fontWeight: "900" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 68,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  back: { fontSize: 32, color: "#404040", paddingHorizontal: 6 },
-  title: { fontSize: 17, fontWeight: "700" },
-  meta: { fontSize: 12, color: "#737373" },
-  section: { fontSize: 13, fontWeight: "600", color: "#525252" },
+  back: { fontSize: 32, color: colors.text, paddingHorizontal: 6 },
+  title: { fontSize: 17, fontWeight: "900", color: colors.text },
+  meta: { fontSize: 11, color: colors.muted, marginTop: 3 },
+  section: { fontSize: 10, fontWeight: "900", color: colors.muted, letterSpacing: 0.9, textTransform: "uppercase", marginTop: 7 },
   actions: { gap: 8, marginTop: 8 },
   proofSummaryCard: {
-    borderRadius: 10,
+    borderRadius: radii.card,
     borderWidth: 1,
-    borderColor: "#e7e5e4",
-    backgroundColor: "white",
-    padding: 12,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    padding: 15,
     gap: 8,
   },
   proofSummaryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  proofSummaryTitle: { fontSize: 15, fontWeight: "800", color: "#171717" },
-  proofSummaryCount: { fontSize: 12, fontWeight: "700", color: "#737373" },
-  proofSummaryEmpty: { fontSize: 12, color: "#737373" },
+  proofSummaryTitle: { fontSize: 15, fontWeight: "900", color: colors.text },
+  proofSummaryCount: { fontSize: 11, fontWeight: "800", color: colors.muted },
+  proofSummaryEmpty: { fontSize: 12, color: colors.muted },
   guidedProofCard: {
-    borderRadius: 10,
+    borderRadius: radii.card,
     borderWidth: 1,
-    borderColor: "#d6d3d1",
-    backgroundColor: "white",
-    padding: 12,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    padding: 15,
     gap: 10,
   },
-  guidedProofSubtitle: { marginTop: 2, fontSize: 12, color: "#525252", fontWeight: "600" },
+  guidedProofSubtitle: { marginTop: 3, fontSize: 11, color: colors.muted, fontWeight: "600" },
   scenarioBadge: {
     overflow: "hidden",
     borderRadius: 999,
@@ -1345,8 +1350,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#e7e5e4",
-    backgroundColor: "#fafaf9",
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
     padding: 10,
   },
   captureStepRowDone: { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
@@ -1357,12 +1362,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#6366F1",
+    backgroundColor: colors.primary,
   },
   captureStepNumberText: { color: "white", fontSize: 12, fontWeight: "800" },
   captureStepBody: { flex: 1, gap: 2 },
-  captureStepTitle: { fontSize: 13, fontWeight: "800", color: "#171717" },
-  captureStepInstruction: { fontSize: 11, color: "#525252", lineHeight: 15 },
+  captureStepTitle: { fontSize: 13, fontWeight: "900", color: colors.text },
+  captureStepInstruction: { fontSize: 11, color: colors.muted, lineHeight: 15 },
   captureStepStatus: { fontSize: 11, color: "#92400e", fontWeight: "700" },
   captureStepStatusDone: { color: "#166534" },
   captureStepStatusRetake: { color: "#c2410c" },
@@ -1371,7 +1376,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#6366F1",
+    backgroundColor: colors.navy,
     paddingHorizontal: 10,
   },
   captureStepButtonText: { color: "white", fontSize: 12, fontWeight: "800" },
@@ -1396,8 +1401,8 @@ const styles = StyleSheet.create({
   locationCard: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#e7e5e4",
-    backgroundColor: "white",
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     padding: 12,
     gap: 8,
   },
@@ -1444,7 +1449,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#6366F1",
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
   },
   finderButtonText: { color: "white", fontSize: 13, fontWeight: "700" },
@@ -1536,7 +1541,7 @@ const styles = StyleSheet.create({
     color: "#171717",
     textAlignVertical: "top",
   },
-  primary: { backgroundColor: "#6366F1", borderRadius: 10, padding: 14, alignItems: "center" },
+  primary: { backgroundColor: colors.navy, borderRadius: radii.inner, padding: 15, alignItems: "center" },
   primaryText: { color: "white", fontWeight: "600", fontSize: 16 },
   secondary: {
     borderWidth: 1,

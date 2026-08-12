@@ -25,7 +25,9 @@ export function SyncBar() {
           ? t("syncWriteError")
           : t("syncReadError")
         : status.phase === "idle"
-          ? status.conflictOps + status.rejectedOps > 0
+          ? queued > 0
+            ? t("syncWriteError")
+            : status.conflictOps + status.rejectedOps > 0
             ? t("syncNeedsAttention")
             : t("syncIdle")
           : t("syncRunning")
@@ -38,7 +40,9 @@ export function SyncBar() {
         : status.conflictOps > 0 || status.quarantinedPhotos > 0
           ? colors.warning
       : status.phase === "idle"
-        ? colors.success
+        ? queued > 0
+          ? colors.warning
+          : colors.success
         : colors.muted
 
   return (
@@ -68,21 +72,22 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.bg,
+    gap: 7,
+    minHeight: 34,
+    paddingHorizontal: 20,
+    paddingVertical: 7,
+    backgroundColor: "transparent",
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  text: { flex: 1, fontSize: 12, color: colors.muted },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  text: { flex: 1, fontSize: 11, fontWeight: "600", color: colors.muted },
   retry: {
     borderRadius: radii.inner,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     backgroundColor: colors.card,
   },
   retryDisabled: { opacity: 0.5 },
-  retryText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  retryText: { fontSize: 10, fontWeight: "800", color: colors.text },
 })

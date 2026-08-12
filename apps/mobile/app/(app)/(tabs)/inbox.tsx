@@ -7,6 +7,7 @@ import { cacheFieldMessages, readFieldMessages } from "../../../src/db/local-sto
 import { useField } from "../../../src/field/field-context"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type InboxMode = "messages" | "notifications"
 
@@ -20,6 +21,7 @@ function notificationTone(type: string) {
 export default function InboxTab() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const [mode, setMode] = useState<InboxMode>("messages")
   const [messages, setMessages] = useState(readFieldMessages)
   const [refreshing, setRefreshing] = useState(false)
@@ -126,10 +128,11 @@ export default function InboxTab() {
           messages.threads.length === 0 ? (
             <Empty icon="✦" title={copy.noMessages} hint={copy.noMessagesHint} />
           ) : (
-            <View style={styles.list}>
+            <View style={[styles.list, layout.isTablet && styles.listTablet]}>
               {messages.threads.map((thread) => (
                 <Pressable key={thread.id} onPress={() => openThread(thread.id)} style={({ pressed }) => [
                   styles.messageCard,
+                  layout.isTablet && styles.listCardTablet,
                   thread.unread && styles.messageUnread,
                   pressed && styles.pressed,
                 ]}>
@@ -164,11 +167,11 @@ export default function InboxTab() {
             {items.length === 0 ? (
               <Empty icon="✓" title={t("inboxEmpty")} hint={t("inboxEmptyHint")} />
             ) : (
-              <View style={styles.list}>
+              <View style={[styles.list, layout.isTablet && styles.listTablet]}>
                 {items.map((item) => {
                   const tone = notificationTone(item.type)
                   return (
-                    <View key={item.id} style={[styles.notificationCard, !item.isRead && styles.messageUnread]}>
+                    <View key={item.id} style={[styles.notificationCard, layout.isTablet && styles.listCardTablet, !item.isRead && styles.messageUnread]}>
                       <View style={[styles.typeIcon, { backgroundColor: tone.bg }]}>
                         <Text style={[styles.typeGlyph, { color: tone.color }]}>{tone.glyph}</Text>
                       </View>
@@ -250,4 +253,6 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
   emptyHint: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 7, maxWidth: 280 },
   pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
+  listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
+  listCardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
 })
