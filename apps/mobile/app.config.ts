@@ -50,7 +50,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...expo.extra,
       mobileVariant: fieldVariant ? "leaddrive-field" : "leadshelf",
       organizationSlug: fieldVariant
-        ? process.env.EXPO_PUBLIC_ORGANIZATION_SLUG || "zeytun"
+        ? process.env.EXPO_PUBLIC_ORGANIZATION_SLUG || "zeytunpharm"
         : null,
     },
   }

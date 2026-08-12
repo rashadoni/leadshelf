@@ -53,7 +53,7 @@ jobs:
       LEADSHELF_API_PROFILE: ${{ inputs.backend || 'live-demo' }}
       LEADSHELF_APP_VARIANT: ${{ inputs.app_variant || 'leadshelf' }}
       EXPO_PUBLIC_MOBILE_VARIANT: ${{ inputs.app_variant == 'zeytunpharm' && 'leaddrive-field' || 'leadshelf' }}
-      EXPO_PUBLIC_ORGANIZATION_SLUG: ${{ inputs.app_variant == 'zeytunpharm' && 'zeytun' || '' }}
+      EXPO_PUBLIC_ORGANIZATION_SLUG: ${{ inputs.app_variant == 'zeytunpharm' && 'zeytunpharm' || '' }}
       EXPO_PUBLIC_API_URL: ${{ inputs.app_variant == 'zeytunpharm' && 'https://app.leaddrivecrm.org' || (inputs.backend == 'local-emulator' && 'http://10.0.2.2:3200' || 'https://hermescrm.xyz') }}
     steps:
       - name: Checkout

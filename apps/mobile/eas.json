@@ -21,7 +21,7 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_MOBILE_VARIANT": "leaddrive-field",
-        "EXPO_PUBLIC_ORGANIZATION_SLUG": "zeytun",
+        "EXPO_PUBLIC_ORGANIZATION_SLUG": "zeytunpharm",
         "EXPO_PUBLIC_API_URL": "https://app.leaddrivecrm.org"
       },
       "android": {

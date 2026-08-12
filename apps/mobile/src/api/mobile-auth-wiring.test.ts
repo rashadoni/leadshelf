@@ -19,7 +19,7 @@ describe("variant-capable field mobile auth wiring", () => {
     expect(client).toContain('shelfBffPath("push")')
     expect(variant).toContain("/api/v1/mtm/mobile/shelf/sync/pull")
     expect(variant).toContain("/api/v1/mtm/mobile/shelf/sync/push")
-    expect(variant).toContain('organizationSlug: process.env.EXPO_PUBLIC_ORGANIZATION_SLUG?.trim().toLowerCase() || "zeytun"')
+    expect(variant).toContain('organizationSlug: process.env.EXPO_PUBLIC_ORGANIZATION_SLUG?.trim().toLowerCase() || "zeytunpharm"')
     expect(variant).toContain('apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || "https://app.leaddrivecrm.org"')
   })
 
