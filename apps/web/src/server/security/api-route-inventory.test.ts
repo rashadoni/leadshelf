@@ -29,7 +29,7 @@ const routes = routeFiles(apiRoot).map((path) => ({
 
 describe("v1 API security inventory", () => {
   it("scans the complete route surface", () => {
-    expect(routes).toHaveLength(63)
+    expect(routes).toHaveLength(65)
     expect(routes.filter((route) => publicRoutes.has(route.relativePath)).map((route) => route.relativePath).sort())
       .toEqual([...publicRoutes].sort())
   })
