@@ -14,13 +14,14 @@ import { readPhotoOutboxUsage } from "../../../src/photos/photo-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { setLocale, t, useLocale, type Locale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
-import { colors, cardShadow, radii } from "../../../src/theme"
+import { colors, radii } from "../../../src/theme"
 import { useField } from "../../../src/field/field-context"
 import { stopWorkdayTracking } from "../../../src/location/workday-tracking"
 import {
   deleteAllEncryptedMedia,
   readEncryptedMediaUsage,
 } from "../../../src/media/encrypted-media-store"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
@@ -28,6 +29,7 @@ export default function ProfileTab() {
   const locale = useLocale()
   const { status, sync } = useSync()
   const field = useField()
+  const layout = useResponsiveLayout()
   const [userName, setUserName] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [capacity, setCapacity] = useState<{
@@ -125,7 +127,9 @@ export default function ProfileTab() {
         </View>
         <SectionHint section="profile" icon="profile" titleKey="profileHintTitle" bodyKey="profileHintBody" />
 
-        <View style={[styles.card, styles.accountCard]}>
+        <View style={[styles.profileGrid, layout.isTablet && styles.profileGridTablet]}>
+          <View style={layout.isTablet ? styles.profileColumn : undefined}>
+        <View style={[styles.card, styles.accountCard, layout.isTablet && styles.cardTablet]}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
@@ -139,7 +143,7 @@ export default function ProfileTab() {
         </View>
 
         {agent ? (
-          <View style={styles.card}>
+          <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>{t("organization")}</Text>
               <Text style={styles.detailValue}>{agent.organizationName}</Text>
@@ -161,7 +165,7 @@ export default function ProfileTab() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/(app)/kpi" as never)}
-          style={({ pressed }) => [styles.card, styles.kpiEntry, pressed && styles.kpiEntryPressed]}
+          style={({ pressed }) => [styles.card, styles.kpiEntry, layout.isTablet && styles.cardTablet, pressed && styles.kpiEntryPressed]}
         >
           <View style={styles.kpiIcon}><Text style={styles.kpiIconText}>%</Text></View>
           <View style={styles.kpiBody}>
@@ -171,8 +175,11 @@ export default function ProfileTab() {
           </View>
           <Text style={styles.kpiArrow}>›</Text>
         </Pressable>
+          </View>
 
-        <View style={styles.card}>
+          <View style={layout.isTablet ? styles.profileColumn : undefined}>
+
+        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
           <Text style={styles.sectionTitle}>{t("profileLanguage")}</Text>
           <View style={styles.localeRow}>
             {LOCALES.map((l) => (
@@ -192,7 +199,7 @@ export default function ProfileTab() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
           <Text style={styles.sectionTitle}>{t("profileSync")}</Text>
           <SyncBar />
           <View style={styles.metricsGrid}>
@@ -229,7 +236,7 @@ export default function ProfileTab() {
           </Pressable>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
           <Text style={styles.sectionTitle}>{t("profileStorage")}</Text>
           <View style={styles.metricsGrid}>
             <View style={styles.metric}>
@@ -252,8 +259,10 @@ export default function ProfileTab() {
             <Text style={styles.capacityHint}>{t("profileStorageWarning")}</Text>
           ) : null}
         </View>
+          </View>
+        </View>
 
-        <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]}>
+        <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.logout, layout.isTablet && styles.logoutTablet, pressed && styles.logoutPressed]}>
           <Text style={styles.logoutText}>{t("logout")}</Text>
         </Pressable>
       </ScrollView>
@@ -264,34 +273,35 @@ export default function ProfileTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 24 },
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: "800", color: colors.text },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 9 },
+  title: { fontSize: 28, fontWeight: "900", color: colors.text, letterSpacing: -0.7 },
   card: {
     backgroundColor: colors.card,
-    marginHorizontal: 14,
-    marginTop: 14,
-    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 17,
     borderRadius: radii.card,
-    ...cardShadow,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  accountCard: { flexDirection: "row", alignItems: "center", gap: 14 },
+  accountCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.navy, borderColor: colors.navy },
   avatar: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: 14,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: { color: colors.headerText, fontSize: 22, fontWeight: "800" },
   accountBody: { flex: 1, minWidth: 0 },
-  accountLabel: { fontSize: 11, fontWeight: "700", color: colors.faint, letterSpacing: 0.4, textTransform: "uppercase" },
-  accountName: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 2 },
-  accountMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  kpiEntry: { minHeight: 112, flexDirection: "row", alignItems: "center", gap: 13, borderWidth: 1, borderColor: colors.infoBorder },
+  accountLabel: { fontSize: 9, fontWeight: "800", color: colors.headerSubtext, letterSpacing: 0.9, textTransform: "uppercase" },
+  accountName: { fontSize: 18, fontWeight: "900", color: colors.headerText, marginTop: 3 },
+  accountMeta: { color: colors.headerSubtext, fontSize: 11, marginTop: 3 },
+  kpiEntry: { minHeight: 104, flexDirection: "row", alignItems: "center", gap: 13 },
   kpiEntryPressed: { backgroundColor: colors.primarySoft },
-  kpiIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  kpiIconText: { color: colors.headerText, fontSize: 20, fontWeight: "900" },
+  kpiIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  kpiIconText: { color: colors.primary, fontSize: 20, fontWeight: "900" },
   kpiBody: { flex: 1, minWidth: 0 },
   kpiTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   kpiHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
@@ -321,7 +331,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     alignSelf: "flex-start",
     backgroundColor: colors.primary,
-    borderRadius: radii.pill,
+    borderRadius: radii.inner,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
@@ -348,15 +358,20 @@ const styles = StyleSheet.create({
   syncDisabled: { backgroundColor: colors.disabled },
   syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
   logout: {
-    marginHorizontal: 14,
+    marginHorizontal: 20,
     marginTop: 18,
     alignItems: "center",
     paddingVertical: 14,
-    borderRadius: radii.card,
+    borderRadius: radii.inner,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.dangerBorder,
   },
+  profileGrid: { width: "100%" },
+  profileGridTablet: { flexDirection: "row", alignItems: "flex-start", gap: 18, paddingHorizontal: 20 },
+  profileColumn: { flex: 1, minWidth: 0 },
+  cardTablet: { marginHorizontal: 0 },
+  logoutTablet: { marginHorizontal: 20 },
   logoutPressed: { backgroundColor: colors.dangerBg },
   logoutText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
 })

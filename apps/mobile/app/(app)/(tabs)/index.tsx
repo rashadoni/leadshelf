@@ -15,7 +15,11 @@ import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-s
 import { formatLongDate } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
-import { colors, cardShadow, radii } from "../../../src/theme"
+import { BrandMark } from "../../../src/components/BrandMark"
+import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
+import { colors, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { mobileVariant } from "../../../src/config/mobile-variant"
 
 const toneStyles: Record<RouteStatusTone, { bg: string; border: string; text: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
@@ -30,6 +34,7 @@ export default function TodayTab() {
   const locale = useLocale()
   const field = useField()
   const shelf = useSync()
+  const layout = useResponsiveLayout()
   const [localOpenTasks, setLocalOpenTasks] = useState(0)
   const [localVisits, setLocalVisits] = useState(0)
 
@@ -62,6 +67,13 @@ export default function TodayTab() {
     { value: String(shelf.status.pendingOps + shelf.status.pendingPhotos), label: t("statPendingSync") },
   ]
 
+  const actions: Array<[string, string, TabIconName]> = [
+    [t("tabRoute"), "/(app)/routes", "route"],
+    [t("tabTasks"), "/(app)/(tabs)/tasks", "tasks"],
+    [t("tabPlanograms"), "/(app)/(tabs)/planograms", "planograms"],
+    [t("tabOrders"), "/(app)/(tabs)/orders", "orders"],
+  ]
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView
@@ -69,9 +81,16 @@ export default function TodayTab() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.headerText} />}
       >
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
-          <Text style={styles.heroTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
-          <Text style={styles.heroDate}>{formatLongDate(new Date(), locale)}</Text>
+          <View style={styles.brandRow}>
+            <BrandMark compact />
+            <Text style={styles.brandName}>{mobileVariant.appName}</Text>
+            <View style={styles.liveStatus}><View style={styles.liveDot} /><Text style={styles.liveText}>{t("syncIdle")}</Text></View>
+          </View>
+          <View style={styles.heroCopy}>
+            <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
+            <Text style={styles.heroTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
+            <Text style={styles.heroDate}>{formatLongDate(new Date(), locale)}</Text>
+          </View>
         </View>
 
         {field.phase === "stale" || field.phase === "error" ? (
@@ -86,19 +105,24 @@ export default function TodayTab() {
           </View>
         ) : null}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("todayOverview")}</Text>
-        </View>
-        <View style={styles.metrics}>
+        <View style={layout.isTablet ? styles.tabletColumns : undefined}>
+          <View style={layout.isTablet ? styles.tabletPrimary : undefined}>
+        <View style={[styles.overview, layout.isTablet && styles.tabletSection]}>
+          <View style={styles.overviewHeader}>
+            <Text style={styles.sectionEyebrow}>{t("todayOverview").toUpperCase()}</Text>
+            <Text style={styles.overviewMeta}>{visitedPoints}/{routePoints}</Text>
+          </View>
+          <View style={styles.metrics}>
           {metrics.map((metric) => (
             <View key={metric.label} style={styles.metricCard}>
               <Text style={styles.metricValue}>{metric.value}</Text>
               <Text style={styles.metricLabel}>{metric.label}</Text>
             </View>
           ))}
+          </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, layout.isTablet && styles.tabletSection]}>
           <View style={styles.progressHeader}>
             <View>
               <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
@@ -133,28 +157,28 @@ export default function TodayTab() {
           )}
           <Pressable onPress={() => router.push("/(app)/(tabs)/week" as never)} style={styles.primaryAction}>
             <Text style={styles.primaryActionText}>{t("openRoute")}</Text>
+            <Text style={styles.primaryArrow}>→</Text>
           </Pressable>
         </View>
-
-        <View style={styles.sectionHeader}>
+          </View>
+          <View style={layout.isTablet ? styles.tabletSecondary : undefined}>
+        <View style={[styles.sectionHeader, layout.isTablet && styles.tabletSectionHeader]}>
           <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
         </View>
-        <View style={styles.quickGrid}>
-          {[
-            [t("tabRoute"), "/(app)/routes", colors.infoBg, colors.info],
-            [t("tabTasks"), "/(app)/(tabs)/tasks", colors.warningBg, colors.warning],
-            [t("tabOrders"), "/(app)/(tabs)/orders", colors.successBg, colors.successDark],
-            [t("tabPlanograms"), "/(app)/(tabs)/planograms", colors.holidayBg, colors.holiday],
-          ].map(([label, href, backgroundColor, color]) => (
+        <View style={[styles.actionList, layout.isTablet && styles.tabletSection]}>
+          {actions.map(([label, href, icon], index) => (
             <Pressable
               key={label}
               onPress={() => router.push(href as never)}
-              style={({ pressed }) => [styles.quickCard, { backgroundColor }, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.actionRow, index > 0 && styles.actionBorder, pressed && styles.pressed]}
             >
-              <Text style={[styles.quickText, { color }]}>{label}</Text>
-              <Text style={[styles.quickArrow, { color }]}>→</Text>
+              <View style={styles.actionIcon}><TabIcon name={icon} color={colors.primary} size={20} /></View>
+              <Text style={styles.actionText}>{label}</Text>
+              <Text style={styles.actionArrow}>›</Text>
             </Pressable>
           ))}
+        </View>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -162,31 +186,41 @@ export default function TodayTab() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.primary },
+  root: { flex: 1, backgroundColor: colors.navy },
   scroll: { minHeight: "100%", backgroundColor: colors.bg, paddingBottom: 28 },
-  hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 28, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
-  eyebrow: { color: colors.headerSubtext, fontSize: 11, fontWeight: "800", letterSpacing: 1.1 },
-  heroTitle: { color: colors.headerText, fontSize: 28, fontWeight: "900", marginTop: 5, letterSpacing: -0.6 },
-  heroDate: { color: colors.headerSubtext, fontSize: 14, marginTop: 4 },
-  notice: { marginHorizontal: 14, marginTop: 14, padding: 12, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.warning, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 10 },
+  hero: { backgroundColor: colors.navy, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
+  brandRow: { minHeight: 40, flexDirection: "row", alignItems: "center" },
+  brandName: { color: colors.headerText, fontSize: 17, fontWeight: "900", letterSpacing: -0.4, marginLeft: 10 },
+  liveStatus: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 6 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  liveText: { color: colors.headerSubtext, fontSize: 10, fontWeight: "700" },
+  heroCopy: { marginTop: 32 },
+  eyebrow: { color: colors.accent, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
+  heroTitle: { color: colors.headerText, fontSize: 29, fontWeight: "900", marginTop: 7, letterSpacing: -0.8 },
+  heroDate: { color: colors.headerSubtext, fontSize: 13, marginTop: 6 },
+  notice: { marginHorizontal: 20, marginTop: 16, padding: 12, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.warning, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 10 },
   noticeError: { borderColor: colors.missedBorder, backgroundColor: colors.missedBg },
   noticeBody: { flex: 1 },
   noticeTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
   noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
   noticeAction: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.card },
   noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
-  sectionHeader: { marginHorizontal: 16, marginTop: 22, marginBottom: 9 },
-  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900", letterSpacing: -0.2 },
-  metrics: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: 10 },
-  metricCard: { width: "46%", marginHorizontal: "2%", marginBottom: 10, backgroundColor: colors.card, padding: 15, borderRadius: radii.card, ...cardShadow },
-  metricValue: { color: colors.text, fontSize: 25, fontWeight: "900" },
-  metricLabel: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  card: { marginHorizontal: 14, backgroundColor: colors.card, borderRadius: radii.card, padding: 16, ...cardShadow },
+  overview: { marginHorizontal: 20, marginTop: 18, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border },
+  overviewHeader: { minHeight: 44, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: colors.border },
+  sectionEyebrow: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
+  overviewMeta: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  metrics: { flexDirection: "row", paddingVertical: 15 },
+  metricCard: { width: "25%", minHeight: 54, paddingHorizontal: 8, borderRightWidth: 1, borderRightColor: colors.border },
+  metricValue: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center" },
+  metricLabel: { color: colors.muted, fontSize: 9, lineHeight: 12, marginTop: 4, textAlign: "center" },
+  sectionHeader: { marginHorizontal: 20, marginTop: 25, marginBottom: 10 },
+  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900", letterSpacing: -0.2 },
+  card: { marginHorizontal: 20, backgroundColor: colors.card, borderRadius: radii.card, padding: 17, borderWidth: 1, borderColor: colors.border },
   progressHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   cardMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  progressValue: { color: colors.primary, fontSize: 22, fontWeight: "900" },
-  progressTrack: { height: 8, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 13 },
+  progressValue: { color: colors.primary, fontSize: 21, fontWeight: "900" },
+  progressTrack: { height: 6, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 15 },
   progressFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
   routeList: { marginTop: 14, gap: 9 },
   routeRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 11 },
@@ -196,11 +230,19 @@ const styles = StyleSheet.create({
   statusPill: { borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 5 },
   statusText: { fontSize: 10, fontWeight: "800" },
   emptyText: { color: colors.muted, fontSize: 13, marginTop: 14 },
-  primaryAction: { marginTop: 15, minHeight: 48, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  primaryAction: { marginTop: 16, minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.navy, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   primaryActionText: { color: colors.headerText, fontSize: 14, fontWeight: "800" },
-  quickGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: 10 },
-  quickCard: { width: "46%", minHeight: 84, marginHorizontal: "2%", marginBottom: 10, borderRadius: radii.card, padding: 15, justifyContent: "space-between" },
-  quickText: { fontSize: 14, fontWeight: "900" },
-  quickArrow: { alignSelf: "flex-end", fontSize: 20, fontWeight: "500" },
+  primaryArrow: { color: colors.accent, fontSize: 20 },
+  actionList: { marginHorizontal: 20, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  actionRow: { minHeight: 62, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  actionBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  actionIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  actionText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
+  actionArrow: { color: colors.faint, fontSize: 24, fontWeight: "400" },
   pressed: { opacity: 0.72 },
+  tabletColumns: { flexDirection: "row", alignItems: "flex-start", gap: 22, paddingHorizontal: 24, paddingTop: 20 },
+  tabletPrimary: { flex: 1.35, minWidth: 0, gap: 18 },
+  tabletSecondary: { flex: 0.8, minWidth: 280 },
+  tabletSection: { marginHorizontal: 0, marginTop: 0 },
+  tabletSectionHeader: { marginHorizontal: 0, marginTop: 0 },
 })

@@ -11,7 +11,8 @@ import type { TaskRow } from "../../../src/sync/ports"
 import { useSync } from "../../../src/sync/sync-context"
 import { countOpenTaskStatuses } from "../../../src/tasks/status"
 import { groupTasksForWorkQueue, type TaskQueueGroup } from "../../../src/tasks/work-queue"
-import { cardShadow, colors, radii } from "../../../src/theme"
+import { colors, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const SECTION_TITLE_KEYS: Record<TaskQueueGroup, MessageKey> = {
   active: "tasksSectionActive",
@@ -54,6 +55,7 @@ export default function TasksScreen() {
   const { sync, status } = useSync()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [refreshing, setRefreshing] = useState(false)
+  const layout = useResponsiveLayout()
 
   const reload = useCallback(() => setTasks(listTasks()), [])
   useFocusEffect(reload)
@@ -105,6 +107,7 @@ export default function TasksScreen() {
         </View>
       ) : (
         <SectionList
+          key={layout.isTablet ? "tablet" : "phone"}
           sections={sections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
@@ -133,7 +136,7 @@ export default function TasksScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push(`/(app)/tasks/${item.id}` as never)}
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.cardPressed]}
               >
                 <View style={styles.cardTop}>
                   <View style={styles.cardMain}>
@@ -168,52 +171,53 @@ export default function TasksScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
-  title: { color: colors.text, fontSize: 24, fontWeight: "800" },
-  subtitle: { color: colors.muted, fontSize: 12, fontWeight: "600", marginTop: 3 },
-  listContent: { paddingHorizontal: 14, paddingBottom: 28 },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 9 },
+  title: { color: colors.text, fontSize: 28, fontWeight: "900", letterSpacing: -0.7 },
+  subtitle: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 5 },
+  listContent: { paddingHorizontal: 20, paddingBottom: 28 },
   emptyWrap: { flexGrow: 1, justifyContent: "center" },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    paddingTop: 14,
-    paddingBottom: 7,
-    paddingHorizontal: 2,
+    paddingTop: 20,
+    paddingBottom: 9,
   },
-  sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  sectionTitle: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
   sectionCount: {
     minWidth: 22,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: radii.pill,
     color: colors.muted,
-    backgroundColor: colors.border,
-    fontSize: 10,
+    backgroundColor: colors.skeleton,
+    fontSize: 9,
     fontWeight: "800",
     textAlign: "center",
   },
   card: {
-    minHeight: 100,
-    marginBottom: 9,
-    padding: 14,
+    minHeight: 104,
+    marginBottom: 10,
+    padding: 15,
     borderRadius: radii.card,
     backgroundColor: colors.card,
-    ...cardShadow,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cardPressed: { opacity: 0.72 },
+  cardTablet: { maxWidth: 820, width: "100%", alignSelf: "center" },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   cardMain: { flex: 1, minWidth: 0 },
-  taskTitle: { color: colors.text, fontSize: 16, fontWeight: "800", lineHeight: 21 },
-  storeName: { color: colors.muted, fontSize: 12, fontWeight: "600", marginTop: 5 },
+  taskTitle: { color: colors.text, fontSize: 15, fontWeight: "900", lineHeight: 20 },
+  storeName: { color: colors.muted, fontSize: 11, fontWeight: "600", marginTop: 5 },
   actionButton: {
     minHeight: 36,
     justifyContent: "center",
     paddingHorizontal: 11,
     borderRadius: radii.inner,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.navy,
   },
-  actionText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
+  actionText: { color: colors.headerText, fontSize: 10, fontWeight: "800" },
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
@@ -237,12 +241,14 @@ const styles = StyleSheet.create({
   emptyCheckText: { color: colors.success, fontSize: 32, fontWeight: "800" },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "800", textAlign: "center" },
   emptyHint: { color: colors.muted, fontSize: 14, textAlign: "center" },
-  skeletonList: { paddingHorizontal: 14, paddingTop: 14, gap: 10 },
+  skeletonList: { paddingHorizontal: 20, paddingTop: 14, gap: 10 },
   skeletonCard: {
     minHeight: 100,
     padding: 14,
     borderRadius: radii.card,
     backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   skeletonLine: { height: 11, borderRadius: radii.pill, backgroundColor: colors.skeleton },
   skeletonTitle: { width: "68%", height: 16 },

@@ -10,12 +10,14 @@ import { t, useLocale } from "../../../src/i18n"
 import type { LocalPlanogramSummary } from "../../../src/planogram/local-library"
 import { useSync } from "../../../src/sync/sync-context"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 export default function PlanogramsTab() {
   const locale = useLocale()
   const { status, sync } = useSync()
   const [items, setItems] = useState<LocalPlanogramSummary[]>([])
   const [refreshing, setRefreshing] = useState(false)
+  const layout = useResponsiveLayout()
   const reload = useCallback(() => setItems(listLocalPlanogramLibrary().planograms), [])
   useFocusEffect(reload)
 
@@ -42,6 +44,9 @@ export default function PlanogramsTab() {
       <SyncBar />
       <SectionHint section="planograms" icon="planograms" titleKey="planogramsHintTitle" bodyKey="planogramsHintBody" />
       <FlatList
+        key={layout.isTablet ? "tablet" : "phone"}
+        numColumns={layout.isTablet ? 2 : 1}
+        columnWrapperStyle={layout.isTablet ? styles.columns : undefined}
         data={items}
         keyExtractor={(item) => item.versionId}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -56,7 +61,7 @@ export default function PlanogramsTab() {
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push(`/(app)/planograms/${item.versionId}` as never)}
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+            style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.cardPressed]}
           >
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle} numberOfLines={2}>
@@ -98,4 +103,6 @@ const styles = StyleSheet.create({
   meta: { marginTop: 8, color: colors.muted, fontSize: 12, lineHeight: 18 },
   date: { marginTop: 4, color: colors.faint, fontSize: 11 },
   open: { marginTop: 12, color: colors.primary, fontSize: 13, fontWeight: "800" },
+  columns: { gap: 12 },
+  cardTablet: { flex: 1, minWidth: 0 },
 })

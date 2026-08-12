@@ -9,24 +9,29 @@ import { initErrorReporting } from "../src/observability"
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false)
-  const [storageUnavailable, setStorageUnavailable] = useState(false)
+  const [storageFailure, setStorageFailure] = useState<{ stage: string; detail: string } | null>(null)
 
   useEffect(() => {
     initErrorReporting()
     void (async () => {
+      let stage = "database"
       try {
         await initDb()
+        stage = "device"
         await getOrCreateDeviceId()
+        stage = "locale"
         const saved = await tokenStore.getLocale()
         if (saved === "ru" || saved === "az") setLocale(saved as Locale)
         setReady(true)
-      } catch {
-        setStorageUnavailable(true)
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        console.error(`[mobile-startup] ${stage}: ${detail}`)
+        setStorageFailure({ stage, detail: detail.slice(0, 240) })
       }
     })()
   }, [])
 
-  if (storageUnavailable) {
+  if (storageFailure) {
     return (
       <View style={styles.failure} accessibilityRole="alert">
         <Text style={styles.title}>Защищённое хранилище недоступно</Text>
@@ -36,6 +41,9 @@ export default function RootLayout() {
         <Text style={styles.title}>Qorunan yaddaş əlçatan deyil</Text>
         <Text style={styles.body}>
           Sinxronlaşdırılmamış iş ola bilərsə, tətbiq məlumatlarını silməyin. Dəstəyə LS-MST-INIT kodunu bildirin.
+        </Text>
+        <Text selectable style={styles.diagnostic}>
+          LS-MST-INIT/{storageFailure.stage}: {storageFailure.detail}
         </Text>
       </View>
     )
@@ -48,4 +56,5 @@ const styles = StyleSheet.create({
   failure: { flex: 1, justifyContent: "center", padding: 24, gap: 12, backgroundColor: "#fff" },
   title: { fontSize: 20, fontWeight: "700", color: "#17202a" },
   body: { fontSize: 16, lineHeight: 24, color: "#34495e" },
+  diagnostic: { marginTop: 8, fontSize: 12, lineHeight: 17, color: "#6b7280" },
 })

@@ -24,6 +24,9 @@ describe("offline media encryption wiring", () => {
     expect(client).toContain("withTemporaryPlaintextMedia")
     expect(client).toContain("persistEncryptedMedia(result.uri, destination, { deletePlaintextSource: true })")
     expect(client).not.toMatch(/new File\((?:input|photo|media)\.fileUri\)/)
+    expect(client).toContain("FileSystem.uploadAsync")
+    expect(client).toContain("FileSystem.FileSystemUploadType.MULTIPART")
+    expect(client).toContain('fieldName: "file"')
   })
 
   it("uses decrypted previews and full media/key wipe for logout and revocation", () => {

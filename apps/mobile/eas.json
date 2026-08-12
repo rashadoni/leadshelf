@@ -17,6 +17,17 @@
         "buildType": "apk"
       }
     },
+    "zeytun-preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_MOBILE_VARIANT": "leaddrive-field",
+        "EXPO_PUBLIC_ORGANIZATION_SLUG": "zeytun",
+        "EXPO_PUBLIC_API_URL": "https://app.leaddrivecrm.org"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {
