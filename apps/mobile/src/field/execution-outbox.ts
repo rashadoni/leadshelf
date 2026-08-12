@@ -61,6 +61,7 @@ export type FieldWorkdayAction = "START" | "PAUSE" | "RESUME" | "FINISH"
 export type FieldWorkdayEventPayload = {
   action: FieldWorkdayAction
   workdayId: string
+  workDate?: string
   occurredAt: string
   latitude: number | null
   longitude: number | null
@@ -375,6 +376,7 @@ export function parseFieldWorkdayEventPayload(value: unknown): FieldWorkdayEvent
     !payload ||
     !actions.includes(String(payload.action)) ||
     !string(payload.workdayId) ||
+    !(payload.workDate == null || (string(payload.workDate) && /^\d{4}-\d{2}-\d{2}$/.test(payload.workDate))) ||
     !parseDate(payload.occurredAt) ||
     !coordinatesValid ||
     !(payload.accuracy == null || (finite(payload.accuracy) && payload.accuracy >= 0)) ||

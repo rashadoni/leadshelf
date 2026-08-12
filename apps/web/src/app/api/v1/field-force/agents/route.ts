@@ -6,14 +6,27 @@ import { dateFilterForDay, visitDateWhere } from "@/server/field-force/dates"
 import { canAdminFieldForce, canReadFieldForce, isLimitedFieldForceRole } from "@/server/field-force/permissions"
 import { shapeFieldForceAgent } from "@/server/field-force/agents"
 import { shapeFieldForceSettings } from "@/server/field-force/settings"
+import { hashPassword } from "@/server/auth/password"
 
 export const runtime = "nodejs"
 
-const bodySchema = z.object({
-  userId: z.string().min(1),
+const agentDetailsSchema = z.object({
   teamId: z.string().min(1).nullable().optional(),
   phone: z.string().trim().max(64).nullable().optional(),
 })
+
+const bodySchema = z.union([agentDetailsSchema.extend({
+  userId: z.string().min(1),
+}), agentDetailsSchema.extend({
+  name: z.string().trim().min(2).max(200),
+  employeeCode: z.string().trim().min(2).max(64).regex(/^[A-Za-z0-9._-]+$/),
+  pin: z.string().regex(/^\d{4,12}$/),
+  role: z.enum(["FIELD_AGENT", "MERCHANDISER", "STORE_STAFF"]).default("FIELD_AGENT"),
+})])
+
+function isUniqueConflict(error: unknown) {
+  return (error as { code?: string })?.code === "P2002"
+}
 
 export async function GET(req: NextRequest) {
   const session = await requireApiSession(req)
@@ -113,34 +126,91 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", details: parsed.error.flatten() }, { status: 400 })
   }
+  const data = parsed.data
 
-  const [user, team] = await Promise.all([
-    workerDb.user.findFirst({
-      where: { id: parsed.data.userId, organizationId: session.org, isActive: true },
+  const team = data.teamId
+    ? await workerDb.team.findFirst({
+        where: { id: data.teamId, organizationId: session.org },
+        select: { id: true },
+      })
+    : null
+  if (data.teamId && !team) return NextResponse.json({ error: "team_not_found" }, { status: 404 })
+
+  if ("userId" in data) {
+    const user = await workerDb.user.findFirst({
+      where: { id: data.userId, organizationId: session.org, isActive: true },
       select: { id: true, employeeCode: true, fieldAgent: { select: { id: true } } },
-    }),
-    parsed.data.teamId
-      ? workerDb.team.findFirst({
-          where: { id: parsed.data.teamId, organizationId: session.org },
-          select: { id: true },
-        })
-      : Promise.resolve(null),
-  ])
+    })
+    if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 })
+    if (user.fieldAgent) return NextResponse.json({ error: "agent_already_exists" }, { status: 409 })
 
-  if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 })
-  if (user.fieldAgent) return NextResponse.json({ error: "agent_already_exists" }, { status: 409 })
-  if (parsed.data.teamId && !team) return NextResponse.json({ error: "team_not_found" }, { status: 404 })
+    const agent = await workerDb.$transaction(async (tx) => {
+      const created = await tx.fieldAgent.create({
+        data: {
+          organizationId: session.org,
+          userId: user.id,
+          teamId: team?.id,
+          phone: data.phone || null,
+          employeeCode: user.employeeCode,
+        },
+        select: { id: true, userId: true, employeeCode: true },
+      })
+      await tx.auditLog.create({
+        data: {
+          organizationId: session.org,
+          userId: session.sub,
+          action: "field_agent.attach",
+          entityType: "FieldAgent",
+          entityId: created.id,
+          payload: { targetUserId: created.userId },
+        },
+      })
+      return created
+    })
+    return NextResponse.json(agent, { status: 201 })
+  }
 
-  const agent = await workerDb.fieldAgent.create({
-    data: {
-      organizationId: session.org,
-      userId: user.id,
-      teamId: team?.id,
-      phone: parsed.data.phone || null,
-      employeeCode: user.employeeCode,
-    },
-    select: { id: true },
-  })
-
-  return NextResponse.json(agent, { status: 201 })
+  const passwordHash = await hashPassword(data.pin)
+  try {
+    const agent = await workerDb.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          organizationId: session.org,
+          name: data.name,
+          employeeCode: data.employeeCode.toUpperCase(),
+          passwordHash,
+          role: data.role,
+          isActive: true,
+        },
+        select: { id: true, employeeCode: true },
+      })
+      const created = await tx.fieldAgent.create({
+        data: {
+          organizationId: session.org,
+          userId: user.id,
+          teamId: team?.id,
+          phone: data.phone || null,
+          employeeCode: user.employeeCode,
+        },
+        select: { id: true, userId: true, employeeCode: true },
+      })
+      await tx.auditLog.create({
+        data: {
+          organizationId: session.org,
+          userId: session.sub,
+          action: "field_agent.create",
+          entityType: "FieldAgent",
+          entityId: created.id,
+          payload: { targetUserId: created.userId, role: data.role },
+        },
+      })
+      return created
+    })
+    return NextResponse.json(agent, { status: 201 })
+  } catch (error) {
+    if (isUniqueConflict(error)) {
+      return NextResponse.json({ error: "employee_code_already_exists" }, { status: 409 })
+    }
+    throw error
+  }
 }

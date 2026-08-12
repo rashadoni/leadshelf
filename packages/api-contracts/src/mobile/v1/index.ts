@@ -526,6 +526,21 @@ export const mobileLocationUpdatePayloadSchema = z.object({
 })
 export type MobileLocationUpdatePayload = z.infer<typeof mobileLocationUpdatePayloadSchema>
 
+export const mobileWorkdayEventPayloadSchema = z.object({
+  workdayId: z.string().min(8).max(128),
+  action: z.enum(["START", "PAUSE", "RESUME", "FINISH"]),
+  workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  occurredAt: z.string().datetime(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  accuracy: z.number().min(0).max(5000).nullable().optional(),
+  note: z.string().trim().max(500).nullable().optional(),
+}).refine(
+  (value) => (value.latitude == null) === (value.longitude == null),
+  { message: "latitude and longitude must be provided together" },
+)
+export type MobileWorkdayEventPayload = z.infer<typeof mobileWorkdayEventPayloadSchema>
+
 export const mobilePromotionEnrollPayloadSchema = z.object({
   promotionId: z.string().min(1),
   storeId: z.string().min(1),
@@ -612,6 +627,12 @@ export const mobilePushOperationSchema = z.discriminatedUnion("kind", [
     clientOpId: z.string().min(8).max(128),
     kind: z.literal("location.update"),
     payload: mobileLocationUpdatePayloadSchema,
+    clientCreatedAt: z.string().optional(),
+  }),
+  z.object({
+    clientOpId: z.string().min(8).max(128),
+    kind: z.literal("workday.event"),
+    payload: mobileWorkdayEventPayloadSchema,
     clientCreatedAt: z.string().optional(),
   }),
   z.object({

@@ -273,6 +273,7 @@ export default function WorkdayScreen() {
       const queued = enqueueFieldWorkdayEvent({
         action,
         workdayId,
+        workDate: date,
         occurredAt,
         latitude: location?.latitude ?? null,
         longitude: location?.longitude ?? null,

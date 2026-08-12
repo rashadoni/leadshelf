@@ -616,6 +616,7 @@ export interface PushOperation {
     | "visit.checkin"
     | "visit.checkout"
     | "location.update"
+    | "workday.event"
     | "order.create"
     | "promotion.enroll"
     | "promotion.submit"
@@ -905,6 +906,157 @@ async function applyLocationUpdate(
   return { status: "applied" }
 }
 
+type WorkdayEventPayload = {
+  workdayId: string
+  action: "START" | "PAUSE" | "RESUME" | "FINISH"
+  workDate?: string
+  occurredAt: string
+  latitude?: number | null
+  longitude?: number | null
+  accuracy?: number | null
+  note?: string | null
+}
+
+function workdayDate(payload: WorkdayEventPayload): Date | null {
+  const raw = payload.workDate ?? payload.occurredAt.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+  const parsed = new Date(`${raw}T00:00:00.000Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === raw
+    ? parsed
+    : null
+}
+
+async function applyWorkdayEvent(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  clientOpId: string,
+  payload: WorkdayEventPayload,
+): Promise<Omit<PushResult, "clientOpId">> {
+  const agent = await findUserAgent(prisma, organizationId, userId)
+  if (!agent) return { status: "rejected", detail: "agent_not_found" }
+
+  const occurredAt = new Date(payload.occurredAt)
+  const date = workdayDate(payload)
+  if (!date || !Number.isFinite(occurredAt.getTime())) {
+    return { status: "rejected", detail: "invalid_workday_timestamp" }
+  }
+
+  const previousEvent = await prisma.agentWorkdayEvent.findUnique({
+    where: { organizationId_clientEventId: { organizationId, clientEventId: clientOpId } },
+    select: { workdayId: true, type: true },
+  })
+  if (previousEvent) {
+    return {
+      status: "already_applied",
+      detail: { workdayId: previousEvent.workdayId, action: previousEvent.type },
+    }
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.agentWorkday.findFirst({
+      where: { id: payload.workdayId, organizationId, agentId: agent.id },
+      include: { events: { orderBy: { occurredAt: "desc" }, take: 1 } },
+    })
+
+    if (payload.action === "START") {
+      if (current) {
+        return { status: "already_applied", detail: { workdayId: current.id, serverStatus: current.status } }
+      }
+      const dayWorkday = await tx.agentWorkday.findUnique({
+        where: {
+          organizationId_agentId_workDate: { organizationId, agentId: agent.id, workDate: date },
+        },
+        select: { id: true, status: true },
+      })
+      if (dayWorkday) {
+        return { status: "conflict", detail: { reason: "workday_exists", workdayId: dayWorkday.id, serverStatus: dayWorkday.status } }
+      }
+      const active = await tx.agentWorkday.findFirst({
+        where: { organizationId, agentId: agent.id, status: { in: ["STARTED", "PAUSED"] } },
+        select: { id: true, status: true },
+      })
+      if (active) {
+        return { status: "conflict", detail: { reason: "active_workday_exists", workdayId: active.id, serverStatus: active.status } }
+      }
+      await tx.agentWorkday.create({
+        data: {
+          id: payload.workdayId,
+          organizationId,
+          agentId: agent.id,
+          workDate: date,
+          status: "STARTED",
+          startedAt: occurredAt,
+          startLatitude: payload.latitude ?? null,
+          startLongitude: payload.longitude ?? null,
+          events: {
+            create: {
+              organizationId,
+              clientEventId: clientOpId,
+              type: "START",
+              occurredAt,
+              latitude: payload.latitude ?? null,
+              longitude: payload.longitude ?? null,
+              accuracy: payload.accuracy ?? null,
+              note: payload.note?.trim() || null,
+            },
+          },
+        },
+      })
+      return { status: "applied", detail: { workdayId: payload.workdayId, serverStatus: "STARTED" } }
+    }
+
+    if (!current) return { status: "rejected", detail: "workday_not_found" }
+    const latestAt = current.events[0]?.occurredAt
+    if (latestAt && occurredAt < latestAt) {
+      return { status: "conflict", detail: { reason: "out_of_order_event", serverStatus: current.status } }
+    }
+
+    const allowed = (
+      (payload.action === "PAUSE" && current.status === "STARTED") ||
+      (payload.action === "RESUME" && current.status === "PAUSED") ||
+      (payload.action === "FINISH" && (current.status === "STARTED" || current.status === "PAUSED"))
+    )
+    if (!allowed) {
+      return { status: "conflict", detail: { reason: "invalid_transition", serverStatus: current.status } }
+    }
+
+    const activePauseSeconds = current.status === "PAUSED" && current.pausedAt
+      ? Math.max(0, Math.floor((occurredAt.getTime() - current.pausedAt.getTime()) / 1000))
+      : 0
+    const nextStatus = payload.action === "PAUSE"
+      ? "PAUSED"
+      : payload.action === "FINISH"
+        ? "COMPLETED"
+        : "STARTED"
+
+    await tx.agentWorkday.update({
+      where: { id: current.id },
+      data: {
+        status: nextStatus,
+        pausedAt: payload.action === "PAUSE" ? occurredAt : null,
+        completedAt: payload.action === "FINISH" ? occurredAt : null,
+        totalPausedSeconds: current.totalPausedSeconds + activePauseSeconds,
+        endLatitude: payload.action === "FINISH" ? payload.latitude ?? null : current.endLatitude,
+        endLongitude: payload.action === "FINISH" ? payload.longitude ?? null : current.endLongitude,
+        events: {
+          create: {
+            organizationId,
+            clientEventId: clientOpId,
+            type: payload.action,
+            occurredAt,
+            latitude: payload.latitude ?? null,
+            longitude: payload.longitude ?? null,
+            accuracy: payload.accuracy ?? null,
+            note: payload.note?.trim() || null,
+          },
+        },
+      },
+    })
+    return { status: "applied", detail: { workdayId: current.id, serverStatus: nextStatus } }
+  })
+}
+
 async function applyOrderCreate(
   prisma: PrismaClient,
   organizationId: string,
@@ -1055,6 +1207,8 @@ export async function pushOperations(
       result = await applyVisitCheckOut(prisma, organizationId, userId, op.payload as never)
     } else if (op.kind === "location.update") {
       result = await applyLocationUpdate(prisma, organizationId, userId, op.payload as never)
+    } else if (op.kind === "workday.event") {
+      result = await applyWorkdayEvent(prisma, organizationId, userId, op.clientOpId, op.payload as never)
     } else if (op.kind === "order.create") {
       result = await applyOrderCreate(prisma, organizationId, userId, deviceId, op.clientOpId, op.payload as never)
     } else if (

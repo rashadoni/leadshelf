@@ -40,6 +40,8 @@ export const TENANT_MODELS = new Set([
   "ShelfMetricSnapshot",
   "Team",
   "FieldAgent",
+  "AgentWorkday",
+  "AgentWorkdayEvent",
   "FieldForceSetting",
   "Route",
   "Visit",

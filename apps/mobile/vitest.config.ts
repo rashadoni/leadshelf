@@ -15,6 +15,7 @@ export default defineConfig({
       "src/i18n/**/*.test.ts",
       "src/db/**/*.test.ts",
       "src/auth/**/*.test.ts",
+      "src/api/**/*.test.ts",
       "src/observability/**/*.test.ts",
       "src/field/**/*.test.ts",
       "src/media/**/*.test.ts",

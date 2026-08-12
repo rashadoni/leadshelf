@@ -39,6 +39,19 @@ enum UserRole {
   STORE_STAFF
 }
 
+enum AgentWorkdayStatus {
+  STARTED
+  PAUSED
+  COMPLETED
+}
+
+enum AgentWorkdayAction {
+  START
+  PAUSE
+  RESUME
+  FINISH
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -88,6 +101,7 @@ model Organization {
   shelfAnalysisRuns      ShelfAnalysisRun[]
   shelfMetricSnapshots   ShelfMetricSnapshot[]
   fieldAgents            FieldAgent[]
+  agentWorkdays          AgentWorkday[]
   federatedIdentities    FederatedIdentity[]
   fieldForceSetting      FieldForceSetting?
   captureTemplates       CaptureTemplate[]
@@ -1627,6 +1641,7 @@ model FieldAgent {
   routes    Route[]
   visits    Visit[]
   locations AgentLocation[]
+  workdays  AgentWorkday[]
   orders    Order[]
   promotionExecutions PromotionExecution[]
   promoInventoryEvents PromoInventoryEvent[]
@@ -1716,13 +1731,60 @@ model AgentLocation {
   id         String     @id @default(cuid())
   agentId    String
   agent      FieldAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  clientLocationId String?
   latitude   Float
   longitude  Float
   accuracyM  Float?
   recordedAt DateTime
 
+  @@unique([agentId, clientLocationId])
   @@index([agentId, recordedAt])
   @@map("agent_locations")
+}
+
+model AgentWorkday {
+  id                 String             @id
+  organizationId     String
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentId             String
+  agent               FieldAgent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workDate            DateTime           @db.Date
+  status              AgentWorkdayStatus
+  startedAt           DateTime
+  pausedAt            DateTime?
+  completedAt         DateTime?
+  totalPausedSeconds  Int                @default(0)
+  startLatitude       Float?
+  startLongitude      Float?
+  endLatitude         Float?
+  endLongitude        Float?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  events AgentWorkdayEvent[]
+
+  @@unique([organizationId, agentId, workDate])
+  @@index([organizationId, agentId, status])
+  @@map("agent_workdays")
+}
+
+model AgentWorkdayEvent {
+  id             String             @id @default(cuid())
+  organizationId String
+  workdayId      String
+  workday        AgentWorkday       @relation(fields: [workdayId], references: [id], onDelete: Cascade)
+  clientEventId  String
+  type           AgentWorkdayAction
+  occurredAt     DateTime
+  latitude       Float?
+  longitude      Float?
+  accuracy       Float?
+  note           String?
+  createdAt      DateTime           @default(now())
+
+  @@unique([organizationId, clientEventId])
+  @@index([workdayId, occurredAt])
+  @@map("agent_workday_events")
 }
 
 model FieldForceSetting {

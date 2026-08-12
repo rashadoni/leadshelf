@@ -92,6 +92,20 @@ import {
 export const API_URL = mobileVariant.apiUrl
 export const PROTOCOL_VERSION = MOBILE_PROTOCOL_VERSION
 
+function workdayPath(date?: string): string {
+  const base = IS_LEADDRIVE_FIELD
+    ? "/api/v1/mtm/mobile/workday"
+    : "/api/v1/mobile/workday"
+  return `${base}${date ? `?date=${encodeURIComponent(date)}` : ""}`
+}
+
+function locationsPath(date?: string): string {
+  const base = IS_LEADDRIVE_FIELD
+    ? "/api/v1/mtm/mobile/location"
+    : "/api/v1/mobile/locations"
+  return `${base}${date ? `?date=${encodeURIComponent(date)}` : ""}`
+}
+
 export { AuthLostError } from "../sync/ports-error"
 
 let refreshInFlight: Promise<boolean> | null = null
@@ -344,14 +358,14 @@ export const fieldApi = {
     return request<unknown>(`/api/v1/mtm/mobile/hrm${suffix}`).then(parseFieldHrm)
   },
   workday: (date?: string) =>
-    request<unknown>(`/api/v1/mtm/mobile/workday${date ? `?date=${encodeURIComponent(date)}` : ""}`)
+    request<unknown>(workdayPath(date))
       .then(parseFieldWorkday),
   locations: (date?: string) =>
-    request<unknown>(`/api/v1/mtm/mobile/location${date ? `?date=${encodeURIComponent(date)}` : ""}`)
+    request<unknown>(locationsPath(date))
       .then(parseFieldLocationHistory),
   uploadLocation: async (input: FieldLocationPayload) => {
     const body = await request<{ success?: boolean; data?: { location?: unknown } }>(
-      "/api/v1/mtm/mobile/location",
+      locationsPath(),
       json(input),
     )
     const location = body.data?.location
@@ -582,6 +596,16 @@ export const syncApi: SyncApi = {
     // batches flush before a photo; checkout queued after it cannot reach the
     // server until the required photo upload has succeeded.
     for (const operation of operations) {
+      if (!IS_LEADDRIVE_FIELD && operation.kind === "field.workday.event") {
+        await flushFieldExecution()
+        shelfOperations.push({
+          clientOpId: operation.clientOpId,
+          clientCreatedAt: operation.clientCreatedAt,
+          kind: "workday.event",
+          payload: operation.payload,
+        } as PushOperation)
+        continue
+      }
       if (isFieldExecutionPushOperation(operation)) {
         fieldExecutionOperations.push(operation)
         continue
