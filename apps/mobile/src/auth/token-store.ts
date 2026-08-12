@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store"
 
 const KEYS = {
   access: "field.access",
+  refresh: "field.refresh",
   legacyAccess: "ls.access",
   legacyRefresh: "ls.refresh",
   deviceId: "ls.deviceId",
@@ -11,6 +12,8 @@ const KEYS = {
   userName: "field.userName",
   locale: "ls.locale",
   lastEmail: "field.lastEmail",
+  lastEmployeeCode: "field.lastEmployeeCode",
+  legacyLastEmployeeCode: "ls.lastEmployeeCode",
 } as const
 
 const ONBOARDING_KEYS = {
@@ -33,6 +36,7 @@ async function set(key: string, value: string | null): Promise<void> {
 
 export const tokenStore = {
   getAccess: () => get(KEYS.access),
+  getRefresh: async () => (await get(KEYS.refresh)) ?? get(KEYS.legacyRefresh),
   getDeviceId: () => get(KEYS.deviceId),
   getUserId: () => get(KEYS.userId),
   getOrgSlug: async () => (await get(KEYS.orgSlug)) ?? get(KEYS.legacyOrgSlug),
@@ -41,6 +45,9 @@ export const tokenStore = {
   // Email не является секретом и сохраняется для быстрого повторного входа.
   getLastEmail: () => get(KEYS.lastEmail),
   setLastEmail: (v: string) => set(KEYS.lastEmail, v),
+  getLastEmployeeCode: async () =>
+    (await get(KEYS.lastEmployeeCode)) ?? get(KEYS.legacyLastEmployeeCode),
+  setLastEmployeeCode: (v: string) => set(KEYS.lastEmployeeCode, v),
   // Контекстные подсказки показываются один раз на каждом основном разделе.
   getOnboarded: (section: OnboardingSection) => get(ONBOARDING_KEYS[section]),
   setOnboarded: (section: OnboardingSection) => set(ONBOARDING_KEYS[section], "1"),
@@ -50,6 +57,14 @@ export const tokenStore = {
     await set(KEYS.legacyAccess, null)
     await set(KEYS.legacyRefresh, null)
   },
+  async setTokens(access: string, refresh: string) {
+    await Promise.all([
+      set(KEYS.access, access),
+      set(KEYS.refresh, refresh),
+      set(KEYS.legacyAccess, null),
+      set(KEYS.legacyRefresh, null),
+    ])
+  },
   setDeviceId: (v: string) => set(KEYS.deviceId, v),
   setUserId: (v: string | null) => set(KEYS.userId, v),
   setOrgSlug: (v: string) => set(KEYS.orgSlug, v),
@@ -57,6 +72,7 @@ export const tokenStore = {
   setLocale: (v: string) => set(KEYS.locale, v),
   async clearSession() {
     await set(KEYS.access, null)
+    await set(KEYS.refresh, null)
     await set(KEYS.legacyAccess, null)
     await set(KEYS.legacyRefresh, null)
     await set(KEYS.userId, null)

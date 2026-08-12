@@ -1,20 +1,30 @@
-name: Mobile native compile
+name: Mobile standalone preview APK
 
 on:
   workflow_dispatch:
     inputs:
       architecture:
-        description: "Android ABI for the debug APK"
+        description: "Android ABI for the standalone preview APK"
         required: true
         type: choice
         options: [arm64-v8a, x86_64]
         default: arm64-v8a
       backend:
-        description: "Backend embedded into the debug APK"
+        description: "Backend embedded into the standalone preview APK"
         required: true
         type: choice
         options: [live-demo, local-emulator]
         default: live-demo
+      record_guide:
+        description: "Run the AZ full-flow guide in an Android phone emulator"
+        required: false
+        type: boolean
+        default: false
+      apk_run_id:
+        description: "Reuse the verified x86_64 APK artifact from this workflow run"
+        required: false
+        type: string
+        default: ""
   pull_request:
     paths:
       - ".github/workflows/mobile-native.yml"
@@ -26,9 +36,10 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  android-debug-apk:
+  android-standalone-preview-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -40,9 +51,11 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up pnpm
+        if: ${{ inputs.apk_run_id == '' }}
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Set up Node
+        if: ${{ inputs.apk_run_id == '' }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.23.2
@@ -55,34 +68,160 @@ jobs:
           java-version: "17"
 
       - name: Install
+        if: ${{ inputs.apk_run_id == '' }}
         run: pnpm install --frozen-lockfile
 
+      - name: Validate mobile contracts
+        if: ${{ inputs.apk_run_id == '' }}
+        run: |
+          pnpm --filter @leadshelf/mobile typecheck
+          pnpm --filter @leadshelf/mobile test
+          pnpm --filter @leadshelf/web test:protocol
+
       - name: Generate native Android project
+        if: ${{ inputs.apk_run_id == '' }}
         working-directory: apps/mobile
         env:
           CI: "true"
         run: pnpm exec expo prebuild --platform android --no-install
 
-      - name: Compile selectable emulator APK
+      - name: Compile standalone preview APK
+        if: ${{ inputs.apk_run_id == '' }}
         working-directory: apps/mobile/android
-        run: ./gradlew app:assembleDebug --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
+        run: ./gradlew app:assembleRelease --no-daemon -PreactNativeArchitectures="$LEADSHELF_ANDROID_ARCH"
 
-      - name: Record compile evidence
+      - name: Download verified guide APK artifact
+        if: ${{ inputs.record_guide && inputs.apk_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GUIDE_APK_RUN_ID: ${{ inputs.apk_run_id }}
         run: |
           set -euo pipefail
-          apk=apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
-          test -s "$apk"
-          sha256sum "$apk" > mobile-native-SHA256SUMS
-          printf 'commit=%s\nkind=debug-emulator-evidence\narchitecture=%s\napi_profile=%s\nproduction_signed=false\n' \
-            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_API_PROFILE" > mobile-native-evidence.txt
+          test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
+          gh run download "$GUIDE_APK_RUN_ID" \
+            -p 'mobile-android-standalone-preview-x86_64-live-demo-*' \
+            -D "$RUNNER_TEMP/guide-apk-artifact"
+          mapfile -t apks < <(find "$RUNNER_TEMP/guide-apk-artifact" -type f -name '*.apk' -print)
+          [ "${#apks[@]}" -eq 1 ]
+          cp "${apks[0]}" "$RUNNER_TEMP/leadshelf-guide.apk"
+          test -s "$RUNNER_TEMP/leadshelf-guide.apk"
 
-      - name: Upload emulator APK evidence
+      - name: Resolve guide APK path
+        if: ${{ inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.apk_run_id }}" ]; then
+            apk="$RUNNER_TEMP/leadshelf-guide.apk"
+          else
+            apk="$GITHUB_WORKSPACE/apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          fi
+          test -s "$apk"
+          printf 'GUIDE_APK_PATH=%s\n' "$apk" >> "$GITHUB_ENV"
+
+      - name: Install pinned Maestro CLI
+        if: ${{ inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
+          mkdir -p "$GITHUB_WORKSPACE/.maestro-bin"
+          curl -fsSL \
+            https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.8.0/maestro.zip \
+            -o "$GITHUB_WORKSPACE/.maestro-bin/maestro.zip"
+          echo "b3e561161904fb391875ca5834d5b22cf0b01c052dd1b408ad83e30d8f8951b3  $GITHUB_WORKSPACE/.maestro-bin/maestro.zip" \
+            | sha256sum -c -
+          unzip -q "$GITHUB_WORKSPACE/.maestro-bin/maestro.zip" \
+            -d "$GITHUB_WORKSPACE/.maestro-bin"
+
+      - name: Enable KVM acceleration for Android emulator
+        if: ${{ inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
+      - name: Run AZ full-flow guide in phone emulator
+        if: ${{ inputs.record_guide }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated
+          disable-linux-hw-accel: false
+          disable-animations: false
+          emulator-boot-timeout: 600
+          script: |
+            test -s "$GUIDE_APK_PATH"
+            adb install -r "$GUIDE_APK_PATH"
+            adb shell pm grant com.leadshelf.mobile android.permission.CAMERA || true
+            adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_FINE_LOCATION || true
+            adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_COARSE_LOCATION || true
+            adb shell pm disable-user --user 0 com.google.android.apps.messaging || true
+            MAESTRO_CLI_NO_ANALYTICS=true MAESTRO_DRIVER_STARTUP_TIMEOUT=180000 "$GITHUB_WORKSPACE/.maestro-bin/maestro/bin/maestro" --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml --format junit --output mobile-guide-results.xml --test-output-dir mobile-guide-results
+
+      - name: Collect mobile guide recording
+        if: ${{ always() && inputs.record_guide }}
+        run: |
+          set -euo pipefail
+          mkdir -p mobile-guide-artifact
+          find "$GITHUB_WORKSPACE" "$HOME/.maestro" \
+            -type f \( -name 'mobile-guide-az-raw*.mp4' -o -name 'mobile-guide-*.png' \) \
+            -exec cp -n {} mobile-guide-artifact/ \; || true
+          if [ -d mobile-guide-results ]; then
+            cp -R mobile-guide-results mobile-guide-artifact/results
+          fi
+          if [ -f mobile-guide-results.xml ]; then
+            cp mobile-guide-results.xml mobile-guide-artifact/
+          fi
+          find mobile-guide-artifact -maxdepth 3 -type f -print
+
+      - name: Upload mobile guide recording
+        if: ${{ always() && inputs.record_guide }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mobile-android-debug-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
+          name: mobile-guide-az-raw-${{ github.sha }}
+          path: mobile-guide-artifact
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Verify and record standalone evidence
+        if: ${{ inputs.apk_run_id == '' }}
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find apps/mobile/android/app/build/outputs/apk/release \
+            -maxdepth 1 -type f -name '*.apk' -print)
+          [ "${#apks[@]}" -eq 1 ] || {
+            echo "expected exactly one release APK, found ${#apks[@]}" >&2
+            exit 2
+          }
+          apk="${apks[0]}"
+          test -s "$apk"
+          unzip -Z1 "$apk" | grep -Fx 'assets/index.android.bundle'
+          unzip -p "$apk" assets/index.android.bundle |
+            grep -aF "$EXPO_PUBLIC_API_URL" >/dev/null
+          jarsigner -verify "$apk" >/dev/null
+          sha256sum "$apk" > mobile-native-SHA256SUMS
+          printf '%s\n' "$apk" > mobile-native-artifact-name
+          printf 'commit=%s\nkind=standalone-preview-apk\narchitecture=%s\napi_profile=%s\napi_origin=%s\nembedded_bundle=true\nstandalone=true\nsigning=android-debug-key\nproduction_signed=false\n' \
+            "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_API_PROFILE" \
+            "$EXPO_PUBLIC_API_URL" > mobile-native-evidence.txt
+
+      - name: Upload standalone preview APK
+        if: ${{ inputs.apk_run_id == '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-android-standalone-preview-${{ inputs.architecture || 'arm64-v8a' }}-${{ inputs.backend || 'live-demo' }}-${{ github.sha }}
           path: |
-            apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/mobile/android/app/build/outputs/apk/release/*.apk
             mobile-native-SHA256SUMS
             mobile-native-evidence.txt
+            mobile-native-artifact-name
           retention-days: 14
           if-no-files-found: error
