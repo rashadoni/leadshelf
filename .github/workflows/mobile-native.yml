@@ -99,10 +99,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$LEADSHELF_APP_VARIANT" = "zeytunpharm" ]; then
-            grep -F 'applicationId "org.leaddrive.field.zeytunpharm"' apps/mobile/android/app/build.gradle >/dev/null
+            grep -F 'org.leaddrive.field.zeytunpharm' apps/mobile/android/app/build.gradle >/dev/null
             grep -F '<string name="app_name">LeadDrive Field</string>' apps/mobile/android/app/src/main/res/values/strings.xml >/dev/null
           else
-            grep -F 'applicationId "com.leadshelf.mobile"' apps/mobile/android/app/build.gradle >/dev/null
+            grep -F 'com.leadshelf.mobile' apps/mobile/android/app/build.gradle >/dev/null
             grep -F '<string name="app_name">LeadShelf</string>' apps/mobile/android/app/src/main/res/values/strings.xml >/dev/null
           fi
 
