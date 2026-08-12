@@ -26,7 +26,7 @@ store-signed artifact.
 The same maintained Expo codebase also builds the Zeytunpharm field-agent APK:
 
 - `EXPO_PUBLIC_MOBILE_VARIANT=leaddrive-field`
-- `EXPO_PUBLIC_ORGANIZATION_SLUG=zeytun` (internal production tenant slug)
+- `EXPO_PUBLIC_ORGANIZATION_SLUG=zeytunpharm` (production tenant slug)
 - `EXPO_PUBLIC_API_URL=https://app.leaddrivecrm.org`
 - Android application id: `org.leaddrive.field.zeytunpharm`
 

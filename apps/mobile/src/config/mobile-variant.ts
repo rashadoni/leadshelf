@@ -13,7 +13,7 @@ export const mobileVariant = IS_LEADDRIVE_FIELD
       id: MOBILE_VARIANT,
       appName: "LeadDrive Field",
       companyName: "Zeytunpharm",
-      organizationSlug: process.env.EXPO_PUBLIC_ORGANIZATION_SLUG?.trim().toLowerCase() || "zeytun",
+      organizationSlug: process.env.EXPO_PUBLIC_ORGANIZATION_SLUG?.trim().toLowerCase() || "zeytunpharm",
       apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || "https://app.leaddrivecrm.org",
     }
   : {
