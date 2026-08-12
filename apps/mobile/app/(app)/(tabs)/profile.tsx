@@ -21,6 +21,7 @@ import {
   deleteAllEncryptedMedia,
   readEncryptedMediaUsage,
 } from "../../../src/media/encrypted-media-store"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
@@ -28,6 +29,7 @@ export default function ProfileTab() {
   const locale = useLocale()
   const { status, sync } = useSync()
   const field = useField()
+  const layout = useResponsiveLayout()
   const [userName, setUserName] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [capacity, setCapacity] = useState<{
@@ -125,7 +127,9 @@ export default function ProfileTab() {
         </View>
         <SectionHint section="profile" icon="profile" titleKey="profileHintTitle" bodyKey="profileHintBody" />
 
-        <View style={[styles.card, styles.accountCard]}>
+        <View style={[styles.profileGrid, layout.isTablet && styles.profileGridTablet]}>
+          <View style={layout.isTablet ? styles.profileColumn : undefined}>
+        <View style={[styles.card, styles.accountCard, layout.isTablet && styles.cardTablet]}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
@@ -139,7 +143,7 @@ export default function ProfileTab() {
         </View>
 
         {agent ? (
-          <View style={styles.card}>
+          <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>{t("organization")}</Text>
               <Text style={styles.detailValue}>{agent.organizationName}</Text>
@@ -161,7 +165,7 @@ export default function ProfileTab() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/(app)/kpi" as never)}
-          style={({ pressed }) => [styles.card, styles.kpiEntry, pressed && styles.kpiEntryPressed]}
+          style={({ pressed }) => [styles.card, styles.kpiEntry, layout.isTablet && styles.cardTablet, pressed && styles.kpiEntryPressed]}
         >
           <View style={styles.kpiIcon}><Text style={styles.kpiIconText}>%</Text></View>
           <View style={styles.kpiBody}>
@@ -171,8 +175,11 @@ export default function ProfileTab() {
           </View>
           <Text style={styles.kpiArrow}>›</Text>
         </Pressable>
+          </View>
 
-        <View style={styles.card}>
+          <View style={layout.isTablet ? styles.profileColumn : undefined}>
+
+        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
           <Text style={styles.sectionTitle}>{t("profileLanguage")}</Text>
           <View style={styles.localeRow}>
             {LOCALES.map((l) => (
@@ -192,7 +199,7 @@ export default function ProfileTab() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
           <Text style={styles.sectionTitle}>{t("profileSync")}</Text>
           <SyncBar />
           <View style={styles.metricsGrid}>
@@ -229,7 +236,7 @@ export default function ProfileTab() {
           </Pressable>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
           <Text style={styles.sectionTitle}>{t("profileStorage")}</Text>
           <View style={styles.metricsGrid}>
             <View style={styles.metric}>
@@ -252,8 +259,10 @@ export default function ProfileTab() {
             <Text style={styles.capacityHint}>{t("profileStorageWarning")}</Text>
           ) : null}
         </View>
+          </View>
+        </View>
 
-        <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]}>
+        <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.logout, layout.isTablet && styles.logoutTablet, pressed && styles.logoutPressed]}>
           <Text style={styles.logoutText}>{t("logout")}</Text>
         </Pressable>
       </ScrollView>
@@ -358,6 +367,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.dangerBorder,
   },
+  profileGrid: { width: "100%" },
+  profileGridTablet: { flexDirection: "row", alignItems: "flex-start", gap: 18, paddingHorizontal: 20 },
+  profileColumn: { flex: 1, minWidth: 0 },
+  cardTablet: { marginHorizontal: 0 },
+  logoutTablet: { marginHorizontal: 20 },
   logoutPressed: { backgroundColor: colors.dangerBg },
   logoutText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
 })

@@ -18,6 +18,8 @@ import { useSync } from "../../../src/sync/sync-context"
 import { BrandMark } from "../../../src/components/BrandMark"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { colors, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { mobileVariant } from "../../../src/config/mobile-variant"
 
 const toneStyles: Record<RouteStatusTone, { bg: string; border: string; text: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
@@ -32,6 +34,7 @@ export default function TodayTab() {
   const locale = useLocale()
   const field = useField()
   const shelf = useSync()
+  const layout = useResponsiveLayout()
   const [localOpenTasks, setLocalOpenTasks] = useState(0)
   const [localVisits, setLocalVisits] = useState(0)
 
@@ -80,7 +83,7 @@ export default function TodayTab() {
         <View style={styles.hero}>
           <View style={styles.brandRow}>
             <BrandMark compact />
-            <Text style={styles.brandName}>LeadShelf</Text>
+            <Text style={styles.brandName}>{mobileVariant.appName}</Text>
             <View style={styles.liveStatus}><View style={styles.liveDot} /><Text style={styles.liveText}>{t("syncIdle")}</Text></View>
           </View>
           <View style={styles.heroCopy}>
@@ -102,7 +105,9 @@ export default function TodayTab() {
           </View>
         ) : null}
 
-        <View style={styles.overview}>
+        <View style={layout.isTablet ? styles.tabletColumns : undefined}>
+          <View style={layout.isTablet ? styles.tabletPrimary : undefined}>
+        <View style={[styles.overview, layout.isTablet && styles.tabletSection]}>
           <View style={styles.overviewHeader}>
             <Text style={styles.sectionEyebrow}>{t("todayOverview").toUpperCase()}</Text>
             <Text style={styles.overviewMeta}>{visitedPoints}/{routePoints}</Text>
@@ -117,7 +122,7 @@ export default function TodayTab() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, layout.isTablet && styles.tabletSection]}>
           <View style={styles.progressHeader}>
             <View>
               <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
@@ -155,11 +160,12 @@ export default function TodayTab() {
             <Text style={styles.primaryArrow}>→</Text>
           </Pressable>
         </View>
-
-        <View style={styles.sectionHeader}>
+          </View>
+          <View style={layout.isTablet ? styles.tabletSecondary : undefined}>
+        <View style={[styles.sectionHeader, layout.isTablet && styles.tabletSectionHeader]}>
           <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
         </View>
-        <View style={styles.actionList}>
+        <View style={[styles.actionList, layout.isTablet && styles.tabletSection]}>
           {actions.map(([label, href, icon], index) => (
             <Pressable
               key={label}
@@ -171,6 +177,8 @@ export default function TodayTab() {
               <Text style={styles.actionArrow}>›</Text>
             </Pressable>
           ))}
+        </View>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -232,4 +240,9 @@ const styles = StyleSheet.create({
   actionText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
   actionArrow: { color: colors.faint, fontSize: 24, fontWeight: "400" },
   pressed: { opacity: 0.72 },
+  tabletColumns: { flexDirection: "row", alignItems: "flex-start", gap: 22, paddingHorizontal: 24, paddingTop: 20 },
+  tabletPrimary: { flex: 1.35, minWidth: 0, gap: 18 },
+  tabletSecondary: { flex: 0.8, minWidth: 280 },
+  tabletSection: { marginHorizontal: 0, marginTop: 0 },
+  tabletSectionHeader: { marginHorizontal: 0, marginTop: 0 },
 })

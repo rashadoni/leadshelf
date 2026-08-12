@@ -10,6 +10,7 @@ import {
 } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const tones: Record<RouteStatusTone, { bg: string; border: string; text: string; dot: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft, dot: colors.draft },
@@ -44,6 +45,7 @@ export default function WeekTab() {
   const field = useField()
   const week = field.week
   const busy = field.phase === "loading" || field.phase === "refreshing"
+  const layout = useResponsiveLayout()
 
   const move = (days: number) => {
     if (!week) return
@@ -107,11 +109,12 @@ export default function WeekTab() {
           </View>
         ) : null}
 
+        <View style={[styles.dayGrid, layout.isTablet && styles.dayGridTablet]}>
         {week?.days.map((day) => {
           const formatted = formatDay(day.date, locale)
           const isDayOff = !day.isWorkingDay
           return (
-            <View key={day.date} style={[styles.dayCard, day.isToday && styles.todayCard, isDayOff && styles.dayOffCard]}>
+            <View key={day.date} style={[styles.dayCard, layout.isTablet && styles.dayCardTablet, day.isToday && styles.todayCard, isDayOff && styles.dayOffCard]}>
               <View style={styles.dayHeader}>
                 <View style={[styles.dateBadge, day.isToday && styles.todayBadge, isDayOff && styles.dayOffBadge]}>
                   <Text style={[styles.dateBadgeText, day.isToday && styles.todayBadgeText, isDayOff && styles.dayOffBadgeText]}>{formatted.date.split(" ")[0]}</Text>
@@ -178,6 +181,7 @@ export default function WeekTab() {
             </View>
           )
         })}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -251,4 +255,7 @@ const styles = StyleSheet.create({
   routeActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   routeActionArrow: { color: colors.primary, fontSize: 18 },
   pressed: { opacity: 0.72 },
+  dayGrid: { width: "100%" },
+  dayGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 14, paddingHorizontal: 14, alignItems: "flex-start" },
+  dayCardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
 })

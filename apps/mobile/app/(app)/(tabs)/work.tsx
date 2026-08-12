@@ -6,6 +6,7 @@ import { useField } from "../../../src/field/field-context"
 import { t, useLocale } from "../../../src/i18n"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { colors, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type Module = {
   label: string
@@ -18,6 +19,7 @@ type Module = {
 export default function WorkTab() {
   useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const shelfOpenTasks = countOpenTasks()
   const modules: Module[] = [
     { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
@@ -51,12 +53,12 @@ export default function WorkTab() {
         </View>
 
         <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
-        <View style={styles.moduleList}>
+        <View style={[styles.moduleList, layout.isTablet && styles.moduleGridTablet]}>
           {modules.map((module, index) => (
             <Pressable
               key={module.href}
               onPress={() => router.push(module.href as never)}
-              style={({ pressed }) => [styles.moduleRow, index > 0 && styles.moduleBorder, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.moduleRow, index > 0 && !layout.isTablet && styles.moduleBorder, layout.isTablet && styles.moduleRowTablet, pressed && styles.pressed]}
             >
               <View style={styles.glyph}><TabIcon name={module.icon} color={colors.primary} size={21} /></View>
               {module.badge ? <View style={styles.badge}><Text style={styles.badgeText}>{module.badge > 99 ? "99+" : module.badge}</Text></View> : null}
@@ -103,4 +105,6 @@ const styles = StyleSheet.create({
   moduleHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   open: { color: colors.faint, fontSize: 25, fontWeight: "400" },
   pressed: { opacity: 0.7 },
+  moduleGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 12, borderWidth: 0, backgroundColor: "transparent", overflow: "visible" },
+  moduleRowTablet: { flexBasis: "48%", flexGrow: 1, minHeight: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radii.card, backgroundColor: colors.card },
 })

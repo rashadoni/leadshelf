@@ -7,6 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldOrganizationListData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const CACHE_KEY = "field.organizations"
 
@@ -18,6 +19,7 @@ export default function OrganizationsScreen() {
   const [loading, setLoading] = useState(!cached)
   const [error, setError] = useState<string | null>(null)
   const sequence = useRef(0)
+  const layout = useResponsiveLayout()
 
   const load = useCallback(async (query = "") => {
     const request = ++sequence.current
@@ -72,12 +74,12 @@ export default function OrganizationsScreen() {
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
 
         {data?.organizations.length ? (
-          <View style={styles.list}>
+          <View style={[styles.list, layout.isTablet && styles.listTablet]}>
             {data.organizations.map((organization) => (
               <Pressable
                 key={organization.id}
                 onPress={() => router.push(`/(app)/organizations/${organization.id}` as never)}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.pressed]}
               >
                 <View style={styles.orgMark}><Text style={styles.orgMarkText}>{organization.name.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.body}>
@@ -132,4 +134,6 @@ const styles = StyleSheet.create({
   empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" },
   emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" },
   pressed: { opacity: 0.7 },
+  listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
+  cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
 })

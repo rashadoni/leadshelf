@@ -12,6 +12,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { countOpenTaskStatuses } from "../../../src/tasks/status"
 import { groupTasksForWorkQueue, type TaskQueueGroup } from "../../../src/tasks/work-queue"
 import { colors, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const SECTION_TITLE_KEYS: Record<TaskQueueGroup, MessageKey> = {
   active: "tasksSectionActive",
@@ -54,6 +55,7 @@ export default function TasksScreen() {
   const { sync, status } = useSync()
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [refreshing, setRefreshing] = useState(false)
+  const layout = useResponsiveLayout()
 
   const reload = useCallback(() => setTasks(listTasks()), [])
   useFocusEffect(reload)
@@ -105,6 +107,7 @@ export default function TasksScreen() {
         </View>
       ) : (
         <SectionList
+          key={layout.isTablet ? "tablet" : "phone"}
           sections={sections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
@@ -133,7 +136,7 @@ export default function TasksScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push(`/(app)/tasks/${item.id}` as never)}
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.cardPressed]}
               >
                 <View style={styles.cardTop}>
                   <View style={styles.cardMain}>
@@ -202,6 +205,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   cardPressed: { opacity: 0.72 },
+  cardTablet: { maxWidth: 820, width: "100%", alignSelf: "center" },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   cardMain: { flex: 1, minWidth: 0 },
   taskTitle: { color: colors.text, fontSize: 15, fontWeight: "900", lineHeight: 20 },

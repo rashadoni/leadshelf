@@ -30,6 +30,12 @@ The same maintained Expo codebase also builds the Zeytunpharm field-agent APK:
 - `EXPO_PUBLIC_API_URL=https://app.leaddrivecrm.org`
 - Android application id: `org.leaddrive.field.zeytunpharm`
 
+The field variant supports phone and tablet layouts. Android rotation is enabled;
+at 768 dp and above the five primary areas move into a persistent left navigation
+rail, list/calendar screens use bounded two-column workspaces, and touch targets
+remain at least 44 dp. Phone navigation and one-column task execution remain
+unchanged.
+
 This variant signs in once through LeadDrive MTM. CRM/medical routes stay in
 LeadDrive, while shelf and commercial requests go through LeadDrive's trusted
 Field BFF. No LeadShelf service credential is stored in the APK.

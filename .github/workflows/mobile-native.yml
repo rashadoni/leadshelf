@@ -94,6 +94,18 @@ jobs:
           CI: "true"
         run: pnpm exec expo prebuild --platform android --no-install
 
+      - name: Verify generated application identity
+        if: ${{ inputs.apk_run_id == '' }}
+        run: |
+          set -euo pipefail
+          if [ "$LEADSHELF_APP_VARIANT" = "zeytunpharm" ]; then
+            grep -F 'applicationId "org.leaddrive.field.zeytunpharm"' apps/mobile/android/app/build.gradle >/dev/null
+            grep -F '<string name="app_name">LeadDrive Field</string>' apps/mobile/android/app/src/main/res/values/strings.xml >/dev/null
+          else
+            grep -F 'applicationId "com.leadshelf.mobile"' apps/mobile/android/app/build.gradle >/dev/null
+            grep -F '<string name="app_name">LeadShelf</string>' apps/mobile/android/app/src/main/res/values/strings.xml >/dev/null
+          fi
+
       - name: Compile standalone preview APK
         if: ${{ inputs.apk_run_id == '' }}
         working-directory: apps/mobile/android
