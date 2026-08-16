@@ -26,8 +26,10 @@ describe("field presence heartbeat", () => {
 
     expect(heartbeat).toHaveBeenCalledTimes(1)
     await Promise.resolve()
+    await Promise.resolve()
     callbacks.interval?.()
     expect(heartbeat).toHaveBeenCalledTimes(2)
+    await Promise.resolve()
     await Promise.resolve()
 
     state = "background"
