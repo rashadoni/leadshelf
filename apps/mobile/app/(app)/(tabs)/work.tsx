@@ -7,6 +7,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 
 type Module = {
   label: string
@@ -21,13 +22,22 @@ export default function WorkTab() {
   const field = useField()
   const layout = useResponsiveLayout()
   const shelfOpenTasks = countOpenTasks()
-  const modules: Module[] = [
-    { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
-    { label: t("tabRoute"), hint: t("todayRoute"), icon: "route", href: "/(app)/routes" },
-    { label: t("shelfTasksTitle"), hint: t("shelfTasksHint"), icon: "tasks", href: "/(app)/(tabs)/tasks", badge: shelfOpenTasks },
-    { label: t("tabShelves"), hint: t("shelvesSectionSubtitle"), icon: "shelves", href: "/(app)/(tabs)/shelves" },
-    { label: t("tabPlanograms"), hint: t("planogramsSectionSubtitle"), icon: "planograms", href: "/(app)/(tabs)/planograms" },
-  ]
+  const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
+  const modules: Module[] = IS_LEADDRIVE_FIELD
+    ? [
+        { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
+        { label: t("tabRoute"), hint: t("todayRoute"), icon: "route", href: "/(app)/routes" },
+        { label: t("agentTasksTitle"), hint: t("agentTasksSubtitle"), icon: "tasks", href: "/(app)/field-tasks", badge: fieldOpenTasks },
+        { label: t("moduleOrganizations"), hint: t("organizationsSearch"), icon: "organizations", href: "/(app)/organizations" },
+        { label: t("moduleContacts"), hint: t("contactsSearch"), icon: "contacts", href: "/(app)/contacts" },
+      ]
+    : [
+        { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
+        { label: t("tabRoute"), hint: t("todayRoute"), icon: "route", href: "/(app)/routes" },
+        { label: t("shelfTasksTitle"), hint: t("shelfTasksHint"), icon: "tasks", href: "/(app)/(tabs)/tasks", badge: shelfOpenTasks },
+        { label: t("tabShelves"), hint: t("shelvesSectionSubtitle"), icon: "shelves", href: "/(app)/(tabs)/shelves" },
+        { label: t("tabPlanograms"), hint: t("planogramsSectionSubtitle"), icon: "planograms", href: "/(app)/(tabs)/planograms" },
+      ]
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
