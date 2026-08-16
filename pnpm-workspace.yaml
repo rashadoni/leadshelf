@@ -26,7 +26,7 @@ overrides:
   "@expo/image-utils": "0.11.0"
   "postcss": "8.5.24"
   "js-yaml": "4.3.1"
-  "nanoid": "3.3.17"
+  "nanoid": "3.3.18"
   # brace-expansion OOM (CVE-2025-5889 / GHSA-mh99-v99m-4gvg): pin each major to
   # its API-compatible patched release. v5 changed the export to a named
   # { expand } object, so it CANNOT be forced onto minimatch@3/9 (which call the

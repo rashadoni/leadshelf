@@ -114,30 +114,59 @@ jobs:
       - name: Sign standalone preview APK
         if: ${{ inputs.apk_run_id == '' }}
         env:
-          PREVIEW_KEYSTORE_PASSWORD: android
-          PREVIEW_KEY_ALIAS: androiddebugkey
+          PREVIEW_KEYSTORE_B64: ${{ secrets.MOBILE_PREVIEW_KEYSTORE_B64 }}
+          PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.MOBILE_PREVIEW_KEYSTORE_PASSWORD }}
+          PREVIEW_KEY_ALIAS: ${{ secrets.MOBILE_PREVIEW_KEY_ALIAS }}
+          PREVIEW_KEY_PASSWORD: ${{ secrets.MOBILE_PREVIEW_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
           test -s "$apk"
           keystore="$RUNNER_TEMP/leaddrive-preview.keystore"
-          keytool -genkeypair -v \
-            -keystore "$keystore" \
-            -storepass "$PREVIEW_KEYSTORE_PASSWORD" \
-            -alias "$PREVIEW_KEY_ALIAS" \
-            -keypass "$PREVIEW_KEYSTORE_PASSWORD" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 3650 \
-            -dname "CN=LeadDrive Preview, OU=Mobile QA, O=LeadDrive, C=AZ"
-          jarsigner \
-            -keystore "$keystore" \
-            -storepass "$PREVIEW_KEYSTORE_PASSWORD" \
-            -keypass "$PREVIEW_KEYSTORE_PASSWORD" \
-            -sigalg SHA256withRSA \
-            -digestalg SHA-256 \
-            "$apk" "$PREVIEW_KEY_ALIAS"
-          rm -f "$keystore"
+          signing_kind=stable-preview-key
+
+          if [ -n "$PREVIEW_KEYSTORE_B64" ]; then
+            test -n "$PREVIEW_KEYSTORE_PASSWORD"
+            test -n "$PREVIEW_KEY_ALIAS"
+            test -n "$PREVIEW_KEY_PASSWORD"
+            printf '%s' "$PREVIEW_KEYSTORE_B64" | base64 --decode > "$keystore"
+          else
+            # Pull requests from forks cannot read repository secrets. They still
+            # receive an installable APK, but only trusted release runs use the
+            # stable preview key and can update an existing installation.
+            signing_kind=ephemeral-preview-key
+            PREVIEW_KEYSTORE_PASSWORD=android
+            PREVIEW_KEY_ALIAS=androiddebugkey
+            PREVIEW_KEY_PASSWORD=android
+            keytool -genkeypair -v \
+              -keystore "$keystore" \
+              -storepass "$PREVIEW_KEYSTORE_PASSWORD" \
+              -alias "$PREVIEW_KEY_ALIAS" \
+              -keypass "$PREVIEW_KEY_PASSWORD" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 3650 \
+              -dname "CN=LeadDrive Preview, OU=Mobile QA, O=LeadDrive, C=AZ"
+          fi
+
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)
+          test -x "$build_tools/zipalign"
+          test -x "$build_tools/apksigner"
+          aligned_apk="$RUNNER_TEMP/app-release-aligned.apk"
+          signed_apk="$RUNNER_TEMP/app-release-signed.apk"
+
+          "$build_tools/zipalign" -f -P 16 4 "$apk" "$aligned_apk"
+          "$build_tools/apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$PREVIEW_KEY_ALIAS" \
+            --ks-pass env:PREVIEW_KEYSTORE_PASSWORD \
+            --key-pass env:PREVIEW_KEY_PASSWORD \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          mv "$signed_apk" "$apk"
+          rm -f "$aligned_apk" "$keystore"
+          printf 'MOBILE_SIGNING_KIND=%s\n' "$signing_kind" >> "$GITHUB_ENV"
+          printf 'ANDROID_BUILD_TOOLS=%s\n' "$build_tools" >> "$GITHUB_ENV"
 
       - name: Download verified guide APK artifact
         if: ${{ inputs.record_guide && inputs.apk_run_id != '' }}
@@ -255,17 +284,17 @@ jobs:
           unzip -Z1 "$apk" | grep -Fx 'assets/index.android.bundle'
           unzip -p "$apk" assets/index.android.bundle |
             grep -aF "$EXPO_PUBLIC_API_URL" >/dev/null
-          signature_report=$(jarsigner -verify -verbose -certs "$apk" 2>&1)
-          printf '%s\n' "$signature_report" | grep -F 'jar verified.' >/dev/null
-          if printf '%s\n' "$signature_report" | grep -F 'jar is unsigned.' >/dev/null; then
-            echo 'APK signature verification reported unsigned content' >&2
-            exit 3
-          fi
+          test -x "$ANDROID_BUILD_TOOLS/apksigner"
+          test -x "$ANDROID_BUILD_TOOLS/zipalign"
+          "$ANDROID_BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$apk"
+          signature_report=$("$ANDROID_BUILD_TOOLS/apksigner" verify --verbose --print-certs "$apk" 2>&1)
+          printf '%s\n' "$signature_report"
+          printf '%s\n' "$signature_report" | grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' >/dev/null
           sha256sum "$apk" > mobile-native-SHA256SUMS
           printf '%s\n' "$apk" > mobile-native-artifact-name
-          printf 'commit=%s\nkind=standalone-preview-apk\narchitecture=%s\napp_variant=%s\napi_profile=%s\napi_origin=%s\nembedded_bundle=true\nstandalone=true\nsigning=ephemeral-preview-key\nproduction_signed=false\n' \
+          printf 'commit=%s\nkind=standalone-preview-apk\narchitecture=%s\napp_variant=%s\napi_profile=%s\napi_origin=%s\nembedded_bundle=true\nstandalone=true\nsigning=%s\napk_signature_scheme_v2=true\nproduction_signed=false\n' \
             "$GITHUB_SHA" "$LEADSHELF_ANDROID_ARCH" "$LEADSHELF_APP_VARIANT" "$LEADSHELF_API_PROFILE" \
-            "$EXPO_PUBLIC_API_URL" > mobile-native-evidence.txt
+            "$EXPO_PUBLIC_API_URL" "$MOBILE_SIGNING_KIND" > mobile-native-evidence.txt
 
       - name: Upload standalone preview APK
         if: ${{ inputs.apk_run_id == '' }}
