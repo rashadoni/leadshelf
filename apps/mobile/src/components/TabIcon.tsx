@@ -15,6 +15,8 @@ export type TabIconName =
   | "planograms"
   | "dashboard"
   | "orders"
+  | "organizations"
+  | "contacts"
   | "profile"
 
 export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: ColorValue; size?: number }) {
@@ -110,6 +112,20 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
             strokeLinejoin="round"
           />
           <Path d="M9 8.4h6M9 11.6h6" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
+        </Svg>
+      )
+    case "organizations":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M4.5 20V6.5L12 3l7.5 3.5V20M8 8.2h1.5M14.5 8.2H16M8 12h1.5M14.5 12H16M10 20v-4h4v4" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "contacts":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={3.5} y={4} width={17} height={16} rx={2.2} stroke={color} strokeWidth={1.7} />
+          <Circle cx={9} cy={9.2} r={2.1} stroke={color} strokeWidth={1.6} />
+          <Path d="M5.8 15.2c.7-1.8 1.8-2.7 3.2-2.7s2.5.9 3.2 2.7M14.5 8h3M14.5 11h3M14.5 14h2" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
         </Svg>
       )
     case "profile":

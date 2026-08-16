@@ -324,6 +324,10 @@ export async function mobileLogout(): Promise<void> {
 }
 
 export const fieldApi = {
+  heartbeat: async () => {
+    const body = await request<{ success?: boolean }>("/api/v1/mtm/mobile/ping", json({}))
+    if (body.success !== true) throw new Error("Invalid mobile heartbeat response")
+  },
   profile: () => request<unknown>("/api/v1/mtm/mobile/profile").then(parseFieldProfile),
   week: (start?: string) =>
     request<unknown>(`/api/v1/mtm/mobile/week${start ? `?start=${encodeURIComponent(start)}` : ""}`)
@@ -525,6 +529,7 @@ export const fieldApi = {
     request<unknown>("/api/v1/mtm/customer-create-requests", json(input))
       .then(parseFieldCustomerRequest),
 } satisfies {
+  heartbeat(): Promise<void>
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
   agentTasks(query?: string): Promise<FieldAgentTasksData>
