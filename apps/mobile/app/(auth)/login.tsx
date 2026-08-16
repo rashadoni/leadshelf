@@ -40,7 +40,7 @@ export default function LoginScreen() {
         tokenStore.getLastEmail(),
         tokenStore.getLastEmployeeCode(),
       ])
-      if (savedOrg && !mobileVariant.organizationSlug) setOrgSlug(savedOrg)
+      if (savedOrg) setOrgSlug(savedOrg)
       if (savedEmail) setEmail(savedEmail)
       if (savedEmployeeCode) setEmployeeCode(savedEmployeeCode)
     })()
@@ -52,7 +52,7 @@ export default function LoginScreen() {
     try {
       const res = IS_LEADDRIVE_FIELD
         ? await mobileLogin({
-            orgSlug: mobileVariant.organizationSlug ?? orgSlug.trim().toLowerCase(),
+            orgSlug: orgSlug.trim().toLowerCase(),
             email: email.trim().toLowerCase(),
             password: pin,
           })
@@ -117,19 +117,12 @@ export default function LoginScreen() {
 
           <View style={[styles.loginWorkspace, layout.isTablet && styles.loginWorkspaceTablet]}>
             <View style={[styles.intro, layout.isTablet && styles.introTablet]}>
-              <Text style={styles.eyebrow}>{IS_LEADDRIVE_FIELD ? "ZEYTUNPHARM · FIELD OPERATIONS" : "FIELD OPERATIONS"}</Text>
+              <Text style={styles.eyebrow}>{IS_LEADDRIVE_FIELD ? "LEADDRIVE · FIELD OPERATIONS" : "FIELD OPERATIONS"}</Text>
               <Text style={[styles.title, layout.isTablet && styles.titleTablet]}>{t("loginTitle")}</Text>
               <Text style={[styles.welcome, layout.isTablet && styles.welcomeTablet]}>{t(IS_LEADDRIVE_FIELD ? "fieldLoginSecureHint" : "loginSecureHint")}</Text>
             </View>
 
             <View style={[styles.form, layout.isTablet && styles.formTablet]}>
-            {IS_LEADDRIVE_FIELD ? (
-              <View style={styles.tenantBadge}>
-                <Text style={styles.tenantBadgeLabel}>{t("orgSlug")}</Text>
-                <Text style={styles.tenantBadgeValue}>Zeytunpharm</Text>
-              </View>
-            ) : null}
-            {!IS_LEADDRIVE_FIELD ? (
             <View style={styles.field}>
               <Text style={styles.label}>{t("orgSlug")}</Text>
               <TextInput
@@ -140,7 +133,6 @@ export default function LoginScreen() {
                 onChangeText={setOrgSlug}
               />
             </View>
-            ) : null}
             <View style={styles.field}>
               <Text style={styles.label}>{IS_LEADDRIVE_FIELD ? t("email") : t("employeeCode")}</Text>
               <TextInput
@@ -217,9 +209,6 @@ const styles = StyleSheet.create({
   welcomeTablet: { fontSize: 17, lineHeight: 25, maxWidth: 430, marginTop: 12 },
   form: { gap: 17 },
   formTablet: { width: 420, padding: 24, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
-  tenantBadge: { minHeight: 58, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" },
-  tenantBadgeLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
-  tenantBadgeValue: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
   field: { gap: 7 },
   label: { fontSize: 12, fontWeight: "800", color: colors.muted, letterSpacing: 0.2 },
   input: {

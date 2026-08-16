@@ -37,4 +37,15 @@ describe("variant-capable field mobile auth wiring", () => {
     expect(login).toContain('IS_LEADDRIVE_FIELD ? t("password") : t("pin")')
     expect(appConfig.expo?.android?.softwareKeyboardLayoutMode).toBe("resize")
   })
+
+  it("lets LeadDrive Field users change the organization at login", () => {
+    const login = source("../../app/(auth)/login.tsx")
+
+    expect(login).toContain("if (savedOrg) setOrgSlug(savedOrg)")
+    expect(login).toContain("orgSlug: orgSlug.trim().toLowerCase()")
+    expect(login).toContain("value={orgSlug}")
+    expect(login).toContain("onChangeText={setOrgSlug}")
+    expect(login).not.toContain("mobileVariant.organizationSlug ?? orgSlug.trim().toLowerCase()")
+    expect(login).not.toContain("tenantBadge")
+  })
 })
