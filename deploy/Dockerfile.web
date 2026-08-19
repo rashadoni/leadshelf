@@ -28,6 +28,14 @@ FROM builder AS seed-demo
 WORKDIR /app
 CMD ["pnpm", "--filter", "@leadshelf/db", "seed:demo"]
 
+# --- одноразовая заливка демо-медиа (docker compose run --rm media-backfill) ---
+# В отличие от seed-demo в БД ничего не пишет, поэтому допустима на client prod.
+# ENTRYPOINT, а не CMD: аргументы `docker compose run` дописываются к команде,
+# так что `run --rm media-backfill --apply` включает запись в бакет.
+FROM builder AS media-backfill
+WORKDIR /app/packages/db
+ENTRYPOINT ["pnpm", "exec", "tsx", "prisma/media-backfill.ts"]
+
 # --- рантайм ---
 FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS runner
 WORKDIR /app

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { DEMO_PRODUCT_PACK_SVG } from "@leadshelf/db"
 import { requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { getObject } from "@/server/storage/s3"
 import { demoMediaFallbackAllowed, runtimeProfile } from "@/server/runtime-profile"
@@ -30,18 +31,7 @@ export async function GET(
 
   const demoFallback = demoMediaFallbackAllowed(runtimeProfile(), key, session.org)
   if (demoFallback && key.startsWith(`products/${session.org}/`)) {
-    const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640" role="img" aria-label="Demo product package">
-  <rect width="640" height="640" fill="#f5f5f4"/>
-  <rect x="172" y="82" width="296" height="476" rx="34" fill="#ffffff" stroke="#d4d4d4" stroke-width="8"/>
-  <rect x="204" y="124" width="232" height="92" rx="18" fill="#dbeafe"/>
-  <rect x="204" y="246" width="232" height="24" rx="12" fill="#d4d4d4"/>
-  <rect x="204" y="292" width="176" height="18" rx="9" fill="#e5e7eb"/>
-  <rect x="204" y="330" width="214" height="18" rx="9" fill="#e5e7eb"/>
-  <circle cx="320" cy="442" r="54" fill="#dcfce7" stroke="#16a34a" stroke-width="8"/>
-  <text x="320" y="180" text-anchor="middle" fill="#1d4ed8" font-family="Arial, sans-serif" font-size="34" font-weight="700">SKU</text>
-  <text x="320" y="456" text-anchor="middle" fill="#15803d" font-family="Arial, sans-serif" font-size="30" font-weight="700">OTC</text>
-</svg>`
+    const svg = DEMO_PRODUCT_PACK_SVG
     return new NextResponse(svg, {
       headers: {
         "Content-Type": "image/svg+xml; charset=utf-8",

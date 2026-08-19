@@ -69,6 +69,17 @@ services:
         condition: service_healthy
     profiles: ["tools"] # только docker compose run --rm seed-demo
 
+  media-backfill:
+    build:
+      context: ./app
+      dockerfile: deploy/Dockerfile.web
+      target: media-backfill
+    env_file: .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"] # docker compose run --rm media-backfill [--apply]
+
   worker-import:
     build:
       context: ./app

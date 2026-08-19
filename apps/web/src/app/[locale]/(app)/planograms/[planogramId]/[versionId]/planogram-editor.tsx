@@ -242,6 +242,11 @@ export function PlanogramEditor({
   const referenceSlotDragRef = useRef<ReferenceSlotDrag | null>(null)
 
   const [placements, setPlacements] = useState(initialPlacements)
+  // Медиа товара может отсутствовать в бакете (демо-каталог, ещё не залитая
+  // картинка). Без этого фолбэка SVG <image> с битым href рисует пустоту —
+  // товар «пропадает» с полки. Ключ ушёл в brokenImages → возвращаемся к
+  // цветному прямоугольнику, как для товара без фото.
+  const [brokenImages, setBrokenImages] = useState<ReadonlySet<string>>(() => new Set())
   const [activeView, setActiveView] = useState<EditorView>("planogram")
   const [zones, setZones] = useState(initialZones)
   const [revision, setRevision] = useState(version.revision)
@@ -1253,6 +1258,14 @@ export function PlanogramEditor({
     return shelf ? shelf.shelfIndex + 1 : 0
   }
 
+  function markImageBroken(key: string) {
+    setBrokenImages((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
+  }
+
+  function imageKeyOf(key: string | null): string | null {
+    return key && !brokenImages.has(key) ? key : null
+  }
+
   function selectPickerProduct(product: PickerProduct) {
     setMessage(null)
     setSelectedPickerProduct(product)
@@ -1289,7 +1302,16 @@ export function PlanogramEditor({
                   className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
                   style={{ backgroundColor: colorFor(p.sku) }}
                 >
-                  {p.imageKey ? <img src={`/api/media/${p.imageKey}`} alt="" className="h-full w-full object-cover" /> : p.name.slice(0, 1)}
+                  {imageKeyOf(p.imageKey) ? (
+                    <img
+                      src={`/api/media/${p.imageKey}`}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={() => markImageBroken(p.imageKey as string)}
+                    />
+                  ) : (
+                    p.name.slice(0, 1)
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-neutral-900">{p.name}</span>
@@ -1603,7 +1625,7 @@ export function PlanogramEditor({
                   opacity={dragState ? 0.72 : 1}
                 >
                   <title>{`${p.product.sku} · ${p.product.name}`}</title>
-                  {p.product.imageKey ? (
+                  {imageKeyOf(p.product.imageKey) ? (
                     <image
                       href={`/api/media/${p.product.imageKey}`}
                       x={x}
@@ -1611,6 +1633,7 @@ export function PlanogramEditor({
                       width={wPx}
                       height={hPx}
                       preserveAspectRatio="none"
+                      onError={() => markImageBroken(p.product.imageKey as string)}
                     />
                   ) : (
                     <rect x={x} y={y} width={wPx} height={hPx} fill={colorFor(p.product.sku)} opacity={0.85} rx={1} />
