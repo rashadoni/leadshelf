@@ -33,6 +33,11 @@ export {
   type ExecuteDsarExportInput,
   type DsarExportResult,
 } from "./dsar.ts"
+export {
+  DEMO_PRODUCT_IMAGE_FILENAME,
+  DEMO_PRODUCT_PACK_SVG,
+  demoProductImageKey,
+} from "./demo-media.ts"
 export { listImportErrorsForBatch } from "./repos/import.ts"
 export {
   consumeDurableRateLimit,

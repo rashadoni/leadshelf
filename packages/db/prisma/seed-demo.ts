@@ -6,6 +6,8 @@ import { Prisma } from "@prisma/client"
 import { calculateShelfCompliance, compareShelf } from "@leadshelf/core"
 import { createSystemClient, createTenantClient, persistShelfMetricSnapshot } from "../src/index.ts"
 import { buildDemoSeedFailureLog, buildDemoSeedReadyLog } from "../src/demo-seed-log.ts"
+import { demoProductImageKey } from "../src/demo-media.ts"
+import { backfillDemoProductImages, demoMediaClient } from "../src/demo-media-store.ts"
 
 const ARGON_OPTS = { memoryCost: 19456, timeCost: 2, parallelism: 1 }
 const DEMO_PASSWORD = "demo1234"
@@ -373,7 +375,7 @@ async function ensureCatalog(organizationId: string, formatId: string, storeId: 
       await prisma.productImage.create({
         data: {
           productId: product.id,
-          url: `products/${organizationId}/${product.id}/demo-pack.svg`,
+          url: demoProductImageKey(organizationId, product.id),
           kind: "front",
           sortOrder: 0,
         },
@@ -422,7 +424,7 @@ async function ensureCatalogCompleteness(organizationId: string) {
         data: { organizationId, productId: product.id, barcode, isPrimary: true },
       })
     }
-    const demoImageUrl = `products/${organizationId}/${product.id}/demo-pack.svg`
+    const demoImageUrl = demoProductImageKey(organizationId, product.id)
     const demoImage = product.images.find((image) => image.url === demoImageUrl)
     if (demoImage) {
       await prisma.productImage.update({
@@ -1607,6 +1609,18 @@ async function ensureAnalyticsSnapshots(input: {
   }
 }
 
+// Заливка плейсхолдеров вынесена в src/demo-media-store.ts: тот же код гоняется
+// отдельной командой media:backfill там, где seed-demo запускать нельзя.
+async function uploadDemoProductImages(organizationId: string): Promise<number> {
+  if (!demoMediaClient()) {
+    // CI и локальный прогон без хранилища: БД засеивается, медиа пропускаем.
+    console.warn("demo_seed_media_skipped: S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY не заданы")
+    return 0
+  }
+  const result = await backfillDemoProductImages({ prisma, organizationId, apply: true })
+  return result.uploaded
+}
+
 async function main() {
   const org = await prisma.organization.upsert({
     where: { slug: "demo" },
@@ -1650,6 +1664,7 @@ async function main() {
   const store = await ensureStore(org.id, region.id, format.id)
   const products = await ensureCatalog(org.id, format.id, store.id)
   await ensureCatalogCompleteness(org.id)
+  const uploadedMedia = await uploadDemoProductImages(org.id)
   const { version: equipmentVersion } = await ensureEquipment(org.id)
   const { planogram, version: planogramVersion } = await ensurePlanogram(
     org.id,
@@ -1753,6 +1768,7 @@ async function main() {
   const ready = stores === 1 && productsCount >= 6 && floorPlans > 0 && planograms > 0 && tasks === 1 && freshProofTasks === 1 && reviews >= 2 && agents >= 5 && routes >= 5 && visits > 0 && sales > 0 && stocks > 0 && prices > 0 && e2eRoutes === 0 && e2eTasks === 0
   if (!ready) throw new Error(`Demo readiness-check failed: ${JSON.stringify(readiness)}`)
 
+  console.log(`demo_seed_media_uploaded: ${uploadedMedia}`)
   console.log(buildDemoSeedReadyLog({
     organizationId: org.id,
     organizationSlug: org.slug,

@@ -9,6 +9,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "media:backfill": "tsx prisma/media-backfill.ts",
     "tenant:offboarding": "tsx prisma/tenant-offboarding.ts",
     "retention": "tsx prisma/retention.ts",
     "dsar": "tsx prisma/dsar.ts",
@@ -23,6 +24,7 @@
     "@leadshelf/core": "workspace:*"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1078.0",
     "@node-rs/argon2": "^2.0.2",
     "@types/node": "^20.17.0",
     "dotenv": "^16.4.0",
