@@ -17,3 +17,20 @@ ignore:
   - vulnerability: CVE-2025-5889
     package:
       name: brace-expansion
+  # CVE-2026-14456 (CVSS 7.5): OpenSSL 3.5.0-3.5.7 QUIC *server* listener не
+  # ограничивает число pending-соединений — поток Initial-пакетов с неизвестными
+  # connection ID растит память без предела. Патча ещё нет: Alpine v3.24/main
+  # отдаёт только 3.5.7-r0 (`apk policy libssl3`, проверено 2026-08-19), тег
+  # node:22-alpine резолвится в тот самый запиненный дайджест, и в трекере
+  # Alpine этот CVE для openssl пока не заведён.
+  #
+  # Код недостижим: web/worker — это Node 22, который вообще не отдаёт QUIC-
+  # сервер (`node:quic` в 22.x нет, ERR_UNKNOWN_BUILTIN_MODULE), а TLS и HTTP/3
+  # снаружи терминирует Caddy на Go с собственным quic-go, не с OpenSSL.
+  # Снять эти две записи, как только Alpine выпустит 3.5.7-r1.
+  - vulnerability: CVE-2026-14456
+    package:
+      name: libssl3
+  - vulnerability: CVE-2026-14456
+    package:
+      name: libcrypto3
