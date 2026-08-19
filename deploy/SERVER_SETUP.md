@@ -15,7 +15,7 @@
   (за Cloudflare; запасной прямой вход `https://157-90-227-191.sslip.io`) —
   оба host работают по HTTPS; demo credentials передаются только утверждённым
   закрытым каналом и не фиксируются в Git/логах. Прод-стек в /opt/leadshelf/prod (compose
-  leadshelf-prod: caddy+web+workers+postgres16; media во внешнем S3), секреты в
+  leadshelf-prod: caddy+web+workers+postgres16+minio), секреты в
   .env.production (root:600, сгенерированы на сервере).
 - **Автодеплой**: push в main -> CI (тесты) -> deploy job (ssh, git pull,
   build, migrate, up) -> smoke check. Ключ CI — отдельный, в GH secrets.
@@ -71,9 +71,13 @@ apt install -y unattended-upgrades fail2ban awscli
 - Caddy: `hermescrm.xyz` -> prod:3000; `157-90-227-191.sslip.io` остается
   запасным прямым входом. Dev не публиковать наружу без отдельного решения —
   доступ через SSH-туннель/basic auth.
-- Prod-стек: `caddy` + `web` + workers + `postgres:16`; object storage —
-  поддерживаемый внешний S3/R2 provider. Dev MinIO остаётся локальным
-  эмулятором.
+- Prod-стек: `caddy` + `web` + workers + `postgres:16` + `minio`. Object
+  storage сегодня — MinIO на этом же хосте (том `leadshelf-prod_miniodata`,
+  порт только на loopback), НЕ внешний провайдер: строчка про внешний S3/R2
+  описывала намерение, и расхождение с фактом стоило разбора 2026-08-19 —
+  бэкап ходит в S3 с хоста и падал на docker-DNS `minio`. Переезд на внешний
+  S3/R2 остаётся отдельной задачей; до него precondition ниже относится к
+  провайдеру, а не к текущей установке.
 
 Production precondition: заранее создать private bucket, включить versioning
 и lifecycle/retention по договору, выдать отдельные least-privilege credentials
