@@ -14,10 +14,12 @@ import {
   placementWidthMm,
   shelfSpaceForShelf,
   shelfUsage,
+  validatePlacementOnShelf,
   type EquipmentGeometryMm,
   type PlacementStackMode,
 } from "@leadshelf/core"
 import { PublishDialog, type PublishTargetOption } from "./publish-dialog"
+import { placementCanvasGeometry, planogramCanvasScale } from "./planogram-canvas-geometry"
 import { formatResponseError } from "@/client/api-error"
 
 const PlanogramThreeViewer = dynamic(
@@ -27,6 +29,62 @@ const PlanogramThreeViewer = dynamic(
 
 // Держим строкой, а не импортом из @leadshelf/db: это клиентский компонент.
 const GENERIC_PRODUCT_IMAGE_FILENAME = "demo-pack.svg"
+
+function CommitNumberInput({
+  label,
+  value,
+  min,
+  className,
+  disabled,
+  onCommit,
+}: {
+  label: string
+  value: number
+  min: number
+  className: string
+  disabled?: boolean
+  onCommit: (value: number) => Promise<boolean>
+}) {
+  const [draft, setDraft] = useState(String(value))
+  const commitInFlightRef = useRef(false)
+
+  useEffect(() => setDraft(String(value)), [value])
+
+  async function commit() {
+    if (commitInFlightRef.current) return
+    const parsed = Number.parseInt(draft, 10)
+    if (!Number.isInteger(parsed) || parsed < min) {
+      setDraft(String(value))
+      return
+    }
+    if (parsed === value) return
+
+    commitInFlightRef.current = true
+    const accepted = await onCommit(parsed)
+    commitInFlightRef.current = false
+    setDraft(String(accepted ? parsed : value))
+  }
+
+  return (
+    <input
+      type="number"
+      aria-label={label}
+      min={min}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur()
+        if (event.key === "Escape") {
+          setDraft(String(value))
+          event.currentTarget.blur()
+        }
+      }}
+      disabled={disabled}
+      className={className}
+    />
+  )
+}
 
 export interface EditorProduct {
   id: string
@@ -214,6 +272,7 @@ export function PlanogramEditor({
   version,
   equipment,
   initialPlacements,
+  initialCatalogProducts,
   placementMetrics,
   initialZones,
   versionHistory,
@@ -226,6 +285,7 @@ export function PlanogramEditor({
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
+  initialCatalogProducts: PickerProduct[]
   placementMetrics: PlacementMetric[]
   initialZones: EditorZone[]
   versionHistory: VersionHistoryItem[]
@@ -244,6 +304,7 @@ export function PlanogramEditor({
   const canvasBoxRef = useRef<HTMLDivElement | null>(null)
   const referenceImageRef = useRef<HTMLDivElement | null>(null)
   const referenceSlotDragRef = useRef<ReferenceSlotDrag | null>(null)
+  const productSearchRequestRef = useRef(0)
 
   const [placements, setPlacements] = useState(initialPlacements)
   // Ширина колонки под холст: ResizeObserver, потому что колонка резиновая и
@@ -268,7 +329,8 @@ export function PlanogramEditor({
   const [message, setMessage] = useState<string | null>(null)
   const [messageTone, setMessageTone] = useState<"error" | "success">("error")
   const [search, setSearch] = useState("")
-  const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false)
+  const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>(initialCatalogProducts)
   const [selectedPickerProduct, setSelectedPickerProduct] = useState<PickerProduct | null>(null)
   const [draggingProductId, setDraggingProductId] = useState<string | null>(null)
   const [references, setReferences] = useState(goldenReferences)
@@ -314,6 +376,13 @@ export function PlanogramEditor({
     () => new Map(placementMetrics.map((metric) => [metric.productId, metric])),
     [placementMetrics],
   )
+  const productPlacementCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const placement of placements) {
+      counts.set(placement.product.id, (counts.get(placement.product.id) ?? 0) + 1)
+    }
+    return counts
+  }, [placements])
   const activeReference = references.find((ref) => ref.id === activeReferenceId) ?? references[0] ?? null
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
   const selectedReferenceSlot =
@@ -402,19 +471,24 @@ export function PlanogramEditor({
   }
 
   async function searchProducts(q: string) {
+    const requestId = ++productSearchRequestRef.current
     setSearch(q)
     setMessage(null)
-    if (q.trim().length < 2) {
-      setPickerProducts([])
+    if (q.trim().length === 0) {
+      setPickerProducts(initialCatalogProducts)
+      setIsSearchingProducts(false)
       return
     }
-    const res = await apiFetch(`/api/v1/catalog/products?q=${encodeURIComponent(q)}&limit=8`)
+    setIsSearchingProducts(true)
+    const res = await apiFetch(`/api/v1/catalog/products?q=${encodeURIComponent(q.trim())}&limit=20`)
+    if (requestId !== productSearchRequestRef.current) return
     if (res.ok) {
       const body = await res.json()
       setPickerProducts(body.products)
     } else {
       await handleResponse(res)
     }
+    setIsSearchingProducts(false)
   }
 
   async function place(product: PickerProduct, shelfId = selectedShelfId, xMm?: number) {
@@ -466,9 +540,9 @@ export function PlanogramEditor({
             },
           },
         ])
-        setSelectedPlacementId(body.placementId as string)
+        setSelectedPlacementId(null)
         setSelectedShelfId(shelfId)
-        setSelectedPickerProduct(null)
+        setSelectedPickerProduct(product)
         setJustPlacedId(body.placementId as string)
         svgRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
         setMessageTone("success")
@@ -546,8 +620,8 @@ export function PlanogramEditor({
     }
   }
 
-  async function patchPlacement(id: string, patch: Record<string, number | string>) {
-    if (readOnly || isBusy) return
+  async function patchPlacement(id: string, patch: Record<string, number | string>): Promise<boolean> {
+    if (readOnly || isBusy) return false
     setMessage(null)
     setPendingAction("patch")
     try {
@@ -562,7 +636,9 @@ export function PlanogramEditor({
         setPlacements((prev) =>
           prev.map((p) => (p.id === id ? ({ ...p, ...patch } as EditorPlacement) : p)),
         )
+        return true
       }
+      return false
     } finally {
       setPendingAction(null)
     }
@@ -1033,14 +1109,12 @@ export function PlanogramEditor({
   // 20px и терял ярлык, и пользователь читал это как «товар не добавился».
   // Теперь вписываем и по ширине контейнера, и по высоте, а zoom даёт ручное
   // увеличение поверх вписанного масштаба.
-  const CANVAS_MAX_HEIGHT_PX = 900
-  const CANVAS_FALLBACK_WIDTH_PX = 560
-  const fitWidthPx = canvasWidthPx || CANVAS_FALLBACK_WIDTH_PX
-  const fitK = Math.min(
-    fitWidthPx / equipment.widthMm,
-    CANVAS_MAX_HEIGHT_PX / equipment.heightMm,
-  )
-  const k = fitK * canvasZoom
+  const k = planogramCanvasScale({
+    equipmentWidthMm: equipment.widthMm,
+    equipmentHeightMm: equipment.heightMm,
+    containerWidthPx: canvasWidthPx,
+    zoom: canvasZoom,
+  })
   const H = equipment.heightMm * k
   const W = equipment.widthMm * k
 
@@ -1191,6 +1265,23 @@ export function PlanogramEditor({
     return Math.max(0, Math.min(max, Math.round(rawMm / 10) * 10))
   }
 
+  function dragPlacementValidation(state: DragState) {
+    const placement = placements.find((item) => item.id === state.placementId)
+    const shelf = shelfSpaceForShelf(equipment, state.shelfId)
+    if (!placement || !shelf) return null
+
+    return validatePlacementOnShelf({
+      shelf,
+      candidate: {
+        ...placement,
+        shelfId: state.shelfId,
+        xMm: state.xMm,
+      },
+      existing: placements,
+      ignorePlacementId: placement.id,
+    })
+  }
+
   function startDrag(event: PointerEvent<SVGGElement>, placement: EditorPlacement) {
     if (readOnly || isBusy) return
     event.stopPropagation()
@@ -1230,6 +1321,12 @@ export function PlanogramEditor({
     const placement = placements.find((p) => p.id === state.placementId)
     if (!placement) return
     if (placement.xMm === state.xMm && placement.shelfId === state.shelfId) return
+    const validation = dragPlacementValidation(state)
+    if (!validation?.ok) {
+      setMessageTone("error")
+      setMessage(t("invalidDrop"))
+      return
+    }
     await patchPlacement(state.placementId, { xMm: state.xMm, shelfId: state.shelfId })
   }
 
@@ -1321,62 +1418,90 @@ export function PlanogramEditor({
   }
 
   function renderPickerProductList(layout: "compact" | "panel") {
+    if (isSearchingProducts) {
+      return <p className="mt-2 rounded-md bg-neutral-50 px-2 py-2 text-xs text-neutral-500">{t("searchingProducts")}</p>
+    }
     if (pickerProducts.length > 0) {
       return (
-        <div className={layout === "compact" ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2 max-h-48 space-y-1 overflow-y-auto"}>
+        <div className={layout === "compact" ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2 max-h-80 space-y-1 overflow-y-auto"}>
           {pickerProducts.map((p) => {
             const selected = selectedPickerProduct?.id === p.id
+            const placedCount = productPlacementCounts.get(p.id) ?? 0
             return (
-              <button
+              <div
                 key={p.id}
-                type="button"
+                data-testid="planogram-product-result"
+                data-product-id={p.id}
+                data-sku={p.sku}
                 draggable={p.hasDimensions}
                 onDragStart={(event) => handleCatalogDragStart(event, p)}
                 onDragEnd={() => setDraggingProductId(null)}
-                onClick={() => selectPickerProduct(p)}
-                disabled={!p.hasDimensions || isBusy}
                 className={
                   layout === "compact"
-                    ? `flex min-w-64 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm disabled:opacity-40 ${
+                    ? `flex min-w-80 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm ${
                         selected ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-neutral-50"
                       }`
-                    : `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-white disabled:opacity-40 ${
+                    : `flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-sm hover:bg-white ${
                         selected ? "bg-amber-50 ring-1 ring-amber-200" : ""
-                      }`
+                      } ${p.hasDimensions ? "border-neutral-200" : "border-dashed border-neutral-200 opacity-60"}`
                 }
                 title={p.hasDimensions ? p.name : t("noDims")}
               >
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
-                  style={{ backgroundColor: colorFor(p.sku) }}
+                <span className="cursor-grab select-none text-base text-neutral-400" title={t("dragProductHint")} aria-hidden="true">
+                  ⋮⋮
+                </span>
+                <button
+                  type="button"
+                  onClick={() => selectPickerProduct(p)}
+                  disabled={!p.hasDimensions || isBusy}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed"
                 >
-                  {imageKeyOf(p.imageKey) ? (
-                    <img
-                      src={`/api/media/${p.imageKey}`}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      onError={() => markImageBroken(p.imageKey as string)}
-                    />
-                  ) : (
-                    p.name.slice(0, 1)
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-neutral-900">{p.name}</span>
-                  <span className="block truncate text-xs text-neutral-500">
-                    {p.sku} · {p.widthMm ?? "—"}×{p.heightMm ?? "—"}×{p.depthMm ?? "—"} mm
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
+                    style={{ backgroundColor: colorFor(p.sku) }}
+                  >
+                    {imageKeyOf(p.imageKey) ? (
+                      <img
+                        src={`/api/media/${p.imageKey}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={() => markImageBroken(p.imageKey as string)}
+                      />
+                    ) : (
+                      p.name.slice(0, 1)
+                    )}
                   </span>
-                </span>
-                <span className="shrink-0 rounded border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700">
-                  {selected ? t("selectedSku") : t("chooseSku")}
-                </span>
-              </button>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-neutral-900">{p.name}</span>
+                    <span className="block truncate text-xs text-neutral-500">
+                      {p.sku} · {p.widthMm ?? "—"}×{p.heightMm ?? "—"}×{p.depthMm ?? "—"} mm
+                    </span>
+                    {placedCount > 0 ? (
+                      <span data-testid="product-placement-count" className="mt-0.5 block text-[11px] font-medium text-emerald-700">
+                        {t("placedProductCount", { count: placedCount })}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("addProductToShelf", { sku: p.sku, shelf: selectedShelfNumber ?? 0 })}
+                  onClick={() => {
+                    selectPickerProduct(p)
+                    void place(p)
+                  }}
+                  disabled={!p.hasDimensions || !selectedShelfId || isBusy}
+                  className="shrink-0 rounded-md bg-neutral-900 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {placedCount > 0 ? t("addAgain") : t("addProduct")}
+                </button>
+              </div>
             )
           })}
         </div>
       )
     }
-    if (search.trim().length >= 2) {
+    if (search.trim().length > 0) {
       return <p className="mt-2 rounded-md bg-neutral-50 px-2 py-2 text-xs text-neutral-500">{t("noProductsFound")}</p>
     }
     return <p className="mt-2 text-xs text-neutral-500">{t("searchMinChars")}</p>
@@ -1510,6 +1635,9 @@ export function PlanogramEditor({
                             <button
                               key={shelf.id}
                               type="button"
+                              data-testid="planogram-shelf-selector"
+                              data-shelf-index={shelf.shelfIndex + 1}
+                              data-shelf-id={shelf.id}
                               onClick={() => setSelectedShelfId(shelf.id)}
                               disabled={isBusy}
                               className={`min-w-32 rounded-md border px-3 py-2 text-left transition disabled:opacity-40 ${
@@ -1540,13 +1668,24 @@ export function PlanogramEditor({
                         </div>
                         {isBusy ? <span className="rounded bg-white px-2 py-1 text-xs text-neutral-600">{t("saving")}</span> : null}
                       </div>
-                      <input
-                        type="search"
-                        value={search}
-                        onChange={(e) => searchProducts(e.target.value)}
-                        placeholder={t("searchProducts")}
-                        className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
-                      />
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          type="search"
+                          value={search}
+                          onChange={(e) => searchProducts(e.target.value)}
+                          placeholder={t("searchProducts")}
+                          className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
+                        />
+                        {search ? (
+                          <button
+                            type="button"
+                            onClick={() => void searchProducts("")}
+                            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                          >
+                            {t("clearSearch")}
+                          </button>
+                        ) : null}
+                      </div>
                       {renderPickerProductList("panel")}
                       {selectedPickerProduct ? (
                         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2">
@@ -1578,6 +1717,7 @@ export function PlanogramEditor({
                 </div>
               <svg
             ref={svgRef}
+            data-testid="planogram-canvas"
             viewBox={`0 0 ${W} ${H}`}
             width={W}
             height={H}
@@ -1665,16 +1805,28 @@ export function PlanogramEditor({
               const dragState = drag?.placementId === p.id ? drag : null
               const shelf = equipment.shelves.find((s) => s.id === (dragState?.shelfId ?? p.shelfId))
               if (!shelf) return null
-              const oriented = orientedProductSizeMm(p)
-              const faceWidthPx = oriented.widthMm * (p.compressionX ?? 1) * k
-              const wPx = faceWidthPx * p.facingsX
-              const hPx = oriented.heightMm * p.facingsY * k
-              const x = (dragState?.xMm ?? p.xMm) * k
-              const y = H - (shelf.yMm + shelf.thicknessMm + oriented.heightMm * p.facingsY) * k
+              const geometry = placementCanvasGeometry({
+                equipmentHeightMm: equipment.heightMm,
+                scale: k,
+                shelf,
+                placement: p,
+                xMm: dragState?.xMm,
+              })
+              const {
+                xPx: x,
+                yPx: y,
+                faceWidthPx,
+                faceHeightPx,
+                widthPx: wPx,
+                heightPx: hPx,
+              } = geometry
+              const dragValidation = dragState ? dragPlacementValidation(dragState) : null
+              const invalidDrag = dragState != null && dragValidation?.ok === false
               const isSel = p.id === selectedPlacementId
               const diffKind = diff.currentMarks.get(editorPlacementDiffKey(p))
               const metric = metricsByProductId.get(p.product.id)
               const productLabel = p.product.sku
+              const patternId = `placement-face-${p.id}`
               const labelWidthPx = Math.min(Math.max(36, productLabel.length * 5.8 + 12), Math.max(0, wPx - 4))
               const showProductLabel = labelWidthPx >= 26 && hPx >= 16
               // Порог по высоте — чтобы повёрнутый текст помещался вдоль товара.
@@ -1684,6 +1836,18 @@ export function PlanogramEditor({
               return (
                 <g
                   key={p.id}
+                  data-testid="planogram-placement"
+                  data-placement-id={p.id}
+                  data-product-id={p.product.id}
+                  data-sku={p.product.sku}
+                  data-shelf-id={dragState?.shelfId ?? p.shelfId}
+                  data-x-mm={dragState?.xMm ?? p.xMm}
+                  data-facings-x={p.facingsX}
+                  data-facings-y={p.facingsY}
+                  data-drop-state={dragState ? (invalidDrag ? "invalid" : "valid") : "idle"}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${p.product.sku} · ${p.product.name}`}
                   onPointerDown={(e) => startDrag(e, p)}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -1691,44 +1855,90 @@ export function PlanogramEditor({
                     setSelectedPlacementId(p.id)
                     setSelectedShelfId(p.shelfId)
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return
+                    event.preventDefault()
+                    setSelectedPickerProduct(null)
+                    setSelectedPlacementId(p.id)
+                    setSelectedShelfId(p.shelfId)
+                  }}
                   className={readOnly ? "cursor-pointer" : "cursor-move"}
                   opacity={dragState ? 0.72 : 1}
+                  style={{ touchAction: "none" }}
                 >
                   <title>{`${p.product.sku} · ${p.product.name}`}</title>
-                  {imageKeyOf(p.product.imageKey) ? (
-                    <image
-                      href={`/api/media/${p.product.imageKey}`}
+                  <defs>
+                    <pattern
+                      id={patternId}
+                      data-testid="planogram-facing-pattern"
+                      data-face-width-px={faceWidthPx}
+                      data-face-height-px={faceHeightPx}
+                      patternUnits="userSpaceOnUse"
                       x={x}
                       y={y}
-                      width={wPx}
-                      height={hPx}
-                      preserveAspectRatio="none"
-                      onError={() => markImageBroken(p.product.imageKey as string)}
-                    />
-                  ) : (
-                    <rect x={x} y={y} width={wPx} height={hPx} fill={colorFor(p.product.sku)} opacity={0.85} rx={1} />
-                  )}
-                  {/* границы фейсов */}
-                  {Array.from({ length: p.facingsX - 1 }, (_, i) => (
-                    <line
-                      key={i}
-                      x1={x + (i + 1) * faceWidthPx}
-                      y1={y}
-                      x2={x + (i + 1) * faceWidthPx}
-                      y2={y + hPx}
-                      stroke="white"
-                      strokeWidth={0.7}
-                      opacity={0.6}
-                    />
-                  ))}
+                      width={faceWidthPx}
+                      height={faceHeightPx}
+                    >
+                      {imageKeyOf(p.product.imageKey) ? (
+                        <image
+                          href={`/api/media/${p.product.imageKey}`}
+                          x={x}
+                          y={y}
+                          width={faceWidthPx}
+                          height={faceHeightPx}
+                          preserveAspectRatio="none"
+                          onError={() => markImageBroken(p.product.imageKey as string)}
+                        />
+                      ) : (
+                        <rect
+                          x={x}
+                          y={y}
+                          width={faceWidthPx}
+                          height={faceHeightPx}
+                          fill={colorFor(p.product.sku)}
+                          opacity={0.85}
+                        />
+                      )}
+                      <rect
+                        x={x}
+                        y={y}
+                        width={faceWidthPx}
+                        height={faceHeightPx}
+                        fill="none"
+                        stroke="white"
+                        strokeWidth={0.7}
+                        opacity={0.65}
+                      />
+                    </pattern>
+                  </defs>
+                  <rect
+                    data-testid="planogram-facing-fill"
+                    x={x}
+                    y={y}
+                    width={wPx}
+                    height={hPx}
+                    fill={`url(#${patternId})`}
+                  />
                   <rect
                     x={x}
                     y={y}
                     width={wPx}
                     height={hPx}
                     fill="none"
-                    stroke={isSel ? "#0f172a" : diffKind === "added" ? "#16a34a" : diffKind === "moved" ? "#f59e0b" : "white"}
-                    strokeWidth={isSel || diffKind ? 2 : 0.8}
+                    stroke={
+                      invalidDrag
+                        ? "#dc2626"
+                        : dragState
+                          ? "#0284c7"
+                          : isSel
+                            ? "#0f172a"
+                            : diffKind === "added"
+                              ? "#16a34a"
+                              : diffKind === "moved"
+                                ? "#f59e0b"
+                                : "white"
+                    }
+                    strokeWidth={dragState || isSel || diffKind ? 2 : 0.8}
                   />
                   {showProductLabel ? (
                     <>
@@ -1869,96 +2079,7 @@ export function PlanogramEditor({
         </div>
 
           {/* Side panels */}
-        <div className="min-w-0 space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
-          {selectedPlacement && !readOnly && activeView === "planogram" ? (
-            <div className="hidden rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:sticky xl:top-3 xl:z-10 xl:block">
-              <h2 className="text-sm font-semibold">{t("selectedPlacement")}</h2>
-              <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                  <div className="text-xs font-medium text-neutral-500">{t("selectedPlacement")}</div>
-                  <div className="mt-1 text-sm font-medium text-neutral-900">{selectedPlacement.product.name}</div>
-                  <div className="mt-1 text-xs text-neutral-600">
-                    {selectedPlacement.product.sku} · {selectedPlacement.widthMm}×{selectedPlacement.heightMm}×{selectedPlacement.depthMm} mm
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <label className="block text-xs">
-                      <span className="text-neutral-500">{t("moveToShelf")}</span>
-                      <select
-                        value={selectedPlacement.shelfId}
-                        onChange={(e) => patchPlacement(selectedPlacement.id, { shelfId: e.target.value })}
-                        disabled={isBusy}
-                        className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
-                      >
-                        {equipment.shelves.map((shelf) => (
-                          <option key={shelf.id} value={shelf.id}>
-                            {t("shelf")} {shelf.shelfIndex + 1}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block text-xs">
-                      <span className="text-neutral-500">{t("position")}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={selectedPlacement.xMm}
-                        onChange={(e) =>
-                          patchPlacement(selectedPlacement.id, { xMm: Number.parseInt(e.target.value || "0", 10) })
-                        }
-                        disabled={isBusy}
-                        className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
-                      />
-                    </label>
-                    <label className="block text-xs">
-                      <span className="text-neutral-500">{t("facingsX")}</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={selectedPlacement.facingsX}
-                        onChange={(e) =>
-                          patchPlacement(selectedPlacement.id, { facingsX: Number.parseInt(e.target.value || "1", 10) })
-                        }
-                        disabled={isBusy}
-                        className="mt-1 block w-full rounded border border-neutral-300 bg-white px-2 py-1"
-                      />
-                    </label>
-                  </div>
-                  <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => patchPlacement(selectedPlacement.id, { xMm: Math.max(0, selectedPlacement.xMm - 10) })}
-                      disabled={isBusy}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
-                    >
-                      {t("nudgeLeft")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => patchPlacement(selectedPlacement.id, { xMm: selectedPlacement.xMm + 10 })}
-                      disabled={isBusy}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
-                    >
-                      {t("nudgeRight")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void duplicatePlacement(selectedPlacement)}
-                      disabled={isBusy}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
-                    >
-                      {t("duplicatePlacement")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deletePlacement(selectedPlacement.id)}
-                      disabled={isBusy}
-                      className="rounded-md border border-red-200 bg-white px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-40"
-                    >
-                      {t("remove")}
-                    </button>
-                  </div>
-                </div>
-            </div>
-          ) : null}
+        <div className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
 
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-medium">{t("versionHistory")}</h2>
@@ -2636,7 +2757,7 @@ export function PlanogramEditor({
 
           {/* Placement props */}
           {selectedPlacement && !readOnly && activeView === "planogram" && (
-            <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
+            <div className="order-first space-y-3 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:sticky xl:top-0 xl:z-10">
               <div className="text-sm font-medium">{selectedPlacement.product.name}</div>
               <div className="text-xs text-neutral-500">
                 {selectedPlacement.product.sku}
@@ -2683,26 +2804,24 @@ export function PlanogramEditor({
                 {(["facingsX", "facingsY", "facingsZ"] as const).map((f) => (
                   <label key={f} className="block text-xs">
                     <span className="text-neutral-500">{t(f)}</span>
-                    <input
-                      type="number"
+                    <CommitNumberInput
+                      label={t(f)}
                       min={1}
                       value={selectedPlacement[f]}
-                      onChange={(e) =>
-                        patchPlacement(selectedPlacement.id, { [f]: Number.parseInt(e.target.value || "1", 10) })
-                      }
+                      disabled={isBusy}
+                      onCommit={(value) => patchPlacement(selectedPlacement.id, { [f]: value })}
                       className="block w-20 rounded border border-neutral-300 px-2 py-1"
                     />
                   </label>
                 ))}
                 <label className="block text-xs">
                   <span className="text-neutral-500">{t("position")}</span>
-                  <input
-                    type="number"
+                  <CommitNumberInput
+                    label={t("position")}
                     min={0}
                     value={selectedPlacement.xMm}
-                    onChange={(e) =>
-                      patchPlacement(selectedPlacement.id, { xMm: Number.parseInt(e.target.value || "0", 10) })
-                    }
+                    disabled={isBusy}
+                    onCommit={(value) => patchPlacement(selectedPlacement.id, { xMm: value })}
                     className="block w-24 rounded border border-neutral-300 px-2 py-1"
                   />
                 </label>
@@ -2711,6 +2830,7 @@ export function PlanogramEditor({
                   <select
                     value={selectedPlacement.shelfId}
                     onChange={(e) => patchPlacement(selectedPlacement.id, { shelfId: e.target.value })}
+                    disabled={isBusy}
                     className="block w-28 rounded border border-neutral-300 px-2 py-1"
                   >
                     {equipment.shelves.map((shelf) => (
@@ -2725,21 +2845,24 @@ export function PlanogramEditor({
                 <button
                   type="button"
                   onClick={() => patchPlacement(selectedPlacement.id, { xMm: Math.max(0, selectedPlacement.xMm - 10) })}
-                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                  disabled={isBusy}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
                 >
                   {t("nudgeLeft")}
                 </button>
                 <button
                   type="button"
                   onClick={() => patchPlacement(selectedPlacement.id, { xMm: selectedPlacement.xMm + 10 })}
-                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                  disabled={isBusy}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
                 >
                   {t("nudgeRight")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void duplicatePlacement(selectedPlacement)}
-                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
+                  disabled={isBusy}
+                  className="rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50 disabled:opacity-40"
                 >
                   {t("duplicatePlacement")}
                 </button>
@@ -2766,6 +2889,7 @@ export function PlanogramEditor({
                       onChange={(e) =>
                         patchPlacement(selectedPlacement.id, { [field]: Number.parseInt(e.target.value, 10) })
                       }
+                      disabled={isBusy}
                       className="block w-20 rounded border border-neutral-300 px-2 py-1"
                     >
                       {[0, 90, 180, 270].map((value) => (
@@ -2783,6 +2907,7 @@ export function PlanogramEditor({
                     onChange={(e) =>
                       patchPlacement(selectedPlacement.id, { stackMode: e.target.value as PlacementStackMode })
                     }
+                    disabled={isBusy}
                     className="block w-32 rounded border border-neutral-300 px-2 py-1"
                   >
                     {(["NONE", "ON_TOP", "LYING"] as const).map((value) => (
@@ -2795,7 +2920,8 @@ export function PlanogramEditor({
               </div>
               <button
                 onClick={() => deletePlacement(selectedPlacement.id)}
-                className="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                disabled={isBusy}
+                className="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
               >
                 {t("remove")}
               </button>

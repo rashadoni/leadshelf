@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:protocol": "vitest run src/server/mobile/protocol.test.ts",
-    "test:e2e:responsive": "playwright test e2e/responsive.spec.ts e2e/accessibility.spec.ts"
+    "test:e2e:responsive": "playwright test e2e/responsive.spec.ts e2e/accessibility.spec.ts e2e/planogram-editor.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1078.0",

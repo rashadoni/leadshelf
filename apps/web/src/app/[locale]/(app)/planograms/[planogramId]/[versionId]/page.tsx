@@ -21,7 +21,7 @@ export default async function PlanogramEditorPage({
   const placementProductIds = [...new Set(payload.version.placements.map((placement) => placement.productId))]
 
   const db = tenantDb(session.org)
-  const [formats, stores, categories, brands, suppliers, versionHistory, goldenReferences, goldenPhotoCandidates] = await Promise.all([
+  const [formats, stores, categories, brands, suppliers, initialCatalogProducts, versionHistory, goldenReferences, goldenPhotoCandidates] = await Promise.all([
     db.storeFormat.findMany({
       select: { id: true, name: true, _count: { select: { stores: { where: { isActive: true } } } } },
       orderBy: { name: "asc" },
@@ -35,6 +35,29 @@ export default async function PlanogramEditorPage({
     db.category.findMany({ orderBy: { normalizedPath: "asc" }, select: { id: true, normalizedPath: true, name: true }, take: 500 }),
     db.brand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true }, take: 500 }),
     db.supplier.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true }, take: 500 }),
+    db.product.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        widthMm: true,
+        heightMm: true,
+        depthMm: true,
+        barcodes: {
+          where: { isPrimary: true },
+          select: { barcode: true },
+          take: 1,
+        },
+        images: {
+          select: { url: true },
+          orderBy: { sortOrder: "asc" },
+          take: 1,
+        },
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: 20,
+    }),
     workerDb.planogramVersion.findMany({
       where: { planogramId, planogram: { organizationId: session.org } },
       select: {
@@ -248,6 +271,18 @@ export default async function PlanogramEditorPage({
           brandName: p.product.brand?.name ?? null,
           imageKey: p.product.images[0]?.url ?? null,
         },
+      }))}
+      initialCatalogProducts={initialCatalogProducts.map((product) => ({
+        id: product.id,
+        sku: product.sku,
+        barcode: product.barcodes[0]?.barcode ?? null,
+        name: product.name,
+        imageKey: product.images[0]?.url ?? null,
+        hasDimensions:
+          product.widthMm != null && product.heightMm != null && product.depthMm != null,
+        widthMm: product.widthMm,
+        heightMm: product.heightMm,
+        depthMm: product.depthMm,
       }))}
       placementMetrics={placementProductIds.map((productId) => {
         const sales = salesByProductId.get(productId)

@@ -362,6 +362,7 @@
     "editor": {
       "products": "Məhsullar",
       "searchProducts": "Məhsul axtar...",
+      "searchingProducts": "Məhsullar axtarılır...",
       "noDims": "ölçü yoxdur",
       "views": {
         "planogram": {
@@ -403,7 +404,13 @@
       "selectedCatalogProductHint": "İndi rəfdə dəqiq yerə klikləyin və ya məhsulu seçilmiş rəfə qoyun.",
       "chooseSku": "Seç",
       "selectedSku": "Seçilib",
-      "searchMinChars": "SKU, ad və ya barkoddan ən azı 2 simvol yazın.",
+      "searchMinChars": "Kataloq məhsulları artıq göstərilir. Filtr üçün ad, SKU və ya barkod yazın.",
+      "clearSearch": "Təmizlə",
+      "dragProductHint": "Məhsulu rəfdə dəqiq yerə dartın",
+      "placedProductCount": "planoqramda: {count}",
+      "addProductToShelf": "{sku} məhsulunu {shelf}-ci rəfə əlavə et",
+      "addProduct": "Əlavə et",
+      "addAgain": "Bir də əlavə et",
       "noProductsFound": "Məhsul tapılmadı. SKU və ya adı yoxlayın.",
       "selectedPlacement": "Yerləşdirmə seçilib",
       "placeOnSelectedShelf": "Seçilmiş rəfə qoy",
@@ -416,8 +423,9 @@
       "selectProductForShelfHint": "Əvvəlcə rəfi seçin, sonra məhsulu tapın. Məhsul seçiləndən sonra düymə onu məhz bu rəfə əlavə edəcək.",
       "clickShelfToPlace": "Rəf {shelf}: {sku} yerləşdirmək üçün bura klikləyin",
       "sessionExpired": "Sessiya yenilənmədi. Yenidən daxil olun və əməliyyatı təkrarlayın.",
-      "placementAdded": "Məhsul {shelf}-ci rəfə əlavə edildi. O, 2D sxemdə göründü; 3D baxış da eyni düzülüşdən qurulur.",
+      "placementAdded": "Məhsul {shelf}-ci rəfə əlavə edildi. Bu SKU seçilmiş qalır: onu dərhal yenidən və ya başqa rəfə əlavə edə bilərsiniz.",
       "dragRejectedHint": "bu yer başqa məhsulla tutulub. Rəfdə boş hissə seçin və ya feysinqi azaldın.",
+      "invalidDrop": "Buraya köçürmək olmaz: məhsul rəfə sığmır və ya başqa yerləşdirmə ilə kəsişir.",
       "zoneOutOfBounds": "zona avadanlıq sərhədlərindən çıxır. Eni/hündürlüyü azaldın və ya zonanı stendin içinə çəkin.",
       "zoneAdded": "«{zone}» zonası əlavə edildi.",
       "shelf": "Rəf",
