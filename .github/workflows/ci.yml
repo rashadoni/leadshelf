@@ -11,6 +11,12 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    # Без лимита действует дефолт GitHub — 6 часов, и всё это время deploy
+    # стоит за `needs: [ci, security]`. 2026-08-19 шаг `Install Playwright
+    # browsers` завис на раннере и держал релиз 45 минут, пока прогон не
+    # отменили руками. Успешная джоба укладывается в 6-9 минут, так что 30
+    # (как у security) — троекратный запас, а не тесная рамка.
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-alpine
