@@ -21,6 +21,13 @@ async function openEditableDemoPlanogram(page: Page) {
     .click()
 
   const createDraft = page.getByRole("button", { name: "Создать черновик для редактирования" })
+  const shelfSelector = page.locator('[data-testid="planogram-shelf-selector"]').first()
+  await expect
+    .poll(async () => (await createDraft.isVisible()) || (await shelfSelector.isVisible()), {
+      message: "planogram must expose either its draft action or editable shelf controls",
+      timeout: 15_000,
+    })
+    .toBe(true)
   if (await createDraft.isVisible()) {
     const publishedUrl = page.url()
     await Promise.all([
@@ -29,6 +36,7 @@ async function openEditableDemoPlanogram(page: Page) {
     ])
   }
   await expect(page.getByTestId("planogram-canvas")).toBeVisible()
+  await expect(shelfSelector).toBeVisible()
 }
 
 function isPlacementMutation(request: Request, method: "PATCH" | "DELETE") {
