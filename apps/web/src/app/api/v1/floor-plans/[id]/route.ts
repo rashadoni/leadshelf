@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
+import { validateFloorPlanLayout } from "@leadshelf/core"
 import { forbidden, requireApiSession, unauthorized } from "@/server/http/api-guard"
 import { workerDb } from "@/server/db/client"
 
@@ -13,7 +14,9 @@ const equipmentSchema = z.object({
   label: z.string().trim().max(120).nullable().optional(),
   xMm: z.number().int().min(0),
   yMm: z.number().int().min(0),
-  rotationDeg: z.number().int().min(-360).max(360).default(0),
+  rotationDeg: z.number().int().min(-360).max(360).refine((value) => value % 90 === 0, {
+    message: "rotationDeg must be a multiple of 90",
+  }).default(0),
   isLocked: z.boolean().default(false),
 })
 
@@ -86,11 +89,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (planograms.length !== requestedPlanogramIds.size) {
     return NextResponse.json({ error: "planogram_not_found" }, { status: 404 })
   }
-  for (const item of data.equipment) {
-    const version = equipmentVersions.find((candidate) => candidate.id === item.equipmentVersionId)!
-    if (item.xMm + version.widthMm > data.widthMm || item.yMm + version.depthMm > data.depthMm) {
-      return NextResponse.json({ error: "equipment_out_of_bounds", label: item.label }, { status: 422 })
-    }
+  const layoutIssues = validateFloorPlanLayout(
+    { widthMm: data.widthMm, depthMm: data.depthMm },
+    data.equipment.map((item) => {
+      const version = equipmentVersions.find((candidate) => candidate.id === item.equipmentVersionId)!
+      return { ...item, widthMm: version.widthMm, depthMm: version.depthMm }
+    }),
+  )
+  const layoutIssue = layoutIssues[0]
+  if (layoutIssue) {
+    return NextResponse.json({
+      error: layoutIssue.type === "outside_bounds" ? "equipment_out_of_bounds" : "equipment_overlap",
+      index: layoutIssue.index,
+      conflictingIndex: layoutIssue.conflictingIndex,
+      label: data.equipment[layoutIssue.index]?.label,
+    }, { status: 422 })
   }
 
   const updated = await workerDb.$transaction(async (tx) => {
