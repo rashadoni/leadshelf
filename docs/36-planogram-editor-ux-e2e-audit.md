@@ -66,6 +66,20 @@ duplicated position/facing/move/remove actions and could drift apart.
 Resolution: a single complete property panel remains and is visually ordered
 first/sticky in the desktop side column.
 
+### PE-UX-06 — P0 — catalog flow made repeated SKU placement look forbidden
+
+The placement API and data model already allow one product to be placed more
+than once, but the editor cleared the selected catalog product after every add.
+The catalog was also empty until two search characters were entered, and the
+only obvious add action lived outside the product row. Together these behaviors
+made repeated placement slow and looked like a one-SKU-per-planogram rule.
+
+Resolution: the first catalog products are server-rendered immediately, search
+works from the first character and can be cleared, every product row has an
+explicit add button and placement count, and a successfully placed SKU remains
+selected. The user can now add it again on the same shelf, select another shelf,
+or drag/click it into an exact position without repeating the search.
+
 ## Regression coverage
 
 Unit coverage:
@@ -83,7 +97,8 @@ Browser E2E coverage (Chromium, Firefox, WebKit in CI):
 4. select shelf 1, search `OTC-001`, and add it;
 5. type position `100` and assert exactly one position PATCH;
 6. drag the placement to a valid new physical position and verify persisted X;
-7. remove the test placement and verify cleanup.
+7. select shelf 4 and add the same `OTC-001` again without another search;
+8. verify both placements exist, then remove both and verify cleanup.
 
 Stable `data-testid`/geometry attributes were added specifically so these tests
 verify behavior and physical relationships instead of fragile localized text or

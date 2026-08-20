@@ -35,7 +35,7 @@ function isPlacementMutation(request: Request, method: "PATCH" | "DELETE") {
   return request.method() === method && /\/api\/v1\/planograms\/[^/]+\/versions\/[^/]+\/placements\/[^/]+$/.test(request.url())
 }
 
-test("planogram editor renders real facings and supports add, commit, move and cleanup", async ({ page }) => {
+test("planogram editor renders real facings and supports repeated add, commit, move and cleanup", async ({ page }) => {
   test.setTimeout(120_000)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await login(page)
@@ -60,12 +60,14 @@ test("planogram editor renders real facings and supports add, commit, move and c
 
   await page.locator('[data-testid="planogram-shelf-selector"][data-shelf-index="1"]').click()
   await page.getByPlaceholder("Поиск товара...").fill("OTC-001")
-  await page.getByRole("button").filter({ hasText: "OTC-001" }).first().click()
+  const productResult = page.locator('[data-testid="planogram-product-result"][data-sku="OTC-001"]')
+  await expect(productResult).toBeVisible()
+  const existingProductPlacements = await page.locator('[data-testid="planogram-placement"][data-sku="OTC-001"]').count()
 
   const addResponsePromise = page.waitForResponse(
     (response) => response.request().method() === "POST" && /\/placements$/.test(response.url()),
   )
-  await page.getByRole("button", { name: "Добавить на полку 1" }).click()
+  await productResult.getByRole("button", { name: "Добавить OTC-001 на полку 1" }).click()
   const addResponse = await addResponsePromise
   expect(addResponse.status()).toBe(201)
   const added = (await addResponse.json()) as { placementId: string }
@@ -107,8 +109,30 @@ test("planogram editor renders real facings and supports add, commit, move and c
   await expect(addedPlacement).toHaveAttribute("data-x-mm", String(movedX))
   await expect(addedPlacement).toHaveAttribute("data-drop-state", "idle")
 
+  // Тот же результат поиска остаётся доступным: SKU можно без повторного
+  // поиска поставить ещё раз, в том числе на другую полку.
+  await page.locator('[data-testid="planogram-shelf-selector"][data-shelf-index="4"]').click()
+  const repeatResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === "POST" && /\/placements$/.test(response.url()),
+  )
+  await productResult.getByRole("button", { name: "Добавить OTC-001 на полку 4" }).click()
+  const repeatResponse = await repeatResponsePromise
+  expect(repeatResponse.status()).toBe(201)
+  const repeated = (await repeatResponse.json()) as { placementId: string }
+  const repeatedPlacementOnShelf = page.locator(`[data-placement-id="${repeated.placementId}"]`)
+  await expect(repeatedPlacementOnShelf).toBeVisible()
+  await expect(page.locator('[data-testid="planogram-placement"][data-sku="OTC-001"]')).toHaveCount(
+    existingProductPlacements + 2,
+  )
+
+  await repeatedPlacementOnShelf.click()
+  let deleteResponse = page.waitForResponse((response) => isPlacementMutation(response.request(), "DELETE"))
+  await page.getByRole("button", { name: "Убрать с полки" }).click()
+  expect((await deleteResponse).ok()).toBe(true)
+  await expect(repeatedPlacementOnShelf).toHaveCount(0)
+
   await addedPlacement.click()
-  const deleteResponse = page.waitForResponse((response) => isPlacementMutation(response.request(), "DELETE"))
+  deleteResponse = page.waitForResponse((response) => isPlacementMutation(response.request(), "DELETE"))
   await page.getByRole("button", { name: "Убрать с полки" }).click()
   expect((await deleteResponse).ok()).toBe(true)
   await expect(addedPlacement).toHaveCount(0)

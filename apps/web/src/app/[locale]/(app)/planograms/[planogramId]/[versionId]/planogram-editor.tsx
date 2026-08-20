@@ -272,6 +272,7 @@ export function PlanogramEditor({
   version,
   equipment,
   initialPlacements,
+  initialCatalogProducts,
   placementMetrics,
   initialZones,
   versionHistory,
@@ -284,6 +285,7 @@ export function PlanogramEditor({
   version: { id: string; versionNumber: number; state: string; revision: string }
   equipment: EquipmentGeometryMm & { name: string }
   initialPlacements: EditorPlacement[]
+  initialCatalogProducts: PickerProduct[]
   placementMetrics: PlacementMetric[]
   initialZones: EditorZone[]
   versionHistory: VersionHistoryItem[]
@@ -328,7 +330,7 @@ export function PlanogramEditor({
   const [messageTone, setMessageTone] = useState<"error" | "success">("error")
   const [search, setSearch] = useState("")
   const [isSearchingProducts, setIsSearchingProducts] = useState(false)
-  const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>([])
+  const [pickerProducts, setPickerProducts] = useState<PickerProduct[]>(initialCatalogProducts)
   const [selectedPickerProduct, setSelectedPickerProduct] = useState<PickerProduct | null>(null)
   const [draggingProductId, setDraggingProductId] = useState<string | null>(null)
   const [references, setReferences] = useState(goldenReferences)
@@ -374,6 +376,13 @@ export function PlanogramEditor({
     () => new Map(placementMetrics.map((metric) => [metric.productId, metric])),
     [placementMetrics],
   )
+  const productPlacementCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const placement of placements) {
+      counts.set(placement.product.id, (counts.get(placement.product.id) ?? 0) + 1)
+    }
+    return counts
+  }, [placements])
   const activeReference = references.find((ref) => ref.id === activeReferenceId) ?? references[0] ?? null
   const slotPlacement = placements.find((p) => p.id === slotPlacementId) ?? placements[0] ?? null
   const selectedReferenceSlot =
@@ -465,13 +474,13 @@ export function PlanogramEditor({
     const requestId = ++productSearchRequestRef.current
     setSearch(q)
     setMessage(null)
-    if (q.trim().length < 2) {
-      setPickerProducts([])
+    if (q.trim().length === 0) {
+      setPickerProducts(initialCatalogProducts)
       setIsSearchingProducts(false)
       return
     }
     setIsSearchingProducts(true)
-    const res = await apiFetch(`/api/v1/catalog/products?q=${encodeURIComponent(q)}&limit=8`)
+    const res = await apiFetch(`/api/v1/catalog/products?q=${encodeURIComponent(q.trim())}&limit=20`)
     if (requestId !== productSearchRequestRef.current) return
     if (res.ok) {
       const body = await res.json()
@@ -531,9 +540,9 @@ export function PlanogramEditor({
             },
           },
         ])
-        setSelectedPlacementId(body.placementId as string)
+        setSelectedPlacementId(null)
         setSelectedShelfId(shelfId)
-        setSelectedPickerProduct(null)
+        setSelectedPickerProduct(product)
         setJustPlacedId(body.placementId as string)
         svgRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
         setMessageTone("success")
@@ -1414,60 +1423,85 @@ export function PlanogramEditor({
     }
     if (pickerProducts.length > 0) {
       return (
-        <div className={layout === "compact" ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2 max-h-48 space-y-1 overflow-y-auto"}>
+        <div className={layout === "compact" ? "mt-2 flex gap-2 overflow-x-auto pb-1" : "mt-2 max-h-80 space-y-1 overflow-y-auto"}>
           {pickerProducts.map((p) => {
             const selected = selectedPickerProduct?.id === p.id
+            const placedCount = productPlacementCounts.get(p.id) ?? 0
             return (
-              <button
+              <div
                 key={p.id}
-                type="button"
+                data-testid="planogram-product-result"
+                data-product-id={p.id}
+                data-sku={p.sku}
                 draggable={p.hasDimensions}
                 onDragStart={(event) => handleCatalogDragStart(event, p)}
                 onDragEnd={() => setDraggingProductId(null)}
-                onClick={() => selectPickerProduct(p)}
-                disabled={!p.hasDimensions || isBusy}
                 className={
                   layout === "compact"
-                    ? `flex min-w-64 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm disabled:opacity-40 ${
+                    ? `flex min-w-80 items-center gap-2 rounded-md border px-2 py-2 text-left text-sm ${
                         selected ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-neutral-50"
                       }`
-                    : `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-white disabled:opacity-40 ${
+                    : `flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-sm hover:bg-white ${
                         selected ? "bg-amber-50 ring-1 ring-amber-200" : ""
-                      }`
+                      } ${p.hasDimensions ? "border-neutral-200" : "border-dashed border-neutral-200 opacity-60"}`
                 }
                 title={p.hasDimensions ? p.name : t("noDims")}
               >
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
-                  style={{ backgroundColor: colorFor(p.sku) }}
+                <span className="cursor-grab select-none text-base text-neutral-400" title={t("dragProductHint")} aria-hidden="true">
+                  ⋮⋮
+                </span>
+                <button
+                  type="button"
+                  onClick={() => selectPickerProduct(p)}
+                  disabled={!p.hasDimensions || isBusy}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed"
                 >
-                  {imageKeyOf(p.imageKey) ? (
-                    <img
-                      src={`/api/media/${p.imageKey}`}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      onError={() => markImageBroken(p.imageKey as string)}
-                    />
-                  ) : (
-                    p.name.slice(0, 1)
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-neutral-900">{p.name}</span>
-                  <span className="block truncate text-xs text-neutral-500">
-                    {p.sku} · {p.widthMm ?? "—"}×{p.heightMm ?? "—"}×{p.depthMm ?? "—"} mm
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded text-xs font-bold text-white"
+                    style={{ backgroundColor: colorFor(p.sku) }}
+                  >
+                    {imageKeyOf(p.imageKey) ? (
+                      <img
+                        src={`/api/media/${p.imageKey}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={() => markImageBroken(p.imageKey as string)}
+                      />
+                    ) : (
+                      p.name.slice(0, 1)
+                    )}
                   </span>
-                </span>
-                <span className="shrink-0 rounded border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700">
-                  {selected ? t("selectedSku") : t("chooseSku")}
-                </span>
-              </button>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-neutral-900">{p.name}</span>
+                    <span className="block truncate text-xs text-neutral-500">
+                      {p.sku} · {p.widthMm ?? "—"}×{p.heightMm ?? "—"}×{p.depthMm ?? "—"} mm
+                    </span>
+                    {placedCount > 0 ? (
+                      <span data-testid="product-placement-count" className="mt-0.5 block text-[11px] font-medium text-emerald-700">
+                        {t("placedProductCount", { count: placedCount })}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("addProductToShelf", { sku: p.sku, shelf: selectedShelfNumber ?? 0 })}
+                  onClick={() => {
+                    selectPickerProduct(p)
+                    void place(p)
+                  }}
+                  disabled={!p.hasDimensions || !selectedShelfId || isBusy}
+                  className="shrink-0 rounded-md bg-neutral-900 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {placedCount > 0 ? t("addAgain") : t("addProduct")}
+                </button>
+              </div>
             )
           })}
         </div>
       )
     }
-    if (search.trim().length >= 2) {
+    if (search.trim().length > 0) {
       return <p className="mt-2 rounded-md bg-neutral-50 px-2 py-2 text-xs text-neutral-500">{t("noProductsFound")}</p>
     }
     return <p className="mt-2 text-xs text-neutral-500">{t("searchMinChars")}</p>
@@ -1634,13 +1668,24 @@ export function PlanogramEditor({
                         </div>
                         {isBusy ? <span className="rounded bg-white px-2 py-1 text-xs text-neutral-600">{t("saving")}</span> : null}
                       </div>
-                      <input
-                        type="search"
-                        value={search}
-                        onChange={(e) => searchProducts(e.target.value)}
-                        placeholder={t("searchProducts")}
-                        className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
-                      />
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          type="search"
+                          value={search}
+                          onChange={(e) => searchProducts(e.target.value)}
+                          placeholder={t("searchProducts")}
+                          className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
+                        />
+                        {search ? (
+                          <button
+                            type="button"
+                            onClick={() => void searchProducts("")}
+                            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                          >
+                            {t("clearSearch")}
+                          </button>
+                        ) : null}
+                      </div>
                       {renderPickerProductList("panel")}
                       {selectedPickerProduct ? (
                         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2">
@@ -1793,6 +1838,7 @@ export function PlanogramEditor({
                   key={p.id}
                   data-testid="planogram-placement"
                   data-placement-id={p.id}
+                  data-product-id={p.product.id}
                   data-sku={p.product.sku}
                   data-shelf-id={dragState?.shelfId ?? p.shelfId}
                   data-x-mm={dragState?.xMm ?? p.xMm}
