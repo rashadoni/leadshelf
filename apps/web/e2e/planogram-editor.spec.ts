@@ -64,6 +64,7 @@ test("planogram editor renders real facings and supports repeated add, commit, m
   const threeViewerBox = await threeViewer.boundingBox()
   expect(threeViewerBox).not.toBeNull()
   expect(threeViewerBox!.width / primaryBox!.width).toBeGreaterThan(0.9)
+  await expect(threeViewer).toHaveAttribute("data-renderer-state", /^(ready|unavailable)$/)
   await page.getByRole("button", { name: "2D планограмма" }).click()
 
   const repeatedPlacement = page.locator('[data-testid="planogram-placement"][data-facings-x="4"]').first()
