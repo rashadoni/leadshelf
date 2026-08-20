@@ -552,7 +552,9 @@
         "quantity": "Miqdar",
         "name": "Ad",
         "height": "Hündürlük"
-      }
+      },
+      "zoomLabel": "Miqyas",
+      "zoomFit": "Sığdır"
     },
     "viewer3d": {
       "title": "3D görünüş",
@@ -766,7 +768,12 @@
       "actions": "Hərəkət",
       "rejectedReviews": "Ofisdə rədd edilib",
       "retakes": "Yenidən çəkiliş",
-      "statuses": { "PASS": "Uyğundur", "REVIEW": "Yoxlama lazımdır", "FAIL": "Uyğun deyil", "UNAVAILABLE": "Mövcud deyil" }
+      "statuses": {
+        "PASS": "Uyğundur",
+        "REVIEW": "Yoxlama lazımdır",
+        "FAIL": "Uyğun deyil",
+        "UNAVAILABLE": "Mövcud deyil"
+      }
     },
     "kpi": {
       "storesWithPlanograms": "Planoqramlı mağaza",
@@ -1060,7 +1067,11 @@
         "move": "Məhsulu düzgün yerə keçirin",
         "manual_review": "Əl ilə yoxlayın"
       },
-      "filters": { "all": "Hamısı", "issues": "Pozuntular", "uncertain": "Qeyri-müəyyən" },
+      "filters": {
+        "all": "Hamısı",
+        "issues": "Pozuntular",
+        "uncertain": "Qeyri-müəyyən"
+      },
       "schemeHint": "Planoqramdakı gözlənilən yerləri faktiki nəticə ilə rəf-rəf müqayisə edin.",
       "photoHint": "Etalon fotonu, faktiki çəkilişi və AI konturlarını eyni seçilmiş məhsul üzrə yoxlayın.",
       "resultHint": "Faizdən əvvəl yerinə yetirilməli konkret hərəkətlər göstərilir.",
@@ -1139,13 +1150,34 @@
       "save": "Saxla",
       "saving": "Saxlanılır...",
       "tabs": {
-        "map": { "label": "Xəritə", "description": "canlı hərəkət" },
-        "routes": { "label": "Marşrutlar", "description": "nöqtələr və icra" },
-        "agents": { "label": "Agentlər", "description": "komandalar və statuslar" },
-        "leaderboard": { "label": "Reytinq", "description": "icra sıralaması" },
-        "activity": { "label": "Aktivlik", "description": "vizit hadisələri" },
-        "reports": { "label": "Hesabatlar", "description": "günlük xülasə" },
-        "settings": { "label": "Ayarlar", "description": "icra siyasətləri" }
+        "map": {
+          "label": "Xəritə",
+          "description": "canlı hərəkət"
+        },
+        "routes": {
+          "label": "Marşrutlar",
+          "description": "nöqtələr və icra"
+        },
+        "agents": {
+          "label": "Agentlər",
+          "description": "komandalar və statuslar"
+        },
+        "leaderboard": {
+          "label": "Reytinq",
+          "description": "icra sıralaması"
+        },
+        "activity": {
+          "label": "Aktivlik",
+          "description": "vizit hadisələri"
+        },
+        "reports": {
+          "label": "Hesabatlar",
+          "description": "günlük xülasə"
+        },
+        "settings": {
+          "label": "Ayarlar",
+          "description": "icra siyasətləri"
+        }
       },
       "routeStatus": {
         "PLANNED": "Planlanıb",
@@ -1198,7 +1230,11 @@
           "name": "Marşrut adını göstərin.",
           "store": "Ən azı bir satış nöqtəsi əlavə edin."
         },
-        "metrics": { "points": "Nöqtələr", "completed": "Tamamlandı", "progress": "İrəliləyiş" }
+        "metrics": {
+          "points": "Nöqtələr",
+          "completed": "Tamamlandı",
+          "progress": "İrəliləyiş"
+        }
       },
       "agents": {
         "search": "Agent, komanda və ya kod axtar",

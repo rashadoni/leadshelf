@@ -5,7 +5,7 @@
 // Каждая мутация — API-вызов; при 422 показываем физическую причину,
 // при 409 перезагружаем draft.
 
-import { useMemo, useRef, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
@@ -24,6 +24,9 @@ const PlanogramThreeViewer = dynamic(
   () => import("./planogram-three-viewer").then((mod) => mod.PlanogramThreeViewer),
   { ssr: false },
 )
+
+// Держим строкой, а не импортом из @leadshelf/db: это клиентский компонент.
+const GENERIC_PRODUCT_IMAGE_FILENAME = "demo-pack.svg"
 
 export interface EditorProduct {
   id: string
@@ -238,10 +241,18 @@ export function PlanogramEditor({
   const locale = useLocale()
   const router = useRouter()
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const canvasBoxRef = useRef<HTMLDivElement | null>(null)
   const referenceImageRef = useRef<HTMLDivElement | null>(null)
   const referenceSlotDragRef = useRef<ReferenceSlotDrag | null>(null)
 
   const [placements, setPlacements] = useState(initialPlacements)
+  // Ширина колонки под холст: ResizeObserver, потому что колонка резиновая и
+  // меняется вместе с боковой панелью и шириной окна.
+  const [canvasWidthPx, setCanvasWidthPx] = useState(0)
+  const [canvasZoom, setCanvasZoom] = useState(1)
+  // Только что поставленное размещение подсвечиваем: у узких SKU иначе не видно,
+  // куда именно встал товар.
+  const [justPlacedId, setJustPlacedId] = useState<string | null>(null)
   // Медиа товара может отсутствовать в бакете (демо-каталог, ещё не залитая
   // картинка). Без этого фолбэка SVG <image> с битым href рисует пустоту —
   // товар «пропадает» с полки. Ключ ушёл в brokenImages → возвращаемся к
@@ -458,6 +469,8 @@ export function PlanogramEditor({
         setSelectedPlacementId(body.placementId as string)
         setSelectedShelfId(shelfId)
         setSelectedPickerProduct(null)
+        setJustPlacedId(body.placementId as string)
+        svgRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
         setMessageTone("success")
         setMessage(t("placementAdded", { shelf: shelfNumberForId(shelfId) }))
       }
@@ -1014,8 +1027,21 @@ export function PlanogramEditor({
   }
 
   // --- SVG geometry ---
-  const H = 560
-  const k = H / equipment.heightMm
+  // Масштаб раньше считался ТОЛЬКО от высоты (H = 560 фиксированно), из-за чего
+  // стеллаж 1200×1800 рисовался шириной 373px в колонке шириной 810px: больше
+  // половины места простаивало, один фейсинг 65-миллиметрового SKU сжимался до
+  // 20px и терял ярлык, и пользователь читал это как «товар не добавился».
+  // Теперь вписываем и по ширине контейнера, и по высоте, а zoom даёт ручное
+  // увеличение поверх вписанного масштаба.
+  const CANVAS_MAX_HEIGHT_PX = 900
+  const CANVAS_FALLBACK_WIDTH_PX = 560
+  const fitWidthPx = canvasWidthPx || CANVAS_FALLBACK_WIDTH_PX
+  const fitK = Math.min(
+    fitWidthPx / equipment.widthMm,
+    CANVAS_MAX_HEIGHT_PX / equipment.heightMm,
+  )
+  const k = fitK * canvasZoom
+  const H = equipment.heightMm * k
   const W = equipment.widthMm * k
 
   const shelfInfos = useMemo(
@@ -1258,12 +1284,34 @@ export function PlanogramEditor({
     return shelf ? shelf.shelfIndex + 1 : 0
   }
 
+  useEffect(() => {
+    const box = canvasBoxRef.current
+    if (!box) return
+    const measure = () => setCanvasWidthPx(box.clientWidth)
+    measure()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [activeView])
+
+  // Подсветка гаснет сама: это подсказка «вот сюда встал товар», а не статус.
+  useEffect(() => {
+    if (!justPlacedId) return
+    const timer = setTimeout(() => setJustPlacedId(null), 2600)
+    return () => clearTimeout(timer)
+  }, [justPlacedId])
+
   function markImageBroken(key: string) {
     setBrokenImages((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
   }
 
+  // Служебная демо-заглушка (одна и та же картинка у всех товаров) не несёт
+  // информации о товаре и хуже цветного прямоугольника: размер читается, а
+  // «что это за SKU» — нет. Считаем её отсутствием фото.
   function imageKeyOf(key: string | null): string | null {
-    return key && !brokenImages.has(key) ? key : null
+    if (!key || brokenImages.has(key)) return null
+    return key.endsWith(`/${GENERIC_PRODUCT_IMAGE_FILENAME}`) ? null : key
   }
 
   function selectPickerProduct(product: PickerProduct) {
@@ -1510,6 +1558,24 @@ export function PlanogramEditor({
                   </div>
                 </div>
               )}
+              <div ref={canvasBoxRef} className="w-full">
+                <div className="mb-2 flex items-center gap-2 text-xs text-neutral-600">
+                  <span>{t("zoomLabel")}</span>
+                  {([["fit", 1], ["1.5x", 1.5], ["2x", 2]] as const).map(([label, value]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setCanvasZoom(value)}
+                      className={`rounded border px-2 py-1 ${
+                        canvasZoom === value
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {label === "fit" ? t("zoomFit") : label}
+                    </button>
+                  ))}
+                </div>
               <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
@@ -1611,6 +1677,10 @@ export function PlanogramEditor({
               const productLabel = p.product.sku
               const labelWidthPx = Math.min(Math.max(36, productLabel.length * 5.8 + 12), Math.max(0, wPx - 4))
               const showProductLabel = labelWidthPx >= 26 && hPx >= 16
+              // Порог по высоте — чтобы повёрнутый текст помещался вдоль товара.
+              const showVerticalLabel = !showProductLabel && wPx >= 9 && hPx >= productLabel.length * 4.6
+              const verticalLabelX = x + wPx / 2 + 3
+              const verticalLabelY = y + hPx - 4
               return (
                 <g
                   key={p.id}
@@ -1676,6 +1746,38 @@ export function PlanogramEditor({
                         {productLabel}
                       </text>
                     </>
+                  ) : showVerticalLabel ? (
+                    // Узкий SKU (один фейсинг бутылки — это 20-40px): горизонтальный
+                    // ярлык не влезает, а без подписи полоска не читается как товар.
+                    // Пишем SKU вдоль товара, обводкой по контуру — поверх картинки.
+                    <text
+                      x={verticalLabelX}
+                      y={verticalLabelY}
+                      fontSize={7}
+                      fill="#111827"
+                      stroke="white"
+                      strokeWidth={2}
+                      paintOrder="stroke"
+                      transform={`rotate(-90 ${verticalLabelX} ${verticalLabelY})`}
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {productLabel}
+                    </text>
+                  ) : null}
+                  {justPlacedId === p.id ? (
+                    <rect
+                      x={x - 2}
+                      y={y - 2}
+                      width={wPx + 4}
+                      height={hPx + 4}
+                      fill="none"
+                      stroke="#16a34a"
+                      strokeWidth={2.5}
+                      rx={2}
+                      style={{ pointerEvents: "none" }}
+                    >
+                      <animate attributeName="opacity" values="1;0.2;1" dur="0.85s" repeatCount="3" />
+                    </rect>
                   ) : null}
                   {dragState && metric ? (
                     <text x={x + 3} y={y + hPx + 12} fontSize={9} fill="#111827" style={{ pointerEvents: "none" }}>
@@ -1689,6 +1791,7 @@ export function PlanogramEditor({
               <p className="mt-1 text-center text-xs text-neutral-400">
                 {equipment.widthMm}×{equipment.heightMm}×{equipment.depthMm} mm
               </p>
+              </div>
             </>
           ) : null}
 
