@@ -57,10 +57,26 @@ describe("planogram canvas geometry", () => {
 
     expect(geometry.faceWidthPx).toBe(40)
     expect(geometry.faceHeightPx).toBe(60)
+    expect(geometry.faceGapPx).toBe(0)
+    expect(geometry.facingStepPx).toBe(40)
     expect(geometry.widthPx).toBe(120)
     expect(geometry.heightPx).toBe(120)
     expect(geometry.xPx).toBe(25)
     expect(geometry.yPx).toBe(720)
+  })
+
+  test("includes the configured gap between horizontal facings", () => {
+    const geometry = placementCanvasGeometry({
+      equipmentHeightMm: 1800,
+      scale: 0.5,
+      shelf,
+      placement: placement({ gapMm: 10 }),
+    })
+
+    expect(geometry.faceWidthPx).toBe(40)
+    expect(geometry.faceGapPx).toBe(5)
+    expect(geometry.facingStepPx).toBe(45)
+    expect(geometry.widthPx).toBe(130)
   })
 
   test("uses the oriented front face and compression without stretching a facing", () => {
@@ -75,5 +91,18 @@ describe("planogram canvas geometry", () => {
     expect(geometry.faceHeightPx).toBe(80)
     expect(geometry.widthPx).toBe(180)
     expect(geometry.heightPx).toBe(80)
+  })
+
+  test("applies vertical compression to each facing and its shelf position", () => {
+    const geometry = placementCanvasGeometry({
+      equipmentHeightMm: 1800,
+      scale: 1,
+      shelf,
+      placement: placement({ compressionY: 0.5, facingsX: 1, facingsY: 2 }),
+    })
+
+    expect(geometry.faceHeightPx).toBe(60)
+    expect(geometry.heightPx).toBe(120)
+    expect(geometry.yPx).toBe(1560)
   })
 })

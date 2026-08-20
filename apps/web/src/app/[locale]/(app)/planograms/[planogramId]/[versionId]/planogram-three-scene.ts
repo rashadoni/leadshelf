@@ -1,6 +1,5 @@
 import {
   orientedProductSizeMm,
-  placementWidthMm,
   type EquipmentGeometryMm,
   type PlacementStackMode,
 } from "@leadshelf/core"
@@ -45,7 +44,11 @@ export type SceneShelf = SceneBox & {
 
 export type SceneProduct = SceneBox & {
   id: string
+  placementId: string
   sku: string
+  facingX: number
+  facingY: number
+  facingZ: number
 }
 
 export type PlanogramThreeSceneModel = {
@@ -89,26 +92,44 @@ export function buildPlanogramThreeSceneModel(
     const shelf = shelvesById.get(placement.shelfId)
     if (!shelf) return []
     const oriented = orientedProductSizeMm(placement)
-    const widthMm = placementWidthMm(placement)
-    const heightMm = oriented.heightMm * placement.facingsY * (placement.compressionY ?? 1)
-    const depthMm = oriented.depthMm * placement.facingsZ * (placement.compressionZ ?? 1)
-    const width = mm(widthMm)
-    const height = mm(heightMm)
-    const depth = mm(depthMm)
-    return [
-      {
-        id: placement.id,
-        sku: placement.product.sku,
-        width,
-        height,
-        depth,
-        position: {
-          x: -equipmentWidth / 2 + mm(placement.xMm) + width / 2,
-          y: mm(shelf.yMm + shelf.thicknessMm) + height / 2,
-          z: equipmentDepth / 2 - depth / 2,
-        },
-      },
-    ]
+    const faceWidthMm = oriented.widthMm * (placement.compressionX ?? 1)
+    const faceHeightMm = oriented.heightMm * (placement.compressionY ?? 1)
+    const faceDepthMm = oriented.depthMm * (placement.compressionZ ?? 1)
+    const gapMm = placement.gapMm ?? 0
+    const width = mm(faceWidthMm)
+    const height = mm(faceHeightMm)
+    const depth = mm(faceDepthMm)
+    const boxes: SceneProduct[] = []
+
+    for (let facingZ = 0; facingZ < placement.facingsZ; facingZ += 1) {
+      for (let facingY = 0; facingY < placement.facingsY; facingY += 1) {
+        for (let facingX = 0; facingX < placement.facingsX; facingX += 1) {
+          boxes.push({
+            id: `${placement.id}:${facingX}:${facingY}:${facingZ}`,
+            placementId: placement.id,
+            sku: placement.product.sku,
+            facingX,
+            facingY,
+            facingZ,
+            width,
+            height,
+            depth,
+            position: {
+              x:
+                -equipmentWidth / 2
+                + mm(placement.xMm + facingX * (faceWidthMm + gapMm))
+                + width / 2,
+              y:
+                mm(shelf.yMm + shelf.thicknessMm + facingY * faceHeightMm)
+                + height / 2,
+              z: mm(shelf.depthMm) / 2 - mm(facingZ * faceDepthMm) - depth / 2,
+            },
+          })
+        }
+      }
+    }
+
+    return boxes
   })
 
   return {
@@ -116,9 +137,9 @@ export function buildPlanogramThreeSceneModel(
     equipmentHeight,
     equipmentDepth,
     cameraPosition: {
-      x: equipmentWidth * 1.08,
-      y: equipmentHeight * 0.72,
-      z: Math.max(equipmentDepth * 3.6, equipmentWidth * 1.35),
+      x: equipmentWidth * 0.28,
+      y: equipmentHeight * 0.56,
+      z: Math.max(equipmentDepth * 4.2, equipmentWidth * 1.8),
     },
     controlTarget: {
       x: 0,

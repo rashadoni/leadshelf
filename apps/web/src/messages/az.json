@@ -566,7 +566,9 @@
     },
     "viewer3d": {
       "title": "3D görünüş",
-      "screenshot": "PNG ixracı"
+      "screenshot": "PNG ixracı",
+      "unavailableTitle": "3D bu brauzerdə əlçatan deyil",
+      "unavailableBody": "Avadanlıq sürətləndirməsini aktiv edin və ya planoqramı WebGL dəstəyi olan brauzerdə açın. 2D redaktə işləməyə davam edir."
     }
   },
   "stores": {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
@@ -46,6 +46,7 @@ export function PlanogramThreeViewer({
   const t = useTranslations("planograms.viewer3d")
   const hostRef = useRef<HTMLDivElement | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+  const [rendererUnavailable, setRendererUnavailable] = useState(false)
 
   useEffect(() => {
     const host = hostRef.current
@@ -58,7 +59,15 @@ export function PlanogramThreeViewer({
     const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 20)
     camera.position.set(sceneModel.cameraPosition.x, sceneModel.cameraPosition.y, sceneModel.cameraPosition.z)
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+    } catch {
+      rendererRef.current = null
+      setRendererUnavailable(true)
+      return
+    }
+    setRendererUnavailable(false)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.shadowMap.enabled = true
     renderer.domElement.style.display = "block"
@@ -134,8 +143,8 @@ export function PlanogramThreeViewer({
 
     const resize = () => {
       const measuredWidth = Math.round(host.clientWidth)
-      const width = measuredWidth > 0 ? Math.min(900, measuredWidth) : 640
-      const height = Math.max(300, Math.round(width * 0.46))
+      const width = measuredWidth > 0 ? measuredWidth : 640
+      const height = Math.max(420, Math.min(720, Math.round(width * 0.52)))
       renderer.setSize(width, height, true)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
@@ -182,12 +191,27 @@ export function PlanogramThreeViewer({
         <button
           type="button"
           onClick={exportScreenshot}
-          className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+          disabled={rendererUnavailable}
+          className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-45"
         >
           {t("screenshot")}
         </button>
       </div>
-      <div ref={hostRef} data-testid="planogram-3d-viewer" className="min-h-[300px] w-full max-w-[900px] overflow-hidden" />
+      <div
+        data-testid="planogram-3d-viewer"
+        data-renderer-state={rendererUnavailable ? "unavailable" : "ready"}
+        className="relative min-h-[420px] w-full overflow-hidden"
+      >
+        <div ref={hostRef} className={rendererUnavailable ? "hidden" : "min-h-[420px] w-full"} />
+        {rendererUnavailable ? (
+          <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
+            <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950">
+              <p className="text-sm font-semibold">{t("unavailableTitle")}</p>
+              <p className="mt-1 text-xs text-amber-800">{t("unavailableBody")}</p>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </section>
   )
 }
