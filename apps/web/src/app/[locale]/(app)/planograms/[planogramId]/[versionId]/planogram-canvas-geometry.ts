@@ -30,16 +30,23 @@ export function placementCanvasGeometry(input: {
 }) {
   const oriented = orientedProductSizeMm(input.placement)
   const faceWidthPx = oriented.widthMm * (input.placement.compressionX ?? 1) * input.scale
-  const faceHeightPx = oriented.heightMm * input.scale
+  const faceHeightPx = oriented.heightMm * (input.placement.compressionY ?? 1) * input.scale
+  const faceGapPx = (input.placement.gapMm ?? 0) * input.scale
+  const facingStepPx = faceWidthPx + faceGapPx
 
   return {
     xPx: (input.xMm ?? input.placement.xMm) * input.scale,
     yPx:
       input.equipmentHeightMm * input.scale
-      - (input.shelf.yMm + input.shelf.thicknessMm + oriented.heightMm * input.placement.facingsY) * input.scale,
+      - (input.shelf.yMm + input.shelf.thicknessMm) * input.scale
+      - faceHeightPx * input.placement.facingsY,
     faceWidthPx,
     faceHeightPx,
-    widthPx: faceWidthPx * input.placement.facingsX,
+    faceGapPx,
+    facingStepPx,
+    widthPx:
+      faceWidthPx * input.placement.facingsX
+      + faceGapPx * Math.max(0, input.placement.facingsX - 1),
     heightPx: faceHeightPx * input.placement.facingsY,
   }
 }

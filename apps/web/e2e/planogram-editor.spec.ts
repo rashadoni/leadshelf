@@ -49,6 +49,23 @@ test("planogram editor renders real facings and supports repeated add, commit, m
   await login(page)
   await openEditableDemoPlanogram(page)
 
+  const primaryWorkspace = page.getByTestId("planogram-primary-workspace")
+  const secondaryTools = page.getByTestId("planogram-secondary-tools")
+  const primaryBox = await primaryWorkspace.boundingBox()
+  const secondaryBox = await secondaryTools.boundingBox()
+  expect(primaryBox).not.toBeNull()
+  expect(secondaryBox).not.toBeNull()
+  expect(secondaryBox!.y).toBeGreaterThanOrEqual(primaryBox!.y + primaryBox!.height - 1)
+  expect(Math.abs(secondaryBox!.width - primaryBox!.width)).toBeLessThanOrEqual(2)
+
+  await page.getByRole("button", { name: "3D просмотр" }).click()
+  const threeViewer = page.getByTestId("planogram-3d-viewer")
+  await expect(threeViewer).toBeVisible()
+  const threeViewerBox = await threeViewer.boundingBox()
+  expect(threeViewerBox).not.toBeNull()
+  expect(threeViewerBox!.width / primaryBox!.width).toBeGreaterThan(0.9)
+  await page.getByRole("button", { name: "2D планограмма" }).click()
+
   const repeatedPlacement = page.locator('[data-testid="planogram-placement"][data-facings-x="4"]').first()
   await expect(repeatedPlacement).toBeVisible()
   const facingGeometry = await repeatedPlacement.evaluate((element) => {
@@ -59,11 +76,16 @@ test("planogram editor renders real facings and supports repeated add, commit, m
       facingsY: Number(element.getAttribute("data-facings-y")),
       faceWidth: Number(pattern?.getAttribute("data-face-width-px")),
       faceHeight: Number(pattern?.getAttribute("data-face-height-px")),
+      faceGap: Number(pattern?.getAttribute("data-face-gap-px")),
       totalWidth: Number(fill?.getAttribute("width")),
       totalHeight: Number(fill?.getAttribute("height")),
     }
   })
-  expect(facingGeometry.totalWidth / facingGeometry.faceWidth).toBeCloseTo(facingGeometry.facingsX, 5)
+  expect(facingGeometry.totalWidth).toBeCloseTo(
+    facingGeometry.faceWidth * facingGeometry.facingsX
+      + facingGeometry.faceGap * Math.max(0, facingGeometry.facingsX - 1),
+    5,
+  )
   expect(facingGeometry.totalHeight / facingGeometry.faceHeight).toBeCloseTo(facingGeometry.facingsY, 5)
 
   await page.locator('[data-testid="planogram-shelf-selector"][data-shelf-index="1"]').click()

@@ -42,7 +42,7 @@ describe("planogram three scene model", () => {
     expect(model.equipmentWidth).toBe(1)
     expect(model.equipmentHeight).toBe(2)
     expect(model.equipmentDepth).toBe(0.5)
-    expect(model.cameraPosition).toEqual({ x: 1.08, y: 1.44, z: 1.8 })
+    expect(model.cameraPosition).toEqual({ x: 0.28, y: 1.12, z: 2.1 })
     expect(model.controlTarget).toEqual({ x: 0, y: 0.9, z: 0 })
     expect(model.floor).toEqual({
       width: 1.08,
@@ -61,17 +61,29 @@ describe("planogram three scene model", () => {
       depth: 0.45,
       position: { x: 0, y: 0.11, z: 0 },
     })
-    expect(model.products).toHaveLength(1)
+    expect(model.products).toHaveLength(6)
     expect(model.products[0]).toMatchObject({
-      id: "placement-a",
+      id: "placement-a:0:0:0",
+      placementId: "placement-a",
       sku: "SKU-A",
-      width: 0.08,
-      height: 0.3,
+      facingX: 0,
+      facingY: 0,
+      facingZ: 0,
+      width: 0.04,
+      height: 0.1,
       depth: 0.04,
     })
-    expect(model.products[0]?.position.x).toBeCloseTo(-0.36)
-    expect(model.products[0]?.position.y).toBeCloseTo(0.27)
-    expect(model.products[0]?.position.z).toBeCloseTo(0.23)
+    expect(model.products[0]?.position.x).toBeCloseTo(-0.38)
+    expect(model.products[0]?.position.y).toBeCloseTo(0.17)
+    expect(model.products[0]?.position.z).toBeCloseTo(0.205)
+    expect(model.products[5]).toMatchObject({
+      id: "placement-a:1:2:0",
+      facingX: 1,
+      facingY: 2,
+      facingZ: 0,
+    })
+    expect(model.products[5]?.position.x).toBeCloseTo(-0.34)
+    expect(model.products[5]?.position.y).toBeCloseTo(0.37)
   })
 
   it("uses the same oriented placement width as the 2D shelf view", () => {
@@ -89,14 +101,24 @@ describe("planogram three scene model", () => {
       }),
     ])
 
-    expect(model.products).toHaveLength(1)
+    expect(model.products).toHaveLength(12)
     expect(model.products[0]).toMatchObject({
-      id: "rotated",
-      width: 0.07875,
-      height: 0.24,
-      depth: 0.16,
+      id: "rotated:0:0:0",
+      placementId: "rotated",
+      width: 0.02625,
+      height: 0.12,
+      depth: 0.08,
     })
-    expect(model.products[0]?.position.x).toBeCloseTo(-0.360625)
-    expect(model.products[0]?.position.z).toBeCloseTo(0.17)
+    expect(model.products[0]?.position.x).toBeCloseTo(-0.386875)
+    expect(model.products[0]?.position.z).toBeCloseTo(0.185)
+    expect(model.products.at(-1)).toMatchObject({
+      id: "rotated:2:1:1",
+      facingX: 2,
+      facingY: 1,
+      facingZ: 1,
+    })
+    expect(model.products.at(-1)?.position.x).toBeCloseTo(-0.334375)
+    expect(model.products.at(-1)?.position.y).toBeCloseTo(0.3)
+    expect(model.products.at(-1)?.position.z).toBeCloseTo(0.105)
   })
 })

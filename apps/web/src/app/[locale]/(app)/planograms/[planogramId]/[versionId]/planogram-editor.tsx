@@ -1583,9 +1583,9 @@ export function PlanogramEditor({
         </div>
       </div>
 
-      <div className="grid max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
+      <div className="max-w-full space-y-4">
         {/* Canvas */}
-        <div className="min-w-0 overflow-x-auto">
+        <div data-testid="planogram-primary-workspace" className="min-w-0 overflow-x-auto">
           {activeView === "planogram" ? (
             <>
               {readOnly ? (
@@ -1721,7 +1721,7 @@ export function PlanogramEditor({
             viewBox={`0 0 ${W} ${H}`}
             width={W}
             height={H}
-            className={`rounded-md border border-neutral-300 bg-neutral-50 ${
+            className={`mx-auto block rounded-md border border-neutral-300 bg-neutral-50 ${
               selectedPickerProduct?.hasDimensions ? "cursor-crosshair" : ""
             }`}
             onPointerMove={moveDrag}
@@ -1817,6 +1817,8 @@ export function PlanogramEditor({
                 yPx: y,
                 faceWidthPx,
                 faceHeightPx,
+                faceGapPx,
+                facingStepPx,
                 widthPx: wPx,
                 heightPx: hPx,
               } = geometry
@@ -1873,10 +1875,11 @@ export function PlanogramEditor({
                       data-testid="planogram-facing-pattern"
                       data-face-width-px={faceWidthPx}
                       data-face-height-px={faceHeightPx}
+                      data-face-gap-px={faceGapPx}
                       patternUnits="userSpaceOnUse"
                       x={x}
                       y={y}
-                      width={faceWidthPx}
+                      width={facingStepPx}
                       height={faceHeightPx}
                     >
                       {imageKeyOf(p.product.imageKey) ? (
@@ -2078,8 +2081,11 @@ export function PlanogramEditor({
           ) : null}
         </div>
 
-          {/* Side panels */}
-        <div className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
+          {/* Secondary tools live below the canvas so the editor keeps the full width. */}
+        <div
+          data-testid="planogram-secondary-tools"
+          className="grid min-w-0 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3"
+        >
 
           <div className="rounded-xl border border-neutral-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-medium">{t("versionHistory")}</h2>
@@ -2757,7 +2763,7 @@ export function PlanogramEditor({
 
           {/* Placement props */}
           {selectedPlacement && !readOnly && activeView === "planogram" && (
-            <div className="order-first space-y-3 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm xl:sticky xl:top-0 xl:z-10">
+            <div className="order-first space-y-3 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm lg:col-span-2 2xl:col-span-3">
               <div className="text-sm font-medium">{selectedPlacement.product.name}</div>
               <div className="text-xs text-neutral-500">
                 {selectedPlacement.product.sku}

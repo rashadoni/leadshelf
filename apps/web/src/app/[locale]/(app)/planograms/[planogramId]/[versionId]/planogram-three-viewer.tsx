@@ -134,8 +134,8 @@ export function PlanogramThreeViewer({
 
     const resize = () => {
       const measuredWidth = Math.round(host.clientWidth)
-      const width = measuredWidth > 0 ? Math.min(900, measuredWidth) : 640
-      const height = Math.max(300, Math.round(width * 0.46))
+      const width = measuredWidth > 0 ? measuredWidth : 640
+      const height = Math.max(420, Math.min(720, Math.round(width * 0.52)))
       renderer.setSize(width, height, true)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
@@ -187,7 +187,7 @@ export function PlanogramThreeViewer({
           {t("screenshot")}
         </button>
       </div>
-      <div ref={hostRef} data-testid="planogram-3d-viewer" className="min-h-[300px] w-full max-w-[900px] overflow-hidden" />
+      <div ref={hostRef} data-testid="planogram-3d-viewer" className="min-h-[420px] w-full overflow-hidden" />
     </section>
   )
 }
