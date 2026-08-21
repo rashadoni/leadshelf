@@ -398,9 +398,6 @@ export function FloorPlanForm({
               onPointerMove={moveDrag}
               onPointerUp={finishDrag}
               onPointerCancel={finishDrag}
-              onClick={(event) => {
-                if (event.target === event.currentTarget) setSelectedIndex(null)
-              }}
               className="block touch-none bg-white shadow-sm"
               style={{ width: `${zoom}%`, aspectRatio: `${Math.max(widthMm, 100)} / ${Math.max(depthMm, 100)}` }}
             >
@@ -413,7 +410,12 @@ export function FloorPlanForm({
                   <path d="M 500 0 L 0 0 0 500" fill="none" stroke="#dbe3ec" strokeWidth="14" />
                 </pattern>
               </defs>
-              <rect width={widthMm} height={depthMm} fill={`url(#floor-grid-major-${floorPlanId ?? "new"})`} />
+              <rect
+                width={widthMm}
+                height={depthMm}
+                fill={`url(#floor-grid-major-${floorPlanId ?? "new"})`}
+                onClick={() => setSelectedIndex(null)}
+              />
               <rect x="35" y="35" width={Math.max(0, widthMm - 70)} height={Math.max(0, depthMm - 70)} fill="none" stroke="#334155" strokeWidth="70" />
               {rows.map((row, index) => {
                 const size = getRotatedFootprint(row.widthMm, row.depthMm, row.rotationDeg)
