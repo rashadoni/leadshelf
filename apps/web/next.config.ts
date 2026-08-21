@@ -53,7 +53,13 @@ const config: NextConfig = {
   // Route-level guards ограничивают фото 15 MiB и видео 35 MiB. Transport
   // должен пропускать multipart overhead, иначе валидные видео обрезаются до
   // выполнения route и превращаются в неочевидный 400.
-  experimental: { middlewareClientMaxBodySize: 40 * 1024 * 1024 },
+  experimental: {
+    // Этот host держит production-сервисы и ограничивает interactive user.slice.
+    // Последовательная static generation не позволяет build-worker'ам выбить
+    // общий memory high-water mark во время локальной проверки и деплоя.
+    cpus: 1,
+    middlewareClientMaxBodySize: 40 * 1024 * 1024,
+  },
 }
 
 export default withNextIntl(config)
