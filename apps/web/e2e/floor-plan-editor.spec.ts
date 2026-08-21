@@ -24,7 +24,21 @@ test("floor plan editor adds, drags, rotates and locks equipment without mutatin
   await expect(canvas).toBeVisible()
   await expect(editor.getByTestId("floor-plan-properties")).toBeVisible()
 
+  const metadataBox = await editor.getByTestId("floor-plan-metadata").boundingBox()
+  const targetBox = await editor.getByTestId("floor-plan-target").boundingBox()
+  const widthBox = await editor.getByTestId("floor-plan-width").boundingBox()
+  expect(metadataBox).not.toBeNull()
+  expect(targetBox).not.toBeNull()
+  expect(widthBox).not.toBeNull()
+  expect(targetBox!.x + targetBox!.width).toBeLessThanOrEqual(widthBox!.x)
+  expect(widthBox!.x + widthBox!.width).toBeLessThanOrEqual(metadataBox!.x + metadataBox!.width + 1)
+
   const placements = editor.getByTestId("floor-plan-equipment")
+  const compactPlacements = editor.locator('[data-testid="floor-plan-equipment"][data-label-mode="compact"]')
+  if (await compactPlacements.count()) {
+    await expect(compactPlacements.first().getByTestId("floor-plan-equipment-marker")).toBeVisible()
+    await expect(compactPlacements.first().locator("text")).toHaveCount(1)
+  }
   const initialCount = await placements.count()
   await editor.getByRole("button", { name: "Добавить оборудование" }).click()
   await expect(placements).toHaveCount(initialCount + 1)
