@@ -75,6 +75,20 @@ export default async function FloorPlansPage() {
       ? [{ id: template.id, name: template.name, versionId: version.id, widthMm: version.widthMm, depthMm: version.depthMm }]
       : []
   })
+  const knownEquipmentVersions = new Set(equipment.map((item) => item.versionId))
+  for (const floorPlan of floorPlans) {
+    for (const item of floorPlan.versions[0]?.equipment ?? []) {
+      if (knownEquipmentVersions.has(item.equipmentVersion.id)) continue
+      equipment.push({
+        id: item.equipmentVersion.id,
+        name: item.equipmentVersion.template.name,
+        versionId: item.equipmentVersion.id,
+        widthMm: item.equipmentVersion.widthMm,
+        depthMm: item.equipmentVersion.depthMm,
+      })
+      knownEquipmentVersions.add(item.equipmentVersion.id)
+    }
+  }
 
   return (
     <div>
@@ -82,19 +96,21 @@ export default async function FloorPlansPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="mt-1 max-w-3xl text-sm text-neutral-500">{t("subtitle")}</p>
       </div>
-      <FloorPlanForm stores={stores} formats={formats} equipment={equipment} planograms={planograms} />
+      <details className="mb-5 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-neutral-800 hover:bg-neutral-50">
+          {t("form.createNew")}
+        </summary>
+        <FloorPlanForm stores={stores} formats={formats} equipment={equipment} planograms={planograms} />
+      </details>
 
       {floorPlans.length === 0 ? (
         <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center text-sm text-neutral-500">
           {t("empty")}
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-5">
           {floorPlans.map((floorPlan) => {
             const version = floorPlan.versions[0]
-            const scale = version ? Math.min(760 / version.widthMm, 420 / version.depthMm) : 1
-            const width = version ? Math.max(320, Math.round(version.widthMm * scale)) : 480
-            const height = version ? Math.max(220, Math.round(version.depthMm * scale)) : 260
             const initial =
               version && (floorPlan.store || floorPlan.format)
                 ? {
@@ -111,6 +127,8 @@ export default async function FloorPlansPage() {
                       yMm: item.yMm,
                       rotationDeg: item.rotationDeg,
                       isLocked: item.isLocked,
+                      widthMm: item.equipmentVersion.widthMm,
+                      depthMm: item.equipmentVersion.depthMm,
                     })),
                   }
                 : null
@@ -137,57 +155,7 @@ export default async function FloorPlansPage() {
                 </div>
                 {!version ? (
                   <div className="p-10 text-center text-sm text-neutral-500">{t("noPublished")}</div>
-                ) : (
-                  <div className="p-4">
-                    <svg
-                      viewBox={`0 0 ${width} ${height}`}
-                      width={width}
-                      height={height}
-                      className="max-w-full rounded-md border border-neutral-200 bg-neutral-50"
-                    >
-                      <rect x={0} y={0} width={width} height={height} fill="#fafafa" />
-                      {version.equipment.map((item) => {
-                        const eqWidth = Math.max(12, item.equipmentVersion.widthMm * scale)
-                        const eqDepth = Math.max(12, item.equipmentVersion.depthMm * scale)
-                        const x = item.xMm * scale
-                        const y = item.yMm * scale
-                        return (
-                          <g
-                            key={item.id}
-                            transform={`translate(${x} ${y}) rotate(${item.rotationDeg} ${eqWidth / 2} ${eqDepth / 2})`}
-                          >
-                            <rect
-                              width={eqWidth}
-                              height={eqDepth}
-                              rx={3}
-                              fill={item.planogram ? "#dbeafe" : "#e5e7eb"}
-                              stroke={item.planogram ? "#2563eb" : "#9ca3af"}
-                            />
-                            <text x={6} y={16} fontSize={11} fill="#111827">
-                              {item.label ?? item.equipmentVersion.template.name}
-                            </text>
-                            {item.planogram ? (
-                              <text x={6} y={32} fontSize={10} fill="#2563eb">
-                                {item.planogram.name}
-                              </text>
-                            ) : null}
-                          </g>
-                        )
-                      })}
-                    </svg>
-                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-neutral-500">
-                      <span>
-                        {version.widthMm}×{version.depthMm} mm
-                      </span>
-                      <span>{t("equipmentCount", { count: version.equipment.length })}</span>
-                    </div>
-                  </div>
-                )}
-                {initial ? (
-                  <details>
-                    <summary className="cursor-pointer border-t border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
-                      {t("form.edit")}
-                    </summary>
+                ) : initial ? (
                     <FloorPlanForm
                       floorPlanId={floorPlan.id}
                       initial={initial}
@@ -197,7 +165,6 @@ export default async function FloorPlansPage() {
                       equipment={equipment}
                       planograms={planograms}
                     />
-                  </details>
                 ) : null}
               </section>
             )
