@@ -282,73 +282,81 @@ export function FloorPlanForm({
 
   return (
     <form onSubmit={submit} className={formClassName} data-testid="floor-plan-editor">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(12rem,1.4fr)_9rem_minmax(13rem,1fr)_8rem_8rem_auto]">
-        <label className="grid gap-1 text-xs font-medium text-neutral-600">
-          {t("name")}
-          <input
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={t("name")}
-            className="h-10 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium text-neutral-600">
-          {t("targetType")}
-          <select
-            value={targetType}
-            onChange={(event) => {
-              const next = event.target.value as "store" | "format"
-              setTargetType(next)
-              setTargetId((next === "store" ? stores[0]?.id : formats[0]?.id) ?? "")
-            }}
-            className="h-10 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
-          >
-            <option value="store">{t("store")}</option>
-            <option value="format">{t("format")}</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-medium text-neutral-600">
-          {t("target")}
-          <select
-            value={targetId}
-            onChange={(event) => setTargetId(event.target.value)}
-            className="h-10 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
-          >
-            {targets.map((target) => (
-              <option key={target.id} value={target.id}>
-                {"code" in target && target.code ? `${target.name} (${target.code})` : target.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-medium text-neutral-600">
-          {t("roomWidth")}
-          <input
-            type="number"
-            min={100}
-            value={widthMm}
-            onChange={(event) => setWidthMm(Number.parseInt(event.target.value || "0", 10))}
-            className="h-10 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-medium text-neutral-600">
-          {t("roomDepth")}
-          <input
-            type="number"
-            min={100}
-            value={depthMm}
-            onChange={(event) => setDepthMm(Number.parseInt(event.target.value || "0", 10))}
-            className="h-10 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
-          />
-        </label>
-        <div className="flex items-end">
-          <button
-            disabled={pending || !targetId || layoutIssues.length > 0}
-            className="h-10 w-full rounded-md bg-neutral-900 px-4 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {pending ? t("saving") : floorPlanId ? t("update") : t("save")}
-          </button>
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(24rem,2fr)]" data-testid="floor-plan-metadata">
+        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1.4fr)_8rem_minmax(0,1fr)]">
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-neutral-600">
+            {t("name")}
+            <input
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={t("name")}
+              className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
+            />
+          </label>
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-neutral-600">
+            {t("targetType")}
+            <select
+              value={targetType}
+              onChange={(event) => {
+                const next = event.target.value as "store" | "format"
+                setTargetType(next)
+                setTargetId((next === "store" ? stores[0]?.id : formats[0]?.id) ?? "")
+              }}
+              className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
+            >
+              <option value="store">{t("store")}</option>
+              <option value="format">{t("format")}</option>
+            </select>
+          </label>
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-neutral-600">
+            {t("target")}
+            <select
+              value={targetId}
+              onChange={(event) => setTargetId(event.target.value)}
+              className="h-10 min-w-0 w-full rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
+              data-testid="floor-plan-target"
+            >
+              {targets.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {"code" in target && target.code ? `${target.name} (${target.code})` : target.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(7rem,1fr)_minmax(7rem,1fr)_auto]">
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-neutral-600">
+            {t("roomWidth")}
+            <input
+              type="number"
+              min={100}
+              value={widthMm}
+              onChange={(event) => setWidthMm(Number.parseInt(event.target.value || "0", 10))}
+              className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
+              data-testid="floor-plan-width"
+            />
+          </label>
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-neutral-600">
+            {t("roomDepth")}
+            <input
+              type="number"
+              min={100}
+              value={depthMm}
+              onChange={(event) => setDepthMm(Number.parseInt(event.target.value || "0", 10))}
+              className="h-10 min-w-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-900"
+              data-testid="floor-plan-depth"
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              disabled={pending || !targetId || layoutIssues.length > 0}
+              className="h-10 w-full whitespace-nowrap rounded-md bg-neutral-900 px-4 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {pending ? t("saving") : floorPlanId ? t("update") : t("save")}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -422,6 +430,7 @@ export function FloorPlanForm({
                 const isSelected = selectedIndex === index
                 const hasIssue = layoutIssues.some((issue) => issue.index === index || issue.conflictingIndex === index)
                 const label = row.label || equipment.find((item) => item.versionId === row.equipmentVersionId)?.name || t("equipmentFallback")
+                const isCompact = size.widthMm < Math.max(900, widthMm * 0.1) || size.depthMm < 500
                 return (
                   <g
                     key={`${row.equipmentVersionId}-${index}`}
@@ -433,6 +442,7 @@ export function FloorPlanForm({
                     data-x-mm={row.xMm}
                     data-y-mm={row.yMm}
                     data-rotation-deg={normalizeQuarterTurn(row.rotationDeg)}
+                    data-label-mode={isCompact ? "compact" : "full"}
                     transform={`translate(${row.xMm} ${row.yMm})`}
                     onPointerDown={(event) => startDrag(index, event)}
                     onClick={(event) => {
@@ -454,6 +464,7 @@ export function FloorPlanForm({
                     }}
                     className={row.isLocked ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing"}
                   >
+                    <title>{`${index + 1}. ${label} · ${size.widthMm}×${size.depthMm} mm`}</title>
                     <rect
                       width={size.widthMm}
                       height={size.depthMm}
@@ -463,29 +474,46 @@ export function FloorPlanForm({
                       strokeWidth={isSelected ? 45 : 24}
                     />
                     <line x1={size.widthMm * 0.15} y1={size.depthMm / 2} x2={size.widthMm * 0.85} y2={size.depthMm / 2} stroke="#64748b" strokeWidth="18" />
-                    <text
-                      x={size.widthMm / 2}
-                      y={Math.max(120, size.depthMm / 2 - 35)}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={Math.min(180, Math.max(90, size.depthMm * 0.28))}
-                      fontWeight="600"
-                      fill="#0f172a"
-                      textLength={Math.max(80, size.widthMm - 120)}
-                      lengthAdjust="spacingAndGlyphs"
-                    >
-                      {label.slice(0, 32)}
-                    </text>
-                    <text
-                      x={size.widthMm / 2}
-                      y={Math.min(size.depthMm - 70, size.depthMm / 2 + 105)}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={Math.min(130, Math.max(75, size.depthMm * 0.2))}
-                      fill="#475569"
-                    >
-                      {index + 1} · {size.widthMm}×{size.depthMm}
-                    </text>
+                    {isCompact ? (
+                      <text
+                        x={size.widthMm / 2}
+                        y={size.depthMm / 2}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={Math.min(220, Math.max(110, Math.min(size.widthMm, size.depthMm) * 0.42))}
+                        fontWeight="700"
+                        fill="#0f172a"
+                        data-testid="floor-plan-equipment-marker"
+                      >
+                        {index + 1}
+                      </text>
+                    ) : (
+                      <>
+                        <text
+                          x={size.widthMm / 2}
+                          y={Math.max(120, size.depthMm / 2 - 35)}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontSize={Math.min(180, Math.max(90, size.depthMm * 0.28))}
+                          fontWeight="600"
+                          fill="#0f172a"
+                          textLength={Math.max(80, size.widthMm - 120)}
+                          lengthAdjust="spacingAndGlyphs"
+                        >
+                          {label.slice(0, 32)}
+                        </text>
+                        <text
+                          x={size.widthMm / 2}
+                          y={Math.min(size.depthMm - 70, size.depthMm / 2 + 105)}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontSize={Math.min(130, Math.max(75, size.depthMm * 0.2))}
+                          fill="#475569"
+                        >
+                          {index + 1} · {size.widthMm}×{size.depthMm}
+                        </text>
+                      </>
+                    )}
                     {row.isLocked ? (
                       <circle cx={Math.max(90, size.widthMm - 90)} cy="90" r="55" fill="#334155" />
                     ) : null}
