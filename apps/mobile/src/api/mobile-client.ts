@@ -22,6 +22,7 @@ import {
   mobileVariant,
   shelfBffPath,
 } from "../config/mobile-variant"
+import { getLocale } from "../i18n"
 import {
   FIELD_DOCUMENT_MEDIA_DIR,
   persistEncryptedMedia,
@@ -182,6 +183,7 @@ async function request<T>(
       ...(rest.headers as Record<string, string>),
       // Протокол на не-JSON путях (multipart upload, media) едет заголовком.
       "x-leadshelf-protocol": String(PROTOCOL_VERSION),
+      "Accept-Language": getLocale(),
       ...(deviceId ? { "x-field-device-id": deviceId } : {}),
       "x-field-device-platform": Platform.OS,
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
