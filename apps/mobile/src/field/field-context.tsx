@@ -23,6 +23,7 @@ import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
 import { fieldErrorMessage } from "./error-message"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
+import { adjacentWeekStarts } from "./week-cache-window"
 import type {
   FieldAgentTasksData,
   FieldLocationHistoryData,
@@ -96,6 +97,25 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     router.replace("/(auth)/login" as never)
   }, [])
 
+  const prefetchAdjacentWeeks = useCallback(async (center: FieldWeekData) => {
+    // The foreground week is already rendered. Fetch only the two neighbour
+    // weeks, one at a time, and never let a cache miss replace its UI state.
+    for (const start of adjacentWeekStarts(center.weekStart)) {
+      if (readFieldCache<FieldWeekData>(weekKey(start))) continue
+      try {
+        const adjacent = await fieldApi.week(start)
+        writeFieldCache(weekKey(adjacent.weekStart), adjacent)
+      } catch (reason) {
+        if (reason instanceof AuthLostError) {
+          await loseSession()
+          return
+        }
+        // A neighbour is optional offline resilience. The requested week keeps
+        // its own error state and the user may retry it explicitly.
+      }
+    }
+  }, [loseSession])
+
   const loadWeek = useCallback(async (start: string) => {
     requestedWeek.current = start
     const sequence = ++requestSequence.current
@@ -116,6 +136,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       setWeek(next)
       setLastUpdatedAt(new Date().toISOString())
       setPhase("ready")
+      void prefetchAdjacentWeeks(next)
     } catch (reason) {
       if (sequence !== requestSequence.current) return
       if (reason instanceof AuthLostError) {
@@ -125,7 +146,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       setError(fieldErrorMessage(reason, "fieldDataError"))
       setPhase(cached ? "stale" : "error")
     }
-  }, [loseSession])
+  }, [loseSession, prefetchAdjacentWeeks])
 
   const refreshActivity = useCallback(async (date?: string) => {
     const workdayCache = readFieldCache<FieldWorkdayData>(WORKDAY_KEY)
@@ -227,6 +248,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       writeFieldCache(CURRENT_WEEK_KEY, weekResult.value)
       writeFieldCache(weekKey(weekResult.value.weekStart), weekResult.value)
       updated = true
+      void prefetchAdjacentWeeks(weekResult.value)
     }
     if (notificationsResult.status === "fulfilled") {
       setNotifications(cacheFieldNotifications(notificationsResult.value))
@@ -259,7 +281,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       setError(fieldErrorMessage(firstError, "fieldDataError"))
       setPhase(profile || week ? "stale" : "error")
     }
-  }, [loseSession, profile, week])
+  }, [loseSession, prefetchAdjacentWeeks, profile, week])
 
   const markAllNotificationsRead = useCallback(async () => {
     if (notifications.unread === 0) return
