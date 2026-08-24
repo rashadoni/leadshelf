@@ -49,7 +49,7 @@ export default function WeekTab() {
 
         <View style={styles.navigator}>
           <Pressable accessibilityLabel={t("previousWeek")} onPress={() => move(-7)} style={styles.navButton}>
-            <Text style={styles.navArrow}>‹</Text>
+            <TabIcon name="chevronLeft" color={colors.primary} size={23} />
           </Pressable>
           <Pressable
             disabled={!week}
@@ -59,7 +59,7 @@ export default function WeekTab() {
             <Text style={styles.currentText}>{t("currentWeek")}</Text>
           </Pressable>
           <Pressable accessibilityLabel={t("nextWeek")} onPress={() => move(7)} style={styles.navButton}>
-            <Text style={styles.navArrow}>›</Text>
+            <TabIcon name="chevronRight" color={colors.primary} size={23} />
           </Pressable>
         </View>
 
@@ -146,7 +146,7 @@ export default function WeekTab() {
                       style={({ pressed }) => [styles.createRouteAction, pressed && styles.pressed]}
                     >
                       <Text style={styles.createRouteActionText}>{t("createRoute")}</Text>
-                      <Text style={styles.createRouteActionArrow}>→</Text>
+                      <TabIcon name="chevronRight" color={colors.headerText} size={19} />
                     </Pressable>
                   ) : null}
                 </View>
@@ -186,7 +186,7 @@ export default function WeekTab() {
                           style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
                         >
                           <Text style={styles.routeActionText}>{route.canEdit ? t("editRoute") : t("openRoute")}</Text>
-                          <Text style={styles.routeActionArrow}>→</Text>
+                          <TabIcon name="chevronRight" color={colors.primary} size={19} />
                         </Pressable>
                       </View>
                     )

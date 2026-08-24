@@ -111,7 +111,7 @@ export default function WorkTab() {
                 <Text style={styles.moduleLabel}>{module.label}</Text>
                 <Text style={styles.moduleHint} numberOfLines={1}>{module.hint}</Text>
               </View>
-              <Text style={styles.open}>›</Text>
+              <TabIcon name="chevronRight" color={colors.faint} size={20} />
             </Pressable>
           ))}
         </View>
@@ -130,7 +130,7 @@ export default function WorkTab() {
                 <Text style={styles.moduleHint} numberOfLines={1}>{t("workMoreForWorkHint")}</Text>
               </View>
               <View style={styles.morePill}><Text style={styles.morePillText}>{t(moreOpen ? "workMoreHide" : "workMoreShow")}</Text></View>
-              <Text style={[styles.moreChevron, moreOpen && styles.moreChevronOpen]}>⌄</Text>
+              <View style={[styles.moreChevron, moreOpen && styles.moreChevronOpen]}><TabIcon name="chevronDown" color={colors.faint} size={19} /></View>
             </Pressable>
             {moreOpen ? (
               <View style={styles.moreItems}>
@@ -146,7 +146,7 @@ export default function WorkTab() {
                       <Text style={styles.moduleLabel}>{module.label}</Text>
                       <Text style={styles.moduleHint} numberOfLines={1}>{module.hint}</Text>
                     </View>
-                    <Text style={styles.open}>›</Text>
+                    <TabIcon name="chevronRight" color={colors.faint} size={20} />
                   </Pressable>
                 ))}
               </View>
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   moreToggle: { minHeight: 72, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
   morePill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.primarySoft },
   morePillText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
-  moreChevron: { color: colors.faint, fontSize: 20, lineHeight: 22, marginLeft: -5 },
+  moreChevron: { width: 19, height: 19, marginLeft: -5, alignItems: "center", justifyContent: "center" },
   moreChevronOpen: { transform: [{ rotate: "180deg" }] },
   moreItems: { borderTopWidth: 1, borderTopColor: colors.border },
   moreItem: { minHeight: 66, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },

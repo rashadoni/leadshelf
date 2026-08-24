@@ -161,7 +161,7 @@ function LocationTrail({ data }: { data: FieldLocationHistoryData }) {
   if (points.length === 0) {
     return (
       <View style={styles.emptyTrail}>
-        <View style={styles.emptyTrailPin}><Text style={styles.emptyTrailPinText}>⌖</Text></View>
+        <View style={styles.emptyTrailPin}><TabIcon name="location" color={colors.primary} size={21} /></View>
         <Text style={styles.emptyTrailText}>{t("workdayNoLocations")}</Text>
       </View>
     )
@@ -452,14 +452,14 @@ export default function WorkdayScreen() {
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹</Text>
+          <TabIcon name="chevronLeft" color={colors.text} size={23} />
         </Pressable>
         <View style={styles.headerBody}>
           <Text style={styles.eyebrow}>{t("workdayToday").toUpperCase()}</Text>
           <Text style={styles.title}>{t("workdayTitle")}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void refresh()} style={styles.refreshButton}>
-          <Text style={styles.refreshText}>↻</Text>
+          <TabIcon name="refresh" color={colors.primary} size={22} />
         </Pressable>
       </View>
 
@@ -556,10 +556,14 @@ export default function WorkdayScreen() {
                   {busyAction === action ? (
                     <ActivityIndicator color={destructive || !secondary ? colors.headerText : colors.warning} />
                   ) : (
-                    <Text style={[styles.actionText, secondary && styles.actionSecondaryText]}>
-                      {action === "START" ? "▶  " : action === "PAUSE" ? "Ⅱ  " : action === "RESUME" ? "▶  " : "■  "}
-                      {t(actionKeys[action])}
-                    </Text>
+                    <View style={styles.actionContent}>
+                      <TabIcon
+                        name={action === "START" || action === "RESUME" ? "play" : action === "PAUSE" ? "pause" : "stop"}
+                        color={colors.headerText}
+                        size={18}
+                      />
+                      <Text style={[styles.actionText, secondary && styles.actionSecondaryText]}>{t(actionKeys[action])}</Text>
+                    </View>
                   )}
                 </Pressable>
               )
@@ -643,7 +647,7 @@ export default function WorkdayScreen() {
         </View>
 
         <View style={styles.privacyCard}>
-          <Text style={styles.privacyIcon}>i</Text>
+          <View style={styles.privacyIcon}><TabIcon name="info" color={colors.headerText} size={16} /></View>
           <View style={styles.privacyBody}>
             <Text style={styles.privacyTitle}>{t("workdayPrivacyTitle")}</Text>
             <Text style={styles.privacyText}>{t(privacyBodyKey)}</Text>
@@ -661,7 +665,7 @@ export default function WorkdayScreen() {
               <Text style={styles.hrmTitle}>{t("moduleHrm")}</Text>
               <Text style={styles.hrmHint}>{t("fieldHrmEntryHint")}</Text>
             </View>
-            <Text style={styles.hrmArrow}>›</Text>
+            <TabIcon name="chevronRight" color={colors.primary} size={21} />
           </Pressable>
         ) : null}
       </ScrollView>
@@ -706,6 +710,7 @@ const styles = StyleSheet.create({
   actionDanger: { backgroundColor: colors.danger },
   actionText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   actionSecondaryText: { color: colors.headerText },
+  actionContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   pressed: { opacity: 0.76, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.55 },
   feedback: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
@@ -754,7 +759,7 @@ const styles = StyleSheet.create({
   eventMeta: { color: colors.muted, fontSize: 10, marginTop: 3 },
   eventPending: { color: colors.warning, fontSize: 9, fontWeight: "900" },
   privacyCard: { flexDirection: "row", gap: 11, backgroundColor: colors.infoBg, borderRadius: radii.card, borderWidth: 1, borderColor: colors.infoBorder, padding: 14, marginTop: 18 },
-  privacyIcon: { width: 25, height: 25, borderRadius: 13, backgroundColor: colors.info, color: colors.headerText, textAlign: "center", textAlignVertical: "center", fontSize: 14, lineHeight: 25, fontWeight: "900" },
+  privacyIcon: { width: 25, height: 25, borderRadius: 13, backgroundColor: colors.info, alignItems: "center", justifyContent: "center" },
   privacyBody: { flex: 1 },
   privacyTitle: { color: colors.info, fontSize: 12, fontWeight: "900" },
   privacyText: { color: colors.info, fontSize: 10, lineHeight: 16, marginTop: 3 },

@@ -455,7 +455,7 @@ export default function FieldRouteDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} hitSlop={10} style={styles.backButton}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("routeDetails").toUpperCase()}</Text>
             <Text style={styles.title}>{routeData.name ?? t("tabRoute")}</Text>
@@ -539,7 +539,7 @@ export default function FieldRouteDetailScreen() {
         ) : null}
         {routeData.canEdit || canRequestStopAddition ? (
           <Pressable onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
-            <Text style={styles.addButtonIcon}>＋</Text>
+            <View style={styles.addButtonIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View>
             <View style={styles.addButtonBody}>
               <Text style={styles.addButtonTitle}>{t("addStop")}</Text>
               <Text style={styles.addButtonHint}>{routeData.canEdit ? t("chooseStop") : t("addStopRequestHint")}</Text>
@@ -567,7 +567,8 @@ export default function FieldRouteDetailScreen() {
                     <Text style={[
                       styles.roadmapMarkerText,
                       (step.state === "completed" || step.state === "active" || step.state === "next") && styles.roadmapMarkerTextInverted,
-                    ]}>{step.state === "completed" ? "✓" : step.position}</Text>
+                    ]}>{step.state === "completed" ? null : step.position}</Text>
+                    {step.state === "completed" ? <TabIcon name="check" color={colors.headerText} size={17} /> : null}
                   </View>
                   {step.position < routeFlow.steps.length ? <View style={[styles.roadmapLine, step.state === "completed" && styles.roadmapLineCompleted]} /> : null}
                 </View>
@@ -804,7 +805,7 @@ const styles = StyleSheet.create({
   primaryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   footerActions: { marginHorizontal: 14, marginTop: 18, gap: 9 },
   addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
-  addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, color: colors.headerText, fontSize: 22, lineHeight: 38, textAlign: "center" },
+  addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
   autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 38, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },

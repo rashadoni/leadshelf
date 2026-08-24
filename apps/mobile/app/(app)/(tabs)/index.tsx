@@ -213,7 +213,7 @@ export default function TodayTab() {
           )}
           <Pressable onPress={() => router.push(primaryAction.href as never)} style={styles.primaryAction}>
             <Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text>
-            <Text style={styles.primaryArrow}>→</Text>
+            <TabIcon name="chevronRight" color={colors.headerText} size={20} />
           </Pressable>
         </View>
           </View>
@@ -230,7 +230,7 @@ export default function TodayTab() {
             >
               <View style={styles.actionIcon}><TabIcon name={icon} color={colors.primary} size={20} /></View>
               <Text style={styles.actionText}>{label}</Text>
-              <Text style={styles.actionArrow}>›</Text>
+              <TabIcon name="chevronRight" color={colors.faint} size={20} />
             </Pressable>
           ))}
         </View>

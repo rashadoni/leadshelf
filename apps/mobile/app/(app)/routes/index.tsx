@@ -9,6 +9,7 @@ import { formatCalendarDay, formatCalendarMonthShort } from "../../../src/i18n/d
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useSync } from "../../../src/sync/sync-context"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 export default function RoutesScreen() {
   const locale = useLocale()
@@ -25,16 +26,16 @@ export default function RoutesScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={field.phase === "refreshing"} onRefresh={() => void field.refresh()} />}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("routeHubTitle")}</Text><Text style={styles.subtitle}>{t("routeHubHint")}</Text></View>
-          {canCreateRoute ? <Pressable onPress={() => router.push("/(app)/routes/new" as never)} style={styles.add}><Text style={styles.addText}>＋</Text></Pressable> : null}
+          {canCreateRoute ? <Pressable accessibilityRole="button" accessibilityLabel={t("createRoute")} onPress={() => router.push("/(app)/routes/new" as never)} style={styles.add}><TabIcon name="add" color={colors.headerText} size={23} /></Pressable> : null}
         </View>
 
         {canCreateRoute ? (
           <Pressable onPress={() => router.push("/(app)/routes/new" as never)} style={styles.createCard}>
-            <View style={styles.createMark}><Text style={styles.createMarkText}>＋</Text></View>
+            <View style={styles.createMark}><TabIcon name="add" color={colors.headerText} size={26} /></View>
             <View style={styles.createBody}><Text style={styles.createTitleLight}>{t("createRoute")}</Text><Text style={styles.createHintLight}>{t("chooseStop")}</Text></View>
-            <Text style={styles.arrowLight}>›</Text>
+            <TabIcon name="chevronRight" color={colors.headerText} size={22} />
           </Pressable>
         ) : field.week ? (
           <View style={styles.planningUnavailable}><Text style={styles.planningUnavailableText}>{t("routePlanningUnavailable")}</Text></View>
@@ -53,7 +54,7 @@ export default function RoutesScreen() {
                 {route.syncState ? <Text style={styles.syncState}>{route.syncState === "PENDING" ? t("queued") : t("syncNeedsAttention")}</Text> : null}
                 <View style={[styles.status, { backgroundColor: tone.background }]}><Text style={[styles.statusText, { color: tone.foreground }]}>{t(meta.labelKey)}</Text></View>
               </View>
-              <Text style={styles.arrow}>›</Text>
+              <TabIcon name="chevronRight" color={colors.faint} size={21} />
             </Pressable>
           )
         }) : <View style={styles.empty}><Text style={styles.emptyText}>{t("fieldRoutesEmpty")}</Text></View>}
@@ -64,7 +65,7 @@ export default function RoutesScreen() {
             <Pressable onPress={() => router.push("/(app)/routes/commercial" as never)} style={styles.commercialCard}>
               <View style={styles.commercialMark}><Text style={styles.commercialMarkText}>▦</Text></View>
               <View style={styles.createBody}><Text style={styles.createTitle}>{t("commercialRoute")}</Text><Text style={styles.createHint}>{t("commercialRouteHint")}</Text></View>
-              <Text style={styles.arrow}>›</Text>
+              <TabIcon name="chevronRight" color={colors.faint} size={21} />
             </Pressable>
           </>
         ) : null}

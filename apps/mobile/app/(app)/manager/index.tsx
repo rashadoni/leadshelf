@@ -77,7 +77,7 @@ function ManagerCard({
           <Text style={styles.cardDetail} numberOfLines={2}>{detail}</Text>
         </>
       )}
-      <View style={styles.cardFooter}><Text style={styles.cardHint}>{hint}</Text><Text style={styles.cardArrow}>›</Text></View>
+      <View style={styles.cardFooter}><Text style={styles.cardHint}>{hint}</Text><TabIcon name="chevronRight" color={colors.primary} size={18} /></View>
     </Pressable>
   )
 }
@@ -155,7 +155,7 @@ export default function ManagerHomeScreen() {
       >
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
-            <Text style={styles.backText}>‹</Text>
+            <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>LEADDRIVE FIELD</Text>
@@ -163,7 +163,7 @@ export default function ManagerHomeScreen() {
             <Text style={styles.subtitle}>{t("managerHomeSubtitle")}</Text>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}>
-            <Text style={styles.refreshText}>↻</Text>
+            <TabIcon name="refresh" color={colors.primary} size={22} />
           </Pressable>
         </View>
 
@@ -241,7 +241,7 @@ export default function ManagerHomeScreen() {
             </View>
 
             <View style={styles.noteCard}>
-              <Text style={styles.noteIcon}>i</Text>
+              <View style={styles.noteIcon}><TabIcon name="info" color={colors.headerText} size={14} /></View>
               <Text style={styles.noteText}>{t("managerLocationsHint")}</Text>
             </View>
           </>
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   cardHint: { color: colors.faint, flex: 1, fontSize: 8, lineHeight: 11, fontWeight: "700" },
   cardArrow: { color: colors.primary, fontSize: 22, lineHeight: 22 },
   noteCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 14, padding: 13, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
-  noteIcon: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.info, color: colors.headerText, lineHeight: 20, textAlign: "center", fontSize: 11, fontWeight: "900" },
+  noteIcon: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.info, alignItems: "center", justifyContent: "center" },
   noteText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" },
   pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
 })

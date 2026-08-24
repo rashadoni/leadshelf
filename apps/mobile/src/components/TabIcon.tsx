@@ -24,6 +24,15 @@ export type TabIconName =
   | "document"
   | "alert"
   | "info"
+  | "chevronLeft"
+  | "chevronRight"
+  | "chevronDown"
+  | "add"
+  | "check"
+  | "refresh"
+  | "play"
+  | "pause"
+  | "stop"
 
 export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: ColorValue; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24" }
@@ -182,6 +191,63 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Circle cx={12} cy={12} r={8.5} stroke={color} strokeWidth={1.8} />
           <Path d="M12 10.7v5M12 8v.1" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+        </Svg>
+      )
+    case "chevronLeft":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m14.5 5.5-6 6.5 6 6.5" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "chevronRight":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m9.5 5.5 6 6.5-6 6.5" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "chevronDown":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m5.5 9.5 6.5 6 6.5-6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "add":
+      return (
+        <Svg {...common} fill="none">
+          <Circle cx={12} cy={12} r={8.5} stroke={color} strokeWidth={1.8} />
+          <Path d="M12 8v8M8 12h8" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+        </Svg>
+      )
+    case "check":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m5.5 12.3 4.1 4.1 8.9-9" stroke={color} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "refresh":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M19.2 10.3A7.5 7.5 0 1 0 20 14" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+          <Path d="M19.2 5.5v4.8h-4.8" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "play":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m8.7 6.4 8.3 5.1a.6.6 0 0 1 0 1l-8.3 5.1A.75.75 0 0 1 7.5 17V7a.75.75 0 0 1 1.2-.6Z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+        </Svg>
+      )
+    case "pause":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={7} y={6} width={3.5} height={12} rx={1} stroke={color} strokeWidth={1.8} />
+          <Rect x={13.5} y={6} width={3.5} height={12} rx={1} stroke={color} strokeWidth={1.8} />
+        </Svg>
+      )
+    case "stop":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={6.5} y={6.5} width={11} height={11} rx={1.5} stroke={color} strokeWidth={1.8} />
         </Svg>
       )
   }
