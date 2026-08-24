@@ -7,7 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldContactChangeRequest, FieldContactDetailData } from "../../../src/field/contracts"
 import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
-import { formatShortDateTime } from "../../../src/i18n/date-format"
+import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { approvalStatusLabel, assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 
@@ -134,7 +134,10 @@ export default function ContactDetailScreen() {
                 <View key={potential.id} style={styles.potentialRow}>
                   <View style={styles.potentialBody}>
                     <Text style={styles.potentialName}>{potential.productExternalId ?? potential.brandExternalId ?? t("potentialLabel")}</Text>
-                    <Text style={styles.potentialMeta}>{[potential.category, potential.periodStart?.slice(0, 10)].filter(Boolean).join(" · ")}</Text>
+                    <Text style={styles.potentialMeta}>{[
+                      potential.category,
+                      potential.periodStart ? formatCalendarDay(potential.periodStart.slice(0, 10), locale).date || potential.periodStart.slice(0, 10) : null,
+                    ].filter(Boolean).join(" · ")}</Text>
                   </View>
                   <View style={styles.potentialValue}><Text style={styles.potentialValueText}>{String(potential.coverageValue)} / {String(potential.potentialValue)}</Text></View>
                 </View>

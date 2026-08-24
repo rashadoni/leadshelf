@@ -72,6 +72,12 @@ export function formatCalendarDay(dateKey: string, locale: Locale): {
   }
 }
 
+/** A compact, locale-safe calendar date with year for cards and histories. */
+export function formatCalendarDate(dateKey: string, locale: Locale): string {
+  const date = calendarDateFromKey(dateKey)
+  return date ? localizedCalendarDateText(date, locale) + " " + String(date.year) : ""
+}
+
 /** Compact deterministic labels for narrow date chips and route/HRM strips. */
 export function formatCalendarWeekdayShort(dateKey: string, locale: Locale): string {
   const date = calendarDateFromKey(dateKey)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  formatCalendarDate,
   formatCalendarDay,
   formatCalendarRange,
   formatShortDateTime,
@@ -31,6 +32,8 @@ describe("offline date formatting", () => {
       weekday: "понедельник",
       date: "24 августа",
     })
+    expect(formatCalendarDate("2026-08-24", "az")).toBe("24 avqust 2026")
+    expect(formatCalendarDate("2026-08-24", "ru")).toBe("24 августа 2026")
     expect(formatCalendarRange("2026-08-24", "2026-08-31", "az")).toBe("24 avqust — 30 avqust 2026")
     expect(formatCalendarRange("2026-12-28", "2027-01-04", "ru")).toBe("28 декабря 2026 — 3 января 2027")
   })

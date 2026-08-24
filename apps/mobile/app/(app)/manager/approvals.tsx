@@ -8,7 +8,7 @@ import type { FieldManagerApprovalDecisionInput, FieldManagerApprovalsData } fro
 import { fieldContactChangePreview, type FieldContactChangePreview } from "../../../src/field/contact-correction"
 import { contactChangeKindLabel, contactCorrectionFieldLabel, hrmRequestTypeLabel, objectTypeLabel, routeChangeTypeLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
-import { formatShortDateTime } from "../../../src/i18n/date-format"
+import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 
@@ -195,9 +195,11 @@ function ApprovalRequest({
   onToggleRouteConflict: () => void
   onSubmit: () => void
 }) {
+  const locale = useLocale()
   const options = decisionsFor(item)
   const needsNote = decisionNeedsNote(item, selectedDecision)
   const requiresFullContactReview = Boolean(item.contactPreview?.needsFullReview)
+  const selectedRescheduleDate = isDateKey(rescheduleDate) ? formatCalendarDay(rescheduleDate, locale) : null
   return (
     <View style={[styles.request, index > 0 && styles.requestBorder]}>
       <View style={styles.requestTop}>
@@ -261,15 +263,17 @@ function ApprovalRequest({
                 keyboardType="numbers-and-punctuation"
                 maxLength={10}
                 onChangeText={onChangeRescheduleDate}
-                placeholder="2026-08-24"
+                placeholder="YYYY-MM-DD"
                 placeholderTextColor={colors.faint}
                 style={styles.dateInput}
                 value={rescheduleDate}
               />
+              {selectedRescheduleDate ? <Text style={styles.dateHint}>{selectedRescheduleDate.weekday}, {selectedRescheduleDate.date}</Text> : null}
               <View style={styles.datePresets}>
                 {[1, 7, 14].map((days) => {
                   const candidate = dateKey(addDays(days))
-                  return <Pressable key={days} accessibilityRole="button" onPress={() => onChangeRescheduleDate(candidate)} style={[styles.datePreset, rescheduleDate === candidate && styles.datePresetSelected]}><Text style={[styles.datePresetText, rescheduleDate === candidate && styles.datePresetTextSelected]}>{candidate}</Text></Pressable>
+                  const candidateLabel = formatCalendarDay(candidate, locale)
+                  return <Pressable key={days} accessibilityRole="button" onPress={() => onChangeRescheduleDate(candidate)} style={[styles.datePreset, rescheduleDate === candidate && styles.datePresetSelected]}><Text style={[styles.datePresetText, rescheduleDate === candidate && styles.datePresetTextSelected]}>{candidateLabel.date || candidate}</Text></Pressable>
                 })}
               </View>
             </View>
@@ -575,6 +579,7 @@ const styles = StyleSheet.create({
   noteInput: { minHeight: 76, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 9, color: colors.text, fontSize: 11, lineHeight: 16 },
   datePanel: { gap: 6 },
   dateInput: { minHeight: 44, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, color: colors.text, fontSize: 12, fontWeight: "900" },
+  dateHint: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   datePresets: { flexDirection: "row", gap: 6 },
   datePreset: { flex: 1, minHeight: 34, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   datePresetSelected: { backgroundColor: colors.primarySoft },

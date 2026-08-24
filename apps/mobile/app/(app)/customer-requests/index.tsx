@@ -7,6 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldCustomerRequest, FieldCustomerRequestsData } from "../../../src/field/contracts"
 import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
+import { formatCalendarDate } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { objectTypeLabel } from "../../../src/field/labels"
 
@@ -88,7 +89,9 @@ export default function CustomerRequestsScreen() {
 }
 
 function RequestCard({ request }: { request: FieldCustomerRequest }) {
+  const locale = useLocale()
   const tone = statusColors(request.status)
+  const submittedAt = request.submittedAt ?? request.updatedAt
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
@@ -101,7 +104,7 @@ function RequestCard({ request }: { request: FieldCustomerRequest }) {
       {request.address ? <Text style={styles.address}>{request.address}</Text> : null}
       <Text style={styles.reason}>{request.reason}</Text>
       <View style={styles.cardFooter}>
-        <Text style={styles.footerText}>{request.submittedAt?.slice(0, 10) ?? request.updatedAt.slice(0, 10)}</Text>
+        <Text style={styles.footerText}>{formatCalendarDate(submittedAt.slice(0, 10), locale) || "—"}</Text>
         {request.route ? <Text style={styles.routeText}>↗ {request.route.name ?? request.route.id}</Text> : null}
       </View>
       {request.duplicateCandidates.length > 0 ? (

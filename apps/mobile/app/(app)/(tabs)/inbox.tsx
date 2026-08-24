@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldMessages, readFieldMessages } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
+import { fieldNotificationCopy } from "../../../src/field/notification-copy"
 import { notificationDestination } from "../../../src/field/notification-target"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
@@ -191,11 +192,12 @@ export default function InboxTab() {
               <View style={[styles.list, layout.isTablet && styles.listTablet]}>
                 {items.map((item) => {
                   const tone = notificationTone(item.type)
+                  const presented = fieldNotificationCopy(item)
                   return (
                     <Pressable
                       key={item.id}
                       accessibilityRole="button"
-                      accessibilityLabel={item.title}
+                      accessibilityLabel={presented.title}
                       onPress={() => void openNotification(item)}
                       style={({ pressed }) => [
                         styles.notificationCard,
@@ -208,8 +210,8 @@ export default function InboxTab() {
                         <TabIcon name={tone.icon} color={tone.color} size={20} />
                       </View>
                       <View style={styles.messageBody}>
-                        <Text style={styles.messageTitle}>{item.title}</Text>
-                        {item.body ? <Text style={styles.preview}>{item.body}</Text> : null}
+                        <Text style={styles.messageTitle}>{presented.title}</Text>
+                        {presented.body ? <Text style={styles.preview}>{presented.body}</Text> : null}
                         <Text style={styles.notificationDate}>{formatShortDateTime(item.createdAt, locale)}</Text>
                       </View>
                       {!item.isRead ? <View style={styles.unreadDot} /> : null}

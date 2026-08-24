@@ -5,12 +5,13 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { useField } from "../../../src/field/field-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
+import { formatCalendarDay, formatCalendarMonthShort } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useSync } from "../../../src/sync/sync-context"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 
 export default function RoutesScreen() {
-  useLocale()
+  const locale = useLocale()
   const field = useField()
   const { status: syncStatus } = useSync()
   const routes = field.week?.days.flatMap((day) => day.routes.map((route) => ({ ...route, day }))) ?? []
@@ -43,9 +44,10 @@ export default function RoutesScreen() {
         {routes.length ? routes.map(({ day, ...route }) => {
           const meta = routeStatusMeta(route.effectiveStatus)
           const tone = tones[meta.tone]
+          const calendarDay = formatCalendarDay(day.date, locale)
           return (
             <Pressable key={route.id} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCard, pressed && styles.pressed]}>
-              <View style={styles.dateBadge}><Text style={styles.dateDay}>{day.date.slice(8)}</Text><Text style={styles.dateMonth}>{day.date.slice(5, 7)}</Text></View>
+              <View style={styles.dateBadge}><Text style={styles.dateDay}>{calendarDay.day || day.date.slice(8)}</Text><Text style={styles.dateMonth}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text></View>
               <View style={styles.routeBody}><Text style={styles.routeName}>{route.name ?? t("tabRoute")}</Text><Text style={styles.routeMeta}>{route.visitedPoints}/{route.totalPoints} {t("routeVisitedLabel")}</Text>{route.points[0] ? <Text style={styles.nextStop} numberOfLines={1}>{route.points.find((point) => point.effectiveStatus === "PENDING")?.contact?.displayName ?? route.points.find((point) => point.effectiveStatus === "PENDING")?.customer.name ?? route.points[0].contact?.displayName ?? route.points[0].customer.name}</Text> : null}</View>
               <View style={styles.routeState}>
                 {route.syncState ? <Text style={styles.syncState}>{route.syncState === "PENDING" ? t("queued") : t("syncNeedsAttention")}</Text> : null}

@@ -17,7 +17,7 @@ import { addOptimisticRoute } from "../../../src/field/route-cache"
 import { enqueueFieldRouteCreate, fieldRouteOutboxResult } from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
-import { formatCalendarDay } from "../../../src/i18n/date-format"
+import { formatCalendarDay, formatCalendarMonthShort } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
@@ -332,10 +332,11 @@ export default function NewRouteScreen() {
                   {availableDays.map((day) => {
                     const selected = selectedDate === day.date
                     const disabled = !day.routePlanningAllowed || day.date === copySource?.date.slice(0, 10)
+                    const calendarDay = formatCalendarDay(day.date, locale)
                     return (
                       <Pressable key={day.date} disabled={disabled} onPress={() => selectDate(day.date)} style={[styles.day, selected && styles.daySelected, disabled && styles.dayDisabled]}>
-                        <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>{day.date.slice(8)}</Text>
-                        <Text style={[styles.dayMonth, selected && styles.dayMonthSelected]}>{day.date.slice(5, 7)}</Text>
+                        <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>{calendarDay.day || day.date.slice(8)}</Text>
+                        <Text style={[styles.dayMonth, selected && styles.dayMonthSelected]}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text>
                         {!day.isWorkingDay ? <Text style={[styles.dayOff, selected && styles.dayMonthSelected]}>●</Text> : null}
                       </Pressable>
                     )
