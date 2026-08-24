@@ -105,6 +105,7 @@ export interface FieldVisitPolicy {
 
 export interface FieldWeekRoute {
   id: string
+  version: number
   name: string | null
   date: string
   persistedStatus: Exclude<FieldRouteStatus, "MISSED">
@@ -1242,6 +1243,10 @@ function number(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)
 }
 
+function positiveInteger(value: unknown): value is number {
+  return number(value) && Number.isInteger(value) && value > 0
+}
+
 function boolean(value: unknown): value is boolean {
   return typeof value === "boolean"
 }
@@ -1417,6 +1422,7 @@ function validWeekRoute(value: unknown): boolean {
   return Boolean(
     route &&
       string(route.id) &&
+      positiveInteger(route.version) &&
       dateKey(route.date) &&
       string(route.effectiveStatus) &&
       number(route.totalPoints) &&

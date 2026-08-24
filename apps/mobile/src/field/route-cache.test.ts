@@ -36,7 +36,7 @@ describe("optimistic field route cache", () => {
       notes: null,
       points: [point],
     })
-    expect(next.days[0]?.routes[0]).toMatchObject({ id: "local-route-1", syncState: "PENDING" })
+    expect(next.days[0]?.routes[0]).toMatchObject({ id: "local-route-1", version: 0, syncState: "PENDING" })
     expect(next.summary).toMatchObject({ routes: 1, draftRoutes: 1 })
   })
 

@@ -149,6 +149,11 @@ export default function FieldRouteDetailScreen() {
       : null
     : routeFlow.primaryPoint
   const canStartVisits = routeData.canExecute && routeData.date === field.week?.today
+  const canSaveRoute = routeData.canEdit && !routeData.syncState && (
+    routeData.id.startsWith("local-route-") || routeData.version > 0
+  )
+  const canPublishRoute = routeData.canPublish && !routeData.syncState && routeData.version > 0 && !routeData.id.startsWith("local-route-")
+  const needsRouteReload = routeData.syncState === "CONFLICT"
   const navigationPlatform: RouteNavigationPlatform = Platform.OS === "android"
     ? "android"
     : Platform.OS === "ios"
@@ -230,6 +235,7 @@ export default function FieldRouteDetailScreen() {
   }
 
   async function save() {
+    if (!canSaveRoute) return
     const dateKey = routeData!.date.slice(0, 10)
     const timezone = field.week?.timezone ?? "UTC"
     const mappedPoints = points.map((point) => {
@@ -249,6 +255,7 @@ export default function FieldRouteDetailScreen() {
     try {
       const input = {
         routeId: routeData!.id,
+        expectedVersion: routeData!.version,
         name: name.trim() || null,
         notes: notes.trim() || null,
         points: mappedPoints.map((point) => ({
@@ -281,6 +288,17 @@ export default function FieldRouteDetailScreen() {
       } else {
         Alert.alert(t("routeQueued"))
       }
+    } catch (error) {
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function reloadRoute() {
+    setSaving(true)
+    try {
+      await field.loadWeek(field.week!.weekStart)
     } catch (error) {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
@@ -399,6 +417,7 @@ export default function FieldRouteDetailScreen() {
   }
 
   function publish() {
+    if (!canPublishRoute) return
     Alert.alert(t("publishConfirmTitle"), t("publishConfirmBody"), [
       { text: t("cancel"), style: "cancel" },
       {
@@ -406,7 +425,7 @@ export default function FieldRouteDetailScreen() {
         onPress: () => void (async () => {
           setSaving(true)
           try {
-            const queued = enqueueFieldRoutePublish(routeData!.id)
+            const queued = enqueueFieldRoutePublish(routeData!.id, routeData!.version)
             const week = field.week!
             field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, "PENDING"))
             await sync()
@@ -663,8 +682,15 @@ export default function FieldRouteDetailScreen() {
 
         {routeData.canEdit ? (
           <View style={styles.footerActions}>
-            <Pressable disabled={saving} onPress={() => void save()} style={[styles.saveButton, saving && styles.disabled]}><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
-            {routeData.canPublish ? <Pressable disabled={saving} onPress={publish} style={[styles.publishButton, saving && styles.disabled]}><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable> : null}
+            {!canSaveRoute ? <Text style={styles.syncHint}>{needsRouteReload ? t("routeRefreshRequired") : t("routeSyncBeforeChange")}</Text> : null}
+            {needsRouteReload ? <Pressable disabled={saving} onPress={() => void reloadRoute()} style={[styles.reloadButton, saving && styles.disabled]}><Text style={styles.reloadText}>{t("reloadRoute")}</Text></Pressable> : null}
+            <Pressable disabled={saving || !canSaveRoute} onPress={() => void save()} style={[styles.saveButton, (saving || !canSaveRoute) && styles.disabled]}><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
+            {routeData.canPublish ? (
+              <>
+                {!canPublishRoute ? <Text style={styles.syncHint}>{t("routeSyncBeforePublish")}</Text> : null}
+                <Pressable disabled={saving || !canPublishRoute} onPress={publish} style={[styles.publishButton, (saving || !canPublishRoute) && styles.disabled]}><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable>
+              </>
+            ) : null}
           </View>
         ) : null}
         <Pressable
@@ -784,6 +810,9 @@ const styles = StyleSheet.create({
   autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
   saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   saveText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
+  syncHint: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800", textAlign: "center" },
+  reloadButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  reloadText: { color: colors.info, fontSize: 13, fontWeight: "900" },
   publishButton: { minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, alignItems: "center", justifyContent: "center" },
   publishText: { color: colors.successDark, fontSize: 14, fontWeight: "900" },
   copyButton: { marginHorizontal: 14, marginTop: 10, minHeight: 62, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },

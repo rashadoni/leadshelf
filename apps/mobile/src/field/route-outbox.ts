@@ -17,12 +17,13 @@ export type FieldRouteCreatePayload = {
 
 export type FieldRouteUpdatePayload = {
   routeId: string
+  expectedVersion: number
   name?: string | null
   notes?: string | null
   points: FieldRouteMutationPoint[]
 }
 
-export type FieldRoutePublishPayload = { routeId: string }
+export type FieldRoutePublishPayload = { routeId: string; expectedVersion: number }
 
 export type FieldRouteChangeRequestPayload = {
   routeId: string
@@ -49,9 +50,9 @@ export type FieldRoutePushResult = {
 }
 
 type RouteMutationApi = {
-  createRoute(input: Omit<FieldRouteCreatePayload, "localRouteId">): Promise<{ id: string }>
-  updateRoute(routeId: string, input: Omit<FieldRouteUpdatePayload, "routeId">): Promise<void>
-  publishRoute(routeId: string): Promise<void>
+  createRoute(input: Omit<FieldRouteCreatePayload, "localRouteId">): Promise<{ id: string; version: number }>
+  updateRoute(routeId: string, input: Omit<FieldRouteUpdatePayload, "routeId">): Promise<{ version: number }>
+  publishRoute(routeId: string, expectedVersion: number): Promise<{ version: number }>
   requestRouteChange(
     routeId: string,
     input: Omit<FieldRouteChangeRequestPayload, "routeId">,
@@ -66,6 +67,10 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function nullableString(value: unknown): value is string | null | undefined {
   return value == null || typeof value === "string"
+}
+
+function positiveVersion(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
 }
 
 function parsePoints(value: unknown): FieldRouteMutationPoint[] {
@@ -111,11 +116,13 @@ export function parseFieldRouteUpdatePayload(value: unknown): FieldRouteUpdatePa
   if (
     !payload ||
     typeof payload.routeId !== "string" ||
+    !positiveVersion(payload.expectedVersion) ||
     !nullableString(payload.name) ||
     !nullableString(payload.notes)
   ) throw new Error("Invalid field route update payload")
   return {
     routeId: payload.routeId,
+    expectedVersion: payload.expectedVersion,
     name: payload.name ?? null,
     notes: payload.notes ?? null,
     points: parsePoints(payload.points),
@@ -124,8 +131,10 @@ export function parseFieldRouteUpdatePayload(value: unknown): FieldRouteUpdatePa
 
 export function parseFieldRoutePublishPayload(value: unknown): FieldRoutePublishPayload {
   const payload = record(value)
-  if (!payload || typeof payload.routeId !== "string") throw new Error("Invalid field route publish payload")
-  return { routeId: payload.routeId }
+  if (!payload || typeof payload.routeId !== "string" || !positiveVersion(payload.expectedVersion)) {
+    throw new Error("Invalid field route publish payload")
+  }
+  return { routeId: payload.routeId, expectedVersion: payload.expectedVersion }
 }
 
 export function parseFieldRouteChangeRequestPayload(value: unknown): FieldRouteChangeRequestPayload {
@@ -171,25 +180,32 @@ export async function sendFieldRouteOperation(
     if (operation.kind === "field.route.create") {
       const { localRouteId: _localRouteId, ...input } = operation.payload
       const route = await api.createRoute(input)
-      return { clientOpId: operation.clientOpId, status: "applied", detail: { routeId: route.id } }
+      return { clientOpId: operation.clientOpId, status: "applied", detail: { routeId: route.id, version: route.version } }
     }
     if (operation.kind === "field.route.update") {
-      await api.updateRoute(operation.payload.routeId, {
+      const route = await api.updateRoute(operation.payload.routeId, {
+        expectedVersion: operation.payload.expectedVersion,
         name: operation.payload.name,
         notes: operation.payload.notes,
         points: operation.payload.points,
       })
+      return {
+        clientOpId: operation.clientOpId,
+        status: "applied",
+        detail: { routeId: operation.payload.routeId, version: route.version },
+      }
     } else if (operation.kind === "field.route.publish") {
-      await api.publishRoute(operation.payload.routeId)
+      const route = await api.publishRoute(operation.payload.routeId, operation.payload.expectedVersion)
+      return {
+        clientOpId: operation.clientOpId,
+        status: "applied",
+        detail: { routeId: operation.payload.routeId, version: route.version },
+      }
     } else {
       const { routeId, ...input } = operation.payload
       await api.requestRouteChange(routeId, input)
     }
-    return {
-      clientOpId: operation.clientOpId,
-      status: "applied",
-      detail: { routeId: operation.payload.routeId },
-    }
+    return { clientOpId: operation.clientOpId, status: "applied", detail: { routeId: operation.payload.routeId } }
   } catch (error) {
     if (!(error instanceof HttpError) || error.status >= 500 || error.status === 408 || error.status === 429) {
       throw error

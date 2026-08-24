@@ -13,6 +13,9 @@ export function addOptimisticRoute(
 ): FieldWeekData {
   const route: FieldWeekRoute = {
     id: input.id,
+    // A local draft never reaches the versioned endpoint. The first server
+    // refresh replaces this placeholder with the authoritative route version.
+    version: 0,
     name: input.name,
     date: input.date,
     persistedStatus: "DRAFT",

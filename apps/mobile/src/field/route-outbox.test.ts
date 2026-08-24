@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { HttpError } from "../sync/ports-error"
 import {
   parseFieldRouteCreatePayload,
+  parseFieldRoutePublishPayload,
   parseFieldRouteUpdatePayload,
   sendFieldRouteOperation,
 } from "./route-outbox"
@@ -16,7 +17,9 @@ describe("field route outbox", () => {
       date: "2026-07-15T00:00:00.000Z",
       points,
     }).points[0]?.contactId).toBe("doctor-1")
-    expect(parseFieldRouteUpdatePayload({ routeId: "route-1", points }).routeId).toBe("route-1")
+    expect(parseFieldRouteUpdatePayload({ routeId: "route-1", expectedVersion: 3, points })).toMatchObject({ routeId: "route-1", expectedVersion: 3 })
+    expect(() => parseFieldRouteUpdatePayload({ routeId: "route-1", points })).toThrow()
+    expect(() => parseFieldRoutePublishPayload({ routeId: "route-1" })).toThrow()
     expect(() => parseFieldRouteUpdatePayload({ routeId: "route-1", points: [{}] })).toThrow()
   })
 
@@ -57,7 +60,7 @@ describe("field route outbox", () => {
     await expect(sendFieldRouteOperation({
       clientOpId: "op-update-0001",
       kind: "field.route.update",
-      payload: { routeId: "route-1", points },
+      payload: { routeId: "route-1", expectedVersion: 3, points },
     }, conflictApi)).resolves.toMatchObject({ status: "conflict" })
 
     const transientApi = {
@@ -82,14 +85,14 @@ describe("field route outbox", () => {
     const api = {
       createRoute: vi.fn(),
       updateRoute: vi.fn(),
-      publishRoute: vi.fn().mockResolvedValue(undefined),
+      publishRoute: vi.fn().mockResolvedValue({ version: 4 }),
       requestRouteChange: vi.fn().mockResolvedValue(undefined),
     }
     await expect(sendFieldRouteOperation({
       clientOpId: "op-publish-0001",
       kind: "field.route.publish",
-      payload: { routeId: "route-1" },
-    }, api)).resolves.toMatchObject({ status: "applied", detail: { routeId: "route-1" } })
+      payload: { routeId: "route-1", expectedVersion: 3 },
+    }, api)).resolves.toMatchObject({ status: "applied", detail: { routeId: "route-1", version: 4 } })
     await expect(sendFieldRouteOperation({
       clientOpId: "op-change-0001",
       kind: "field.route.change-request",
@@ -100,7 +103,7 @@ describe("field route outbox", () => {
         payload: { customerId: "clinic-1", contactId: "doctor-1" },
       },
     }, api)).resolves.toMatchObject({ status: "applied" })
-    expect(api.publishRoute).toHaveBeenCalledWith("route-1")
+    expect(api.publishRoute).toHaveBeenCalledWith("route-1", 3)
     expect(api.requestRouteChange).toHaveBeenCalledWith("route-1", expect.objectContaining({ changeType: "ADD_STOP" }))
   })
 })

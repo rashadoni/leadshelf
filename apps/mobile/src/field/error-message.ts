@@ -8,6 +8,11 @@ export const FIELD_TASK_ERROR_OVERRIDES: FieldErrorCodeOverrides = {
   MTM_TASK_STATUS_CONFLICT: "agentTaskConflictHint",
 }
 
+export const FIELD_ROUTE_ERROR_OVERRIDES: FieldErrorCodeOverrides = {
+  ROUTE_VERSION_CONFLICT: "routeRefreshRequired",
+  ROUTE_VERSION_REQUIRED: "routeRefreshRequired",
+}
+
 function errorCode(error: HttpError): string | null {
   const detail = error.detail
   if (!detail || typeof detail !== "object" || Array.isArray(detail)) return null

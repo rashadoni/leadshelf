@@ -515,7 +515,7 @@ export const fieldApi = {
     status?: "DRAFT" | "PLANNED"
     points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
   }) => {
-    const body = await request<{ success?: boolean; data?: { id?: unknown } }>("/api/v1/mtm/routes", json({
+    const body = await request<{ success?: boolean; data?: { id?: unknown; version?: unknown } }>("/api/v1/mtm/routes", json({
       agentId: input.agentId,
       assignments: [{ agentId: input.agentId, role: "PRIMARY" }],
       date: input.date,
@@ -524,21 +524,38 @@ export const fieldApi = {
       notes: input.notes ?? null,
       points: input.points,
     }))
-    if (body.success !== true || typeof body.data?.id !== "string") throw new Error("Invalid route create response")
-    return { id: body.data.id }
+    const version = body.data?.version
+    if (body.success !== true || typeof body.data?.id !== "string" || typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+      throw new Error("Invalid route create response")
+    }
+    return { id: body.data.id, version }
   },
   updateRoute: async (routeId: string, input: {
+    expectedVersion: number
     name?: string | null
     notes?: string | null
     points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
   }) => {
-    await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}`, {
+    const body = await request<{ success?: boolean; data?: { version?: unknown } }>(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}`, {
       ...json(input),
       method: "PUT",
     })
+    const version = body.data?.version
+    if (body.success !== true || typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+      throw new Error("Invalid route update response")
+    }
+    return { version }
   },
-  publishRoute: async (routeId: string) => {
-    await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}/publish`, json({}))
+  publishRoute: async (routeId: string, expectedVersion: number) => {
+    const body = await request<{ success?: boolean; data?: { version?: unknown } }>(
+      `/api/v1/mtm/routes/${encodeURIComponent(routeId)}/publish`,
+      json({ expectedVersion }),
+    )
+    const version = body.data?.version
+    if (body.success !== true || typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+      throw new Error("Invalid route publish response")
+    }
+    return { version }
   },
   requestRouteChange: async (routeId: string, input: {
     changeType: "REMOVE_STOP" | "ADD_STOP" | "CONFLICT_OVERRIDE"
@@ -604,13 +621,14 @@ export const fieldApi = {
     notes?: string | null
     status?: "DRAFT" | "PLANNED"
     points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
-  }): Promise<{ id: string }>
+  }): Promise<{ id: string; version: number }>
   updateRoute(routeId: string, input: {
+    expectedVersion: number
     name?: string | null
     notes?: string | null
     points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
-  }): Promise<void>
-  publishRoute(routeId: string): Promise<void>
+  }): Promise<{ version: number }>
+  publishRoute(routeId: string, expectedVersion: number): Promise<{ version: number }>
   requestRouteChange(routeId: string, input: {
     changeType: "REMOVE_STOP" | "ADD_STOP" | "CONFLICT_OVERRIDE"
     routePointId?: string

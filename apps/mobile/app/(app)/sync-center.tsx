@@ -19,6 +19,7 @@ import {
 } from "../../src/commercial/ui"
 import { SyncBar } from "../../src/components/SyncBar"
 import {
+  discardFieldRouteVersionConflict,
   detachFieldCommitmentEvidence,
   detachFieldMessageAttachment,
   listFieldSyncRecoveryQueue,
@@ -32,7 +33,12 @@ import { useSync } from "../../src/sync/sync-context"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
-import { fieldErrorMessage, fieldErrorMessageForCode, FIELD_TASK_ERROR_OVERRIDES } from "../../src/field/error-message"
+import {
+  fieldErrorMessage,
+  fieldErrorMessageForCode,
+  FIELD_ROUTE_ERROR_OVERRIDES,
+  FIELD_TASK_ERROR_OVERRIDES,
+} from "../../src/field/error-message"
 
 function kindKey(kind: string): MessageKey {
   if (kind === "field.route.create") return "syncKindRouteCreate"
@@ -99,7 +105,11 @@ function rowError(row: FieldSyncRecoveryRow): string | null {
   return fieldErrorMessageForCode(
     detail?.code,
     rowErrorFallback(row),
-    row.kind.startsWith("field.task.") ? FIELD_TASK_ERROR_OVERRIDES : {},
+    row.kind.startsWith("field.task.")
+      ? FIELD_TASK_ERROR_OVERRIDES
+      : row.kind.startsWith("field.route.")
+        ? FIELD_ROUTE_ERROR_OVERRIDES
+        : {},
   )
 }
 
@@ -142,6 +152,26 @@ export default function SyncCenterScreen() {
     } finally {
       setBusyId(null)
     }
+  }
+
+  async function discardOutdatedRouteChange(row: FieldSyncRecoveryRow) {
+    if (busyId || syncBusy) return
+    setBusyId(row.clientOpId)
+    try {
+      const discarded = discardFieldRouteVersionConflict(row.clientOpId)
+      if (!discarded) return
+      Alert.alert(t("syncCenterRouteChangeDiscarded"))
+      await flush()
+    } catch (error) {
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  function openRouteRecovery(row: FieldSyncRecoveryRow) {
+    const routeId = string(row.payload.routeId)
+    if (routeId) router.push(`/(app)/routes/${routeId}` as never)
   }
 
   async function continueWithoutPhoto(row: FieldSyncRecoveryRow) {
@@ -194,6 +224,17 @@ export default function SyncCenterScreen() {
     )
   }
 
+  function confirmDiscardOutdatedRouteChange(row: FieldSyncRecoveryRow) {
+    Alert.alert(t("syncCenterDiscardRouteTitle"), t("syncCenterDiscardRouteBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("syncCenterDiscardRouteConfirm"),
+        style: "destructive",
+        onPress: () => void discardOutdatedRouteChange(row),
+      },
+    ])
+  }
+
   async function refresh() {
     setRefreshing(true)
     try {
@@ -243,7 +284,9 @@ export default function SyncCenterScreen() {
               {error ? <View style={styles.error}><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
               <Text style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
               <View style={styles.actions}>
-                <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View>
+                {row.canRetry ? <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View> : null}
+                {row.canDiscard && string(row.payload.routeId) ? <View style={styles.action}><CommercialButton label={t("syncCenterOpenRoute")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => openRouteRecovery(row)} /></View> : null}
+                {row.canDiscard ? <View style={styles.action}><CommercialButton label={t("syncCenterDiscardRoute")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
                 {row.canContinueWithoutEvidence ? <View style={styles.action}><CommercialButton label={t("syncCenterWithoutPhoto")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
                 {row.canDetachAttachment ? <View style={styles.action}><CommercialButton label={locale === "az" ? "Faylsız" : "Без файла"} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
               </View>

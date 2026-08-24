@@ -346,6 +346,39 @@ function resetRecoverablePhotoSubmit(clientPhotoId: string): void {
   }
 }
 
+/**
+ * Route mutations created by older APKs did not carry an optimistic-lock
+ * version. Guessing one from a later pull could overwrite a manager's edit,
+ * while leaving the old row pending would make every future sync fail during
+ * payload validation. Keep the original operation for recovery, but take it
+ * out of the send queue and make the conflict visible to diagnostics.
+ */
+function holdLegacyRouteVersionOperations(): void {
+  const rows = db.getAllSync<{ clientOpId: string; kind: string; payload: string }>(
+    `SELECT clientOpId, kind, payload FROM outbox_ops
+     WHERE status='pending' AND kind IN ('field.route.update','field.route.publish')`,
+  )
+  const detail = {
+    code: "ROUTE_VERSION_REQUIRED",
+    recovery: "RELOAD_AND_REAPPLY",
+  }
+  db.withTransactionSync(() => {
+    for (const row of rows) {
+      let payload: Record<string, unknown>
+      try {
+        payload = parseJsonObject(row.payload)
+      } catch {
+        payload = {}
+      }
+      if (positiveIntegerValue(payload.expectedVersion) !== null) continue
+      db.runSync("UPDATE outbox_ops SET status='conflict', detail=? WHERE clientOpId=?", [
+        JSON.stringify(detail),
+        row.clientOpId,
+      ])
+    }
+  })
+}
+
 export function initDb(): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
@@ -502,6 +535,7 @@ function initializeSchema(): void {
   db.withTransactionSync(() => {
     for (const photo of uploadedWithStuckSubmit) resetRecoverablePhotoSubmit(photo.clientPhotoId)
   })
+  holdLegacyRouteVersionOperations()
 }
 
 export type SessionScopeResult =
@@ -1970,6 +2004,10 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
 }
 
+function positiveIntegerValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null
+}
+
 export interface LocalCatalogProductRow {
   id: string
   sku: string
@@ -2258,6 +2296,7 @@ function applyOutboxResultSideEffects(
             ? parseFieldRoutePublishPayload(raw).routeId
             : parseFieldRouteChangeRequestPayload(raw).routeId
       const serverRouteId = stringValue(unknownRecord(detail)?.routeId)
+      const serverVersion = positiveIntegerValue(unknownRecord(detail)?.version)
       const rows = db.getAllSync<{ k: string; json: string }>("SELECT k, json FROM field_cache")
       for (const row of rows) {
         const cached = unknownRecord(JSON.parse(row.json) as unknown)
@@ -2272,6 +2311,7 @@ function applyOutboxResultSideEffects(
             changed = true
             const next = { ...route }
             if (status === "applied" && serverRouteId) next.id = serverRouteId
+            if (status === "applied" && serverVersion !== null) next.version = serverVersion
             if (status === "applied") delete next.syncState
             if (status === "applied" && kind === "field.route.publish") {
               next.persistedStatus = "PLANNED"
@@ -2900,6 +2940,25 @@ export function enqueueFieldRouteUpdate(input: FieldRouteUpdatePayload): { clien
     }
   }
 
+  const queuedUpdate = db.getFirstSync<{ clientOpId: string; payload: string }>(
+    `SELECT clientOpId, payload FROM outbox_ops
+     WHERE kind='field.route.update'
+       AND status='pending'
+       AND json_extract(payload, '$.routeId')=?
+     ORDER BY clientCreatedAt DESC LIMIT 1`,
+    [input.routeId],
+  )
+  if (queuedUpdate) {
+    const existing = parseFieldRouteUpdatePayload(JSON.parse(queuedUpdate.payload) as unknown)
+    // Retain the first optimistic-lock version: later offline saves replace
+    // the pending payload instead of creating a conflicting second update.
+    db.runSync("UPDATE outbox_ops SET payload=? WHERE clientOpId=?", [
+      JSON.stringify({ ...input, expectedVersion: existing.expectedVersion }),
+      queuedUpdate.clientOpId,
+    ])
+    return { clientOpId: queuedUpdate.clientOpId }
+  }
+
   const clientOpId = `field-route-${Crypto.randomUUID()}`
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
@@ -2908,11 +2967,11 @@ export function enqueueFieldRouteUpdate(input: FieldRouteUpdatePayload): { clien
   return { clientOpId }
 }
 
-export function enqueueFieldRoutePublish(routeId: string): { clientOpId: string } {
+export function enqueueFieldRoutePublish(routeId: string, expectedVersion: number): { clientOpId: string } {
   const clientOpId = `field-route-${Crypto.randomUUID()}`
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
-    [clientOpId, "field.route.publish", JSON.stringify({ routeId }), new Date().toISOString()],
+    [clientOpId, "field.route.publish", JSON.stringify({ routeId, expectedVersion }), new Date().toISOString()],
   )
   return { clientOpId }
 }
@@ -3545,6 +3604,8 @@ export interface FieldSyncRecoveryRow {
   attempts: number
   detail: unknown
   evidence: FieldSyncRecoveryEvidence | null
+  canRetry: boolean
+  canDiscard: boolean
   canContinueWithoutEvidence: boolean
   canDetachAttachment: boolean
 }
@@ -3566,6 +3627,21 @@ function parsedDetail(raw: string | null): unknown {
   } catch {
     return raw
   }
+}
+
+function routeOperationRequiresRefresh(
+  row: Pick<FieldRecoveryDbRow, "kind" | "payload" | "detail">,
+): boolean {
+  if (row.kind !== "field.route.update" && row.kind !== "field.route.publish") return false
+  try {
+    const payload = parseJsonObject(row.payload)
+    if (positiveIntegerValue(payload.expectedVersion) === null) return true
+  } catch {
+    return true
+  }
+  const detail = unknownRecord(parsedDetail(row.detail))
+  const code = stringValue(detail?.code)
+  return code === "ROUTE_VERSION_REQUIRED" || code === "ROUTE_VERSION_CONFLICT"
 }
 
 /**
@@ -3618,6 +3694,7 @@ export function listFieldSyncRecoveryQueue(): FieldSyncRecoveryRow[] {
     }
     const evidenceClientPhotoId = stringValue(payload.evidenceClientPhotoId)
     const evidenceRow = evidenceClientPhotoId ? photoById.get(evidenceClientPhotoId) : null
+    const requiresRouteRefresh = routeOperationRequiresRefresh(row)
     let evidence: FieldSyncRecoveryEvidence | null = null
     if (evidenceRow) {
       try {
@@ -3641,6 +3718,8 @@ export function listFieldSyncRecoveryQueue(): FieldSyncRecoveryRow[] {
       attempts: row.attempts ?? 0,
       detail: parsedDetail(row.detail),
       evidence,
+      canRetry: !requiresRouteRefresh,
+      canDiscard: requiresRouteRefresh,
       canContinueWithoutEvidence: Boolean(
         evidenceClientPhotoId &&
         (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill"),
@@ -3707,6 +3786,10 @@ export function retryFieldSyncOperation(clientOpId: string): { clientOpId: strin
     [clientOpId],
   )
   if (!row) return null
+  // A versionless pre-upgrade mutation, or a response that says the base
+  // version changed, cannot become safe by merely retrying the same payload.
+  // Keep it recoverable until the field worker reloads and reapplies the edit.
+  if (routeOperationRequiresRefresh(row)) return null
   let nextId = clientOpId
   db.withTransactionSync(() => {
     if (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill") {
@@ -3744,6 +3827,24 @@ export function retryFieldSyncOperation(clientOpId: string): { clientOpId: strin
     nextId = renewFieldOutboxOperation(row.clientOpId, row.kind)
   })
   return { clientOpId: nextId }
+}
+
+/**
+ * The worker can explicitly abandon only a stale versioned route mutation
+ * after reviewing the current CRM route. This is intentionally separate from
+ * retry: no local change is silently erased and tenant switching stays
+ * protected until this confirmation is made.
+ */
+export function discardFieldRouteVersionConflict(clientOpId: string): boolean {
+  const row = db.getFirstSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops WHERE clientOpId=? AND kind IN ('field.route.update','field.route.publish')
+       AND status IN ('conflict','rejected')`,
+    [clientOpId],
+  )
+  if (!row || !routeOperationRequiresRefresh(row)) return false
+  db.runSync("DELETE FROM outbox_ops WHERE clientOpId=?", [clientOpId])
+  return true
 }
 
 export function detachFieldMessageAttachment(clientOpId: string): {
