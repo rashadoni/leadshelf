@@ -7,6 +7,7 @@ import { enqueueFieldTaskCreate, readFieldCache } from "../../../src/db/local-st
 import type { FieldAgentTaskPriority, FieldAgentTaskRecurrence, FieldAgentTasksData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY, type FieldTaskCustomerPreview } from "../../../src/field/task-cache"
+import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -175,7 +176,7 @@ export default function NewAgentTaskScreen() {
       router.replace(`/(app)/field-tasks/${queued.taskId}` as never)
       void sync().then(() => field.refreshAgentTasks()).catch(() => {})
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("agentTaskActionFailed"))
+      setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
     } finally {
       setSaving(false)
     }

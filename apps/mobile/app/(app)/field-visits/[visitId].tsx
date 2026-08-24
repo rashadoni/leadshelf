@@ -33,6 +33,7 @@ import type {
   FieldVisitPotential,
 } from "../../../src/field/execution-outbox"
 import { useField } from "../../../src/field/field-context"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import {
   completeOptimisticFieldVisit,
   findFieldVisit,
@@ -312,7 +313,7 @@ export default function FieldVisitWorkspaceScreen() {
         Alert.alert(t("photoQueued"))
       }
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "fieldVisitConflict"))
     } finally {
       setSaving(false)
     }
@@ -391,7 +392,7 @@ export default function FieldVisitWorkspaceScreen() {
       if (result?.status !== "applied") Alert.alert(t("fieldVisitResultQueued"))
       router.replace(`/(app)/routes/${workspace.visit.routeId}` as never)
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "fieldVisitConflict"))
     } finally {
       setSaving(false)
     }

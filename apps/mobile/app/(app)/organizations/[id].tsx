@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldOrganizationDetailData } from "../../../src/field/contracts"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
@@ -23,7 +24,7 @@ export default function OrganizationDetailScreen() {
       setData(next)
       writeFieldCache(key, next)
       setError(null)
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
+    }).catch((reason) => setError(fieldErrorMessage(reason, "fieldDataError")))
   }, [id, key])
 
   const organization = data?.organization

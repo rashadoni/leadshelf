@@ -13,6 +13,7 @@ import {
 import { formatFileSize, openLocalDocument, pickFieldDocument } from "../../../src/field/document-files"
 import type { FieldDocument } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -101,7 +102,7 @@ export default function DocumentsScreen() {
       Alert.alert(copy.saved, copy.savedHint)
       void sync().then(() => load(false)).catch(() => {})
     } catch (cause) {
-      setWarning(cause instanceof Error ? cause.message : String(cause))
+      setWarning(fieldErrorMessage(cause, "documentActionFailed"))
     }
   }
 
@@ -119,7 +120,7 @@ export default function DocumentsScreen() {
       void sync().catch(() => {})
       await openLocalDocument(localUri, document.mimeType)
     } catch (cause) {
-      Alert.alert(copy.title, cause instanceof Error ? cause.message : String(cause))
+      Alert.alert(copy.title, fieldErrorMessage(cause, "documentOpenUnavailable"))
     } finally {
       setBusyId(null)
     }

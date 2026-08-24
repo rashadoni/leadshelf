@@ -27,6 +27,7 @@ import type {
   FieldWorkdayStatus,
 } from "../../src/field/contracts"
 import { useField } from "../../src/field/field-context"
+import { fieldErrorMessage } from "../../src/field/error-message"
 import { presentFieldAttendancePolicy } from "../../src/field/attendance-policy"
 import {
   appendOptimisticFieldLocation,
@@ -371,7 +372,7 @@ export default function WorkdayScreen() {
       await field.refreshActivity()
     } catch (error) {
       if (queuedClientOpId) setFeedback("workdayQueueSaved")
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "workdayActionConflict"))
     } finally {
       setBusyAction(null)
     }

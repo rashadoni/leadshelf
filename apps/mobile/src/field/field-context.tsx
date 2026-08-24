@@ -21,6 +21,7 @@ import {
 } from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
+import { fieldErrorMessage } from "./error-message"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
 import type {
   FieldAgentTasksData,
@@ -121,7 +122,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
         await loseSession()
         return
       }
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(fieldErrorMessage(reason, "fieldDataError"))
       setPhase(cached ? "stale" : "error")
     }
   }, [loseSession])
@@ -169,7 +170,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       : locationResult.status === "rejected"
         ? locationResult.reason
         : null
-    setActivityError(reason instanceof Error ? reason.message : String(reason ?? "Field activity unavailable"))
+    setActivityError(fieldErrorMessage(reason, "fieldDataError"))
     setActivityPhase(workdayCache || locationsCache ? "stale" : "error")
   }, [loseSession])
 
@@ -188,7 +189,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
         await loseSession()
         return
       }
-      setTaskError(reason instanceof Error ? reason.message : String(reason))
+      setTaskError(fieldErrorMessage(reason, "fieldDataError"))
       setTaskPhase(cached ? "stale" : "error")
     }
   }, [loseSession])
@@ -255,7 +256,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
             : messagesResult.status === "rejected"
               ? messagesResult.reason
             : null
-      setError(firstError instanceof Error ? firstError.message : String(firstError ?? "Field data unavailable"))
+      setError(fieldErrorMessage(firstError, "fieldDataError"))
       setPhase(profile || week ? "stale" : "error")
     }
   }, [loseSession, profile, week])

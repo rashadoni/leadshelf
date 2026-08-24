@@ -6,6 +6,7 @@ import { enqueueFieldTaskUpdate, readFieldCache } from "../../../src/db/local-st
 import type { FieldAgentTask, FieldAgentTaskPriority, FieldAgentTasksData, FieldAgentTaskStatus } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
+import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -99,7 +100,7 @@ export default function AgentTasksScreen() {
       await sync()
       await field.refreshAgentTasks()
     } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : t("agentTaskActionFailed"))
+      setLocalError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
     } finally {
       setBusyId(null)

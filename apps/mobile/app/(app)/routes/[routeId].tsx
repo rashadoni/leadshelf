@@ -33,6 +33,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { resolveFieldRouteFlow, type FieldRouteStepState } from "../../../src/field/route-flow"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
@@ -203,7 +204,7 @@ export default function FieldRouteDetailScreen() {
       if (result?.status !== "applied") Alert.alert(t("fieldVisitQueued"))
       router.push(`/(app)/field-visits/${visitId}` as never)
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "fieldVisitConflict"))
     } finally {
       setCheckingInPointId(null)
     }
@@ -281,7 +282,7 @@ export default function FieldRouteDetailScreen() {
         Alert.alert(t("routeQueued"))
       }
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setSaving(false)
     }
@@ -331,7 +332,7 @@ export default function FieldRouteDetailScreen() {
         Alert.alert(t("requestQueued"))
       }
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setSaving(false)
     }
@@ -391,7 +392,7 @@ export default function FieldRouteDetailScreen() {
         Alert.alert(t("requestQueued"))
       }
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setSaving(false)
     }
@@ -419,7 +420,7 @@ export default function FieldRouteDetailScreen() {
               Alert.alert(t("publishQueued"))
             }
           } catch (error) {
-            Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+            Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
           } finally {
             setSaving(false)
           }

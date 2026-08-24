@@ -78,7 +78,7 @@ export default function WorkTab() {
           </View>
           <View style={styles.identityBody}>
             <Text style={styles.identityLabel}>{t("organization")}</Text>
-            <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? "LeadShelf"}</Text>
+            <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? t("organizationUnavailable")}</Text>
           </View>
           {IS_LEADDRIVE_FIELD ? (
             <View style={[styles.connection, activeWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionOff]}>

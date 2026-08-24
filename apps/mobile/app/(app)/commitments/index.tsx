@@ -31,6 +31,7 @@ import {
   type LocalCatalogProductRow,
 } from "../../../src/db/local-store"
 import { FIELD_COMMITMENTS_CACHE_KEY } from "../../../src/field/commitment-cache"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import type {
   FieldCommitment,
   FieldCommitmentOutcome,
@@ -262,7 +263,7 @@ export default function CommitmentsScreen() {
       await syncQuietly()
     } catch (error) {
       if (persistedPhoto) await discardFieldVisitPhotoFile(persistedPhoto.fileUri)
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "commitmentsSyncRejected"))
     } finally {
       setBusy(false)
     }
@@ -316,7 +317,7 @@ export default function CommitmentsScreen() {
       await syncQuietly()
     } catch (error) {
       if (persistedPhoto) await discardFieldVisitPhotoFile(persistedPhoto.fileUri)
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "commitmentsSyncRejected"))
     } finally {
       setBusy(false)
     }

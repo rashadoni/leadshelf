@@ -19,6 +19,7 @@ import type {
   FieldKpiRatio,
   FieldPersonalKpiData,
 } from "../../src/field/contracts"
+import { fieldErrorMessage } from "../../src/field/error-message"
 import { cardShadow, colors, radii } from "../../src/theme"
 import { useResponsiveLayout } from "../../src/layout/responsive"
 
@@ -112,7 +113,7 @@ export default function PersonalKpiScreen() {
       setPhase("ready")
     } catch (reason) {
       if (sequence !== requestSequence.current) return
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(fieldErrorMessage(reason, "kpiUnavailable"))
       setPhase(cached ? "stale" : "error")
     }
   }, [])

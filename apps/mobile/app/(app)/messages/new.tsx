@@ -4,6 +4,7 @@ import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { enqueueFieldMessage, readFieldMessages, type FieldDocumentDraft } from "../../../src/db/local-store"
 import { formatFileSize, pickFieldDocument } from "../../../src/field/document-files"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { agentRoleLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -52,7 +53,7 @@ export default function NewMessageScreen() {
       const file = await pickFieldDocument()
       if (file) setAttachment(file)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(fieldErrorMessage(cause, "messageActionFailed"))
     }
   }
 
@@ -68,7 +69,7 @@ export default function NewMessageScreen() {
       Alert.alert(copy.queuedTitle, copy.queuedBody, [{ text: t("ok"), onPress: () => router.back() }])
       void sync().catch(() => {})
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(fieldErrorMessage(cause, "messageActionFailed"))
     } finally {
       setBusy(false)
     }

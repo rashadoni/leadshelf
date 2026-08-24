@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldOrganizationListData } from "../../../src/field/contracts"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
@@ -38,7 +39,7 @@ export default function OrganizationsScreen() {
       })
       if (!query && !append) writeFieldCache(CACHE_KEY, next)
     } catch (reason) {
-      if (request === sequence.current) setError(reason instanceof Error ? reason.message : String(reason))
+      if (request === sequence.current) setError(fieldErrorMessage(reason, "fieldDataError"))
     } finally {
       if (request === sequence.current) {
         setLoading(false)

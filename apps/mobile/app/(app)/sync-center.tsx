@@ -32,6 +32,7 @@ import { useSync } from "../../src/sync/sync-context"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
+import { fieldErrorMessage, fieldErrorMessageForCode, FIELD_TASK_ERROR_OVERRIDES } from "../../src/field/error-message"
 
 function kindKey(kind: string): MessageKey {
   if (kind === "field.route.create") return "syncKindRouteCreate"
@@ -81,10 +82,25 @@ function rowContext(row: FieldSyncRecoveryRow): string | null {
     string(row.payload.workdayId)
 }
 
+function rowErrorFallback(row: FieldSyncRecoveryRow): MessageKey {
+  if (row.kind.startsWith("field.task.")) return "agentTaskSyncRejected"
+  if (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill") {
+    return row.status === "conflict" ? "commitmentsSyncConflict" : "commitmentsSyncRejected"
+  }
+  if (row.kind.startsWith("field.visit.")) return "fieldVisitConflict"
+  if (row.kind === "field.workday.event" || row.kind === "field.location") return "workdayActionConflict"
+  if (row.kind.startsWith("field.route.")) return "syncNeedsAttention"
+  return "fieldDataError"
+}
+
 function rowError(row: FieldSyncRecoveryRow): string | null {
   const detail = record(row.detail)
-  return string(detail?.error) ?? string(detail?.message) ?? string(detail?.code) ??
-    (typeof row.detail === "string" ? row.detail : null)
+  if (!detail && typeof row.detail !== "string") return null
+  return fieldErrorMessageForCode(
+    detail?.code,
+    rowErrorFallback(row),
+    row.kind.startsWith("field.task.") ? FIELD_TASK_ERROR_OVERRIDES : {},
+  )
 }
 
 function rowPhoto(row: FieldSyncRecoveryRow): string | null {
@@ -122,7 +138,7 @@ export default function SyncCenterScreen() {
       Alert.alert(t("syncCenterRetryQueued"))
       await flush()
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
     }
@@ -138,7 +154,7 @@ export default function SyncCenterScreen() {
       Alert.alert(t("syncCenterPhotoRemoved"))
       await flush()
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
     }
@@ -154,7 +170,7 @@ export default function SyncCenterScreen() {
       Alert.alert(locale === "az" ? "Fayl ayrıldı" : "Файл откреплён")
       await flush()
     } catch (error) {
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
     }

@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldHrm, enqueueFieldHrmCancel, enqueueFieldHrmRequest, readFieldHrm } from "../../../src/db/local-store"
 import type { FieldHrmData, FieldHrmRequest, FieldHrmRequestType } from "../../../src/field/contracts"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { workdayStatusLabel } from "../../../src/field/labels"
 import { type Locale, useLocale } from "../../../src/i18n"
 import {
@@ -126,7 +127,7 @@ export default function HrmScreen() {
       Alert.alert(copy.title, copy.queued)
       void sync().then(() => load(false)).catch(() => {})
     } catch (cause) {
-      setWarning(cause instanceof Error ? cause.message : String(cause))
+      setWarning(fieldErrorMessage(cause, "hrmActionFailed"))
     } finally {
       setBusy(false)
     }

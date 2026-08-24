@@ -21,6 +21,7 @@ import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
   if (to < 0 || to >= items.length) return items
@@ -258,7 +259,7 @@ export default function NewRouteScreen() {
         router.replace("/(app)/routes" as never)
       }
     } catch (cause) {
-      setError(managerMode ? t("managerRoutePublishFailed") : cause instanceof Error ? cause.message : t("fieldDataError"))
+      setError(fieldErrorMessage(cause, managerMode ? "managerRoutePublishFailed" : "fieldDataError"))
     } finally {
       setSaving(false)
     }

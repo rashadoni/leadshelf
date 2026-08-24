@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldContactChangeRequest, FieldContactDetailData } from "../../../src/field/contracts"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -29,7 +30,7 @@ export default function ContactDetailScreen() {
       setData(next)
       writeFieldCache(key, next)
       setError(null)
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
+    }).catch((reason) => setError(fieldErrorMessage(reason, "fieldDataError")))
     void fieldApi.contactChangeRequests(id)
       .then((next) => setChangeRequests(next.requests))
       // History is a convenience view only; keep the reachable contact usable

@@ -9,7 +9,7 @@ import { initErrorReporting } from "../src/observability"
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false)
-  const [storageFailure, setStorageFailure] = useState<{ stage: string; detail: string } | null>(null)
+  const [storageFailure, setStorageFailure] = useState<{ stage: string } | null>(null)
 
   useEffect(() => {
     initErrorReporting()
@@ -26,7 +26,9 @@ export default function RootLayout() {
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error)
         console.error(`[mobile-startup] ${stage}: ${detail}`)
-        setStorageFailure({ stage, detail: detail.slice(0, 240) })
+        // Keep the raw diagnostic in local logs for support, but never render
+        // implementation details or storage paths in the recovery screen.
+        setStorageFailure({ stage })
       }
     })()
   }, [])
@@ -42,9 +44,7 @@ export default function RootLayout() {
         <Text style={styles.body}>
           Sinxronlaşdırılmamış iş ola bilərsə, tətbiq məlumatlarını silməyin. Dəstəyə LS-MST-INIT kodunu bildirin.
         </Text>
-        <Text selectable style={styles.diagnostic}>
-          LS-MST-INIT/{storageFailure.stage}: {storageFailure.detail}
-        </Text>
+        <Text selectable style={styles.diagnostic}>LS-MST-INIT/{storageFailure.stage}</Text>
       </View>
     )
   }

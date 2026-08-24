@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldCustomerRequest, FieldCustomerRequestsData } from "../../../src/field/contracts"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { objectTypeLabel } from "../../../src/field/labels"
@@ -47,7 +48,7 @@ export default function CustomerRequestsScreen() {
       setData(next)
       writeFieldCache(CACHE_KEY, next)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(fieldErrorMessage(reason, "fieldDataError"))
     } finally {
       setLoading(false)
     }

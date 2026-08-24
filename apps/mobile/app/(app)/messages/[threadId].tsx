@@ -13,6 +13,7 @@ import {
 import { formatFileSize, openLocalDocument, pickFieldDocument } from "../../../src/field/document-files"
 import type { FieldMessageThreadData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { formatTime } from "../../../src/i18n/date-format"
 import { useSync } from "../../../src/sync/sync-context"
@@ -98,7 +99,7 @@ export default function MessageThreadScreen() {
       const file = await pickFieldDocument()
       if (file) setAttachment(file)
     } catch (cause) {
-      setWarning(cause instanceof Error ? cause.message : String(cause))
+      setWarning(fieldErrorMessage(cause, "messageActionFailed"))
     }
   }
 
@@ -114,7 +115,7 @@ export default function MessageThreadScreen() {
       await sync().catch(() => {})
       await load(false)
     } catch (cause) {
-      setWarning(cause instanceof Error ? cause.message : String(cause))
+      setWarning(fieldErrorMessage(cause, "messageActionFailed"))
     } finally {
       setBusy(false)
     }
@@ -136,7 +137,7 @@ export default function MessageThreadScreen() {
       setLocalFiles((current) => ({ ...current, [document.id]: localUri }))
       await openLocalDocument(localUri, document.mimeType)
     } catch (cause) {
-      Alert.alert(copy.downloadError, cause instanceof Error ? cause.message : String(cause))
+      Alert.alert(copy.downloadError, fieldErrorMessage(cause, "documentOpenUnavailable"))
     }
   }
 

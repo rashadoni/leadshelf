@@ -6,6 +6,7 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { CreateFieldCustomerRequest, FieldCustomerRequest, FieldCustomerRequestsData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
+import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { getCurrentDeviceLocation, type DeviceLocation } from "../../../src/location/device-location"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -81,7 +82,7 @@ export default function NewCustomerRequestScreen() {
       const current = cached?.value.requests ?? []
       writeFieldCache(CACHE_KEY, { requests: [next, ...current.filter((item) => item.id !== next.id)] })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("fieldDataError"))
+      setError(fieldErrorMessage(cause, "customerRequestFailed"))
     } finally {
       setSubmitting(false)
     }

@@ -17,6 +17,7 @@ import type {
 } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
+import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -115,7 +116,7 @@ export default function AgentTaskDetailScreen() {
       applyCachedTasks()
       await flush()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("agentTaskActionFailed"))
+      setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
     } finally {
       setBusy(false)
@@ -142,7 +143,7 @@ export default function AgentTaskDetailScreen() {
       Alert.alert(type === "COMMENTED" ? t("agentTaskCommentSaved") : t("agentTaskEvidenceSaved"))
       await flush()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("agentTaskActionFailed"))
+      setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
     } finally {
       setBusy(false)
