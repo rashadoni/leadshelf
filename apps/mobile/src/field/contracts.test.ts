@@ -879,8 +879,25 @@ describe("LeadDrive field contracts", () => {
           routePointId: "point-1",
           status: "CHECKED_IN",
           checkInAt: "2026-07-15T08:00:00.000Z",
-          customer: { id: "customer-1", name: "Clinic", objectType: "CLINIC" },
-          contact: null,
+          customer: {
+            id: "customer-1",
+            name: "Clinic",
+            objectType: "CLINIC",
+            address: "1 Nizami St",
+            city: "Baku",
+            phone: "+994500000000",
+            latitude: 40.4,
+            longitude: 49.8,
+          },
+          contact: {
+            id: "contact-1",
+            displayName: "Dr Aygun",
+            type: "DOCTOR",
+            specialtyName: "Pediatrician",
+            phone: "+994500000001",
+          },
+          route: { id: "route-1", name: null, date: "2026-07-15T00:00:00.000Z", status: "PLANNED" },
+          routePoint: { id: "point-1", orderIndex: 1, plannedTime: "2026-07-15T09:30:00.000Z", status: "PENDING" },
           requirementSnapshot: {
             id: "snapshot-1",
             sourcePolicyId: "policy-1",
@@ -910,7 +927,10 @@ describe("LeadDrive field contracts", () => {
         reminders: [],
       },
     }
-    expect(parseFieldVisitWorkspace(workspace).visit.actionResults[0]?.actionKey).toBe("VISIT_NOTE")
+    const parsedWorkspace = parseFieldVisitWorkspace(workspace)
+    expect(parsedWorkspace.visit.actionResults[0]?.actionKey).toBe("VISIT_NOTE")
+    expect(parsedWorkspace.visit.customer.address).toBe("1 Nizami St")
+    expect(parsedWorkspace.visit.routePoint?.plannedTime).toBe("2026-07-15T09:30:00.000Z")
     expect(() => parseFieldVisitWorkspace({
       ...workspace,
       data: {

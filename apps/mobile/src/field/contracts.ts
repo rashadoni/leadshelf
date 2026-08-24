@@ -406,6 +406,24 @@ export interface FieldVisitWorkspaceData {
     checkOutLng: number | null
     duration: number | null
     nextActionDueAt: string | null
+    customer: FieldWeekVisit["customer"] & {
+      address?: string | null
+      city?: string | null
+      phone?: string | null
+      latitude?: number | null
+      longitude?: number | null
+    }
+    contact: (NonNullable<FieldWeekVisit["contact"]> & {
+      specialtyName?: string | null
+      phone?: string | null
+    }) | null
+    route?: { id: string; name: string | null; date: string; status: string } | null
+    routePoint?: {
+      id: string
+      orderIndex: number
+      plannedTime: string | null
+      status: string
+    } | null
     requirementSnapshot: {
       id: string
       sourcePolicyId: string | null
@@ -2074,6 +2092,8 @@ export function parseFieldVisitWorkspace(value: unknown): FieldVisitWorkspaceDat
   const visit = record(data?.visit)
   const customer = record(visit?.customer)
   const contact = visit?.contact == null ? null : record(visit.contact)
+  const route = visit?.route == null ? null : record(visit.route)
+  const routePoint = visit?.routePoint == null ? null : record(visit.routePoint)
   const snapshot = visit?.requirementSnapshot == null ? null : record(visit.requirementSnapshot)
   const snapshotRequirements = snapshot?.requirements
   if (
@@ -2090,7 +2110,30 @@ export function parseFieldVisitWorkspace(value: unknown): FieldVisitWorkspaceDat
     !string(customer.id) ||
     !string(customer.name) ||
     !string(customer.objectType) ||
-    (contact != null && (!string(contact.id) || !string(contact.displayName) || !string(contact.type))) ||
+    (customer.address != null && !string(customer.address)) ||
+    (customer.city != null && !string(customer.city)) ||
+    (customer.phone != null && !string(customer.phone)) ||
+    (customer.latitude != null && !number(customer.latitude)) ||
+    (customer.longitude != null && !number(customer.longitude)) ||
+    (contact != null && (
+      !string(contact.id) ||
+      !string(contact.displayName) ||
+      !string(contact.type) ||
+      (contact.specialtyName != null && !string(contact.specialtyName)) ||
+      (contact.phone != null && !string(contact.phone))
+    )) ||
+    (route != null && (
+      !string(route.id) ||
+      (route.name != null && !string(route.name)) ||
+      !timestamp(route.date) ||
+      !string(route.status)
+    )) ||
+    (routePoint != null && (
+      !string(routePoint.id) ||
+      !number(routePoint.orderIndex) ||
+      (routePoint.plannedTime != null && !timestamp(routePoint.plannedTime)) ||
+      !string(routePoint.status)
+    )) ||
     (snapshot != null && (
       !string(snapshot.id) ||
       !timestamp(snapshot.resolvedAt) ||

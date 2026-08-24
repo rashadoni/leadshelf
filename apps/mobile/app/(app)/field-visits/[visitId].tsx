@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Alert,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +24,7 @@ import {
   writeFieldCache,
 } from "../../../src/db/local-store"
 import type {
+  FieldRoutePoint,
   FieldVisitRequirement,
   FieldVisitWorkspaceData,
 } from "../../../src/field/contracts"
@@ -57,6 +60,8 @@ import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatShortDateTime, formatTime } from "../../../src/i18n/date-format"
+import { formatRouteTime } from "../../../src/field/route-time"
+import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import {
   agentTaskStatusLabel,
@@ -426,6 +431,42 @@ export default function FieldVisitWorkspaceScreen() {
 
   const customerName = workspace.visit.contact?.displayName ?? workspace.visit.customer.name
   const isCompleted = workspace.visit.status === "CHECKED_OUT"
+  const visitAddress = [
+    workspace.visit.customer.address,
+    workspace.visit.customer.city,
+  ].filter((value): value is string => Boolean(value)).join(", ")
+  const visitPhone = workspace.visit.contact?.phone ?? workspace.visit.customer.phone ?? null
+  const navigationPlatform: RouteNavigationPlatform = Platform.OS === "android"
+    ? "android"
+    : Platform.OS === "ios"
+      ? "ios"
+      : "other"
+  const visitNavigationPoint: Pick<FieldRoutePoint, "customer" | "contact"> = {
+    customer: {
+      id: workspace.visit.customer.id,
+      name: workspace.visit.customer.name,
+      code: null,
+      objectType: workspace.visit.customer.objectType,
+      category: "",
+      address: workspace.visit.customer.address ?? null,
+      city: workspace.visit.customer.city ?? null,
+      phone: workspace.visit.customer.phone ?? null,
+      latitude: workspace.visit.customer.latitude ?? null,
+      longitude: workspace.visit.customer.longitude ?? null,
+    },
+    contact: workspace.visit.contact ? {
+      id: workspace.visit.contact.id,
+      displayName: workspace.visit.contact.displayName,
+      type: workspace.visit.contact.type,
+      specialtyName: workspace.visit.contact.specialtyName ?? null,
+      phone: workspace.visit.contact.phone ?? null,
+    } : null,
+  }
+  const visitNavigationUrls = routeNavigationUrls(visitNavigationPoint, navigationPlatform)
+  const plannedVisitTime = workspace.visit.routePoint?.plannedTime
+    ? formatRouteTime(workspace.visit.routePoint.plannedTime, field.week?.timezone ?? "UTC")
+    : ""
+  const hasVisitContext = Boolean(visitAddress || visitPhone || plannedVisitTime || visitNavigationUrls.length)
   const completedDraftIssue = activeRequirement && activeRequirement.actionKey !== "PHOTO"
     ? visitActionDraftIssue({
       actionKey: activeRequirement.actionKey,
@@ -441,6 +482,24 @@ export default function FieldVisitWorkspaceScreen() {
       draft: actionDraft,
     })
     : null
+
+  async function openVisitNavigation() {
+    if (!visitNavigationUrls.length) {
+      Alert.alert(t("routeNoCoordinates"))
+      return
+    }
+    try {
+      for (const url of visitNavigationUrls) {
+        if (await Linking.canOpenURL(url)) {
+          await Linking.openURL(url)
+          return
+        }
+      }
+      Alert.alert(t("routeNavigationUnavailable"))
+    } catch {
+      Alert.alert(t("routeNavigationUnavailable"))
+    }
+  }
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -464,6 +523,47 @@ export default function FieldVisitWorkspaceScreen() {
           <View style={styles.summaryDivider} />
           <View><Text style={styles.summaryLabel}>{t("fieldVisitDone")}</Text><Text style={styles.summaryValue}>{requirements.filter((item) => visitRequirementProgress(workspace, item).satisfied).length}</Text></View>
         </View>
+
+        {hasVisitContext ? (
+          <View style={styles.contextCard}>
+            <Text style={styles.contextTitle}>{t("fieldVisitContext")}</Text>
+            <View style={styles.contextGrid}>
+              {plannedVisitTime ? (
+                <View style={styles.contextItem}>
+                  <View style={styles.contextIcon}><TabIcon name="week" color={colors.primary} size={17} /></View>
+                  <View style={styles.contextBody}>
+                    <Text style={styles.contextLabel}>{t("plannedTime")}</Text>
+                    <Text style={styles.contextValue}>{plannedVisitTime}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {visitAddress ? (
+                <View style={styles.contextItem}>
+                  <View style={styles.contextIcon}><TabIcon name="location" color={colors.primary} size={17} /></View>
+                  <View style={styles.contextBody}>
+                    <Text style={styles.contextLabel}>{t("fieldVisitAddress")}</Text>
+                    <Text numberOfLines={2} style={styles.contextValue}>{visitAddress}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {visitPhone ? (
+                <Pressable accessibilityRole="button" onPress={() => void Linking.openURL(`tel:${visitPhone}`)} style={styles.contextItem}>
+                  <View style={styles.contextIcon}><TabIcon name="contacts" color={colors.primary} size={17} /></View>
+                  <View style={styles.contextBody}>
+                    <Text style={styles.contextLabel}>{t("fieldVisitContactPhone")}</Text>
+                    <Text numberOfLines={1} style={[styles.contextValue, styles.contextActionValue]}>{visitPhone}</Text>
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
+            {visitNavigationUrls.length ? (
+              <Pressable accessibilityRole="button" onPress={() => void openVisitNavigation()} style={styles.contextNavigation}>
+                <TabIcon name="route" color={colors.primary} size={17} />
+                <Text style={styles.contextNavigationText}>{t("routeOpenNavigation")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <View><Text style={styles.sectionTitle}>{t("fieldVisitActions")}</Text><Text style={styles.sectionHint}>{workspace.visit.requirementSnapshot?.sourcePolicy?.name ?? t("fieldVisitPolicy")}</Text></View>
@@ -702,6 +802,17 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.headerSubtext, fontSize: 8, fontWeight: "900", textTransform: "uppercase", textAlign: "center" },
   summaryValue: { color: colors.headerText, fontSize: 18, fontWeight: "900", textAlign: "center", marginTop: 4 },
   summaryDivider: { width: 1, height: 34, backgroundColor: "rgba(255,255,255,0.2)" },
+  contextCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  contextTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  contextGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  contextItem: { minHeight: 50, flexGrow: 1, flexBasis: "44%", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: radii.inner, padding: 9, backgroundColor: colors.bg },
+  contextIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  contextBody: { flex: 1, minWidth: 0 },
+  contextLabel: { color: colors.muted, fontSize: 8, fontWeight: "800", textTransform: "uppercase" },
+  contextValue: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 2 },
+  contextActionValue: { color: colors.primary },
+  contextNavigation: { minHeight: 42, marginTop: 10, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
+  contextNavigationText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   sectionHeader: { marginHorizontal: 16, marginTop: 22, marginBottom: 5, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   sectionHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
