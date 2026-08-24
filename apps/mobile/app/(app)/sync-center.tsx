@@ -31,6 +31,7 @@ import { t, useLocale, type MessageKey } from "../../src/i18n"
 import { useSync } from "../../src/sync/sync-context"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
+import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 
 function kindKey(kind: string): MessageKey {
   if (kind === "field.route.create") return "syncKindRouteCreate"
@@ -234,11 +235,13 @@ export default function SyncCenterScreen() {
           )
         })}</View> : null}
 
-        <Pressable onPress={() => router.push("/(app)/commercial/media-queue" as never)} style={styles.commercialLink}>
-          <View style={styles.commercialMark}><Text style={styles.commercialMarkText}>⌾</Text></View>
-          <View style={styles.commercialBody}><Text style={styles.commercialTitle}>{t("syncCenterCommercialMedia")}</Text><Text style={styles.commercialHint}>{t("syncCenterCommercialMediaHint")}</Text></View>
-          <Text style={styles.arrow}>›</Text>
-        </Pressable>
+        {!IS_LEADDRIVE_FIELD ? (
+          <Pressable onPress={() => router.push("/(app)/commercial/media-queue" as never)} style={styles.commercialLink}>
+            <View style={styles.commercialMark}><Text style={styles.commercialMarkText}>⌾</Text></View>
+            <View style={styles.commercialBody}><Text style={styles.commercialTitle}>{t("syncCenterCommercialMedia")}</Text><Text style={styles.commercialHint}>{t("syncCenterCommercialMediaHint")}</Text></View>
+            <Text style={styles.arrow}>›</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   )
