@@ -1,4 +1,5 @@
 import { t } from "../i18n"
+import type { FieldContactCorrectionField } from "./contact-correction"
 
 /**
  * Server enums must never leak into the field-facing interface. Unknown
@@ -82,6 +83,30 @@ export function contactChangeKindLabel(value: string | null | undefined): string
   if (value === "DUPLICATE_REPORT") return t("managerContactChange_DUPLICATE_REPORT")
   if (value === "DICTIONARY_ASSIGNMENTS") return t("managerContactChange_DICTIONARY_ASSIGNMENTS")
   return t("managerApprovalTypeUnknown")
+}
+
+export function approvalStatusLabel(value: string | null | undefined): string {
+  if (value === "DRAFT") return t("requestStatus_DRAFT")
+  if (value === "SUBMITTED") return t("requestStatus_SUBMITTED")
+  if (value === "IN_REVIEW") return t("requestStatus_IN_REVIEW")
+  if (value === "NEEDS_INFO") return t("requestStatus_NEEDS_INFO")
+  if (value === "APPROVED") return t("requestStatus_APPROVED")
+  if (value === "REJECTED") return t("requestStatus_REJECTED")
+  if (value === "CANCELLED") return t("requestStatus_CANCELLED")
+  return t("lifecycleStatus_UNKNOWN")
+}
+
+export function contactCorrectionFieldLabel(field: FieldContactCorrectionField): string {
+  if (field === "firstName") return t("contactCorrectionField_firstName")
+  if (field === "lastName") return t("contactCorrectionField_lastName")
+  if (field === "middleName") return t("contactCorrectionField_middleName")
+  if (field === "specialtyName") return t("contactCorrectionField_specialtyName")
+  if (field === "qualificationCategory") return t("contactCorrectionField_qualificationCategory")
+  if (field === "profile") return t("contactCorrectionField_profile")
+  if (field === "email") return t("contactCorrectionField_email")
+  if (field === "phone") return t("contactCorrectionField_phone")
+  if (field === "messengerPhone") return t("contactCorrectionField_messengerPhone")
+  return t("contactCorrectionField_notes")
 }
 
 /**

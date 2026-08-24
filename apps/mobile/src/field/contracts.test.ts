@@ -3,6 +3,8 @@ import {
   FIELD_ATTENDANCE_POLICY_DEFAULT,
   FieldContractError,
   parseFieldContactDetail,
+  parseFieldContactChangeRequest,
+  parseFieldContactChangeRequests,
   parseFieldCommitments,
   parseFieldAgentTasks,
   parseFieldContacts,
@@ -842,6 +844,25 @@ describe("LeadDrive field contracts", () => {
         capabilities: { canManage: false, canRequestChanges: true },
       },
     }).contact.displayName).toBe("Aygun Aliyeva")
+  })
+
+  it("accepts manager-reviewed contact correction requests", () => {
+    const request = {
+      id: "contact-change-1",
+      contactId: "contact-1",
+      kind: "CONTACT_UPDATE",
+      status: "SUBMITTED",
+      reason: "Phone was updated during the visit",
+      payload: { phone: "+994501234567" },
+      decisionComment: null,
+      submittedAt: "2026-08-24T10:00:00.000Z",
+      reviewedAt: null,
+    }
+    expect(parseFieldContactChangeRequests({ success: true, data: { requests: [request] } }).requests[0]).toMatchObject({
+      id: "contact-change-1",
+      status: "SUBMITTED",
+    })
+    expect(parseFieldContactChangeRequest({ success: true, data: request }).payload).toEqual({ phone: "+994501234567" })
   })
 
   it("accepts customer request queue and duplicate candidates", () => {

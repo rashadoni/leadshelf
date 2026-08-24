@@ -58,6 +58,8 @@ import {
   parseFieldDocuments,
   parseFieldHrm,
   parseFieldLocationHistory,
+  parseFieldContactChangeRequest,
+  parseFieldContactChangeRequests,
   parseFieldContactDetail,
   parseFieldContacts,
   parseFieldCustomerRequest,
@@ -72,6 +74,9 @@ import {
   parseFieldWorkday,
   parseFieldVisitWorkspace,
   type CreateFieldCustomerRequest,
+  type CreateFieldContactChangeRequest,
+  type FieldContactChangeRequest,
+  type FieldContactChangeRequestsData,
   type FieldContactDetailData,
   type FieldContactListData,
   type FieldCustomerRequest,
@@ -547,6 +552,12 @@ export const fieldApi = {
   contact: (id: string) =>
     request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}`)
       .then(parseFieldContactDetail),
+  contactChangeRequests: (id: string) =>
+    request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}/change-requests`)
+      .then(parseFieldContactChangeRequests),
+  createContactChangeRequest: (id: string, input: CreateFieldContactChangeRequest) =>
+    request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}/change-requests`, json(input))
+      .then(parseFieldContactChangeRequest),
   customerRequests: () =>
     request<unknown>("/api/v1/mtm/customer-create-requests?mine=1")
       .then(parseFieldCustomerRequests),
@@ -601,6 +612,8 @@ export const fieldApi = {
   organization(id: string): Promise<FieldOrganizationDetailData>
   contacts(search?: string, page?: number, limit?: number): Promise<FieldContactListData>
   contact(id: string): Promise<FieldContactDetailData>
+  contactChangeRequests(id: string): Promise<FieldContactChangeRequestsData>
+  createContactChangeRequest(id: string, input: CreateFieldContactChangeRequest): Promise<FieldContactChangeRequest>
   customerRequests(): Promise<FieldCustomerRequestsData>
   createCustomerRequest(input: CreateFieldCustomerRequest): Promise<FieldCustomerRequest>
 }

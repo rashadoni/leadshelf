@@ -1000,6 +1000,12 @@ export interface FieldOrganizationDetailData {
 
 export interface FieldContact {
   id: string
+  /**
+   * The revision token used by agent-side change requests. It remains optional
+   * at the boundary so an older server response can still be displayed; the
+   * correction flow deliberately refuses to submit without it.
+   */
+  updatedAt?: string
   externalCode: string | null
   firstName: string
   lastName: string
@@ -1069,6 +1075,48 @@ export interface FieldContactDetailData {
   asOf: string
   timezone: string
   capabilities: { canManage: boolean; canRequestChanges: boolean }
+}
+
+/**
+ * The mobile agent may propose only a contact update. The server remains the
+ * sole writer: it validates the revision token, records an immutable request,
+ * and waits for a manager decision.
+ */
+export type FieldContactUpdatePayload = Partial<{
+  firstName: string
+  lastName: string
+  middleName: string | null
+  specialtyName: string | null
+  qualificationCategory: string | null
+  profile: string | null
+  email: string | null
+  phone: string | null
+  messengerPhone: string | null
+  notes: string | null
+}>
+
+export interface CreateFieldContactChangeRequest {
+  idempotencyKey: string
+  expectedContactUpdatedAt: string
+  kind: "CONTACT_UPDATE"
+  payload: FieldContactUpdatePayload
+  reason: string
+}
+
+export interface FieldContactChangeRequest {
+  id: string
+  contactId: string
+  kind: string
+  status: string
+  reason: string
+  payload: Record<string, unknown>
+  decisionComment: string | null
+  submittedAt: string
+  reviewedAt: string | null
+}
+
+export interface FieldContactChangeRequestsData {
+  requests: FieldContactChangeRequest[]
 }
 
 export interface FieldCustomerRequest {
@@ -2410,7 +2458,8 @@ function validContact(value: unknown): boolean {
       string(contact.firstName) &&
       string(contact.lastName) &&
       string(contact.type) &&
-      string(contact.status),
+      string(contact.status) &&
+      (contact.updatedAt == null || timestamp(contact.updatedAt)),
   )
 }
 
@@ -2436,6 +2485,38 @@ export function parseFieldContactDetail(value: unknown): FieldContactDetailData 
     throw new FieldContractError("contact detail")
   }
   return data as unknown as FieldContactDetailData
+}
+
+function validContactChangeRequest(value: unknown): value is Record<string, unknown> {
+  const request = record(value)
+  return Boolean(
+    request &&
+      string(request.id) &&
+      string(request.contactId) &&
+      string(request.kind) &&
+      string(request.status) &&
+      string(request.reason) &&
+      record(request.payload) &&
+      timestamp(request.submittedAt) &&
+      (request.decisionComment == null || string(request.decisionComment)) &&
+      nullableTimestamp(request.reviewedAt),
+  )
+}
+
+export function parseFieldContactChangeRequests(value: unknown): FieldContactChangeRequestsData {
+  const data = validEnvelope(value)
+  if (!data || !Array.isArray(data.requests) || !data.requests.every(validContactChangeRequest)) {
+    throw new FieldContractError("contact change requests")
+  }
+  return data as unknown as FieldContactChangeRequestsData
+}
+
+export function parseFieldContactChangeRequest(value: unknown): FieldContactChangeRequest {
+  const data = validEnvelope(value)
+  if (!data || !validContactChangeRequest(data)) {
+    throw new FieldContractError("contact change request")
+  }
+  return data as unknown as FieldContactChangeRequest
 }
 
 export function parseFieldCustomerRequests(value: unknown): FieldCustomerRequestsData {

@@ -1,34 +1,45 @@
-import { useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router, useLocalSearchParams } from "expo-router"
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
-import type { FieldContactDetailData } from "../../../src/field/contracts"
+import type { FieldContactChangeRequest, FieldContactDetailData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
+import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
-import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
+import { approvalStatusLabel, assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 
 function messengerUrl(phone: string): string {
   return `https://wa.me/${phone.replace(/\D/g, "")}`
 }
 
 export default function ContactDetailScreen() {
-  useLocale()
+  const locale = useLocale()
   const { id } = useLocalSearchParams<{ id: string }>()
   const key = `field.contact.${id}`
   const cached = readFieldCache<FieldContactDetailData>(key)
   const [data, setData] = useState<FieldContactDetailData | null>(cached?.value ?? null)
+  const [changeRequests, setChangeRequests] = useState<FieldContactChangeRequest[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return
     void fieldApi.contact(id).then((next) => {
       setData(next)
       writeFieldCache(key, next)
       setError(null)
     }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
+    void fieldApi.contactChangeRequests(id)
+      .then((next) => setChangeRequests(next.requests))
+      // History is a convenience view only; keep the reachable contact usable
+      // if a legacy deployment has not exposed this optional endpoint yet.
+      .catch(() => setChangeRequests([]))
   }, [id, key])
+
+  useFocusEffect(useCallback(() => {
+    load()
+  }, [load]))
 
   const contact = data?.contact
   const details: Array<[string, string | null]> = contact ? [
@@ -85,6 +96,11 @@ export default function ContactDetailScreen() {
                     <Text style={styles.messageText}>◉ {t("messengerLabel")} · {contact.messengerPhone}</Text>
                   </Pressable>
                 ) : null}
+                {data?.capabilities.canRequestChanges ? (
+                  <Pressable onPress={() => router.push(`/(app)/contacts/${contact.id}/suggest-correction` as never)} style={[styles.action, styles.correctionAction]}>
+                    <Text style={styles.correctionText}>✎ {t("contactCorrectionMakeSuggestion")}</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
 
@@ -123,6 +139,23 @@ export default function ContactDetailScreen() {
                 </View>
               )) : <Text style={styles.emptyText}>—</Text>}
             </View>
+
+            {data?.capabilities.canRequestChanges ? (
+              <>
+                <SectionHeader title={t("contactCorrectionHistory")} count={changeRequests.length} />
+                <View style={styles.card}>
+                  {changeRequests.length ? changeRequests.slice(0, 3).map((request) => (
+                    <Pressable key={request.id} onPress={() => router.push(`/(app)/contacts/${contact.id}/suggest-correction` as never)} style={styles.changeRequestRow}>
+                      <View style={styles.changeRequestBody}>
+                        <Text style={styles.changeRequestStatus}>{approvalStatusLabel(request.status)}</Text>
+                        <Text style={styles.changeRequestReason} numberOfLines={2}>{request.reason}</Text>
+                      </View>
+                      <Text style={styles.changeRequestDate}>{formatShortDateTime(request.submittedAt, locale)}</Text>
+                    </Pressable>
+                  )) : <Pressable onPress={() => router.push(`/(app)/contacts/${contact.id}/suggest-correction` as never)}><Text style={styles.changeRequestEmpty}>{t("contactCorrectionHistoryEmpty")}</Text></Pressable>}
+                </View>
+              </>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -147,11 +180,12 @@ const styles = StyleSheet.create({
   category: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, categoryText: { color: colors.primary, fontSize: 13, fontWeight: "900" },
   detailRow: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border }, detailLabel: { color: colors.faint, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }, detailValue: { color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 3 },
   actions: { gap: 8, marginTop: 12 }, action: { minHeight: 43, borderRadius: radii.inner, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 }, callAction: { backgroundColor: colors.successBg }, mailAction: { backgroundColor: colors.infoBg }, messageAction: { backgroundColor: colors.primarySoft },
-  callText: { color: colors.successDark, fontSize: 12, fontWeight: "900" }, mailText: { color: colors.info, fontSize: 12, fontWeight: "900" }, messageText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  correctionAction: { backgroundColor: colors.primary }, callText: { color: colors.successDark, fontSize: 12, fontWeight: "900" }, mailText: { color: colors.info, fontSize: 12, fontWeight: "900" }, messageText: { color: colors.primary, fontSize: 12, fontWeight: "900" }, correctionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   sectionHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 2, flexDirection: "row", alignItems: "center", gap: 7 }, sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" }, sectionCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 10, fontWeight: "900", lineHeight: 22, textAlign: "center" },
   workplaceCard: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, workplaceBody: { flex: 1, minWidth: 0 }, workplaceName: { color: colors.text, fontSize: 13, fontWeight: "900" }, workplaceMeta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 }, workplaceAddress: { color: colors.muted, fontSize: 10, marginTop: 4 },
   primaryPill: { maxWidth: 78, paddingHorizontal: 7, paddingVertical: 5, borderRadius: radii.pill, backgroundColor: colors.successBg }, primaryText: { color: colors.successDark, fontSize: 8, fontWeight: "900", textAlign: "center" }, arrow: { color: colors.faint, fontSize: 24 },
   assignmentRow: { minHeight: 39, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: colors.border }, assignmentName: { color: colors.text, fontSize: 12, fontWeight: "800" }, assignmentRole: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   potentialRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, potentialBody: { flex: 1 }, potentialName: { color: colors.text, fontSize: 12, fontWeight: "900" }, potentialMeta: { color: colors.muted, fontSize: 9, marginTop: 2 }, potentialValue: { borderRadius: radii.pill, backgroundColor: colors.infoBg, paddingHorizontal: 9, paddingVertical: 6 }, potentialValueText: { color: colors.info, fontSize: 10, fontWeight: "900" },
+  changeRequestRow: { minHeight: 54, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, changeRequestBody: { flex: 1, minWidth: 0 }, changeRequestStatus: { color: colors.primary, fontSize: 10, fontWeight: "900" }, changeRequestReason: { color: colors.text, fontSize: 11, lineHeight: 16, marginTop: 3 }, changeRequestDate: { color: colors.faint, fontSize: 9, fontWeight: "700" }, changeRequestEmpty: { color: colors.primary, fontSize: 11, fontWeight: "800", paddingVertical: 8 },
   emptyText: { color: colors.muted, fontSize: 12, textAlign: "center", paddingVertical: 9 }, pressed: { opacity: 0.7 },
 })
