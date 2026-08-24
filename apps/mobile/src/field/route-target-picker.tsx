@@ -5,6 +5,7 @@ import type { FieldContactListData, FieldOrganizationListData, FieldRoutePoint }
 import { t, useLocale } from "../i18n"
 import { colors, radii } from "../theme"
 import { routeTargetKey } from "./route-target"
+import { contactTypeLabel, objectTypeLabel } from "./labels"
 
 export { routeTargetKey } from "./route-target"
 
@@ -97,7 +98,7 @@ export function RouteTargetPicker({
               contact: null,
             })} style={[styles.result, disabled && styles.disabled]}>
               <View style={styles.orgMark}><Text style={styles.orgMarkText}>{organization.name.charAt(0).toUpperCase()}</Text></View>
-              <View style={styles.resultBody}><Text style={styles.resultName}>{organization.name}</Text><Text style={styles.resultMeta}>{organization.objectType} · {organization.city ?? organization.address ?? "—"}</Text>{disabled ? <Text style={styles.added}>{t("stopAlreadyAdded")}</Text> : null}</View>
+              <View style={styles.resultBody}><Text style={styles.resultName}>{organization.name}</Text><Text style={styles.resultMeta}>{objectTypeLabel(organization.objectType)} · {organization.city ?? organization.address ?? "—"}</Text>{disabled ? <Text style={styles.added}>{t("stopAlreadyAdded")}</Text> : null}</View>
               <Text style={styles.plus}>{disabled ? "✓" : "+"}</Text>
             </Pressable>
           )
@@ -105,7 +106,7 @@ export function RouteTargetPicker({
           <View key={contact.id} style={styles.contactCard}>
             <View style={styles.contactTop}>
               <View style={styles.contactMark}><Text style={styles.contactMarkText}>{contact.displayName.charAt(0).toUpperCase()}</Text></View>
-              <View style={styles.resultBody}><Text style={styles.resultName}>{contact.displayName}</Text><Text style={styles.resultMeta}>{contact.specialtyName ?? contact.type}</Text></View>
+              <View style={styles.resultBody}><Text style={styles.resultName}>{contact.displayName}</Text><Text style={styles.resultMeta}>{contact.specialtyName ?? contactTypeLabel(contact.type)}</Text></View>
             </View>
             {contact.workplaces?.length ? contact.workplaces.map((workplace) => {
               const key = routeTargetKey(workplace.customer.id, contact.id)
@@ -122,7 +123,7 @@ export function RouteTargetPicker({
                     phone: contact.phone,
                   },
                 })} style={[styles.workplace, disabled && styles.disabled]}>
-                  <View style={styles.workplaceBody}><Text style={styles.workplaceName}>{workplace.customer.name}</Text><Text style={styles.workplaceMeta}>{[workplace.customer.city, workplace.customer.address].filter(Boolean).join(" · ") || workplace.customer.objectType}</Text></View>
+                  <View style={styles.workplaceBody}><Text style={styles.workplaceName}>{workplace.customer.name}</Text><Text style={styles.workplaceMeta}>{[workplace.customer.city, workplace.customer.address].filter(Boolean).join(" · ") || objectTypeLabel(workplace.customer.objectType)}</Text></View>
                   {workplace.isPrimary ? <Text style={styles.primary}>{t("primaryWorkplace")}</Text> : null}
                   <Text style={styles.plus}>{disabled ? "✓" : "+"}</Text>
                 </Pressable>

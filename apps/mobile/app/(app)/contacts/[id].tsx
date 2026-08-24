@@ -7,6 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldContactDetailData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 
 function messengerUrl(phone: string): string {
   return `https://wa.me/${phone.replace(/\D/g, "")}`
@@ -35,7 +36,7 @@ export default function ContactDetailScreen() {
     [t("qualificationLabel"), contact.qualificationCategory],
     [t("profileLabel"), contact.profile],
     [t("categoryLabel"), contact.category],
-    [t("statusLabel"), contact.status],
+    [t("statusLabel"), lifecycleStatusLabel(contact.status)],
   ] : []
 
   return (
@@ -56,7 +57,7 @@ export default function ContactDetailScreen() {
               <View style={styles.avatar}><Text style={styles.avatarText}>{contact.displayName.charAt(0).toUpperCase()}</Text></View>
               <View style={styles.summaryBody}>
                 <Text style={styles.summaryName}>{contact.displayName}</Text>
-                <Text style={styles.summaryMeta}>{contact.type}{contact.specialtyName ? ` · ${contact.specialtyName}` : ""}</Text>
+                <Text style={styles.summaryMeta}>{contactTypeLabel(contact.type)}{contact.specialtyName ? ` · ${contact.specialtyName}` : ""}</Text>
               </View>
               <View style={styles.category}><Text style={styles.categoryText}>{contact.category}</Text></View>
             </View>
@@ -92,7 +93,7 @@ export default function ContactDetailScreen() {
               <Pressable key={workplace.id} onPress={() => router.push(`/(app)/organizations/${workplace.customer.id}` as never)} style={({ pressed }) => [styles.workplaceCard, pressed && styles.pressed]}>
                 <View style={styles.workplaceBody}>
                   <Text style={styles.workplaceName}>{workplace.customer.name}</Text>
-                  <Text style={styles.workplaceMeta}>{[workplace.position, workplace.department].filter(Boolean).join(" · ") || workplace.customer.objectType}</Text>
+                  <Text style={styles.workplaceMeta}>{[workplace.position, workplace.department].filter(Boolean).join(" · ") || objectTypeLabel(workplace.customer.objectType)}</Text>
                   {workplace.customer.address || workplace.customer.city ? <Text style={styles.workplaceAddress}>{[workplace.customer.city, workplace.customer.address].filter(Boolean).join(" · ")}</Text> : null}
                 </View>
                 {workplace.isPrimary ? <View style={styles.primaryPill}><Text style={styles.primaryText}>{t("primaryWorkplace")}</Text></View> : null}
@@ -105,7 +106,7 @@ export default function ContactDetailScreen() {
               {contact.agentAssignments?.length ? contact.agentAssignments.map((assignment, index) => (
                 <View key={`${assignment.agent.id}-${index}`} style={styles.assignmentRow}>
                   <Text style={styles.assignmentName}>{assignment.agent.name}</Text>
-                  <Text style={styles.assignmentRole}>{assignment.role}</Text>
+                  <Text style={styles.assignmentRole}>{assignmentRoleLabel(assignment.role)}</Text>
                 </View>
               )) : <Text style={styles.emptyText}>—</Text>}
             </View>

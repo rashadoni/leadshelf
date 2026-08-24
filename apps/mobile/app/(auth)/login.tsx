@@ -117,7 +117,7 @@ export default function LoginScreen() {
 
           <View style={[styles.loginWorkspace, layout.isTablet && styles.loginWorkspaceTablet]}>
             <View style={[styles.intro, layout.isTablet && styles.introTablet]}>
-              <Text style={styles.eyebrow}>{IS_LEADDRIVE_FIELD ? "LEADDRIVE · FIELD OPERATIONS" : "FIELD OPERATIONS"}</Text>
+              <Text style={styles.eyebrow}>{t(IS_LEADDRIVE_FIELD ? "fieldOperationsEyebrow" : "operationsEyebrow")}</Text>
               <Text style={[styles.title, layout.isTablet && styles.titleTablet]}>{t("loginTitle")}</Text>
               <Text style={[styles.welcome, layout.isTablet && styles.welcomeTablet]}>{t(IS_LEADDRIVE_FIELD ? "fieldLoginSecureHint" : "loginSecureHint")}</Text>
             </View>

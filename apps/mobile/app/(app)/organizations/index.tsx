@@ -8,6 +8,7 @@ import type { FieldOrganizationListData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { objectTypeLabel } from "../../../src/field/labels"
 
 const CACHE_KEY = "field.organizations"
 
@@ -84,7 +85,7 @@ export default function OrganizationsScreen() {
                 <View style={styles.orgMark}><Text style={styles.orgMarkText}>{organization.name.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.body}>
                   <Text style={styles.name}>{organization.name}</Text>
-                  <Text style={styles.meta}>{organization.objectType} · {t("categoryLabel")} {organization.category}</Text>
+                  <Text style={styles.meta}>{objectTypeLabel(organization.objectType)} · {t("categoryLabel")} {organization.category}</Text>
                   {organization.address || organization.city ? <Text style={styles.address} numberOfLines={2}>{[organization.city, organization.address].filter(Boolean).join(" · ")}</Text> : null}
                   <View style={styles.statsRow}>
                     <Text style={styles.stat}>{organization._count?.contactWorkplaces ?? 0} {t("contactsLabel").toLowerCase()}</Text>

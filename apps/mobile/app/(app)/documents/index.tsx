@@ -168,7 +168,7 @@ export default function DocumentsScreen() {
           <View key={document.id} style={[styles.card, document.assignment.required && !document.assignment.readAt && styles.cardRequired]}>
             <View style={styles.fileTop}>
               <View style={[styles.fileIcon, document.assignment.required && !document.assignment.readAt && styles.fileIconRequired]}><Text style={[styles.fileIconText, document.assignment.required && !document.assignment.readAt && styles.fileIconTextRequired]}>{document.fileName.split(".").at(-1)?.toUpperCase().slice(0, 4) || "DOC"}</Text></View>
-              <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={2}>{document.title || document.fileName}</Text><Text style={styles.fileMeta}>{document.fileName} · {formatFileSize(document.sizeBytes)}</Text></View>
+              <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={2}>{document.title || document.fileName}</Text><Text style={styles.fileMeta}>{document.fileName} · {formatFileSize(document.sizeBytes, locale)}</Text></View>
             </View>
             {document.visit ? <Text style={styles.context}>⌖ {document.visit.customer.name}</Text> : null}
             {document.task ? <Text style={styles.context}>✓ {document.task.title}</Text> : null}

@@ -8,6 +8,7 @@ import type { FieldContactListData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { contactTypeLabel } from "../../../src/field/labels"
 
 const CACHE_KEY = "field.contacts"
 
@@ -73,7 +74,7 @@ export default function ContactsScreen() {
                   <View style={styles.avatar}><Text style={styles.avatarText}>{contact.displayName.charAt(0).toUpperCase()}</Text></View>
                   <View style={styles.body}>
                     <Text style={styles.name}>{contact.displayName}</Text>
-                    <Text style={styles.meta}>{contact.specialtyName ?? contact.type} · {t("categoryLabel")} {contact.category}</Text>
+                    <Text style={styles.meta}>{contact.specialtyName ?? contactTypeLabel(contact.type)} · {t("categoryLabel")} {contact.category}</Text>
                     {primary ? <Text style={styles.workplace} numberOfLines={2}>{primary.customer.name}{primary.customer.city ? ` · ${primary.customer.city}` : ""}</Text> : null}
                     {contact.phone ? <Text style={styles.phone}>{contact.phone}</Text> : null}
                   </View>

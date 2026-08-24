@@ -49,6 +49,7 @@ import { persistAndQueueFieldVisitPhoto } from "../../../src/field/visit-photo-s
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
+import { formatTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
 const outcomes: FieldVisitOutcome[] = ["SUCCESSFUL", "PARTIAL", "NO_CONTACT", "RESCHEDULE"]
@@ -338,7 +339,7 @@ export default function FieldVisitWorkspaceScreen() {
         </View>
 
         <View style={styles.summaryCard}>
-          <View><Text style={styles.summaryLabel}>CHECK-IN</Text><Text style={styles.summaryValue}>{new Date(workspace.visit.checkInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text></View>
+          <View><Text style={styles.summaryLabel}>{t("checkIn")}</Text><Text style={styles.summaryValue}>{formatTime(workspace.visit.checkInAt)}</Text></View>
           <View style={styles.summaryDivider} />
           <View><Text style={styles.summaryLabel}>{t("fieldVisitPolicy")}</Text><Text style={styles.summaryValue}>{requirements.length}</Text></View>
           <View style={styles.summaryDivider} />

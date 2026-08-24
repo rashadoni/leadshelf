@@ -19,6 +19,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
   if (to < 0 || to >= items.length) return items
@@ -31,6 +32,13 @@ function reorder<T>(items: T[], from: number, to: number): T[] {
 
 type RouteDraftTarget = RouteTarget & { time: string }
 type RouteDraftStep = 1 | 2 | 3
+
+function targetMeta(target: RouteDraftTarget): string {
+  if (target.contact) {
+    return [target.contact.specialtyName ?? contactTypeLabel(target.contact.type), target.customer.name].join(" · ")
+  }
+  return target.customer.address ?? target.customer.city ?? objectTypeLabel(target.customer.objectType)
+}
 
 const ROUTE_WIZARD_STEPS = [
   { id: 1, label: "routeWizardStepDate", icon: "today" },
@@ -310,7 +318,7 @@ export default function NewRouteScreen() {
                 <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
                 <View style={styles.targetBody}>
                   <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
-                  <Text style={styles.targetMeta}>{target.contact ? `${target.contact.specialtyName ?? target.contact.type} · ${target.customer.name}` : target.customer.address ?? target.customer.city ?? target.customer.objectType}</Text>
+                  <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
                 </View>
                 <Pressable onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><Text style={styles.removeText}>×</Text></Pressable>
               </View>
@@ -345,7 +353,7 @@ export default function NewRouteScreen() {
                 <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
                 <View style={styles.targetBody}>
                   <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
-                  <Text style={styles.targetMeta}>{target.contact ? `${target.contact.specialtyName ?? target.contact.type} · ${target.customer.name}` : target.customer.address ?? target.customer.city ?? target.customer.objectType}</Text>
+                  <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
                 </View>
                 <View style={styles.targetActions}>
                   <Pressable disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.iconButton, index === 0 && styles.disabled]}><Text style={styles.iconText}>↑</Text></Pressable>

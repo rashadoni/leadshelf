@@ -7,6 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldOrganizationDetailData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 
 export default function OrganizationDetailScreen() {
   useLocale()
@@ -50,7 +51,7 @@ export default function OrganizationDetailScreen() {
               <View style={styles.mark}><Text style={styles.markText}>{organization.name.charAt(0).toUpperCase()}</Text></View>
               <View style={styles.summaryBody}>
                 <Text style={styles.summaryName}>{organization.name}</Text>
-                <Text style={styles.summaryMeta}>{organization.objectType} · {organization.status}</Text>
+                <Text style={styles.summaryMeta}>{objectTypeLabel(organization.objectType)} · {lifecycleStatusLabel(organization.status)}</Text>
               </View>
               <View style={styles.category}><Text style={styles.categoryText}>{organization.category}</Text></View>
             </View>
@@ -78,7 +79,7 @@ export default function OrganizationDetailScreen() {
                 <View style={styles.personAvatar}><Text style={styles.personInitial}>{workplace.contact.displayName.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.personBody}>
                   <Text style={styles.personName}>{workplace.contact.displayName}</Text>
-                  <Text style={styles.personMeta}>{workplace.contact.specialtyName ?? workplace.contact.type}</Text>
+                  <Text style={styles.personMeta}>{workplace.contact.specialtyName ?? contactTypeLabel(workplace.contact.type)}</Text>
                 </View>
                 {workplace.isPrimary ? <View style={styles.primaryPill}><Text style={styles.primaryPillText}>{t("primaryWorkplace")}</Text></View> : null}
               </Pressable>
@@ -92,7 +93,7 @@ export default function OrganizationDetailScreen() {
               {organization.agentAssignments?.length ? organization.agentAssignments.map((assignment, index) => (
                 <View key={`${assignment.agent.id}-${index}`} style={styles.assignmentRow}>
                   <Text style={styles.assignmentName}>{assignment.agent.name}</Text>
-                  <Text style={styles.assignmentRole}>{assignment.role}</Text>
+                  <Text style={styles.assignmentRole}>{assignmentRoleLabel(assignment.role)}</Text>
                 </View>
               )) : <Text style={styles.emptyText}>—</Text>}
             </View>

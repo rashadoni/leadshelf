@@ -13,6 +13,16 @@ const MONTHS_GENITIVE: Record<Locale, string[]> = {
   ru: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
 }
 
+const WEEKDAYS_SHORT: Record<Locale, string[]> = {
+  az: ["B", "BE", "ÇA", "Ç", "CA", "C", "Ş"],
+  ru: ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"],
+}
+
+const MONTHS_SHORT: Record<Locale, string[]> = {
+  az: ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avq", "sen", "okt", "noy", "dek"],
+  ru: ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"],
+}
+
 type CalendarDate = {
   year: number
   monthIndex: number
@@ -60,6 +70,17 @@ export function formatCalendarDay(dateKey: string, locale: Locale): {
     weekday: WEEKDAYS[locale][date.weekdayIndex],
     date: localizedCalendarDateText(date, locale),
   }
+}
+
+/** Compact deterministic labels for narrow date chips and route/HRM strips. */
+export function formatCalendarWeekdayShort(dateKey: string, locale: Locale): string {
+  const date = calendarDateFromKey(dateKey)
+  return date ? WEEKDAYS_SHORT[locale][date.weekdayIndex] : ""
+}
+
+export function formatCalendarMonthShort(dateKey: string, locale: Locale): string {
+  const date = calendarDateFromKey(dateKey)
+  return date ? MONTHS_SHORT[locale][date.monthIndex] : ""
 }
 
 /** A locale-safe calendar range for Week, without Android Intl/ICU fallback. */

@@ -9,6 +9,7 @@ import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { agentRoleLabel } from "../../../src/field/labels"
 
 const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
   ONLINE: "managerFreshness_ONLINE",
@@ -106,7 +107,7 @@ export default function ManagerLocationsScreen() {
                       <View style={[styles.avatar, { backgroundColor: tone.background }]}><Text style={[styles.avatarText, { color: tone.foreground }]}>{agent.name.charAt(0).toUpperCase()}</Text></View>
                       <View style={styles.cardBody}>
                         <Text style={styles.name}>{agent.name}</Text>
-                        <Text style={styles.role}>{agent.role}</Text>
+                        <Text style={styles.role}>{agentRoleLabel(agent.role)}</Text>
                       </View>
                       <View style={[styles.freshness, { backgroundColor: tone.background }]}><Text style={[styles.freshnessText, { color: tone.foreground }]}>{t(freshnessKeys[agent.freshness])}</Text></View>
                     </View>

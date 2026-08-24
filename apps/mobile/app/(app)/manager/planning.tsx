@@ -11,6 +11,7 @@ import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { agentRoleLabel } from "../../../src/field/labels"
 
 const knownRouteStatus = new Set(["DRAFT", "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "MISSED"])
 const tones: Record<RouteStatusTone, { background: string; foreground: string }> = {
@@ -147,7 +148,7 @@ export default function ManagerPlanningScreen() {
                 {noRouteAgents.map((agent, index) => (
                   <View key={agent.id} style={[styles.agentRow, index > 0 && styles.agentBorder]}>
                     <View style={styles.agentAvatar}><Text style={styles.agentAvatarText}>{agent.name.charAt(0).toUpperCase()}</Text></View>
-                    <View style={styles.agentBody}><Text style={styles.agentName}>{agent.name}</Text><Text style={styles.agentRole}>{agent.role}</Text></View>
+                    <View style={styles.agentBody}><Text style={styles.agentName}>{agent.name}</Text><Text style={styles.agentRole}>{agentRoleLabel(agent.role)}</Text></View>
                   </View>
                 ))}
               </View>

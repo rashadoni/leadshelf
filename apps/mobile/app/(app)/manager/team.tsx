@@ -9,6 +9,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime, formatTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { agentRoleLabel } from "../../../src/field/labels"
 
 function workdayMeta(agent: FieldManagerTeamAgent): { label: string; background: string; color: string } {
   if (agent.workday?.status === "STARTED") {
@@ -86,7 +87,7 @@ export default function ManagerTeamScreen() {
                         <View style={styles.avatar}><Text style={styles.avatarText}>{agent.name.charAt(0).toUpperCase()}</Text></View>
                         <View style={styles.cardBody}>
                           <Text style={styles.name}>{agent.name}</Text>
-                          <Text style={styles.role}>{agent.role}</Text>
+                          <Text style={styles.role}>{agentRoleLabel(agent.role)}</Text>
                         </View>
                         <View style={[styles.presence, agent.isOnline ? styles.presenceOnline : styles.presenceOffline]}>
                           <View style={[styles.presenceDot, { backgroundColor: agent.isOnline ? colors.success : colors.faint }]} />

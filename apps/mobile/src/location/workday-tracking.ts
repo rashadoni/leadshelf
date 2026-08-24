@@ -28,6 +28,11 @@ export interface WorkdayTrackingState {
   observedAt: string
 }
 
+export interface WorkdayTrackingNotification {
+  title: string
+  body: string
+}
+
 export function stoppedWorkdayTrackingState(): WorkdayTrackingState {
   return {
     mode: "stopped",
@@ -96,7 +101,11 @@ export async function stopWorkdayTracking(): Promise<void> {
 
 export async function startWorkdayTracking(
   intervalSeconds: number,
-  options: { requestForegroundPermission?: boolean; requestBackgroundPermission?: boolean } = {},
+  options: {
+    requestForegroundPermission?: boolean
+    requestBackgroundPermission?: boolean
+    notification?: WorkdayTrackingNotification
+  } = {},
 ): Promise<WorkdayTrackingState> {
   const requestForegroundPermission = options.requestForegroundPermission ?? true
   const requestBackgroundPermission = options.requestBackgroundPermission ?? true
@@ -148,8 +157,8 @@ export async function startWorkdayTracking(
             showsBackgroundLocationIndicator: true,
             activityType: Location.ActivityType.OtherNavigation,
             foregroundService: {
-              notificationTitle: "LeadDrive Field",
-              notificationBody: "Active workday · GPS tracking",
+              notificationTitle: options.notification?.title ?? "LeadDrive",
+              notificationBody: options.notification?.body ?? "Active workday",
               killServiceOnDestroy: false,
             },
           })
@@ -183,6 +192,7 @@ export async function reconcileWorkdayTracking(
   status: "STARTED" | "PAUSED" | "COMPLETED" | null,
   intervalSeconds: number,
   enabled = true,
+  notification?: WorkdayTrackingNotification,
 ): Promise<WorkdayTrackingState> {
   if (status !== "STARTED" || !enabled) {
     await stopWorkdayTracking()
@@ -191,5 +201,6 @@ export async function reconcileWorkdayTracking(
   return startWorkdayTracking(intervalSeconds, {
     requestForegroundPermission: false,
     requestBackgroundPermission: false,
+    notification,
   })
 }

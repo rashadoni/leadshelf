@@ -3,6 +3,7 @@ import * as DocumentPicker from "expo-document-picker"
 import * as FileSystem from "expo-file-system/legacy"
 import * as Sharing from "expo-sharing"
 import type { FieldDocumentDraft } from "../db/local-store"
+import { getLocale, t, type Locale } from "../i18n"
 import { tokenStore } from "../auth/token-store"
 import {
   FIELD_DOCUMENT_MEDIA_DIR,
@@ -50,13 +51,13 @@ export async function pickFieldDocument(input?: {
   const fileName = safeFileName(asset.name)
   const extension = fileName.split(".").at(-1)?.toLowerCase() ?? ""
   const mimeType = MIME_BY_EXTENSION[extension]
-  if (!mimeType) throw new Error("Этот тип файла не поддерживается")
+  if (!mimeType) throw new Error(t("documentTypeUnsupported"))
   const fileInfo = asset.size == null ? await FileSystem.getInfoAsync(asset.uri) : null
   const size = asset.size ?? (fileInfo?.exists ? fileInfo.size : null)
   if (!Number.isInteger(size) || !size || size > 25 * 1024 * 1024) {
-    throw new Error("Файл должен быть не больше 25 МБ")
+    throw new Error(t("documentMaxSize"))
   }
-  if (!FileSystem.documentDirectory) throw new Error("Хранилище устройства недоступно")
+  if (!FileSystem.documentDirectory) throw new Error(t("documentStorageUnavailable"))
   const [organizationSlug, agentId] = await Promise.all([tokenStore.getOrgSlug(), tokenStore.getUserId()])
   const scope = `${organizationSlug ?? "unknown"}-${agentId ?? "unknown"}`.replace(/[^A-Za-z0-9._-]+/g, "_")
   const directory = `${FIELD_DOCUMENT_MEDIA_DIR}${scope}/`
@@ -76,16 +77,19 @@ export async function pickFieldDocument(input?: {
 
 export async function openLocalDocument(uri: string, mimeType: string): Promise<void> {
   if (!await Sharing.isAvailableAsync()) {
-    throw new Error("На этом устройстве просмотр файла недоступен")
+    throw new Error(t("documentOpenUnavailable"))
   }
   await withDecryptedMedia(uri, (temporaryUri) => Sharing.shareAsync(temporaryUri, {
     mimeType,
-    dialogTitle: "Открыть локальный файл",
+    dialogTitle: t("documentOpenTitle"),
   }))
 }
 
-export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} Б`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`
-  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} МБ`
+export function formatFileSize(bytes: number, locale: Locale = getLocale()): string {
+  const unit = locale === "az"
+    ? { bytes: "B", kilobytes: "KB", megabytes: "MB" }
+    : { bytes: "Б", kilobytes: "КБ", megabytes: "МБ" }
+  if (bytes < 1024) return String(bytes) + " " + unit.bytes
+  if (bytes < 1024 * 1024) return String(Math.round(bytes / 1024)) + " " + unit.kilobytes
+  return String((bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)) + " " + unit.megabytes
 }

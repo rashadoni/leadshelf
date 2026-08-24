@@ -35,6 +35,7 @@ import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { resolveFieldRouteFlow, type FieldRouteStepState } from "../../../src/field/route-flow"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import {
   setOptimisticFieldVisitSyncState,
   startOptimisticFieldVisit,
@@ -64,6 +65,15 @@ function routeStepLabel(state: FieldRouteStepState): string {
   if (state === "next") return t("routeNextStop")
   if (state === "missed") return t("routeMissedStop")
   return t("routeUpcomingStop")
+}
+
+function routePointSubject(point: FieldRoutePoint): string | null {
+  if (!point.contact) return null
+  return (point.contact.specialtyName ?? contactTypeLabel(point.contact.type)) + " · " + point.customer.name
+}
+
+function routePointMeta(point: FieldRoutePoint): string {
+  return point.customer.address ?? point.customer.city ?? objectTypeLabel(point.customer.objectType)
 }
 
 export default function FieldRouteDetailScreen() {
@@ -565,8 +575,8 @@ export default function FieldRouteDetailScreen() {
                       (step.state === "completed" || step.state === "active" || step.state === "next") && styles.stepStateTextInverted,
                     ]}>{routeStepLabel(step.state)}</Text></View> : null}
                     <Text style={styles.pointName}>{point.contact?.displayName ?? point.customer.name}</Text>
-                    {point.contact ? <Text style={styles.pointSubject}>{point.contact.specialtyName ?? point.contact.type} · {point.customer.name}</Text> : null}
-                    <Text style={styles.pointMeta}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
+                    {routePointSubject(point) ? <Text style={styles.pointSubject}>{routePointSubject(point)}</Text> : null}
+                    <Text style={styles.pointMeta}>{routePointMeta(point)}</Text>
                     {routeData.canEdit ? (
                       <View style={styles.timeRow}>
                         <Text style={styles.timeLabel}>{t("plannedTime")}</Text>

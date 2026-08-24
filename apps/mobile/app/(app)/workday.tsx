@@ -27,6 +27,7 @@ import type {
   FieldWorkdayStatus,
 } from "../../src/field/contracts"
 import { useField } from "../../src/field/field-context"
+import { presentFieldAttendancePolicy } from "../../src/field/attendance-policy"
 import {
   appendOptimisticFieldLocation,
   applyOptimisticWorkdayAction,
@@ -42,6 +43,7 @@ import {
   stoppedWorkdayTrackingState,
   stopWorkdayTracking,
   type WorkdayTrackingIssue,
+  type WorkdayTrackingNotification,
   type WorkdayTrackingRecovery,
   type WorkdayTrackingState,
 } from "../../src/location/workday-tracking"
@@ -182,7 +184,7 @@ function LocationTrail({ data }: { data: FieldLocationHistoryData }) {
 }
 
 export default function WorkdayScreen() {
-  useLocale()
+  const locale = useLocale()
   const field = useField()
   const { sync, status: syncStatus } = useSync()
   const [busyAction, setBusyAction] = useState<FieldWorkdayAction | null>(null)
@@ -200,33 +202,24 @@ export default function WorkdayScreen() {
     ? field.locations
     : { date, timezone, gpsIntervalSeconds: intervalSeconds, distanceMeters: 0, locations: [] }
   const workday = workdayData.workday
-  const attendancePolicy = workdayData.attendancePolicy
-  const requiresQrBeforeStart = attendancePolicy.clockEvidence === "QR"
-  const capturesEventGps = attendancePolicy.clockEvidence === "GPS"
-  const runsContinuousTracking = attendancePolicy.continuousTracking === "ACTIVE_WORKDAY" && !requiresQrBeforeStart
-  const usesGps = capturesEventGps || runsContinuousTracking
-  const policyEvidenceKey: MessageKey = requiresQrBeforeStart
-    ? "workdayEvidence_QR"
-    : usesGps
-      ? "workdayEvidence_GPS"
-      : "workdayEvidence_NONE"
-  const policyHintKey: MessageKey = requiresQrBeforeStart
-    ? "workdayPolicyQrPending"
-    : runsContinuousTracking
-      ? "workdayPolicyContinuousGps"
-      : capturesEventGps
-        ? "workdayPolicyEventGps"
-        : "workdayPolicyNoLocation"
-  const privacyBodyKey: MessageKey = requiresQrBeforeStart
-    ? "workdayPrivacyBodyQr"
-    : runsContinuousTracking
-      ? "workdayPrivacyBodyContinuousGps"
-      : capturesEventGps
-        ? "workdayPrivacyBodyEventGps"
-        : "workdayPrivacyBodyNoLocation"
+  const attendancePresentation = presentFieldAttendancePolicy(workdayData.attendancePolicy)
+  const attendancePolicy = attendancePresentation.policy
+  const {
+    requiresQrBeforeStart,
+    capturesEventGps,
+    runsContinuousTracking,
+    usesGps,
+    evidenceKey: policyEvidenceKey,
+    hintKey: policyHintKey,
+    privacyBodyKey,
+  } = attendancePresentation
   const displayStatus: DisplayStatus = workday?.status ?? "NOT_STARTED"
   const workedSeconds = currentWorkedSeconds(workday, nowMs)
   const pausedSeconds = currentPausedSeconds(workday, nowMs)
+  const trackingNotification = useMemo<WorkdayTrackingNotification>(() => ({
+    title: t("workdayTrackingNotificationTitle"),
+    body: t("workdayTrackingNotificationBody"),
+  }), [locale])
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1_000)
@@ -242,6 +235,7 @@ export default function WorkdayScreen() {
       workday?.status ?? null,
       intervalSeconds,
       runsContinuousTracking,
+      trackingNotification,
     )
       .catch((): WorkdayTrackingState => ({
         mode: "unavailable",
@@ -250,7 +244,7 @@ export default function WorkdayScreen() {
         observedAt: new Date().toISOString(),
       }))
     setTracking(state)
-  }, [intervalSeconds, runsContinuousTracking, workday?.status])
+  }, [intervalSeconds, runsContinuousTracking, trackingNotification, workday?.status])
 
   useEffect(() => {
     if (busyAction) return
@@ -259,6 +253,7 @@ export default function WorkdayScreen() {
       workday?.status ?? null,
       intervalSeconds,
       runsContinuousTracking,
+      trackingNotification,
     )
       .then((state) => { if (active) setTracking(state) })
       .catch(() => {
@@ -270,7 +265,7 @@ export default function WorkdayScreen() {
         })
       })
     return () => { active = false }
-  }, [busyAction, intervalSeconds, runsContinuousTracking, workday?.status])
+  }, [busyAction, intervalSeconds, runsContinuousTracking, trackingNotification, workday?.status])
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -346,7 +341,7 @@ export default function WorkdayScreen() {
 
       if ((action === "START" || action === "RESUME") && runsContinuousTracking) {
         try {
-          const state = await startWorkdayTracking(intervalSeconds)
+          const state = await startWorkdayTracking(intervalSeconds, { notification: trackingNotification })
           setTracking(state)
           if (state.mode === "denied" || state.mode === "services_disabled" || state.mode === "unavailable") {
             setFeedback("workdayTrackingPermissionNeeded")
@@ -402,7 +397,7 @@ export default function WorkdayScreen() {
         setFeedback("workdayTrackingSettingsOpened")
         return
       }
-      const next = await startWorkdayTracking(intervalSeconds)
+      const next = await startWorkdayTracking(intervalSeconds, { notification: trackingNotification })
       setTracking(next)
       if (next.mode === "background" || next.mode === "foreground") {
         setFeedback("workdayTrackingRecovered")

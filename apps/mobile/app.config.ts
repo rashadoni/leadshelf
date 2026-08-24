@@ -3,6 +3,20 @@ import base from "./app.json"
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const fieldVariant = process.env.EXPO_PUBLIC_MOBILE_VARIANT === "leaddrive-field"
+  // These Android prompts are baked into an APK. Release automation can choose
+  // the tenant's default language; the in-app switch remains AZ/RU at runtime.
+  const permissionLocale = process.env.EXPO_PUBLIC_PERMISSION_LOCALE === "ru" ? "ru" : "az"
+  const fieldPermissions = permissionLocale === "ru"
+    ? {
+        camera: "Разрешите LeadDrive Field делать фото-подтверждения визитов.",
+        locationWhenInUse: "Разрешите LeadDrive Field подтвердить визит по GPS, если это требует правило организации.",
+        locationAlways: "Разрешите LeadDrive Field записывать GPS только во время активного рабочего дня, если это требует правило организации.",
+      }
+    : {
+        camera: "LeadDrive Field-ə vizit sübutu fotolarını çəkməyə icazə verin.",
+        locationWhenInUse: "Təşkilat qaydası tələb edərsə, LeadDrive Field-ə viziti GPS ilə təsdiqləməyə icazə verin.",
+        locationAlways: "Təşkilat qaydası tələb edərsə, LeadDrive Field-ə yalnız aktiv iş günü zamanı GPS qeydi aparmağa icazə verin.",
+      }
   const expo = base.expo as unknown as ExpoConfig
   const displayName = fieldVariant ? "LeadDrive Field" : expo.name
   const androidPackage = fieldVariant ? "org.leaddrive.field.zeytunpharm" : expo.android?.package
@@ -20,14 +34,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         if (name === "expo-camera") {
           return [name, {
             ...options,
-            cameraPermission: "Allow LeadDrive Field to capture visit proof photos.",
+            cameraPermission: fieldPermissions.camera,
           }] as [string, Record<string, unknown>]
         }
         if (name === "expo-location") {
           return [name, {
             ...options,
-            locationWhenInUsePermission: "Allow LeadDrive Field to verify visits and record your route during an active workday.",
-            locationAlwaysAndWhenInUsePermission: "Allow LeadDrive Field to record your route only while your workday is active.",
+            locationWhenInUsePermission: fieldPermissions.locationWhenInUse,
+            locationAlwaysAndWhenInUsePermission: fieldPermissions.locationAlways,
           }] as [string, Record<string, unknown>]
         }
         return plugin

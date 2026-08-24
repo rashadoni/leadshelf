@@ -53,12 +53,21 @@ describe("workday tracking permission and recovery state", () => {
   })
 
   it("starts background tracking when both permissions and task runtime are available", async () => {
-    const state = await startWorkdayTracking(30)
+    const state = await startWorkdayTracking(30, {
+      notification: { title: "LeadDrive · İş günü", body: "GPS yalnız aktiv iş günü zamanı işləyir" },
+    })
 
     expect(state).toMatchObject({ mode: "background", issue: "none", recovery: "none" })
     expect(locationMocks.startLocationUpdatesAsync).toHaveBeenCalledWith(
       WORKDAY_LOCATION_TASK,
-      expect.objectContaining({ timeInterval: 30_000, distanceInterval: 20 }),
+      expect.objectContaining({
+        timeInterval: 30_000,
+        distanceInterval: 20,
+        foregroundService: expect.objectContaining({
+          notificationTitle: "LeadDrive · İş günü",
+          notificationBody: "GPS yalnız aktiv iş günü zamanı işləyir",
+        }),
+      }),
     )
     expect(locationMocks.watchPositionAsync).not.toHaveBeenCalled()
   })

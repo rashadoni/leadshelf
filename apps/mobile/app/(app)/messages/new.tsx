@@ -4,7 +4,8 @@ import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { enqueueFieldMessage, readFieldMessages, type FieldDocumentDraft } from "../../../src/db/local-store"
 import { formatFileSize, pickFieldDocument } from "../../../src/field/document-files"
-import { useLocale } from "../../../src/i18n"
+import { agentRoleLabel } from "../../../src/field/labels"
+import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
@@ -64,7 +65,7 @@ export default function NewMessageScreen() {
     setError(null)
     try {
       enqueueFieldMessage({ threadId: null, recipientAgentId: recipientId, body: body.trim() || null }, attachment)
-      Alert.alert(copy.queuedTitle, copy.queuedBody, [{ text: "OK", onPress: () => router.back() }])
+      Alert.alert(copy.queuedTitle, copy.queuedBody, [{ text: t("ok"), onPress: () => router.back() }])
       void sync().catch(() => {})
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -88,7 +89,7 @@ export default function NewMessageScreen() {
             {inbox.availableRecipients.map((person) => (
               <Pressable key={person.id} onPress={() => setRecipientId(person.id)} style={[styles.recipient, recipientId === person.id && styles.recipientSelected]}>
                 <View style={[styles.avatar, recipientId === person.id && styles.avatarSelected]}><Text style={[styles.avatarText, recipientId === person.id && styles.avatarTextSelected]}>{person.name.charAt(0).toUpperCase()}</Text></View>
-                <View style={styles.recipientBody}><Text style={[styles.recipientName, recipientId === person.id && styles.recipientNameSelected]} numberOfLines={1}>{person.name}</Text><Text style={[styles.recipientRole, recipientId === person.id && styles.recipientRoleSelected]}>{person.role}</Text></View>
+                <View style={styles.recipientBody}><Text style={[styles.recipientName, recipientId === person.id && styles.recipientNameSelected]} numberOfLines={1}>{person.name}</Text><Text style={[styles.recipientRole, recipientId === person.id && styles.recipientRoleSelected]}>{agentRoleLabel(person.role)}</Text></View>
                 {recipientId === person.id ? <Text style={styles.check}>✓</Text> : null}
               </Pressable>
             ))}
@@ -100,7 +101,7 @@ export default function NewMessageScreen() {
             {attachment ? (
               <View style={styles.fileCard}>
                 <View style={styles.fileIcon}><Text style={styles.fileIconText}>DOC</Text></View>
-                <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName}</Text><Text style={styles.fileMeta}>{formatFileSize(attachment.sizeBytes)}</Text></View>
+                <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName}</Text><Text style={styles.fileMeta}>{formatFileSize(attachment.sizeBytes, locale)}</Text></View>
                 <Pressable onPress={() => setAttachment(null)} style={styles.remove}><Text style={styles.removeText}>×</Text></Pressable>
               </View>
             ) : (

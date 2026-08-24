@@ -7,6 +7,7 @@ import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { FieldCustomerRequest, FieldCustomerRequestsData } from "../../../src/field/contracts"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { objectTypeLabel } from "../../../src/field/labels"
 
 const CACHE_KEY = "field.customer-requests"
 
@@ -19,7 +20,7 @@ function statusLabel(status: string): string {
     case "APPROVED": return t("requestStatus_APPROVED")
     case "REJECTED": return t("requestStatus_REJECTED")
     case "CANCELLED": return t("requestStatus_CANCELLED")
-    default: return status
+    default: return t("lifecycleStatus_UNKNOWN")
   }
 }
 
@@ -92,7 +93,7 @@ function RequestCard({ request }: { request: FieldCustomerRequest }) {
       <View style={styles.cardTop}>
         <View style={styles.cardBody}>
           <Text style={styles.cardName}>{request.name}</Text>
-          <Text style={styles.cardMeta}>{request.objectType}{request.city ? ` · ${request.city}` : ""}</Text>
+          <Text style={styles.cardMeta}>{objectTypeLabel(request.objectType)}{request.city ? ` · ${request.city}` : ""}</Text>
         </View>
         <View style={[styles.status, { backgroundColor: tone.background }]}><Text style={[styles.statusText, { color: tone.foreground }]}>{statusLabel(request.status)}</Text></View>
       </View>

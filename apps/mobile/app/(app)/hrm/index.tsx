@@ -5,7 +5,14 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldHrm, enqueueFieldHrmCancel, enqueueFieldHrmRequest, readFieldHrm } from "../../../src/db/local-store"
 import type { FieldHrmData, FieldHrmRequest, FieldHrmRequestType } from "../../../src/field/contracts"
-import { useLocale } from "../../../src/i18n"
+import { workdayStatusLabel } from "../../../src/field/labels"
+import { type Locale, useLocale } from "../../../src/i18n"
+import {
+  formatCalendarDay,
+  formatCalendarMonthShort,
+  formatCalendarWeekdayShort,
+  formatShortDateTime,
+} from "../../../src/i18n/date-format"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
@@ -170,9 +177,9 @@ export default function HrmScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
                   {upcomingDates.map((date) => <DateChoice key={date} date={date} selected={startDate === date} locale={locale} onPress={() => { setStartDate(date); if (endDate < date) setEndDate(date) }} />)}
                 </ScrollView>
-                <View style={styles.rangeLine}><Text style={styles.rangeText}>{copy.from}: {startDate}</Text><Text style={styles.rangeArrow}>→</Text><Text style={styles.rangeText}>{copy.to}: {endDate}</Text></View>
+                <View style={styles.rangeLine}><Text style={styles.rangeText}>{copy.from}: {formatCalendarDay(startDate, locale).date}</Text><Text style={styles.rangeArrow}>→</Text><Text style={styles.rangeText}>{copy.to}: {formatCalendarDay(endDate, locale).date}</Text></View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.endDates}>
-                  {upcomingDates.filter((date) => date >= startDate).slice(0, 14).map((date) => <Pressable key={date} onPress={() => setEndDate(date)} style={[styles.endDate, endDate === date && styles.endDateSelected]}><Text style={[styles.endDateText, endDate === date && styles.endDateTextSelected]}>{date.slice(5)}</Text></Pressable>)}
+                  {upcomingDates.filter((date) => date >= startDate).slice(0, 14).map((date) => <Pressable key={date} onPress={() => setEndDate(date)} style={[styles.endDate, endDate === date && styles.endDateSelected]}><Text style={[styles.endDateText, endDate === date && styles.endDateTextSelected]}>{formatCalendarDay(date, locale).day}</Text></Pressable>)}
                 </ScrollView>
               </>
             )}
@@ -192,11 +199,32 @@ export default function HrmScreen() {
               {data.days.filter((day) => day.date >= addDays(-2)).slice(0, 35).map((day) => {
                 const request = day.requests.find((item) => item.status !== "CANCELLED")
                 const tone = request ? "request" : day.calendar.isWorkingDay ? "working" : "off"
-                return <View key={day.date} style={[styles.dayCard, tone === "request" ? styles.dayRequest : tone === "working" ? styles.dayWorking : styles.dayOff]}><Text style={styles.dayWeek}>{new Date(`${day.date}T12:00:00`).toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU", { weekday: "short" }).toUpperCase()}</Text><Text style={styles.dayNumber}>{day.date.slice(-2)}</Text><Text style={styles.dayMonth}>{new Date(`${day.date}T12:00:00`).toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU", { month: "short" })}</Text><View style={[styles.dayDot, { backgroundColor: tone === "request" ? colors.warning : tone === "working" ? colors.success : colors.holiday }]} /></View>
+                return (
+                  <View key={day.date} style={[styles.dayCard, tone === "request" ? styles.dayRequest : tone === "working" ? styles.dayWorking : styles.dayOff]}>
+                    <Text style={styles.dayWeek}>{formatCalendarWeekdayShort(day.date, locale)}</Text>
+                    <Text style={styles.dayNumber}>{formatCalendarDay(day.date, locale).day}</Text>
+                    <Text style={styles.dayMonth}>{formatCalendarMonthShort(day.date, locale)}</Text>
+                    <View style={[styles.dayDot, { backgroundColor: tone === "request" ? colors.warning : tone === "working" ? colors.success : colors.holiday }]} />
+                  </View>
+                )
               })}
             </ScrollView>
             <View style={styles.scheduleList}>
-              {data.days.filter((day) => day.date >= addDays(0)).slice(0, 14).map((day) => <View key={day.date} style={styles.scheduleRow}><View style={[styles.scheduleMark, { backgroundColor: day.requests.length > 0 ? colors.warningBg : day.calendar.isWorkingDay ? colors.successBg : colors.holidayBg }]}><Text style={[styles.scheduleMarkText, { color: day.requests.length > 0 ? colors.warning : day.calendar.isWorkingDay ? colors.successDark : colors.holiday }]}>{day.requests.length > 0 ? "!" : day.calendar.isWorkingDay ? "✓" : "—"}</Text></View><View style={styles.scheduleBody}><Text style={styles.scheduleDate}>{new Date(`${day.date}T12:00:00`).toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU", { weekday: "long", day: "numeric", month: "long" })}</Text><Text style={styles.scheduleMeta}>{day.requests.length > 0 ? typeLabel(day.requests[0]!.type, copy) : day.calendar.name || (day.calendar.isWorkingDay ? copy.working : copy.dayOff)}</Text></View>{day.workday ? <View style={styles.workdayPill}><Text style={styles.workdayPillText}>{day.workday.status}</Text></View> : null}</View>)}
+              {data.days.filter((day) => day.date >= addDays(0)).slice(0, 14).map((day) => {
+                const request = day.requests.find((item) => item.status !== "CANCELLED")
+                return (
+                  <View key={day.date} style={styles.scheduleRow}>
+                    <View style={[styles.scheduleMark, { backgroundColor: request ? colors.warningBg : day.calendar.isWorkingDay ? colors.successBg : colors.holidayBg }]}>
+                      <Text style={[styles.scheduleMarkText, { color: request ? colors.warning : day.calendar.isWorkingDay ? colors.successDark : colors.holiday }]}>{request ? "!" : day.calendar.isWorkingDay ? "✓" : "—"}</Text>
+                    </View>
+                    <View style={styles.scheduleBody}>
+                      <Text style={styles.scheduleDate}>{formatCalendarDay(day.date, locale).weekday}, {formatCalendarDay(day.date, locale).date}</Text>
+                      <Text style={styles.scheduleMeta}>{request ? typeLabel(request.type, copy) : day.calendar.name || (day.calendar.isWorkingDay ? copy.working : copy.dayOff)}</Text>
+                    </View>
+                    {day.workday ? <View style={styles.workdayPill}><Text style={styles.workdayPillText}>{workdayStatusLabel(day.workday.status)}</Text></View> : null}
+                  </View>
+                )
+              })}
             </View>
           </>
         ) : (
@@ -210,14 +238,22 @@ export default function HrmScreen() {
 function typeLabel(type: FieldHrmRequestType, copy: { leave: string; absence: string; correction: string }) { return type === "LEAVE" ? copy.leave : type === "ABSENCE" ? copy.absence : copy.correction }
 function Segment({ label, selected, onPress, count = 0 }: { label: string; selected: boolean; onPress: () => void; count?: number }) { return <Pressable onPress={onPress} style={[styles.segmentButton, selected && styles.segmentSelected]}><Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{label}</Text>{count > 0 ? <View style={styles.segmentCount}><Text style={styles.segmentCountText}>{count}</Text></View> : null}</Pressable> }
 function TypeButton({ label, glyph, selected, onPress }: { label: string; glyph: string; selected: boolean; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.typeButton, selected && styles.typeSelected]}><Text style={[styles.typeGlyph, selected && styles.typeTextSelected]}>{glyph}</Text><Text style={[styles.typeText, selected && styles.typeTextSelected]} numberOfLines={2}>{label}</Text></Pressable> }
-function DateChoice({ date, selected, locale, onPress }: { date: string; selected: boolean; locale: string; onPress: () => void }) { const value = new Date(`${date}T12:00:00`); return <Pressable onPress={onPress} style={[styles.dateChoice, selected && styles.dateChoiceSelected]}><Text style={[styles.dateWeek, selected && styles.dateTextSelected]}>{value.toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU", { weekday: "short" })}</Text><Text style={[styles.dateNumber, selected && styles.dateTextSelected]}>{date.slice(-2)}</Text><Text style={[styles.dateMonth, selected && styles.dateTextSelected]}>{value.toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU", { month: "short" })}</Text></Pressable> }
+function DateChoice({ date, selected, locale, onPress }: { date: string; selected: boolean; locale: Locale; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.dateChoice, selected && styles.dateChoiceSelected]}>
+      <Text style={[styles.dateWeek, selected && styles.dateTextSelected]}>{formatCalendarWeekdayShort(date, locale)}</Text>
+      <Text style={[styles.dateNumber, selected && styles.dateTextSelected]}>{formatCalendarDay(date, locale).day}</Text>
+      <Text style={[styles.dateMonth, selected && styles.dateTextSelected]}>{formatCalendarMonthShort(date, locale)}</Text>
+    </Pressable>
+  )
+}
 function TimeInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <View style={styles.timeInputWrap}><Text style={styles.timeLabel}>{label}</Text><TextInput value={value} onChangeText={onChange} keyboardType="numbers-and-punctuation" maxLength={5} style={styles.timeInput} /></View> }
 function Legend({ color, label }: { color: string; label: string }) { return <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: color }]} /><Text style={styles.legendText}>{label}</Text></View> }
 function Empty({ title, hint }: { title: string; hint: string }) { return <View style={styles.empty}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>◷</Text></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyHint}>{hint}</Text></View> }
 
-function RequestCard({ request, locale, copy, onCancel }: { request: FieldHrmRequest; locale: string; copy: Record<string, string>; onCancel: () => void }) {
+function RequestCard({ request, locale, copy, onCancel }: { request: FieldHrmRequest; locale: Locale; copy: Record<string, string>; onCancel: () => void }) {
   const palette = request.status === "APPROVED" ? { bg: colors.successBg, color: colors.successDark, label: copy.approved } : request.status === "REJECTED" ? { bg: colors.dangerBg, color: colors.missed, label: copy.rejected } : request.status === "CANCELLED" ? { bg: colors.draftBg, color: colors.draft, label: copy.cancelled } : { bg: colors.warningBg, color: colors.warning, label: copy.pending }
-  return <View style={styles.requestCard}><View style={styles.requestTop}><View style={[styles.requestIcon, { backgroundColor: palette.bg }]}><Text style={[styles.requestIconText, { color: palette.color }]}>{request.type === "LEAVE" ? "☀" : request.type === "ABSENCE" ? "◷" : "↻"}</Text></View><View style={styles.requestBody}><Text style={styles.requestTitle}>{typeLabel(request.type, copy as never)}</Text><Text style={styles.requestDates}>{new Date(request.startDate).toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU")} — {new Date(request.endDate).toLocaleDateString(locale === "az" ? "az-AZ" : "ru-RU")}</Text></View><View style={[styles.status, { backgroundColor: palette.bg }]}><Text style={[styles.statusText, { color: palette.color }]}>{palette.label}</Text></View></View><Text style={styles.requestReason}>{request.reason}</Text>{request.decisionNote ? <View style={styles.decision}><Text style={styles.decisionLabel}>{copy.decision}</Text><Text style={styles.decisionText}>{request.decisionNote}</Text></View> : null}<View style={styles.requestFooter}>{request.syncState ? <Text style={styles.syncState}>↻ {copy.sync}</Text> : <Text style={styles.submitted}>{new Date(request.submittedAt).toLocaleString(locale === "az" ? "az-AZ" : "ru-RU")}</Text>}{request.status === "PENDING" ? <Pressable onPress={onCancel} style={styles.cancelRequest}><Text style={styles.cancelRequestText}>{copy.cancelRequest}</Text></Pressable> : null}</View></View>
+  return <View style={styles.requestCard}><View style={styles.requestTop}><View style={[styles.requestIcon, { backgroundColor: palette.bg }]}><Text style={[styles.requestIconText, { color: palette.color }]}>{request.type === "LEAVE" ? "☀" : request.type === "ABSENCE" ? "◷" : "↻"}</Text></View><View style={styles.requestBody}><Text style={styles.requestTitle}>{typeLabel(request.type, copy as never)}</Text><Text style={styles.requestDates}>{formatCalendarDay(request.startDate, locale).date} — {formatCalendarDay(request.endDate, locale).date}</Text></View><View style={[styles.status, { backgroundColor: palette.bg }]}><Text style={[styles.statusText, { color: palette.color }]}>{palette.label}</Text></View></View><Text style={styles.requestReason}>{request.reason}</Text>{request.decisionNote ? <View style={styles.decision}><Text style={styles.decisionLabel}>{copy.decision}</Text><Text style={styles.decisionText}>{request.decisionNote}</Text></View> : null}<View style={styles.requestFooter}>{request.syncState ? <Text style={styles.syncState}>↻ {copy.sync}</Text> : <Text style={styles.submitted}>{formatShortDateTime(request.submittedAt, locale)}</Text>}{request.status === "PENDING" ? <Pressable onPress={onCancel} style={styles.cancelRequest}><Text style={styles.cancelRequestText}>{copy.cancelRequest}</Text></Pressable> : null}</View></View>
 }
 
 const styles = StyleSheet.create({

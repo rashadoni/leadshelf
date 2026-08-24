@@ -11,6 +11,7 @@ import { router, useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { countOpenTasks, listVisits } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
+import { presentFieldAttendancePolicy } from "../../../src/field/attendance-policy"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
 import type { FieldWorkdayStatus } from "../../../src/field/contracts"
@@ -90,6 +91,7 @@ export default function TodayTab() {
       : t("openRoute")
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const workdayActive = workdayStatus === "STARTED"
+  const attendancePresentation = presentFieldAttendancePolicy(field.workday?.attendancePolicy)
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
   const metrics = [
@@ -151,7 +153,7 @@ export default function TodayTab() {
             </View>
             <View style={styles.workdayBody}>
               <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
-              <Text style={styles.workdayHint}>{workdayActive ? t("workdaySubtitle") : t("workdayTrackingHintStopped")}</Text>
+              <Text style={styles.workdayHint}>{t(attendancePresentation.hintKey)}</Text>
             </View>
             <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : "→"}</Text>
           </Pressable>

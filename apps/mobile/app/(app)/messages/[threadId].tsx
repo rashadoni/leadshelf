@@ -13,9 +13,17 @@ import {
 import { formatFileSize, openLocalDocument, pickFieldDocument } from "../../../src/field/document-files"
 import type { FieldMessageThreadData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
-import { useLocale } from "../../../src/i18n"
+import { t, useLocale } from "../../../src/i18n"
+import { formatTime } from "../../../src/i18n/date-format"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
+
+function messageThreadTypeLabel(type: string): string {
+  if (type === "DIRECT") return t("messageThreadType_DIRECT")
+  if (type === "BROADCAST") return t("messageThreadType_BROADCAST")
+  if (type === "SYSTEM") return t("messageThreadType_SYSTEM")
+  return t("messageThreadType_UNKNOWN")
+}
 
 export default function MessageThreadScreen() {
   const { threadId = "" } = useLocalSearchParams<{ threadId?: string }>()
@@ -74,8 +82,8 @@ export default function MessageThreadScreen() {
   const title = useMemo(() => {
     if (!data) return "…"
     if (data.thread.subject) return data.thread.subject
-    return data.thread.participants.filter((person) => person.id !== field.profile?.agent.id).map((person) => person.name).join(", ") || "Диалог"
-  }, [data, field.profile?.agent.id])
+    return data.thread.participants.filter((person) => person.id !== field.profile?.agent.id).map((person) => person.name).join(", ") || t("messageThreadFallback")
+  }, [data, field.profile?.agent.id, locale])
 
   async function refresh() {
     setRefreshing(true)
@@ -139,7 +147,7 @@ export default function MessageThreadScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={8}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
-          <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.messages}</Text><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.participants}>{data.thread.type === "DIRECT" ? "● online" : data.thread.type}</Text></View>
+          <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.messages}</Text><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.participants}>{messageThreadTypeLabel(data.thread.type)}</Text></View>
         </View>
         {warning ? <View style={styles.warning}><Text style={styles.warningText}>{warning}</Text></View> : null}
         <ScrollView
@@ -168,10 +176,10 @@ export default function MessageThreadScreen() {
                       localUri,
                     })} style={[styles.attachment, own && styles.attachmentOwn]}>
                       <View style={styles.attachmentIcon}><Text style={styles.attachmentIconText}>DOC</Text></View>
-                      <View style={styles.attachmentBody}><Text style={[styles.attachmentName, own && styles.attachmentNameOwn]} numberOfLines={1}>{message.attachmentDocument.fileName}</Text><Text style={[styles.attachmentMeta, own && styles.attachmentMetaOwn]}>{formatFileSize(message.attachmentDocument.sizeBytes)} · {localUri ? copy.open : copy.download}</Text></View>
+                      <View style={styles.attachmentBody}><Text style={[styles.attachmentName, own && styles.attachmentNameOwn]} numberOfLines={1}>{message.attachmentDocument.fileName}</Text><Text style={[styles.attachmentMeta, own && styles.attachmentMetaOwn]}>{formatFileSize(message.attachmentDocument.sizeBytes, locale)} · {localUri ? copy.open : copy.download}</Text></View>
                     </Pressable>
                   ) : null}
-                  <View style={styles.messageMeta}><Text style={[styles.messageTime, own && styles.messageTimeOwn]}>{new Date(message.sentAt).toLocaleTimeString(locale === "az" ? "az-AZ" : "ru-RU", { hour: "2-digit", minute: "2-digit" })}</Text>{message.syncState ? <Text style={styles.queued}>{copy.queued}</Text> : null}</View>
+                  <View style={styles.messageMeta}><Text style={[styles.messageTime, own && styles.messageTimeOwn]}>{formatTime(message.sentAt)}</Text>{message.syncState ? <Text style={styles.queued}>{copy.queued}</Text> : null}</View>
                   {message.acknowledgementRequired ? (
                     message.acknowledged ? <View style={styles.acked}><Text style={styles.ackedText}>✓ {copy.acked}</Text></View> : <Pressable onPress={() => acknowledge(message.id)} style={styles.ack}><Text style={styles.ackText}>{copy.ack}</Text></Pressable>
                   ) : null}
@@ -199,7 +207,7 @@ export default function MessageThreadScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 },
   header: { minHeight: 70, paddingHorizontal: 13, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
-  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, participants: { color: colors.success, fontSize: 8, fontWeight: "800", marginTop: 2 },
+  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, participants: { color: colors.muted, fontSize: 8, fontWeight: "800", marginTop: 2 },
   warning: { margin: 10, marginBottom: 0, padding: 10, borderRadius: 12, backgroundColor: colors.warningBg }, warningText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" },
   messages: { paddingHorizontal: 12, paddingVertical: 14, gap: 10 }, empty: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 80 },
   messageRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, maxWidth: "88%" }, messageRowOwn: { alignSelf: "flex-end", justifyContent: "flex-end" },
