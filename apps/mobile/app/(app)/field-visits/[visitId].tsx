@@ -48,6 +48,7 @@ import {
   setVisitPhotoSyncState,
   setVisitWorkspaceSyncState,
   type FieldVisitActionDraft,
+  visitActionDraftFromEvidence,
   visitActionDraftIssue,
   visitRequirementProgress,
 } from "../../../src/field/visit-workspace"
@@ -148,7 +149,14 @@ export default function FieldVisitWorkspaceScreen() {
 
   function openActionEditor(requirement: FieldVisitRequirement) {
     setActiveRequirement(requirement)
-    setActionDraft(emptyVisitActionDraft(tomorrowDateKey()))
+    const existingAction = [...(workspace?.visit.actionResults ?? [])].reverse().find((result) => (
+      result.actionKey === requirement.actionKey && result.syncState !== "REJECTED"
+    ))
+    setActionDraft(visitActionDraftFromEvidence(
+      requirement.actionKey,
+      existingAction?.evidence,
+      tomorrowDateKey(),
+    ))
     setTimeout(() => {
       visitScroll.current?.scrollTo({ y: Math.max(0, editorOffset.current - 14), animated: true })
     }, 48)
@@ -205,7 +213,12 @@ export default function FieldVisitWorkspaceScreen() {
     setSaving(true)
     try {
       const completedAt = new Date().toISOString()
-      const actionResultId = `field-action-${Crypto.randomUUID()}`
+      const existingNextAction = activeRequirement.actionKey === "NEXT_ACTION"
+        ? [...workspace.visit.actionResults].reverse().find((result) => (
+          result.actionKey === "NEXT_ACTION" && result.syncState !== "REJECTED"
+        ))
+        : null
+      const actionResultId = existingNextAction?.id ?? `field-action-${Crypto.randomUUID()}`
       const payload = {
         actionResultId,
         visitId,
@@ -462,23 +475,22 @@ export default function FieldVisitWorkspaceScreen() {
           const progress = outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION"
             ? { completed: hasRescheduleFollowUp ? 1 : 0, required: 1, satisfied: hasRescheduleFollowUp }
             : requirementProgress
-          const nextActionAlreadySaved = requirement.actionKey === "NEXT_ACTION" && progress.satisfied
           return (
             <Pressable
               key={requirement.actionKey}
-              disabled={isCompleted || nextActionAlreadySaved}
+              disabled={isCompleted}
               onPress={() => openActionEditor(requirement)}
               style={({ pressed }) => [
                 styles.actionCard,
                 progress.satisfied && styles.actionCardDone,
-                (isCompleted || nextActionAlreadySaved) && styles.actionCardDisabled,
+                isCompleted && styles.actionCardDisabled,
                 pressed && styles.pressed,
               ]}
             >
               <View style={[styles.actionMark, progress.satisfied && styles.actionMarkDone]}><Text style={[styles.actionMarkText, progress.satisfied && styles.actionMarkTextDone]}>{progress.satisfied ? "✓" : requirement.mode === "REQUIRED" ? "!" : "+"}</Text></View>
               <View style={styles.actionBody}>
                 <Text style={styles.actionTitle}>{actionLabel(requirement)}</Text>
-                <Text style={styles.actionMeta}>{outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION" ? t("fieldVisitFollowUpNeeded") : requirement.mode === "REQUIRED" ? t("fieldVisitRequired") : t("fieldVisitOptional")} · {progress.completed}/{progress.required}</Text>
+                <Text style={styles.actionMeta}>{outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION" ? t(progress.satisfied ? "fieldVisitFollowUpReady" : "fieldVisitFollowUpNeeded") : requirement.mode === "REQUIRED" ? t("fieldVisitRequired") : t("fieldVisitOptional")} · {progress.completed}/{progress.required}</Text>
               </View>
               <Text style={styles.chevron}>›</Text>
             </Pressable>

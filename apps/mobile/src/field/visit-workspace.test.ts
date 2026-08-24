@@ -9,6 +9,7 @@ import {
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
   setVisitWorkspaceSyncState,
+  visitActionDraftFromEvidence,
   visitActionDraftIssue,
 } from "./visit-workspace"
 
@@ -207,6 +208,51 @@ describe("field visit workspace", () => {
       status: "COMPLETED",
       draft: { ...draft, stockQuantity: "-2" },
     })).toBe("STOCK_QUANTITY")
+  })
+
+  it("prefills and replaces a saved mobile follow-up during correction", () => {
+    const first = addOptimisticVisitAction(workspace, {
+      actionResultId: "action-next",
+      visitId: "visit-1",
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      evidence: {
+        title: "Call doctor",
+        dueDate: "2026-07-16T09:30:00.000Z",
+        priority: "MEDIUM",
+      },
+      completedAt: "2026-07-15T08:20:00.000Z",
+    })
+    const corrected = addOptimisticVisitAction(first, {
+      actionResultId: "action-next",
+      visitId: "visit-1",
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      evidence: {
+        title: "Call buyer at 10",
+        dueDate: "2026-07-16T10:00:00.000Z",
+        priority: "HIGH",
+      },
+      completedAt: "2026-07-15T08:25:00.000Z",
+    })
+    expect(corrected.visit.actionResults).toHaveLength(1)
+    expect(corrected.visit.actionResults[0]).toMatchObject({
+      id: "action-next",
+      evidence: {
+        title: "Call buyer at 10",
+        priority: "HIGH",
+      },
+      syncState: "PENDING",
+    })
+    expect(visitActionDraftFromEvidence(
+      "NEXT_ACTION",
+      corrected.visit.actionResults[0].evidence,
+      "2026-07-16",
+    )).toMatchObject({
+      nextActionTitle: "Call buyer at 10",
+      nextPriority: "HIGH",
+      nextDueDate: "2026-07-16",
+    })
   })
 
   it("keeps the workspace visit open after a rejected checkout", () => {

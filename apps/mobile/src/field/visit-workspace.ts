@@ -48,7 +48,25 @@ export function addOptimisticVisitAction(
   workspace: FieldVisitWorkspaceData,
   payload: FieldVisitActionPayload,
 ): FieldVisitWorkspaceData {
-  if (workspace.visit.actionResults.some((result) => result.id === payload.actionResultId)) return workspace
+  const existing = workspace.visit.actionResults.find((result) => result.id === payload.actionResultId)
+  if (existing) {
+    return {
+      ...workspace,
+      visit: {
+        ...workspace.visit,
+        actionResults: workspace.visit.actionResults.map((result) => result.id !== payload.actionResultId
+          ? result
+          : {
+            ...result,
+            actionKey: payload.actionKey,
+            status: payload.status,
+            evidence: payload.evidence ?? null,
+            completedAt: payload.completedAt,
+            syncState: "PENDING",
+          }),
+      },
+    }
+  }
   const result: FieldVisitActionResult = {
     id: payload.actionResultId,
     requirementId: workspace.visit.requirementSnapshot?.requirements.find(
@@ -113,6 +131,16 @@ export function emptyVisitActionDraft(nextDueDate = ""): FieldVisitActionDraft {
   }
 }
 
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : ""
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
 function localDateTimeToIso(dateKey: string, time: string): string | null {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
   const timeMatch = /^(\d{2}):(\d{2})$/.exec(time)
@@ -135,6 +163,67 @@ function localDateTimeToIso(dateKey: string, time: string): string | null {
 
 function normalizedTopics(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean)
+}
+
+function localDateTimeParts(value: unknown): { date: string; time: string } | null {
+  const date = typeof value === "string" ? new Date(value) : new Date(Number.NaN)
+  if (Number.isNaN(date.getTime())) return null
+  return {
+    date: String(date.getFullYear()) + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0"),
+    time: String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0"),
+  }
+}
+
+export function visitActionDraftFromEvidence(
+  actionKey: FieldVisitActionPayload["actionKey"],
+  evidence: unknown,
+  defaultNextDueDate = "",
+): FieldVisitActionDraft {
+  const draft = emptyVisitActionDraft(defaultNextDueDate)
+  const value = recordValue(evidence)
+  if (!value) return draft
+  if (typeof value.reason === "string") return { ...draft, waiverReason: value.reason }
+  if (actionKey === "PRESENTATION") {
+    return {
+      ...draft,
+      presentationMaterial: stringValue(value.material),
+      presentationVersion: stringValue(value.version),
+      presentationTopic: stringValue(value.topic),
+    }
+  }
+  if (actionKey === "STOCK_CHECK") {
+    const state = value.state
+    return {
+      ...draft,
+      stockProduct: stringValue(value.product),
+      stockState: state === "AVAILABLE" || state === "NOT_AVAILABLE" || state === "UNKNOWN" ? state : "UNKNOWN",
+      stockQuantity: typeof value.quantity === "number" && Number.isFinite(value.quantity) ? String(value.quantity) : "",
+    }
+  }
+  if (actionKey === "CHECKLIST") return { ...draft, checklistResult: stringValue(value.result) }
+  if (actionKey === "VISIT_NOTE") {
+    return {
+      ...draft,
+      finalNote: stringValue(value.finalNote),
+      discussedTopics: Array.isArray(value.discussedTopics)
+        ? value.discussedTopics.filter((item): item is string => typeof item === "string").join(", ")
+        : stringValue(value.discussedTopics),
+    }
+  }
+  if (actionKey === "FEEDBACK") return { ...draft, feedback: stringValue(value.feedback) }
+  if (actionKey === "NEXT_ACTION") {
+    const dateTime = localDateTimeParts(value.dueDate)
+    const priority = value.priority
+    return {
+      ...draft,
+      nextActionTitle: stringValue(value.title),
+      ...(dateTime ? { nextDueDate: dateTime.date, nextDueTime: dateTime.time } : {}),
+      nextPriority: priority === "LOW" || priority === "MEDIUM" || priority === "HIGH" || priority === "URGENT"
+        ? priority
+        : "MEDIUM",
+    }
+  }
+  return draft
 }
 
 /**
