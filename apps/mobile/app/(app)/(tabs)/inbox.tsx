@@ -40,6 +40,8 @@ export default function InboxTab() {
     attachment: "Fayl əlavə edilib",
     ack: "Təsdiq lazımdır",
     queued: "Göndərilmə növbəsində",
+    sent: "Göndərildi",
+    read: "Oxunub",
     refreshError: "Mesajlar yenilənmədi — telefondakı nüsxə göstərilir.",
     localThread: "Mesaj telefonda saxlanılıb. Sinxronlaşdıqdan sonra dialoq açılacaq.",
     notificationReadError: "Bildiriş telefonda saxlanılmadı. Yenidən cəhd edin.",
@@ -54,6 +56,8 @@ export default function InboxTab() {
     attachment: "Прикреплён файл",
     ack: "Нужно подтвердить",
     queued: "В очереди на отправку",
+    sent: "Отправлено",
+    read: "Прочитано",
     refreshError: "Сообщения не обновились — показана копия с телефона.",
     localThread: "Сообщение сохранено на телефоне. Диалог откроется после синхронизации.",
     notificationReadError: "Не удалось сохранить уведомление на телефоне. Повторите попытку.",
@@ -159,6 +163,12 @@ export default function InboxTab() {
                     <View style={styles.metaRow}>
                       {thread.needsAcknowledgement ? <Pill label={copy.ack} tone="warning" /> : null}
                       {thread.syncState ? <Pill label={copy.queued} tone="info" /> : null}
+                      {!thread.syncState && thread.lastMessage?.delivery ? (
+                        <Pill
+                          label={thread.lastMessage.delivery.status === "READ" ? `✓✓ ${copy.read}` : `✓ ${copy.sent}`}
+                          tone="success"
+                        />
+                      ) : null}
                     </View>
                   </View>
                   {thread.unread ? <View style={styles.unreadDot} /> : <Text style={styles.chevron}>›</Text>}
@@ -213,8 +223,8 @@ export default function InboxTab() {
   )
 }
 
-function Pill({ label, tone }: { label: string; tone: "warning" | "info" }) {
-  return <View style={[styles.pill, tone === "warning" ? styles.pillWarning : styles.pillInfo]}><Text style={[styles.pillText, tone === "warning" ? styles.pillWarningText : styles.pillInfoText]}>{label}</Text></View>
+function Pill({ label, tone }: { label: string; tone: "warning" | "info" | "success" }) {
+  return <View style={[styles.pill, tone === "warning" ? styles.pillWarning : tone === "success" ? styles.pillSuccess : styles.pillInfo]}><Text style={[styles.pillText, tone === "warning" ? styles.pillWarningText : tone === "success" ? styles.pillSuccessText : styles.pillInfoText]}>{label}</Text></View>
 }
 
 function Empty({ icon, title, hint }: { icon: string; title: string; hint: string }) {
@@ -259,9 +269,11 @@ const styles = StyleSheet.create({
   pill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4 },
   pillWarning: { backgroundColor: colors.warningBg },
   pillInfo: { backgroundColor: colors.infoBg },
+  pillSuccess: { backgroundColor: colors.successBg },
   pillText: { fontSize: 8, fontWeight: "900" },
   pillWarningText: { color: colors.warning },
   pillInfoText: { color: colors.info },
+  pillSuccessText: { color: colors.successDark },
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   chevron: { color: colors.faint, fontSize: 25, fontWeight: "400" },
   typeIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },

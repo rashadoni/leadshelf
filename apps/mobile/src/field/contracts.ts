@@ -834,6 +834,7 @@ export interface FieldNotificationsData {
 
 export type FieldMessageThreadType = "DIRECT" | "BROADCAST" | "SYSTEM"
 export type FieldMessageReceiptType = "READ" | "ACKNOWLEDGED"
+export type FieldMessageDeliveryStatus = "SENT" | "READ"
 
 export interface FieldMessagePerson {
   id: string
@@ -855,6 +856,15 @@ export interface FieldMessageAttachment {
   localUri?: string | null
 }
 
+export interface FieldMessageDelivery {
+  /**
+   * SENT means the server accepted the message. It deliberately does not
+   * claim device or push delivery. READ is exposed only for direct messages.
+   */
+  status: FieldMessageDeliveryStatus
+  readAt: string | null
+}
+
 export interface FieldMessage {
   id: string
   senderAgentId: string | null
@@ -868,6 +878,7 @@ export interface FieldMessage {
   read: boolean
   acknowledged: boolean
   receipts?: Array<{ id?: string; type: FieldMessageReceiptType; occurredAt: string }>
+  delivery?: FieldMessageDelivery | null
   syncState?: "PENDING" | "CONFLICT" | "REJECTED"
 }
 
@@ -2335,6 +2346,7 @@ export function parseFieldNotifications(value: unknown): FieldNotificationsData 
 
 const messageThreadTypes = new Set<FieldMessageThreadType>(["DIRECT", "BROADCAST", "SYSTEM"])
 const messageReceiptTypes = new Set<FieldMessageReceiptType>(["READ", "ACKNOWLEDGED"])
+const messageDeliveryStatuses = new Set<FieldMessageDeliveryStatus>(["SENT", "READ"])
 const hrmRequestTypes = new Set<FieldHrmRequestType>(["LEAVE", "ABSENCE", "TIME_CORRECTION"])
 const hrmRequestStatuses = new Set<FieldHrmRequestStatus>(["PENDING", "APPROVED", "REJECTED", "CANCELLED"])
 
@@ -2360,6 +2372,16 @@ function validMessageAttachment(value: unknown): boolean {
   )
 }
 
+function validMessageDelivery(value: unknown): boolean {
+  if (value == null) return true
+  const delivery = record(value)
+  return Boolean(
+    delivery && string(delivery.status) &&
+      messageDeliveryStatuses.has(delivery.status as FieldMessageDeliveryStatus) &&
+      nullableTimestamp(delivery.readAt),
+  )
+}
+
 function validMessage(value: unknown, summary = false): boolean {
   const message = record(value)
   if (!message) return false
@@ -2374,6 +2396,7 @@ function validMessage(value: unknown, summary = false): boolean {
       timestamp(message.sentAt) && boolean(message.acknowledgementRequired) &&
       validMessageAttachment(message.attachmentDocument) &&
       (summary || boolean(message.read)) && boolean(message.acknowledged) &&
+      validMessageDelivery(message.delivery) &&
       (receipts == null || (Array.isArray(receipts) && receipts.every((receiptValue) => {
         const receipt = record(receiptValue)
         return Boolean(

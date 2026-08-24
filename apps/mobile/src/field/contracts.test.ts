@@ -375,6 +375,7 @@ describe("LeadDrive field contracts", () => {
       acknowledgementRequired: true,
       attachmentDocument: attachment,
       acknowledged: false,
+      delivery: { status: "READ", readAt: "2026-07-16T08:01:00.000Z" },
     }
     expect(parseFieldMessages({
       success: true,
@@ -396,7 +397,7 @@ describe("LeadDrive field contracts", () => {
       },
     }).threads[0]?.needsAcknowledgement).toBe(true)
 
-    expect(parseFieldMessageThread({
+    const parsedThread = parseFieldMessageThread({
       success: true,
       data: {
         thread: {
@@ -415,7 +416,9 @@ describe("LeadDrive field contracts", () => {
         },
         capabilities: { reply: true, sendAttachments: true, acknowledge: true },
       },
-    }).thread.messages[0]?.body).toBe("Please confirm")
+    })
+    expect(parsedThread.thread.messages[0]?.body).toBe("Please confirm")
+    expect(parsedThread.thread.messages[0]?.delivery).toEqual({ status: "READ", readAt: "2026-07-16T08:01:00.000Z" })
 
     const document = {
       ...attachment,

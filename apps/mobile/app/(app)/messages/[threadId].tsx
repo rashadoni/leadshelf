@@ -43,11 +43,13 @@ export default function MessageThreadScreen() {
     messages: "MESAJLAR", loading: "Dialoq yüklənir…", offline: "Dialoq yenilənmədi — telefondakı nüsxə göstərilir.",
     readonly: "Bu elan yalnız oxumaq üçündür.", placeholder: "Mesaj yazın…", attach: "Fayl", send: "Göndər",
     ack: "Oxudum, təsdiq edirəm", acked: "Təsdiqləndi", queued: "Növbədə", file: "Fayl",
+    sent: "Göndərildi", read: "Oxunub",
     download: "Yüklə", open: "Aç", downloadError: "Faylı açmaq alınmadı", empty: "Bu dialoqda hələ mesaj yoxdur.",
   } : {
     messages: "СООБЩЕНИЯ", loading: "Загружаем диалог…", offline: "Диалог не обновился — показана копия с телефона.",
     readonly: "Это объявление доступно только для чтения.", placeholder: "Напишите сообщение…", attach: "Файл", send: "Отправить",
     ack: "Прочитал(а), подтверждаю", acked: "Подтверждено", queued: "В очереди", file: "Файл",
+    sent: "Отправлено", read: "Прочитано",
     download: "Скачать", open: "Открыть", downloadError: "Не удалось открыть файл", empty: "В этом диалоге пока нет сообщений.",
   }
 
@@ -179,7 +181,15 @@ export default function MessageThreadScreen() {
                       <View style={styles.attachmentBody}><Text style={[styles.attachmentName, own && styles.attachmentNameOwn]} numberOfLines={1}>{message.attachmentDocument.fileName}</Text><Text style={[styles.attachmentMeta, own && styles.attachmentMetaOwn]}>{formatFileSize(message.attachmentDocument.sizeBytes, locale)} · {localUri ? copy.open : copy.download}</Text></View>
                     </Pressable>
                   ) : null}
-                  <View style={styles.messageMeta}><Text style={[styles.messageTime, own && styles.messageTimeOwn]}>{formatTime(message.sentAt)}</Text>{message.syncState ? <Text style={styles.queued}>{copy.queued}</Text> : null}</View>
+                  <View style={styles.messageMeta}>
+                    <Text style={[styles.messageTime, own && styles.messageTimeOwn]}>{formatTime(message.sentAt)}</Text>
+                    {message.syncState ? <Text style={styles.queued}>{copy.queued}</Text> : null}
+                    {!message.syncState && message.delivery ? (
+                      <Text style={styles.delivery}>
+                        {message.delivery.status === "READ" ? `✓✓ ${copy.read}` : `✓ ${copy.sent}`}
+                      </Text>
+                    ) : null}
+                  </View>
                   {message.acknowledgementRequired ? (
                     message.acknowledged ? <View style={styles.acked}><Text style={styles.ackedText}>✓ {copy.acked}</Text></View> : <Pressable onPress={() => acknowledge(message.id)} style={styles.ack}><Text style={styles.ackText}>{copy.ack}</Text></Pressable>
                   ) : null}
@@ -215,7 +225,7 @@ const styles = StyleSheet.create({
   bubble: { minWidth: 88, maxWidth: "100%", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, bubbleOwn: { backgroundColor: colors.primary, borderBottomRightRadius: 5 }, bubbleOther: { backgroundColor: colors.card, borderBottomLeftRadius: 5, ...cardShadow },
   sender: { color: colors.primary, fontSize: 8, fontWeight: "900", marginBottom: 4 }, body: { color: colors.text, fontSize: 13, lineHeight: 19 }, bodyOwn: { color: colors.headerText },
   attachment: { marginTop: 7, minHeight: 52, borderRadius: 13, padding: 7, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 8 }, attachmentOwn: { backgroundColor: "rgba(255,255,255,0.15)" }, attachmentIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, attachmentIconText: { color: colors.info, fontSize: 7, fontWeight: "900" }, attachmentBody: { flex: 1, minWidth: 0 }, attachmentName: { color: colors.text, fontSize: 10, fontWeight: "900" }, attachmentNameOwn: { color: colors.headerText }, attachmentMeta: { color: colors.info, fontSize: 8, fontWeight: "700", marginTop: 2 }, attachmentMetaOwn: { color: colors.headerSubtext },
-  messageMeta: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 5 }, messageTime: { color: colors.faint, fontSize: 7, fontWeight: "700" }, messageTimeOwn: { color: colors.headerSubtext }, queued: { color: "#E0E7FF", fontSize: 7, fontWeight: "900" },
+  messageMeta: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 5 }, messageTime: { color: colors.faint, fontSize: 7, fontWeight: "700" }, messageTimeOwn: { color: colors.headerSubtext }, queued: { color: "#E0E7FF", fontSize: 7, fontWeight: "900" }, delivery: { color: colors.headerSubtext, fontSize: 7, fontWeight: "900" },
   ack: { marginTop: 8, minHeight: 37, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, ackText: { color: colors.warning, fontSize: 9, fontWeight: "900" }, acked: { marginTop: 7, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, ackedText: { color: colors.successDark, fontSize: 8, fontWeight: "900" },
   composer: { padding: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border }, composerRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   selectedFile: { minHeight: 35, marginBottom: 7, borderRadius: 11, paddingHorizontal: 10, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 7 }, selectedFileText: { flex: 1, color: colors.info, fontSize: 9, fontWeight: "800" }, selectedFileRemove: { color: colors.info, fontSize: 21 },
