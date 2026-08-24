@@ -26,6 +26,15 @@ export type FieldContactCorrectionChange = {
   after: string | null
 }
 
+export type FieldContactChangePreview = {
+  fields: Array<{ field: FieldContactCorrectionField; value: string | null }>
+  /**
+   * True means the request contains a contact field the APK cannot render
+   * accurately. The manager must not approve that request blind on mobile.
+   */
+  needsFullReview: boolean
+}
+
 export type FieldContactCorrectionIssue =
   | "FIRST_NAME_REQUIRED"
   | "LAST_NAME_REQUIRED"
@@ -101,6 +110,35 @@ export function buildFieldContactUpdatePayload(
     }
     return payload
   }, {})
+}
+
+export function fieldContactChangePreview(
+  kind: string,
+  payload: Record<string, unknown> | null | undefined,
+): FieldContactChangePreview {
+  if (kind !== "CONTACT_UPDATE" || !payload) return { fields: [], needsFullReview: true }
+
+  const known = new Set<FieldContactCorrectionField>([
+    "firstName",
+    "lastName",
+    ...OPTIONAL_FIELDS,
+  ])
+  const fields: FieldContactChangePreview["fields"] = []
+  let needsFullReview = Object.keys(payload).length === 0
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (!known.has(key as FieldContactCorrectionField)) {
+      needsFullReview = true
+      continue
+    }
+    if (value !== null && typeof value !== "string") {
+      needsFullReview = true
+      continue
+    }
+    fields.push({ field: key as FieldContactCorrectionField, value })
+  }
+
+  return { fields, needsFullReview }
 }
 
 export function fieldContactCorrectionIssue(

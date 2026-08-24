@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   buildFieldContactUpdatePayload,
+  fieldContactChangePreview,
   fieldContactCorrectionChanges,
   fieldContactCorrectionDraft,
   fieldContactCorrectionIssue,
@@ -57,5 +58,20 @@ describe("field contact correction", () => {
     expect(fieldContactCorrectionIssue(contact, { ...draft, firstName: " " })).toBe("FIRST_NAME_REQUIRED")
     expect(fieldContactCorrectionIssue(contact, { ...draft, lastName: " " })).toBe("LAST_NAME_REQUIRED")
     expect(fieldContactCorrectionIssue(contact, { ...draft, email: "not-an-email" })).toBe("EMAIL_INVALID")
+  })
+
+  it("shows only exactly understood fields to a mobile manager", () => {
+    expect(fieldContactChangePreview("CONTACT_UPDATE", {
+      phone: "+994501234567",
+      notes: null,
+    })).toEqual({
+      fields: [
+        { field: "phone", value: "+994501234567" },
+        { field: "notes", value: null },
+      ],
+      needsFullReview: false,
+    })
+    expect(fieldContactChangePreview("CONTACT_UPDATE", { category: "A" }).needsFullReview).toBe(true)
+    expect(fieldContactChangePreview("WORKPLACE_UPSERT", { customerId: "customer-1" }).needsFullReview).toBe(true)
   })
 })

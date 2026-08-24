@@ -713,11 +713,11 @@ describe("LeadDrive field contracts", () => {
       },
     }).routes[0]).toMatchObject({ totalPoints: 4, visitedPoints: 1 })
 
-    expect(parseFieldManagerApprovals({
+    const approvals = parseFieldManagerApprovals({
       success: true,
       data: {
         scope: "TEAM_OR_REGION",
-        counts: { hrm: 1, routeChanges: 0, customers: 0, contactChanges: 0 },
+        counts: { hrm: 1, routeChanges: 0, customers: 0, contactChanges: 1 },
         hrm: [{
           id: "hrm-1",
           agentId: "agent-1",
@@ -730,9 +730,22 @@ describe("LeadDrive field contracts", () => {
         }],
         routeChanges: [],
         customers: [],
-        contactChanges: [],
+        contactChanges: [{
+          id: "contact-change-1",
+          contactId: "contact-1",
+          requestedByAgentId: "agent-1",
+          kind: "CONTACT_UPDATE",
+          reason: "Phone changed at the visit",
+          payload: { phone: "+994501234567" },
+          status: "SUBMITTED",
+          submittedAt: "2026-07-15T05:00:00.000Z",
+          contact: { displayName: "Aygun Aliyeva" },
+          requestedByAgent: { name: "Manager view agent" },
+        }],
       },
-    }).counts).toEqual({ hrm: 1, routeChanges: 0, customers: 0, contactChanges: 0 })
+    })
+    expect(approvals.counts).toEqual({ hrm: 1, routeChanges: 0, customers: 0, contactChanges: 1 })
+    expect(approvals.contactChanges[0]?.payload).toEqual({ phone: "+994501234567" })
   })
 
   it("rejects invalid workday transitions and location coordinates at the boundary", () => {

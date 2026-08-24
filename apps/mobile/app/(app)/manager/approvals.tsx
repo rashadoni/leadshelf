@@ -5,7 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
 import type { FieldManagerApprovalDecisionInput, FieldManagerApprovalsData } from "../../../src/field/contracts"
-import { contactChangeKindLabel, hrmRequestTypeLabel, objectTypeLabel, routeChangeTypeLabel } from "../../../src/field/labels"
+import { fieldContactChangePreview, type FieldContactChangePreview } from "../../../src/field/contact-correction"
+import { contactChangeKindLabel, contactCorrectionFieldLabel, hrmRequestTypeLabel, objectTypeLabel, routeChangeTypeLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
@@ -23,6 +24,8 @@ type ReviewItem = {
   requestedBy: string
   submittedAt: string
   canReschedule: boolean
+  contactId?: string
+  contactPreview?: FieldContactChangePreview
 }
 
 function dateKey(value: Date): string {
@@ -194,6 +197,7 @@ function ApprovalRequest({
 }) {
   const options = decisionsFor(item)
   const needsNote = decisionNeedsNote(item, selectedDecision)
+  const requiresFullContactReview = Boolean(item.contactPreview?.needsFullReview)
   return (
     <View style={[styles.request, index > 0 && styles.requestBorder]}>
       <View style={styles.requestTop}>
@@ -206,9 +210,31 @@ function ApprovalRequest({
         </Pressable>
       </View>
       <Text style={styles.requestReason} numberOfLines={reviewing ? undefined : 3}>{item.reason}</Text>
+      {item.contactPreview ? (
+        <View style={styles.contactProposal}>
+          <View style={styles.contactProposalTop}>
+            <Text style={styles.contactProposalTitle}>{t("managerContactProposalTitle")}</Text>
+            {item.contactId ? <Pressable accessibilityRole="button" onPress={() => router.push(`/(app)/contacts/${item.contactId}` as never)} style={styles.contactProposalOpen}><Text style={styles.contactProposalOpenText}>{t("managerContactProposalOpen")}</Text></Pressable> : null}
+          </View>
+          {item.contactPreview.fields.map((change) => (
+            <View key={change.field} style={styles.contactProposalRow}>
+              <Text style={styles.contactProposalLabel}>{contactCorrectionFieldLabel(change.field)}</Text>
+              <Text style={styles.contactProposalValue}>{change.value ?? t("managerContactProposalCleared")}</Text>
+            </View>
+          ))}
+          {requiresFullContactReview ? <Text style={styles.contactProposalWarning}>{t("managerContactProposalUnknown")}</Text> : null}
+        </View>
+      ) : null}
       <RequestMeta by={item.requestedBy} at={item.submittedAt} />
 
-      {reviewing ? (
+      {reviewing && requiresFullContactReview ? (
+        <View style={styles.decisionPanel}>
+          <Text style={styles.decisionTitle}>{t("managerContactProposalTitle")}</Text>
+          <Text style={styles.contactProposalWarning}>{t("managerContactProposalUnknown")}</Text>
+        </View>
+      ) : null}
+
+      {reviewing && !requiresFullContactReview ? (
         <View style={styles.decisionPanel}>
           <Text style={styles.decisionTitle}>{t("managerDecisionTitle")}</Text>
           <Text style={styles.decisionHint}>{t("managerDecisionHint")}</Text>
@@ -464,7 +490,21 @@ export default function ManagerApprovalsScreen() {
                   {data.customers.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "CUSTOMER_CREATE", title: item.name, typeLabel: objectTypeLabel(item.objectType), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: false }, index)} />)}
                 </Section>
                 <Section title={t("managerApprovalContact")} count={data.counts.contactChanges} icon="contacts">
-                  {data.contactChanges.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "CONTACT_CHANGE", title: item.contact.displayName, typeLabel: contactChangeKindLabel(item.kind), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: false }, index)} />)}
+                  {data.contactChanges.map((item, index) => {
+                    const contactPreview = fieldContactChangePreview(item.kind, item.payload)
+                    return <ApprovalRequest key={item.id} {...reviewProps({
+                      id: item.id,
+                      kind: "CONTACT_CHANGE",
+                      title: item.contact.displayName,
+                      typeLabel: contactChangeKindLabel(item.kind),
+                      reason: item.reason,
+                      requestedBy: item.requestedByAgent.name,
+                      submittedAt: item.submittedAt,
+                      canReschedule: false,
+                      contactId: item.contactId,
+                      contactPreview,
+                    }, index)} />
+                  })}
                 </Section>
               </>
             )}
@@ -510,6 +550,15 @@ const styles = StyleSheet.create({
   reviewButton: { minHeight: 38, maxWidth: 130, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   reviewButtonText: { color: colors.primary, fontSize: 9, lineHeight: 12, textAlign: "center", fontWeight: "900" },
   requestReason: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 8 },
+  contactProposal: { marginTop: 9, borderRadius: 12, padding: 10, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, gap: 7 },
+  contactProposalTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  contactProposalTitle: { flex: 1, color: colors.info, fontSize: 10, fontWeight: "900" },
+  contactProposalOpen: { minHeight: 30, borderRadius: 9, paddingHorizontal: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  contactProposalOpenText: { color: colors.info, fontSize: 8, fontWeight: "900" },
+  contactProposalRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  contactProposalLabel: { flex: 1, color: colors.muted, fontSize: 9, fontWeight: "800" },
+  contactProposalValue: { flex: 1.2, color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "900", textAlign: "right" },
+  contactProposalWarning: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" },
   requestMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 2 },
   requestBy: { color: colors.primary, fontSize: 8, fontWeight: "800" },
   requestAt: { color: colors.faint, fontSize: 8, fontWeight: "700" },

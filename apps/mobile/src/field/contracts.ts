@@ -703,6 +703,11 @@ export interface FieldManagerContactChangeApproval {
   reason: string
   status: string
   submittedAt: string
+  /**
+   * Legacy manager endpoints may omit it. In that case the APK leaves the
+   * decision disabled instead of asking a manager to approve blind.
+   */
+  payload: Record<string, unknown> | null
   contact: { displayName: string }
   requestedByAgent: { name: string }
 }
@@ -2068,6 +2073,7 @@ function managerContactChangeApproval(value: unknown): FieldManagerContactChange
   const item = record(value)
   const contact = record(item?.contact)
   const requestedByAgent = managerPerson(value, "requestedByAgent")
+  const payload = item?.payload == null ? null : record(item.payload)
   if (
     !item ||
     !string(item.id) ||
@@ -2077,6 +2083,7 @@ function managerContactChangeApproval(value: unknown): FieldManagerContactChange
     !string(item.reason) ||
     !string(item.status) ||
     !timestamp(item.submittedAt) ||
+    (item.payload != null && !payload) ||
     !contact ||
     !string(contact.displayName) ||
     !requestedByAgent
@@ -2086,6 +2093,7 @@ function managerContactChangeApproval(value: unknown): FieldManagerContactChange
   return {
     id: item.id, contactId: item.contactId, requestedByAgentId: item.requestedByAgentId,
     kind: item.kind, reason: item.reason, status: item.status, submittedAt: item.submittedAt,
+    payload,
     contact: { displayName: contact.displayName }, requestedByAgent,
   }
 }
