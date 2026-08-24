@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { enqueueFieldTaskCreate, readFieldCache } from "../../../src/db/local-store"
 import type { FieldAgentTaskPriority, FieldAgentTaskRecurrence, FieldAgentTasksData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
@@ -38,6 +38,7 @@ export default function NewAgentTaskScreen() {
   const { copyFrom } = useLocalSearchParams<{ copyFrom?: string }>()
   const field = useField()
   const { sync } = useSync()
+  const insets = useSafeAreaInsets()
   const copySource = field.agentTasks?.tasks.find((task) => task.id === copyFrom) ?? null
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -116,7 +117,10 @@ export default function NewAgentTaskScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("agentTasksTitle").toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("agentTaskCopy") : t("agentTaskCreateTitle")}</Text></View>

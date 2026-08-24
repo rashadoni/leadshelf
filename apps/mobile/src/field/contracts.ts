@@ -538,7 +538,34 @@ export interface FieldNotification {
   type: string
   isRead: boolean
   metadata: unknown | null
+  target?: FieldNotificationTarget | null
   createdAt: string
+}
+
+export type FieldNotificationTargetKind =
+  | "ROUTE"
+  | "VISIT"
+  | "TASK"
+  | "MESSAGE_THREAD"
+  | "CUSTOMER"
+  | "CONTACT"
+  | "CUSTOMER_REQUEST"
+  | "HRM_REQUEST"
+
+export const fieldNotificationTargetKinds = new Set<FieldNotificationTargetKind>([
+  "ROUTE",
+  "VISIT",
+  "TASK",
+  "MESSAGE_THREAD",
+  "CUSTOMER",
+  "CONTACT",
+  "CUSTOMER_REQUEST",
+  "HRM_REQUEST",
+])
+
+export interface FieldNotificationTarget {
+  kind: FieldNotificationTargetKind
+  id: string
 }
 
 export interface FieldNotificationsData {
@@ -1471,6 +1498,17 @@ export function parseFieldNotifications(value: unknown): FieldNotificationsData 
       !string(item.createdAt)
     ) {
       throw new FieldContractError("mobile notifications")
+    }
+    if (item.target != null) {
+      const target = record(item.target)
+      if (
+        !target ||
+        !string(target.kind) ||
+        !fieldNotificationTargetKinds.has(target.kind as FieldNotificationTargetKind) ||
+        !string(target.id)
+      ) {
+        throw new FieldContractError("mobile notification target")
+      }
     }
   }
   return data as unknown as FieldNotificationsData

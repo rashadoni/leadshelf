@@ -49,6 +49,7 @@ type FieldContextValue = {
   applyLocalWorkday: (workday: FieldWorkdayData) => void
   applyLocalLocations: (locations: FieldLocationHistoryData) => void
   applyLocalAgentTasks: (tasks: FieldAgentTasksData) => void
+  markNotificationRead: (id: string) => Promise<void>
   markAllNotificationsRead: () => Promise<void>
 }
 
@@ -264,6 +265,24 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     writeFieldCache(NOTIFICATIONS_KEY, next)
   }, [notifications])
 
+  const markNotificationRead = useCallback(async (id: string) => {
+    const current = notifications.items.find((item) => item.id === id)
+    if (!current || current.isRead) return
+    const next = {
+      unread: Math.max(0, notifications.unread - 1),
+      items: notifications.items.map((item) => item.id === id ? { ...item, isRead: true } : item),
+    }
+    setNotifications(next)
+    writeFieldCache(NOTIFICATIONS_KEY, next)
+    try {
+      await fieldApi.markNotificationsRead({ ids: [id], isRead: true })
+    } catch (error) {
+      setNotifications(notifications)
+      writeFieldCache(NOTIFICATIONS_KEY, notifications)
+      throw error
+    }
+  }, [notifications])
+
   const applyLocalWeek = useCallback((next: FieldWeekData) => {
     setWeek(next)
     requestedWeek.current = next.weekStart
@@ -348,6 +367,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       applyLocalWorkday,
       applyLocalLocations,
       applyLocalAgentTasks,
+      markNotificationRead,
       markAllNotificationsRead,
     }}>
       {children}

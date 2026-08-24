@@ -9,6 +9,7 @@ import {
   type RouteStatusTone,
 } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
+import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 
@@ -19,25 +20,6 @@ const tones: Record<RouteStatusTone, { bg: string; border: string; text: string;
   completed: { bg: colors.successBg, border: colors.successBorder, text: colors.successDark, dot: colors.success },
   cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft, dot: colors.faint },
   missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed, dot: colors.missed },
-}
-
-function formatDay(dateKey: string, locale: "az" | "ru") {
-  const date = new Date(`${dateKey}T12:00:00.000Z`)
-  return {
-    weekday: new Intl.DateTimeFormat(locale === "az" ? "az-AZ" : "ru-RU", { weekday: "long", timeZone: "UTC" }).format(date),
-    date: new Intl.DateTimeFormat(locale === "az" ? "az-AZ" : "ru-RU", { day: "numeric", month: "short", timeZone: "UTC" }).format(date),
-  }
-}
-
-function formatRange(start: string, endExclusive: string, locale: "az" | "ru") {
-  const end = shiftDateKey(endExclusive, -1)
-  const formatter = new Intl.DateTimeFormat(locale === "az" ? "az-AZ" : "ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  })
-  return `${formatter.format(new Date(`${start}T12:00:00.000Z`))} — ${formatter.format(new Date(`${end}T12:00:00.000Z`))}`
 }
 
 export default function WeekTab() {
@@ -61,7 +43,7 @@ export default function WeekTab() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>{t("tabWeek").toUpperCase()}</Text>
           <Text style={styles.title}>{t("weekSchedule")}</Text>
-          {week ? <Text style={styles.range}>{formatRange(week.weekStart, week.weekEndExclusive, locale)}</Text> : null}
+          {week ? <Text style={styles.range}>{formatCalendarRange(week.weekStart, week.weekEndExclusive, locale)}</Text> : null}
         </View>
 
         <View style={styles.navigator}>
@@ -111,13 +93,13 @@ export default function WeekTab() {
 
         <View style={[styles.dayGrid, layout.isTablet && styles.dayGridTablet]}>
         {week?.days.map((day) => {
-          const formatted = formatDay(day.date, locale)
+          const formatted = formatCalendarDay(day.date, locale)
           const isDayOff = !day.isWorkingDay
           return (
             <View key={day.date} style={[styles.dayCard, layout.isTablet && styles.dayCardTablet, day.isToday && styles.todayCard, isDayOff && styles.dayOffCard]}>
               <View style={styles.dayHeader}>
                 <View style={[styles.dateBadge, day.isToday && styles.todayBadge, isDayOff && styles.dayOffBadge]}>
-                  <Text style={[styles.dateBadgeText, day.isToday && styles.todayBadgeText, isDayOff && styles.dayOffBadgeText]}>{formatted.date.split(" ")[0]}</Text>
+                  <Text style={[styles.dateBadgeText, day.isToday && styles.todayBadgeText, isDayOff && styles.dayOffBadgeText]}>{formatted.day}</Text>
                 </View>
                 <View style={styles.dayHeaderBody}>
                   <Text style={styles.weekday}>{formatted.weekday}</Text>
@@ -134,7 +116,19 @@ export default function WeekTab() {
               ) : null}
 
               {day.routes.length === 0 ? (
-                <Text style={styles.noPlans}>{t("noPlansForDay")}</Text>
+                <View style={styles.emptyDay}>
+                  <Text style={styles.noPlans}>{t("noPlansForDay")}</Text>
+                  {day.routePlanningAllowed ? (
+                    <Pressable
+                      accessibilityLabel={t("createRoute")}
+                      onPress={() => router.push(("/(app)/routes/new?date=" + encodeURIComponent(day.date)) as never)}
+                      style={({ pressed }) => [styles.createRouteAction, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.createRouteActionText}>{t("createRoute")}</Text>
+                      <Text style={styles.createRouteActionArrow}>→</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : (
                 <View style={styles.routeList}>
                   {day.routes.map((route) => {
@@ -230,7 +224,11 @@ const styles = StyleSheet.create({
   dayOffLine: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 11, padding: 9, borderRadius: radii.inner, backgroundColor: "rgba(255,255,255,0.58)" },
   holidayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.holiday },
   dayOffText: { color: colors.holiday, fontSize: 12, fontWeight: "800" },
-  noPlans: { color: colors.muted, fontSize: 13, paddingVertical: 16, textAlign: "center" },
+  emptyDay: { paddingTop: 6 },
+  noPlans: { color: colors.muted, fontSize: 13, paddingVertical: 11, textAlign: "center" },
+  createRouteAction: { minHeight: 44, marginTop: 2, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  createRouteActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
+  createRouteActionArrow: { color: colors.headerText, fontSize: 18, fontWeight: "700" },
   routeList: { marginTop: 12, gap: 11 },
   routeCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radii.inner, padding: 12 },
   routeTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },

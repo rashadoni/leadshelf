@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useState } from "react"
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router, useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldMessages, readFieldMessages } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
+import { notificationDestination } from "../../../src/field/notification-target"
 import { t, useLocale } from "../../../src/i18n"
+import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 
@@ -39,6 +41,7 @@ export default function InboxTab() {
     queued: "Göndərilmə növbəsində",
     refreshError: "Mesajlar yenilənmədi — telefondakı nüsxə göstərilir.",
     localThread: "Mesaj telefonda saxlanılıb. Sinxronlaşdıqdan sonra dialoq açılacaq.",
+    notificationReadError: "Bildiriş yenilənmədi. İnterneti yoxlayıb yenidən cəhd edin.",
   } : {
     title: "Входящие",
     subtitle: "Сообщения и важные уведомления в одном месте",
@@ -52,15 +55,9 @@ export default function InboxTab() {
     queued: "В очереди на отправку",
     refreshError: "Сообщения не обновились — показана копия с телефона.",
     localThread: "Сообщение сохранено на телефоне. Диалог откроется после синхронизации.",
+    notificationReadError: "Уведомление не обновилось. Проверьте интернет и повторите попытку.",
   }
   const { items, unread: notificationUnread } = field.notifications
-  const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale === "az" ? "az-AZ" : "ru-RU", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }), [locale])
-
   const refreshMessages = useCallback(async (showWarning = true) => {
     try {
       const next = cacheFieldMessages(await fieldApi.messages())
@@ -89,6 +86,16 @@ export default function InboxTab() {
       return
     }
     router.push(`/(app)/messages/${threadId}` as never)
+  }
+
+  async function openNotification(item: typeof items[number]) {
+    try {
+      await field.markNotificationRead(item.id)
+      const destination = notificationDestination(item)
+      if (destination) router.push(destination as never)
+    } catch {
+      setWarning(copy.notificationReadError)
+    }
   }
 
   return (
@@ -142,7 +149,7 @@ export default function InboxTab() {
                   <View style={styles.messageBody}>
                     <View style={styles.messageTitleRow}>
                       <Text style={styles.messageTitle} numberOfLines={1}>{thread.title}</Text>
-                      <Text style={styles.time}>{dateFormatter.format(new Date(thread.lastMessageAt))}</Text>
+                      <Text style={styles.time}>{formatShortDateTime(thread.lastMessageAt, locale)}</Text>
                     </View>
                     <Text style={styles.preview} numberOfLines={2}>
                       {thread.lastMessage?.body || (thread.lastMessage?.attachmentDocument ? `📎 ${copy.attachment}` : "—")}
@@ -171,17 +178,28 @@ export default function InboxTab() {
                 {items.map((item) => {
                   const tone = notificationTone(item.type)
                   return (
-                    <View key={item.id} style={[styles.notificationCard, layout.isTablet && styles.listCardTablet, !item.isRead && styles.messageUnread]}>
+                    <Pressable
+                      key={item.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.title}
+                      onPress={() => void openNotification(item)}
+                      style={({ pressed }) => [
+                        styles.notificationCard,
+                        layout.isTablet && styles.listCardTablet,
+                        !item.isRead && styles.messageUnread,
+                        pressed && styles.pressed,
+                      ]}
+                    >
                       <View style={[styles.typeIcon, { backgroundColor: tone.bg }]}>
                         <Text style={[styles.typeGlyph, { color: tone.color }]}>{tone.glyph}</Text>
                       </View>
                       <View style={styles.messageBody}>
                         <Text style={styles.messageTitle}>{item.title}</Text>
                         {item.body ? <Text style={styles.preview}>{item.body}</Text> : null}
-                        <Text style={styles.notificationDate}>{dateFormatter.format(new Date(item.createdAt))}</Text>
+                        <Text style={styles.notificationDate}>{formatShortDateTime(item.createdAt, locale)}</Text>
                       </View>
                       {!item.isRead ? <View style={styles.unreadDot} /> : null}
-                    </View>
+                    </Pressable>
                   )
                 })}
               </View>

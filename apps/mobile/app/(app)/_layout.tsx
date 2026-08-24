@@ -1,4 +1,4 @@
-import { Stack } from "expo-router"
+import { router, Stack, usePathname } from "expo-router"
 import { useEffect } from "react"
 import { AppState } from "react-native"
 import { SyncProvider } from "../../src/sync/sync-context"
@@ -8,9 +8,16 @@ import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 import { startFieldPresenceHeartbeat } from "../../src/field/presence-heartbeat"
 import { colors } from "../../src/theme"
 import { useResponsiveLayout } from "../../src/layout/responsive"
+import { isLegacyCommercialFieldPath } from "../../src/field/legacy-field-paths"
 
 export default function AppLayout() {
   const layout = useResponsiveLayout()
+  const pathname = usePathname()
+  const legacyFieldPath = IS_LEADDRIVE_FIELD && isLegacyCommercialFieldPath(pathname)
+
+  useEffect(() => {
+    if (legacyFieldPath) router.replace("/(app)/(tabs)/work" as never)
+  }, [legacyFieldPath])
 
   useEffect(() => {
     if (!IS_LEADDRIVE_FIELD) return
@@ -23,6 +30,8 @@ export default function AppLayout() {
       },
     })
   }, [])
+
+  if (legacyFieldPath) return null
 
   return (
     <FieldProvider>

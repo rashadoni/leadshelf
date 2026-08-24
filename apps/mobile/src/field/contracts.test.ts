@@ -320,11 +320,32 @@ describe("LeadDrive field contracts", () => {
           type: "warning",
           isRead: false,
           metadata: null,
+          target: { kind: "ROUTE", id: "route-1" },
           createdAt: "2026-07-15T10:00:00.000Z",
         }],
       },
     })
     expect(inbox.unread).toBe(1)
+    expect(inbox.items[0]?.target).toEqual({ kind: "ROUTE", id: "route-1" })
+  })
+
+  it("rejects an inbox target outside the supported mobile destinations", () => {
+    expect(() => parseFieldNotifications({
+      success: true,
+      data: {
+        unread: 1,
+        items: [{
+          id: "n1",
+          title: "Unknown target",
+          body: null,
+          type: "warning",
+          isRead: false,
+          metadata: null,
+          target: { kind: "ORDER", id: "order-1" },
+          createdAt: "2026-07-15T10:00:00.000Z",
+        }],
+      },
+    })).toThrow(FieldContractError)
   })
 
   it("accepts direct conversations, private documents and HRM schedule", () => {

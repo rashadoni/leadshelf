@@ -13,7 +13,7 @@ import { countOpenTasks, listVisits } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import type { FieldWorkdayStatus } from "../../../src/field/contracts"
-import { formatLongDate } from "../../../src/i18n/date-format"
+import { formatLongDate, formatTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { BrandMark } from "../../../src/components/BrandMark"
@@ -72,10 +72,12 @@ export default function TodayTab() {
   const progress = routePoints > 0 ? Math.min(100, Math.round((visitedPoints / routePoints) * 100)) : 0
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const workdayActive = workdayStatus === "STARTED"
+  const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
+  const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
   const metrics = [
     { value: String(summary?.visits ?? localVisits), label: t("statVisitsToday") },
     { value: String(summary?.tasksCompleted ?? 0), label: t("statDoneTasks") },
-    { value: String(localOpenTasks), label: t("statOpenTasks") },
+    { value: String(openTasks), label: t("statOpenTasks") },
     { value: String(shelf.status.pendingOps + shelf.status.pendingPhotos), label: t("statPendingSync") },
   ]
 
@@ -116,7 +118,7 @@ export default function TodayTab() {
           <View style={[styles.notice, field.phase === "error" && styles.noticeError]}>
             <View style={styles.noticeBody}>
               <Text style={styles.noticeTitle}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
-              {field.lastUpdatedAt ? <Text style={styles.noticeMeta}>{new Date(field.lastUpdatedAt).toLocaleTimeString()}</Text> : null}
+              {field.lastUpdatedAt ? <Text style={styles.noticeMeta}>{formatTime(field.lastUpdatedAt)}</Text> : null}
             </View>
             <Pressable onPress={() => void field.refresh()} style={styles.noticeAction}>
               <Text style={styles.noticeActionText}>{t("refresh")}</Text>
@@ -127,7 +129,7 @@ export default function TodayTab() {
         {IS_LEADDRIVE_FIELD ? (
           <Pressable onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
             <View style={[styles.workdayIcon, workdayActive && styles.workdayIconActive]}>
-              <Text style={styles.workdayIconText}>⌖</Text>
+              <TabIcon name="today" color={colors.primary} size={22} />
             </View>
             <View style={styles.workdayBody}>
               <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
@@ -240,7 +242,6 @@ const styles = StyleSheet.create({
   workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 76, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
   workdayIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.draftBg, alignItems: "center", justifyContent: "center" },
   workdayIconActive: { backgroundColor: colors.successBg },
-  workdayIconText: { color: colors.primary, fontSize: 22, fontWeight: "900" },
   workdayBody: { flex: 1, minWidth: 0 },
   workdayTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   workdayHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },

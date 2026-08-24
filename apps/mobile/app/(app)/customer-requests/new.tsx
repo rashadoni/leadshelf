@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router } from "expo-router"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { CreateFieldCustomerRequest, FieldCustomerRequest, FieldCustomerRequestsData } from "../../../src/field/contracts"
@@ -18,6 +18,7 @@ const CATEGORIES = ["A", "B", "C", "D"] as const
 export default function NewCustomerRequestScreen() {
   useLocale()
   const field = useField()
+  const insets = useSafeAreaInsets()
   const routes = useMemo(() => field.week?.days.flatMap((day) => day.routes.map((route) => ({ id: route.id, name: route.name, date: day.date }))) ?? [], [field.week])
   const [objectType, setObjectType] = useState<CreateFieldCustomerRequest["objectType"]>("CLINIC")
   const [name, setName] = useState("")
@@ -89,7 +90,7 @@ export default function NewCustomerRequestScreen() {
   if (created) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
-        <ScrollView contentContainerStyle={styles.successScroll}>
+        <ScrollView contentContainerStyle={[styles.successScroll, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
           <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View>
           <Text style={styles.successTitle}>{t("requestSubmitted")}</Text>
           <Text style={styles.successName}>{created.name}</Text>
@@ -119,7 +120,10 @@ export default function NewCustomerRequestScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
             <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("newCustomerRequest")}</Text></View>

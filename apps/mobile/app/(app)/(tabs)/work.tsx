@@ -3,7 +3,8 @@ import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { countOpenTasks } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
-import { t, useLocale } from "../../../src/i18n"
+import type { FieldWorkdayStatus } from "../../../src/field/contracts"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
@@ -17,12 +18,24 @@ type Module = {
   badge?: number
 }
 
+type DisplayWorkdayStatus = FieldWorkdayStatus | "NOT_STARTED"
+
+const workdayStatusKeys: Record<DisplayWorkdayStatus, MessageKey> = {
+  NOT_STARTED: "workdayStatus_NOT_STARTED",
+  STARTED: "workdayStatus_STARTED",
+  PAUSED: "workdayStatus_PAUSED",
+  COMPLETED: "workdayStatus_COMPLETED",
+}
+
 export default function WorkTab() {
   useLocale()
   const field = useField()
   const layout = useResponsiveLayout()
-  const shelfOpenTasks = countOpenTasks()
+  const shelfOpenTasks = IS_LEADDRIVE_FIELD ? 0 : countOpenTasks()
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
+  const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
+  const activeWorkday = workdayStatus === "STARTED"
+  const pausedWorkday = workdayStatus === "PAUSED"
   const modules: Module[] = IS_LEADDRIVE_FIELD
     ? [
         { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
@@ -56,10 +69,21 @@ export default function WorkTab() {
             <Text style={styles.identityLabel}>{t("organization")}</Text>
             <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? "LeadShelf"}</Text>
           </View>
-          <View style={[styles.connection, field.profile?.capabilities.shelfExecution.enabled ? styles.connectionOn : styles.connectionOff]}>
-            <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
-            <Text style={styles.connectionText}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
-          </View>
+          {IS_LEADDRIVE_FIELD ? (
+            <View style={[styles.connection, activeWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionOff]}>
+              <View style={[styles.connectionDot, { backgroundColor: activeWorkday ? colors.success : pausedWorkday ? colors.warning : colors.faint }]} />
+              <Text style={[styles.connectionText, activeWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
+                {t(workdayStatusKeys[workdayStatus])}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.connection, field.profile?.capabilities.shelfExecution.enabled ? styles.connectionOn : styles.connectionOff]}>
+              <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
+              <Text style={[styles.connectionText, field.profile?.capabilities.shelfExecution.enabled ? styles.connectionTextOn : styles.connectionTextOff]}>
+                {field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}
+              </Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
@@ -100,9 +124,13 @@ const styles = StyleSheet.create({
   identityName: { color: colors.headerText, fontSize: 15, fontWeight: "900", marginTop: 3 },
   connection: { maxWidth: 105, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
   connectionOn: { backgroundColor: colors.successBg },
+  connectionPaused: { backgroundColor: colors.warningBg },
   connectionOff: { backgroundColor: colors.warningBg },
   connectionDot: { width: 6, height: 6, borderRadius: 3 },
-  connectionText: { flexShrink: 1, color: colors.headerText, fontSize: 9, fontWeight: "800" },
+  connectionText: { flexShrink: 1, fontSize: 9, fontWeight: "800" },
+  connectionTextOn: { color: colors.successDark },
+  connectionTextOff: { color: colors.warning },
+  connectionTextIdle: { color: colors.text },
   sectionTitle: { marginHorizontal: 20, marginTop: 25, marginBottom: 10, color: colors.text, fontSize: 16, fontWeight: "900" },
   moduleList: { marginHorizontal: 20, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   moduleRow: { minHeight: 72, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, position: "relative" },

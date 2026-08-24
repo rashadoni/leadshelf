@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { formatShortDateTime, formatTime, isSameLocalDay } from "./date-format"
+import {
+  formatCalendarDay,
+  formatCalendarRange,
+  formatShortDateTime,
+  formatTime,
+  isSameLocalDay,
+} from "./date-format"
 
 describe("offline date formatting", () => {
   it("uses local time rather than slicing a UTC timestamp", () => {
@@ -12,5 +18,20 @@ describe("offline date formatting", () => {
   it("compares calendar days in the device timezone", () => {
     expect(isSameLocalDay(new Date(2026, 6, 10, 1), new Date(2026, 6, 10, 23))).toBe(true)
     expect(isSameLocalDay(new Date(2026, 6, 10, 23), new Date(2026, 6, 11, 1))).toBe(false)
+  })
+
+  it("formats calendar labels without relying on Android Intl locale support", () => {
+    expect(formatCalendarDay("2026-08-24", "az")).toEqual({
+      day: "24",
+      weekday: "bazar ertəsi",
+      date: "24 avqust",
+    })
+    expect(formatCalendarDay("2026-08-24", "ru")).toEqual({
+      day: "24",
+      weekday: "понедельник",
+      date: "24 августа",
+    })
+    expect(formatCalendarRange("2026-08-24", "2026-08-31", "az")).toBe("24 avqust — 30 avqust 2026")
+    expect(formatCalendarRange("2026-12-28", "2027-01-04", "ru")).toBe("28 декабря 2026 — 3 января 2027")
   })
 })

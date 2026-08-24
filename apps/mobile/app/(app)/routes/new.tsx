@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, type RouteTarget } from "../../../src/field/route-target-picker"
 import {
@@ -31,11 +31,14 @@ type RouteDraftTarget = RouteTarget & { time: string }
 
 export default function NewRouteScreen() {
   useLocale()
-  const { copyFrom } = useLocalSearchParams<{ copyFrom?: string }>()
+  const { copyFrom, date: requestedDate } = useLocalSearchParams<{ copyFrom?: string; date?: string }>()
   const field = useField()
   const { sync } = useSync()
+  const insets = useSafeAreaInsets()
   const availableDays = field.week?.days ?? []
-  const initialDate = availableDays.find((day) => day.isToday && day.routePlanningAllowed)?.date ?? availableDays.find((day) => day.routePlanningAllowed)?.date ?? null
+  const canCreateRoute = field.week?.capabilities.createOwnDraft === true
+  const calendarDate = typeof requestedDate === "string" ? requestedDate.slice(0, 10) : null
+  const initialDate = calendarDate ?? availableDays.find((day) => day.isToday && day.routePlanningAllowed)?.date ?? availableDays.find((day) => day.routePlanningAllowed)?.date ?? null
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate)
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
@@ -85,6 +88,10 @@ export default function NewRouteScreen() {
   }
 
   async function create() {
+    if (!canCreateRoute) {
+      setError(t("routePlanningUnavailable"))
+      return
+    }
     const agentId = field.profile?.agent.id
     const timezone = field.week?.timezone ?? "UTC"
     const plannedTimes = targets.map((target) => (
@@ -157,11 +164,16 @@ export default function NewRouteScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("routeHubTitle").toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("copyRoute") : t("createRoute")}</Text></View>
         </View>
+
+        {!canCreateRoute && field.week ? <View style={styles.error}><Text style={styles.errorText}>{t("routePlanningUnavailable")}</Text></View> : null}
 
         <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>

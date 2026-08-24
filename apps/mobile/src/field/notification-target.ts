@@ -1,0 +1,71 @@
+import {
+  fieldNotificationTargetKinds,
+  type FieldNotification,
+  type FieldNotificationTarget,
+  type FieldNotificationTargetKind,
+} from "./contracts"
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function string(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null
+}
+
+function target(kind: string | null, id: string | null): FieldNotificationTarget | null {
+  return kind && id && fieldNotificationTargetKinds.has(kind as FieldNotificationTargetKind)
+    ? { kind: kind as FieldNotificationTargetKind, id }
+    : null
+}
+
+/**
+ * Reads the additive semantic target when present and understands the current
+ * metadata producer keys during the server rollout. The app never needs to
+ * infer a target from notification copy.
+ */
+export function notificationTarget(notification: FieldNotification): FieldNotificationTarget | null {
+  if (notification.target) return target(notification.target.kind, notification.target.id)
+  const metadata = record(notification.metadata)
+  if (!metadata) return null
+  const nested = record(metadata.target)
+  const semantic = target(string(nested?.kind), string(nested?.id))
+  if (semantic) return semantic
+  return (
+    target("ROUTE", string(metadata.routeId))
+    ?? target("VISIT", string(metadata.visitId))
+    ?? target("TASK", string(metadata.taskId))
+    ?? target("MESSAGE_THREAD", string(metadata.threadId))
+    ?? target("CUSTOMER", string(metadata.customerId))
+    ?? target("CONTACT", string(metadata.contactId))
+    ?? target("CUSTOMER_REQUEST", string(metadata.requestId))
+    ?? target("HRM_REQUEST", string(metadata.hrmRequestId))
+    ?? target("ROUTE", Array.isArray(metadata.routeIds) ? string(metadata.routeIds[0]) : null)
+  )
+}
+
+export function notificationDestination(notification: FieldNotification): string | null {
+  const item = notificationTarget(notification)
+  if (!item) return null
+  switch (item.kind) {
+    case "ROUTE":
+      return "/(app)/routes/" + item.id
+    case "VISIT":
+      return "/(app)/field-visits/" + item.id
+    case "TASK":
+      return "/(app)/field-tasks/" + item.id
+    case "MESSAGE_THREAD":
+      return "/(app)/messages/" + item.id
+    case "CUSTOMER":
+      return "/(app)/organizations/" + item.id
+    case "CONTACT":
+      return "/(app)/contacts/" + item.id
+    case "CUSTOMER_REQUEST":
+      return "/(app)/customer-requests"
+    case "HRM_REQUEST":
+      return "/(app)/hrm"
+  }
+  return null
+}

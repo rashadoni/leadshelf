@@ -13,6 +13,74 @@ const MONTHS_GENITIVE: Record<Locale, string[]> = {
   ru: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
 }
 
+type CalendarDate = {
+  year: number
+  monthIndex: number
+  day: number
+  weekdayIndex: number
+}
+
+function calendarDateFromKey(dateKey: string): CalendarDate | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  if (!match) return null
+  const year = Number(match[1])
+  const monthIndex = Number(match[2]) - 1
+  const day = Number(match[3])
+  const date = new Date(year, monthIndex, day, 12)
+  if (
+    !Number.isFinite(date.getTime())
+    || date.getFullYear() !== year
+    || date.getMonth() !== monthIndex
+    || date.getDate() !== day
+  ) {
+    return null
+  }
+  return { year, monthIndex, day, weekdayIndex: date.getDay() }
+}
+
+function localizedCalendarDateText(date: CalendarDate, locale: Locale): string {
+  return String(date.day) + " " + MONTHS_GENITIVE[locale][date.monthIndex]
+}
+
+/**
+ * Deterministic labels for a calendar day.
+ *
+ * Android Hermes builds may not include Azerbaijani ICU data. Calendar labels
+ * use the offline Field dictionary instead of falling back to the phone locale.
+ */
+export function formatCalendarDay(dateKey: string, locale: Locale): {
+  day: string
+  weekday: string
+  date: string
+} {
+  const date = calendarDateFromKey(dateKey)
+  if (!date) return { day: "", weekday: "", date: "" }
+  return {
+    day: String(date.day),
+    weekday: WEEKDAYS[locale][date.weekdayIndex],
+    date: localizedCalendarDateText(date, locale),
+  }
+}
+
+/** A locale-safe calendar range for Week, without Android Intl/ICU fallback. */
+export function formatCalendarRange(startKey: string, endExclusiveKey: string, locale: Locale): string {
+  const start = calendarDateFromKey(startKey)
+  const endExclusive = calendarDateFromKey(endExclusiveKey)
+  if (!start || !endExclusive) return ""
+  const lastDay = new Date(endExclusive.year, endExclusive.monthIndex, endExclusive.day - 1, 12)
+  const end: CalendarDate = {
+    year: lastDay.getFullYear(),
+    monthIndex: lastDay.getMonth(),
+    day: lastDay.getDate(),
+    weekdayIndex: lastDay.getDay(),
+  }
+  const startText = localizedCalendarDateText(start, locale)
+  const endText = localizedCalendarDateText(end, locale)
+  return start.year === end.year
+    ? startText + " — " + endText + " " + String(end.year)
+    : startText + " " + String(start.year) + " — " + endText + " " + String(end.year)
+}
+
 /** «понедельник, 15 июня» / «bazar ertəsi, 15 iyun» */
 export function formatLongDate(date: Date, locale: Locale): string {
   const weekday = WEEKDAYS[locale][date.getDay()]
