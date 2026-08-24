@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
+import { fieldApi } from "../../../src/api/mobile-client"
 import { enqueueFieldTaskCreate, readFieldCache } from "../../../src/db/local-store"
 import type { FieldAgentTaskPriority, FieldAgentTaskRecurrence, FieldAgentTasksData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY, type FieldTaskCustomerPreview } from "../../../src/field/task-cache"
+import { objectTypeLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -46,16 +48,21 @@ export default function NewAgentTaskScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(dateKey(addDays(1)))
   const [time, setTime] = useState("09:00")
   const [customerId, setCustomerId] = useState<string | null>(null)
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [searchedCustomers, setSearchedCustomers] = useState<FieldTaskCustomerPreview[]>([])
+  const [customerLoading, setCustomerLoading] = useState(false)
+  const [customerSearchError, setCustomerSearchError] = useState<string | null>(null)
   const [recurrence, setRecurrence] = useState<FieldAgentTaskRecurrence | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const customerSearchSequence = useRef(0)
 
   const dates = useMemo(() => Array.from({ length: 8 }, (_, index) => {
     const date = addDays(index)
     return { key: dateKey(date), day: String(date.getDate()).padStart(2, "0"), month: String(date.getMonth() + 1).padStart(2, "0") }
   }), [])
 
-  const customers = useMemo(() => {
+  const plannedCustomers = useMemo(() => {
     const map = new Map<string, FieldTaskCustomerPreview>()
     for (const point of field.week?.days.flatMap((day) => day.routes.flatMap((route) => route.points)) ?? []) {
       if (!map.has(point.customer.id)) {
@@ -71,6 +78,26 @@ export default function NewAgentTaskScreen() {
     return [...map.values()].sort((left, right) => left.name.localeCompare(right.name))
   }, [field.week])
 
+  const customers = useMemo(() => {
+    const map = new Map<string, FieldTaskCustomerPreview>()
+    for (const customer of plannedCustomers) map.set(customer.id, customer)
+    for (const customer of searchedCustomers) map.set(customer.id, customer)
+    if (copySource?.customer && !map.has(copySource.customer.id)) {
+      map.set(copySource.customer.id, copySource.customer)
+    }
+    return [...map.values()].sort((left, right) => left.name.localeCompare(right.name))
+  }, [copySource?.customer, plannedCustomers, searchedCustomers])
+
+  const customerQuery = customerSearch.trim()
+  const visibleCustomers = useMemo(() => {
+    const normalized = customerQuery.toLocaleLowerCase()
+    const matches = normalized
+      ? customers.filter((customer) => [customer.name, customer.address, customer.city].filter(Boolean).join(" ").toLocaleLowerCase().includes(normalized))
+      : plannedCustomers
+    return matches.slice(0, 12)
+  }, [customerQuery, customers, plannedCustomers])
+  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
+
   useEffect(() => {
     if (!copySource) return
     setTitle(copySource.title)
@@ -79,6 +106,47 @@ export default function NewAgentTaskScreen() {
     setCustomerId(copySource.customerId)
     setRecurrence(copySource.recurrenceRule)
   }, [copySource])
+
+  useEffect(() => {
+    const query = customerSearch.trim()
+    const request = ++customerSearchSequence.current
+    if (query.length < 2) {
+      setSearchedCustomers([])
+      setCustomerLoading(false)
+      setCustomerSearchError(null)
+      return
+    }
+    const timeout = setTimeout(() => {
+      void fieldApi.organizations(query)
+        .then((data) => {
+          if (request !== customerSearchSequence.current) return
+          setSearchedCustomers(data.organizations.map((organization) => ({
+            id: organization.id,
+            name: organization.name,
+            objectType: organization.objectType,
+            address: organization.address,
+            city: organization.city,
+          })))
+          setCustomerSearchError(null)
+        })
+        .catch(() => {
+          if (request !== customerSearchSequence.current) return
+          setSearchedCustomers([])
+          setCustomerSearchError(t("agentTaskCustomerSearchFailed"))
+        })
+        .finally(() => {
+          if (request === customerSearchSequence.current) setCustomerLoading(false)
+        })
+    }, 350)
+    setCustomerLoading(true)
+    setCustomerSearchError(null)
+    return () => clearTimeout(timeout)
+  }, [customerSearch])
+
+  function chooseCustomer(id: string | null) {
+    setCustomerId(id)
+    setCustomerSearch("")
+  }
 
   async function create() {
     const normalizedTitle = title.trim()
@@ -145,10 +213,47 @@ export default function NewAgentTaskScreen() {
         {selectedDate ? <View style={styles.timeCard}><Text style={styles.timeLabel}>{t("agentTaskTimeLabel")}</Text><TextInput value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} placeholder="09:00" placeholderTextColor={colors.faint} style={styles.timeInput} /><View style={styles.timePresets}>{["09:00", "12:00", "15:00", "18:00"].map((value) => <Pressable key={value} onPress={() => setTime(value)} style={[styles.timePreset, time === value && styles.timePresetSelected]}><Text style={[styles.timePresetText, time === value && styles.timePresetTextSelected]}>{value}</Text></Pressable>)}</View></View> : null}
 
         <SectionTitle>{t("agentTaskCustomerLabel")}</SectionTitle>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.customerList}>
-          <ChoiceChip selected={customerId === null} label={t("agentTaskNoCustomerChoice")} onPress={() => setCustomerId(null)} />
-          {customers.map((customer) => <ChoiceChip key={customer.id} selected={customerId === customer.id} label={customer.name} onPress={() => setCustomerId(customer.id)} />)}
-        </ScrollView>
+        <View style={styles.customerPicker}>
+          <View style={styles.customerSearchBox}>
+            <Text style={styles.customerSearchIcon}>⌕</Text>
+            <TextInput
+              accessibilityLabel={t("agentTaskCustomerSearch")}
+              autoCorrect={false}
+              onChangeText={setCustomerSearch}
+              placeholder={t("agentTaskCustomerSearch")}
+              placeholderTextColor={colors.faint}
+              style={styles.customerSearchInput}
+              value={customerSearch}
+            />
+          </View>
+          <Text style={styles.customerHint}>{t("agentTaskCustomerSearchHint")}</Text>
+          {selectedCustomer ? (
+            <View style={styles.selectedCustomer}>
+              <View style={styles.selectedCustomerMark}><Text style={styles.selectedCustomerMarkText}>{selectedCustomer.name.charAt(0).toUpperCase()}</Text></View>
+              <View style={styles.selectedCustomerBody}>
+                <Text style={styles.selectedCustomerEyebrow}>{t("agentTaskCustomerSelected")}</Text>
+                <Text style={styles.selectedCustomerName} numberOfLines={1}>{selectedCustomer.name}</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskNoCustomerChoice")} onPress={() => chooseCustomer(null)} style={styles.clearCustomer}><Text style={styles.clearCustomerText}>×</Text></Pressable>
+            </View>
+          ) : null}
+          <Pressable accessibilityRole="button" onPress={() => chooseCustomer(null)} style={[styles.noCustomerChoice, customerId === null && styles.noCustomerChoiceSelected]}>
+            <Text style={[styles.noCustomerChoiceText, customerId === null && styles.noCustomerChoiceTextSelected]}>{t("agentTaskNoCustomerChoice")}</Text>
+          </Pressable>
+          {customerLoading ? <Text style={styles.customerState}>{t("agentTaskCustomerLoading")}</Text> : null}
+          {customerSearchError ? <Text style={styles.customerError}>{customerSearchError}</Text> : null}
+          {visibleCustomers.map((customer) => (
+            <Pressable key={customer.id} accessibilityRole="button" onPress={() => chooseCustomer(customer.id)} style={[styles.customerChoice, customerId === customer.id && styles.customerChoiceSelected]}>
+              <View style={[styles.customerMark, customerId === customer.id && styles.customerMarkSelected]}><Text style={[styles.customerMarkText, customerId === customer.id && styles.customerMarkTextSelected]}>{customer.name.charAt(0).toUpperCase()}</Text></View>
+              <View style={styles.customerChoiceBody}>
+                <Text style={[styles.customerChoiceName, customerId === customer.id && styles.customerChoiceNameSelected]} numberOfLines={1}>{customer.name}</Text>
+                <Text style={[styles.customerChoiceMeta, customerId === customer.id && styles.customerChoiceMetaSelected]} numberOfLines={1}>{[objectTypeLabel(customer.objectType), customer.city, customer.address].filter(Boolean).join(" · ")}</Text>
+              </View>
+              {customerId === customer.id ? <Text style={styles.customerChosen}>✓</Text> : null}
+            </Pressable>
+          ))}
+          {customerQuery.length >= 2 && !customerLoading && !customerSearchError && visibleCustomers.length === 0 ? <Text style={styles.customerState}>{t("agentTaskCustomerNoMatches")}</Text> : null}
+        </View>
 
         {field.agentTasks?.capabilities.recurringTasks !== false && selectedDate ? <><SectionTitle>{t("agentTaskRecurrenceLabel")}</SectionTitle><View style={styles.wrapChips}><ChoiceChip selected={recurrence === null} label={t("agentTaskRecurrenceNone")} onPress={() => setRecurrence(null)} /><ChoiceChip selected={recurrence === "DAILY"} label={t("agentTaskRecurrenceDaily")} onPress={() => setRecurrence("DAILY")} /><ChoiceChip selected={recurrence === "WEEKLY"} label={t("agentTaskRecurrenceWeekly")} onPress={() => setRecurrence("WEEKLY")} /><ChoiceChip selected={recurrence === "MONTHLY"} label={t("agentTaskRecurrenceMonthly")} onPress={() => setRecurrence("MONTHLY")} /></View></> : null}
 
@@ -175,6 +280,7 @@ function Input({ label, required, multiline, ...props }: { label: string; requir
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 34 }, header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, backText: { color: colors.text, fontSize: 30, lineHeight: 31 }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 }, intro: { marginHorizontal: 16, marginTop: 12, color: colors.muted, fontSize: 11, lineHeight: 17 },
   formCard: { marginHorizontal: 14, marginTop: 15, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 13, ...cardShadow }, inputLabel: { color: colors.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45, marginBottom: 6 }, input: { minHeight: 47, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 12, color: colors.text, fontSize: 13 }, textarea: { minHeight: 92, paddingTop: 11, lineHeight: 18 }, sectionTitle: { marginHorizontal: 16, marginTop: 20, marginBottom: 9, color: colors.text, fontSize: 14, fontWeight: "900" }, wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 }, chip: { maxWidth: 210, minHeight: 39, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, chipTextSelected: { color: colors.headerText },
-  days: { paddingHorizontal: 14, gap: 8 }, noDate: { minWidth: 118, height: 64, borderRadius: 16, paddingHorizontal: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, noDateText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, day: { width: 58, height: 64, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, daySelected: { backgroundColor: colors.primary, borderColor: colors.primary }, dayNumber: { color: colors.text, fontSize: 17, fontWeight: "900" }, dayMonth: { color: colors.muted, fontSize: 9, fontWeight: "800" }, dayTextSelected: { color: colors.headerText }, timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 }, timeLabel: { color: colors.muted, fontSize: 10, fontWeight: "900" }, timeInput: { width: 76, height: 41, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, timePresets: { width: "100%", flexDirection: "row", gap: 6 }, timePreset: { flex: 1, minHeight: 34, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, timePresetSelected: { backgroundColor: colors.primarySoft }, timePresetText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, timePresetTextSelected: { color: colors.primary }, customerList: { paddingHorizontal: 14, gap: 8 },
+  days: { paddingHorizontal: 14, gap: 8 }, noDate: { minWidth: 118, height: 64, borderRadius: 16, paddingHorizontal: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, noDateText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, day: { width: 58, height: 64, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, daySelected: { backgroundColor: colors.primary, borderColor: colors.primary }, dayNumber: { color: colors.text, fontSize: 17, fontWeight: "900" }, dayMonth: { color: colors.muted, fontSize: 9, fontWeight: "800" }, dayTextSelected: { color: colors.headerText }, timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 }, timeLabel: { color: colors.muted, fontSize: 10, fontWeight: "900" }, timeInput: { width: 76, height: 41, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, timePresets: { width: "100%", flexDirection: "row", gap: 6 }, timePreset: { flex: 1, minHeight: 34, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, timePresetSelected: { backgroundColor: colors.primarySoft }, timePresetText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, timePresetTextSelected: { color: colors.primary },
+  customerPicker: { marginHorizontal: 14, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, gap: 8, ...cardShadow }, customerSearchBox: { minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, customerSearchIcon: { color: colors.faint, fontSize: 20 }, customerSearchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 13 }, customerHint: { color: colors.muted, fontSize: 9, lineHeight: 13, fontWeight: "700" }, noCustomerChoice: { minHeight: 42, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, noCustomerChoiceSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft }, noCustomerChoiceText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, noCustomerChoiceTextSelected: { color: colors.primary }, selectedCustomer: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 }, selectedCustomerMark: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, selectedCustomerMarkText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, selectedCustomerBody: { flex: 1, minWidth: 0 }, selectedCustomerEyebrow: { color: colors.primary, fontSize: 8, lineHeight: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 }, selectedCustomerName: { color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "900", marginTop: 1 }, clearCustomer: { width: 38, minHeight: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" }, clearCustomerText: { color: colors.primary, fontSize: 24, lineHeight: 25 }, customerChoice: { minHeight: 55, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 }, customerChoiceSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, customerMark: { width: 33, height: 33, borderRadius: 11, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, customerMarkSelected: { backgroundColor: colors.primary }, customerMarkText: { color: colors.info, fontSize: 13, fontWeight: "900" }, customerMarkTextSelected: { color: colors.headerText }, customerChoiceBody: { flex: 1, minWidth: 0 }, customerChoiceName: { color: colors.text, fontSize: 11, fontWeight: "900" }, customerChoiceNameSelected: { color: colors.primary }, customerChoiceMeta: { color: colors.muted, fontSize: 9, marginTop: 2, fontWeight: "700" }, customerChoiceMetaSelected: { color: colors.primary }, customerChosen: { color: colors.primary, fontSize: 18, fontWeight: "900" }, customerState: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center", paddingVertical: 5, fontWeight: "800" }, customerError: { color: colors.missed, fontSize: 10, lineHeight: 15, paddingVertical: 4, fontWeight: "800" },
   copyNotice: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg }, copyNoticeText: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" }, error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" }, submit: { marginHorizontal: 14, marginTop: 18, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, submitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, disabled: { opacity: 0.4 },
 })
