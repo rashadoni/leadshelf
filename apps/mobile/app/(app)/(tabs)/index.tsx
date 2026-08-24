@@ -13,8 +13,8 @@ import { countOpenTasks, listVisits } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { presentFieldAttendancePolicy } from "../../../src/field/attendance-policy"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
-import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
 import type { FieldWorkdayStatus } from "../../../src/field/contracts"
+import { resolveFieldTodayPrimaryAction } from "../../../src/field/today-primary-action"
 import { formatLongDate, formatTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -73,23 +73,25 @@ export default function TodayTab() {
   const visitedPoints = summary?.routeVisited ?? today?.routes.reduce((sum, route) => sum + route.visitedPoints, 0) ?? 0
   const progress = routePoints > 0 ? Math.min(100, Math.round((visitedPoints / routePoints) * 100)) : 0
   const activeVisit = field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
-  const activeRoute = activeVisit?.routeId ? today?.routes.find((route) => route.id === activeVisit.routeId) ?? null : null
-  const nextRoute = activeRoute ?? today?.routes.find((route) => resolveFieldRouteFlow(route, activeVisit).primaryPoint !== null) ?? null
-  const nextRouteFlow = nextRoute ? resolveFieldRouteFlow(nextRoute, activeVisit) : null
-  const nextStopName = nextRouteFlow?.primaryPoint
-    ? nextRouteFlow.primaryPoint.contact?.displayName ?? nextRouteFlow.primaryPoint.customer.name
-    : null
-  const routeActionHref = activeVisit
-    ? "/(app)/field-visits/" + activeVisit.id
-    : nextRoute
-      ? "/(app)/routes/" + nextRoute.id
-      : "/(app)/(tabs)/week"
-  const routeActionLabel = activeVisit
-    ? t("continueFieldVisit")
-    : nextStopName
-      ? t("routeNextStop") + ": " + nextStopName
-      : t("openRoute")
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
+  const primaryAction = resolveFieldTodayPrimaryAction({
+    isField: IS_LEADDRIVE_FIELD,
+    activeVisit,
+    today,
+    canCreateOwnDraft: field.week?.capabilities.createOwnDraft === true,
+    availableWorkdayActions: field.workday?.availableActions,
+  })
+  const routeActionLabel = primaryAction.kind === "CONTINUE_VISIT"
+    ? t("continueFieldVisit")
+    : primaryAction.kind === "START_WORKDAY"
+      ? t("workdayStart")
+      : primaryAction.kind === "RESUME_WORKDAY"
+        ? t("workdayResume")
+        : primaryAction.kind === "OPEN_NEXT_ROUTE" && primaryAction.nextStopName
+          ? t("routeNextStop") + ": " + primaryAction.nextStopName
+          : primaryAction.kind === "CREATE_ROUTE"
+            ? t("createRoute")
+            : t("weekSchedule")
   const workdayActive = workdayStatus === "STARTED"
   const attendancePresentation = presentFieldAttendancePolicy(field.workday?.attendancePolicy)
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
@@ -155,7 +157,7 @@ export default function TodayTab() {
               <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
               <Text style={styles.workdayHint}>{t(attendancePresentation.hintKey)}</Text>
             </View>
-            <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : "→"}</Text>
+            <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : workdayStatus === "PAUSED" ? t("workdayResume") : "→"}</Text>
           </Pressable>
         ) : null}
 
@@ -209,7 +211,7 @@ export default function TodayTab() {
           ) : (
             <Text style={styles.emptyText}>{t("noRouteToday")}</Text>
           )}
-          <Pressable onPress={() => router.push(routeActionHref as never)} style={styles.primaryAction}>
+          <Pressable onPress={() => router.push(primaryAction.href as never)} style={styles.primaryAction}>
             <Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text>
             <Text style={styles.primaryArrow}>→</Text>
           </Pressable>
