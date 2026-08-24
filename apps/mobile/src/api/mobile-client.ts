@@ -64,6 +64,10 @@ import {
   parseFieldCustomerRequests,
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
+  parseFieldManagerApprovals,
+  parseFieldManagerLocations,
+  parseFieldManagerPlanning,
+  parseFieldManagerTeam,
   parseFieldWeek,
   parseFieldWorkday,
   parseFieldVisitWorkspace,
@@ -82,6 +86,10 @@ import {
   type FieldDocumentsData,
   type FieldHrmData,
   type FieldLocationHistoryData,
+  type FieldManagerApprovalsData,
+  type FieldManagerLocationsData,
+  type FieldManagerPlanningData,
+  type FieldManagerTeamData,
   type FieldOrganizationDetailData,
   type FieldOrganizationListData,
   type FieldWeekData,
@@ -367,6 +375,15 @@ export const fieldApi = {
   locations: (date?: string) =>
     request<unknown>(locationsPath(date))
       .then(parseFieldLocationHistory),
+  managerTeam: () =>
+    request<unknown>("/api/v1/mtm/mobile/manager/team").then(parseFieldManagerTeam),
+  managerLocations: () =>
+    request<unknown>("/api/v1/mtm/mobile/manager/locations?limit=200").then(parseFieldManagerLocations),
+  managerPlanning: (date: string) =>
+    request<unknown>("/api/v1/mtm/mobile/manager/planning?date=" + encodeURIComponent(date))
+      .then(parseFieldManagerPlanning),
+  managerApprovals: () =>
+    request<unknown>("/api/v1/mtm/mobile/manager/approvals").then(parseFieldManagerApprovals),
   uploadLocation: async (input: FieldLocationPayload) => {
     const body = await request<{ success?: boolean; data?: { location?: unknown } }>(
       locationsPath(),
@@ -542,6 +559,10 @@ export const fieldApi = {
   hrm(start?: string, end?: string): Promise<FieldHrmData>
   workday(date?: string): Promise<FieldWorkdayData>
   locations(date?: string): Promise<FieldLocationHistoryData>
+  managerTeam(): Promise<FieldManagerTeamData>
+  managerLocations(): Promise<FieldManagerLocationsData>
+  managerPlanning(date: string): Promise<FieldManagerPlanningData>
+  managerApprovals(): Promise<FieldManagerApprovalsData>
   uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
   uploadVisitPhoto(input: FieldVisitPhotoPayload): Promise<Record<string, unknown>>

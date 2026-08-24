@@ -552,6 +552,156 @@ export interface FieldLocationHistoryData {
   locations: FieldAgentLocation[]
 }
 
+export type FieldManagerScope = "ORGANIZATION" | "TEAM_OR_REGION"
+export type FieldManagerGpsFreshness = "ONLINE" | "DELAYED" | "STALE" | "NO_LOCATION"
+
+export interface FieldManagerWorkday {
+  id: string
+  status: Extract<FieldWorkdayStatus, "STARTED" | "PAUSED">
+  startedAt: string
+  pausedAt: string | null
+}
+
+export interface FieldManagerTeamAgent {
+  id: string
+  name: string
+  role: string
+  status: string
+  teamId: string | null
+  isOnline: boolean
+  lastSeenAt: string | null
+  workday: FieldManagerWorkday | null
+}
+
+export interface FieldManagerTeamData {
+  scope: FieldManagerScope
+  agents: FieldManagerTeamAgent[]
+}
+
+export interface FieldManagerLocationPoint {
+  latitude: number
+  longitude: number
+  accuracy: number | null
+  speed: number | null
+  heading: number | null
+  battery: number | null
+  isMoving: boolean
+  recordedAt: string
+}
+
+export interface FieldManagerLocationAgent {
+  id: string
+  name: string
+  role: string
+  isOnline: boolean
+  lastSeenAt: string | null
+  freshness: FieldManagerGpsFreshness
+  hasLiveLocation: boolean
+  /**
+   * A point is live only when freshness is ONLINE. Delayed/stale evidence is
+   * intentionally represented only by lastKnownLocation.
+   */
+  liveLocation: FieldManagerLocationPoint | null
+  lastKnownLocation: FieldManagerLocationPoint | null
+}
+
+export interface FieldManagerLocationsData {
+  scope: FieldManagerScope
+  generatedAt: string
+  locations: FieldManagerLocationAgent[]
+}
+
+export interface FieldManagerPlanningAgent {
+  id: string
+  name: string
+  role: string
+  status: string
+  teamId: string | null
+}
+
+export interface FieldManagerPlanningRoute {
+  id: string
+  agentId: string
+  date: string
+  name: string | null
+  status: string
+  totalPoints: number
+  visitedPoints: number
+  startedAt: string | null
+  completedAt: string | null
+  agent: { id: string; name: string }
+}
+
+export interface FieldManagerPlanningData {
+  scope: FieldManagerScope
+  date: string | null
+  from: string
+  to: string
+  days: number
+  maxRangeDays: number
+  agents: FieldManagerPlanningAgent[]
+  routes: FieldManagerPlanningRoute[]
+  truncated: boolean
+}
+
+export interface FieldManagerHrmApproval {
+  id: string
+  agentId: string
+  type: string
+  startDate: string
+  endDate: string
+  reason: string
+  submittedAt: string
+  agent: { name: string }
+}
+
+export interface FieldManagerRouteChangeApproval {
+  id: string
+  requestedByAgentId: string
+  routeId: string
+  changeType: string
+  reason: string
+  status: string
+  submittedAt: string
+  requestedByAgent: { name: string }
+}
+
+export interface FieldManagerCustomerApproval {
+  id: string
+  requestedByAgentId: string
+  name: string
+  objectType: string
+  reason: string
+  status: string
+  submittedAt: string
+  requestedByAgent: { name: string }
+}
+
+export interface FieldManagerContactChangeApproval {
+  id: string
+  contactId: string
+  requestedByAgentId: string
+  kind: string
+  reason: string
+  status: string
+  submittedAt: string
+  contact: { displayName: string }
+  requestedByAgent: { name: string }
+}
+
+export interface FieldManagerApprovalsData {
+  scope: FieldManagerScope
+  /**
+   * Counts are the records returned by the current bounded response, not an
+   * assertion about every pending request in the organization.
+   */
+  counts: { hrm: number; routeChanges: number; customers: number; contactChanges: number }
+  hrm: FieldManagerHrmApproval[]
+  routeChanges: FieldManagerRouteChangeApproval[]
+  customers: FieldManagerCustomerApproval[]
+  contactChanges: FieldManagerContactChangeApproval[]
+}
+
 export interface FieldNotification {
   id: string
   title: string
@@ -1480,6 +1630,409 @@ export function parseFieldLocationHistory(value: unknown): FieldLocationHistoryD
     }
   }
   return data as unknown as FieldLocationHistoryData
+}
+
+const managerScopes = new Set<FieldManagerScope>(["ORGANIZATION", "TEAM_OR_REGION"])
+const managerGpsFreshness = new Set<FieldManagerGpsFreshness>([
+  "ONLINE",
+  "DELAYED",
+  "STALE",
+  "NO_LOCATION",
+])
+
+function managerScope(value: unknown): value is FieldManagerScope {
+  return string(value) && managerScopes.has(value as FieldManagerScope)
+}
+
+function managerLocationPoint(value: unknown): FieldManagerLocationPoint | null {
+  const point = record(value)
+  if (
+    !point ||
+    !number(point.latitude) ||
+    point.latitude < -90 ||
+    point.latitude > 90 ||
+    !number(point.longitude) ||
+    point.longitude < -180 ||
+    point.longitude > 180 ||
+    (point.accuracy != null && !number(point.accuracy)) ||
+    (point.speed != null && !number(point.speed)) ||
+    (point.heading != null && !number(point.heading)) ||
+    (point.battery != null && !number(point.battery)) ||
+    !boolean(point.isMoving) ||
+    !timestamp(point.recordedAt)
+  ) {
+    return null
+  }
+  return {
+    latitude: point.latitude,
+    longitude: point.longitude,
+    accuracy: point.accuracy == null ? null : point.accuracy,
+    speed: point.speed == null ? null : point.speed,
+    heading: point.heading == null ? null : point.heading,
+    battery: point.battery == null ? null : point.battery,
+    isMoving: point.isMoving,
+    recordedAt: point.recordedAt,
+  }
+}
+
+function managerWorkday(value: unknown): FieldManagerWorkday | null {
+  if (value == null) return null
+  const workday = record(value)
+  if (
+    !workday ||
+    !string(workday.id) ||
+    (workday.status !== "STARTED" && workday.status !== "PAUSED") ||
+    !timestamp(workday.startedAt) ||
+    !nullableTimestamp(workday.pausedAt)
+  ) {
+    return null
+  }
+  return {
+    id: workday.id,
+    status: workday.status,
+    startedAt: workday.startedAt,
+    pausedAt: workday.pausedAt == null ? null : workday.pausedAt,
+  }
+}
+
+function managerTeamAgent(value: unknown): FieldManagerTeamAgent | null {
+  const agent = record(value)
+  const workday = managerWorkday(agent?.workday)
+  if (
+    !agent ||
+    !string(agent.id) ||
+    !string(agent.name) ||
+    !string(agent.role) ||
+    !string(agent.status) ||
+    !(agent.teamId == null || string(agent.teamId)) ||
+    !boolean(agent.isOnline) ||
+    !nullableTimestamp(agent.lastSeenAt) ||
+    (agent.workday != null && !workday)
+  ) {
+    return null
+  }
+  return {
+    id: agent.id,
+    name: agent.name,
+    role: agent.role,
+    status: agent.status,
+    teamId: agent.teamId == null ? null : agent.teamId,
+    isOnline: agent.isOnline,
+    lastSeenAt: agent.lastSeenAt == null ? null : agent.lastSeenAt,
+    workday,
+  }
+}
+
+export function parseFieldManagerTeam(value: unknown): FieldManagerTeamData {
+  const data = validEnvelope(value)
+  if (!data || !managerScope(data.scope) || !Array.isArray(data.agents)) {
+    throw new FieldContractError("mobile manager team")
+  }
+  const agents = data.agents.map(managerTeamAgent)
+  if (agents.some((agent) => agent == null)) {
+    throw new FieldContractError("mobile manager team")
+  }
+  return { scope: data.scope, agents: agents as FieldManagerTeamAgent[] }
+}
+
+function managerLocationAgent(value: unknown): FieldManagerLocationAgent | null {
+  const agent = record(value)
+  if (
+    !agent ||
+    !string(agent.id) ||
+    !string(agent.name) ||
+    !string(agent.role) ||
+    !boolean(agent.isOnline) ||
+    !nullableTimestamp(agent.lastSeenAt) ||
+    !string(agent.freshness) ||
+    !managerGpsFreshness.has(agent.freshness as FieldManagerGpsFreshness) ||
+    !boolean(agent.hasLiveLocation)
+  ) {
+    return null
+  }
+  const liveLocation = managerLocationPoint(agent.liveLocation)
+  const lastKnownLocation = managerLocationPoint(agent.lastKnownLocation)
+  const freshness = agent.freshness as FieldManagerGpsFreshness
+  // Never upgrade a delayed or stale point to live client-side, including
+  // through the legacy location property that may be present in the API.
+  if (
+    (agent.liveLocation != null && !liveLocation) ||
+    (agent.lastKnownLocation != null && !lastKnownLocation) ||
+    (freshness === "ONLINE" && (!agent.hasLiveLocation || !liveLocation)) ||
+    (freshness !== "ONLINE" && (agent.hasLiveLocation || liveLocation))
+  ) {
+    return null
+  }
+  return {
+    id: agent.id,
+    name: agent.name,
+    role: agent.role,
+    isOnline: agent.isOnline,
+    lastSeenAt: agent.lastSeenAt == null ? null : agent.lastSeenAt,
+    freshness,
+    hasLiveLocation: agent.hasLiveLocation,
+    liveLocation,
+    lastKnownLocation,
+  }
+}
+
+export function parseFieldManagerLocations(value: unknown): FieldManagerLocationsData {
+  const data = validEnvelope(value)
+  const contract = record(data?.contract)
+  if (
+    !data ||
+    !managerScope(data.scope) ||
+    !contract ||
+    !timestamp(contract.generatedAt) ||
+    !Array.isArray(data.locations)
+  ) {
+    throw new FieldContractError("mobile manager locations")
+  }
+  const locations = data.locations.map(managerLocationAgent)
+  if (locations.some((location) => location == null)) {
+    throw new FieldContractError("mobile manager locations")
+  }
+  return {
+    scope: data.scope,
+    generatedAt: contract.generatedAt,
+    locations: locations as FieldManagerLocationAgent[],
+  }
+}
+
+function managerPlanningAgent(value: unknown): FieldManagerPlanningAgent | null {
+  const agent = record(value)
+  if (
+    !agent ||
+    !string(agent.id) ||
+    !string(agent.name) ||
+    !string(agent.role) ||
+    !string(agent.status) ||
+    !(agent.teamId == null || string(agent.teamId))
+  ) {
+    return null
+  }
+  return {
+    id: agent.id,
+    name: agent.name,
+    role: agent.role,
+    status: agent.status,
+    teamId: agent.teamId == null ? null : agent.teamId,
+  }
+}
+
+function managerPlanningRoute(value: unknown): FieldManagerPlanningRoute | null {
+  const route = record(value)
+  const agent = record(route?.agent)
+  if (
+    !route ||
+    !string(route.id) ||
+    !string(route.agentId) ||
+    !timestamp(route.date) ||
+    !(route.name == null || string(route.name)) ||
+    !string(route.status) ||
+    !number(route.totalPoints) ||
+    !number(route.visitedPoints) ||
+    !nullableTimestamp(route.startedAt) ||
+    !nullableTimestamp(route.completedAt) ||
+    !agent ||
+    !string(agent.id) ||
+    !string(agent.name)
+  ) {
+    return null
+  }
+  return {
+    id: route.id,
+    agentId: route.agentId,
+    date: route.date,
+    name: route.name == null ? null : route.name,
+    status: route.status,
+    totalPoints: route.totalPoints,
+    visitedPoints: route.visitedPoints,
+    startedAt: route.startedAt == null ? null : route.startedAt,
+    completedAt: route.completedAt == null ? null : route.completedAt,
+    agent: { id: agent.id, name: agent.name },
+  }
+}
+
+export function parseFieldManagerPlanning(value: unknown): FieldManagerPlanningData {
+  const data = validEnvelope(value)
+  const date = data?.date == null ? null : data.date
+  if (
+    !data ||
+    !managerScope(data.scope) ||
+    !(date == null || dateKey(date)) ||
+    !dateKey(data.from) ||
+    !dateKey(data.to) ||
+    !number(data.days) ||
+    data.days < 1 ||
+    !number(data.maxRangeDays) ||
+    data.maxRangeDays < data.days ||
+    !boolean(data.truncated) ||
+    !Array.isArray(data.agents) ||
+    !Array.isArray(data.routes)
+  ) {
+    throw new FieldContractError("mobile manager planning")
+  }
+  const agents = data.agents.map(managerPlanningAgent)
+  const routes = data.routes.map(managerPlanningRoute)
+  if (agents.some((agent) => agent == null) || routes.some((route) => route == null)) {
+    throw new FieldContractError("mobile manager planning")
+  }
+  return {
+    scope: data.scope,
+    date: date == null ? null : date,
+    from: data.from,
+    to: data.to,
+    days: data.days,
+    maxRangeDays: data.maxRangeDays,
+    agents: agents as FieldManagerPlanningAgent[],
+    routes: routes as FieldManagerPlanningRoute[],
+    truncated: data.truncated,
+  }
+}
+
+function managerPerson(value: unknown, key: "agent" | "requestedByAgent"): { name: string } | null {
+  const person = record(record(value)?.[key])
+  return person && string(person.name) ? { name: person.name } : null
+}
+
+function managerHrmApproval(value: unknown): FieldManagerHrmApproval | null {
+  const item = record(value)
+  const agent = managerPerson(value, "agent")
+  if (
+    !item ||
+    !string(item.id) ||
+    !string(item.agentId) ||
+    !string(item.type) ||
+    !timestamp(item.startDate) ||
+    !timestamp(item.endDate) ||
+    !string(item.reason) ||
+    !timestamp(item.submittedAt) ||
+    !agent
+  ) {
+    return null
+  }
+  return {
+    id: item.id, agentId: item.agentId, type: item.type, startDate: item.startDate,
+    endDate: item.endDate, reason: item.reason, submittedAt: item.submittedAt, agent,
+  }
+}
+
+function managerRouteChangeApproval(value: unknown): FieldManagerRouteChangeApproval | null {
+  const item = record(value)
+  const requestedByAgent = managerPerson(value, "requestedByAgent")
+  if (
+    !item ||
+    !string(item.id) ||
+    !string(item.requestedByAgentId) ||
+    !string(item.routeId) ||
+    !string(item.changeType) ||
+    !string(item.reason) ||
+    !string(item.status) ||
+    !timestamp(item.submittedAt) ||
+    !requestedByAgent
+  ) {
+    return null
+  }
+  return {
+    id: item.id, requestedByAgentId: item.requestedByAgentId, routeId: item.routeId,
+    changeType: item.changeType, reason: item.reason, status: item.status,
+    submittedAt: item.submittedAt, requestedByAgent,
+  }
+}
+
+function managerCustomerApproval(value: unknown): FieldManagerCustomerApproval | null {
+  const item = record(value)
+  const requestedByAgent = managerPerson(value, "requestedByAgent")
+  if (
+    !item ||
+    !string(item.id) ||
+    !string(item.requestedByAgentId) ||
+    !string(item.name) ||
+    !string(item.objectType) ||
+    !string(item.reason) ||
+    !string(item.status) ||
+    !timestamp(item.submittedAt) ||
+    !requestedByAgent
+  ) {
+    return null
+  }
+  return {
+    id: item.id, requestedByAgentId: item.requestedByAgentId, name: item.name,
+    objectType: item.objectType, reason: item.reason, status: item.status,
+    submittedAt: item.submittedAt, requestedByAgent,
+  }
+}
+
+function managerContactChangeApproval(value: unknown): FieldManagerContactChangeApproval | null {
+  const item = record(value)
+  const contact = record(item?.contact)
+  const requestedByAgent = managerPerson(value, "requestedByAgent")
+  if (
+    !item ||
+    !string(item.id) ||
+    !string(item.contactId) ||
+    !string(item.requestedByAgentId) ||
+    !string(item.kind) ||
+    !string(item.reason) ||
+    !string(item.status) ||
+    !timestamp(item.submittedAt) ||
+    !contact ||
+    !string(contact.displayName) ||
+    !requestedByAgent
+  ) {
+    return null
+  }
+  return {
+    id: item.id, contactId: item.contactId, requestedByAgentId: item.requestedByAgentId,
+    kind: item.kind, reason: item.reason, status: item.status, submittedAt: item.submittedAt,
+    contact: { displayName: contact.displayName }, requestedByAgent,
+  }
+}
+
+export function parseFieldManagerApprovals(value: unknown): FieldManagerApprovalsData {
+  const data = validEnvelope(value)
+  const counts = record(data?.counts)
+  if (
+    !data ||
+    !managerScope(data.scope) ||
+    !counts ||
+    !number(counts.hrm) ||
+    !number(counts.routeChanges) ||
+    !number(counts.customers) ||
+    !number(counts.contactChanges) ||
+    !Array.isArray(data.hrm) ||
+    !Array.isArray(data.routeChanges) ||
+    !Array.isArray(data.customers) ||
+    !Array.isArray(data.contactChanges)
+  ) {
+    throw new FieldContractError("mobile manager approvals")
+  }
+  const hrm = data.hrm.map(managerHrmApproval)
+  const routeChanges = data.routeChanges.map(managerRouteChangeApproval)
+  const customers = data.customers.map(managerCustomerApproval)
+  const contactChanges = data.contactChanges.map(managerContactChangeApproval)
+  if (
+    hrm.some((item) => item == null) ||
+    routeChanges.some((item) => item == null) ||
+    customers.some((item) => item == null) ||
+    contactChanges.some((item) => item == null)
+  ) {
+    throw new FieldContractError("mobile manager approvals")
+  }
+  return {
+    scope: data.scope,
+    counts: {
+      hrm: counts.hrm,
+      routeChanges: counts.routeChanges,
+      customers: counts.customers,
+      contactChanges: counts.contactChanges,
+    },
+    hrm: hrm as FieldManagerHrmApproval[],
+    routeChanges: routeChanges as FieldManagerRouteChangeApproval[],
+    customers: customers as FieldManagerCustomerApproval[],
+    contactChanges: contactChanges as FieldManagerContactChangeApproval[],
+  }
 }
 
 export function parseFieldVisitWorkspace(value: unknown): FieldVisitWorkspaceData {

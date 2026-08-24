@@ -9,6 +9,7 @@ import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
+import { hasFieldManagerRole } from "../../../src/field/manager-access"
 
 type Module = {
   label: string
@@ -36,6 +37,7 @@ export default function WorkTab() {
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const activeWorkday = workdayStatus === "STARTED"
   const pausedWorkday = workdayStatus === "PAUSED"
+  const canOpenManager = IS_LEADDRIVE_FIELD && hasFieldManagerRole(field.profile?.agent.role)
   const modules: Module[] = IS_LEADDRIVE_FIELD
     ? [
         { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
@@ -43,6 +45,7 @@ export default function WorkTab() {
         { label: t("agentTasksTitle"), hint: t("agentTasksSubtitle"), icon: "tasks", href: "/(app)/field-tasks", badge: fieldOpenTasks },
         { label: t("moduleOrganizations"), hint: t("organizationsSearch"), icon: "organizations", href: "/(app)/organizations" },
         { label: t("moduleContacts"), hint: t("contactsSearch"), icon: "contacts", href: "/(app)/contacts" },
+        ...(canOpenManager ? [{ label: t("managerHomeTitle"), hint: t("managerHomeSubtitle"), icon: "dashboard" as const, href: "/(app)/manager" }] : []),
       ]
     : [
         { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },

@@ -17,6 +17,10 @@ import {
   parseFieldOrganizations,
   parseFieldPersonalKpi,
   parseFieldLocationHistory,
+  parseFieldManagerApprovals,
+  parseFieldManagerLocations,
+  parseFieldManagerPlanning,
+  parseFieldManagerTeam,
   parseFieldProfile,
   parseFieldVisitWorkspace,
   parseFieldWeek,
@@ -578,6 +582,155 @@ describe("LeadDrive field contracts", () => {
       },
     })
     expect(malformed.attendancePolicy).toEqual(FIELD_ATTENDANCE_POLICY_DEFAULT)
+  })
+
+  it("keeps manager location semantics and exposes only scoped, read-only data", () => {
+    const point = {
+      latitude: 40.4093,
+      longitude: 49.8671,
+      accuracy: 8,
+      speed: null,
+      heading: null,
+      battery: 0.8,
+      isMoving: true,
+      recordedAt: "2026-07-15T05:00:00.000Z",
+    }
+    const locations = parseFieldManagerLocations({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        contract: { generatedAt: "2026-07-15T05:01:00.000Z" },
+        locations: [
+          {
+            id: "agent-live",
+            name: "Live agent",
+            role: "AGENT",
+            isOnline: true,
+            lastSeenAt: "2026-07-15T05:00:50.000Z",
+            freshness: "ONLINE",
+            hasLiveLocation: true,
+            location: point,
+            liveLocation: point,
+            lastKnownLocation: point,
+          },
+          {
+            id: "agent-stale",
+            name: "Stale agent",
+            role: "AGENT",
+            isOnline: true,
+            lastSeenAt: "2026-07-15T05:00:50.000Z",
+            freshness: "STALE",
+            hasLiveLocation: false,
+            location: null,
+            liveLocation: null,
+            lastKnownLocation: point,
+          },
+          {
+            id: "agent-no-location",
+            name: "No location agent",
+            role: "AGENT",
+            isOnline: false,
+            lastSeenAt: null,
+            freshness: "NO_LOCATION",
+            hasLiveLocation: false,
+            location: null,
+            liveLocation: null,
+            lastKnownLocation: null,
+          },
+        ],
+      },
+    })
+    expect(locations.locations[0]).toMatchObject({ freshness: "ONLINE", hasLiveLocation: true, liveLocation: point })
+    expect(locations.locations[1]).toMatchObject({ freshness: "STALE", hasLiveLocation: false, liveLocation: null, lastKnownLocation: point })
+    expect(locations.locations[2]).toMatchObject({ freshness: "NO_LOCATION", hasLiveLocation: false, lastKnownLocation: null })
+
+    expect(() => parseFieldManagerLocations({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        contract: { generatedAt: "2026-07-15T05:01:00.000Z" },
+        locations: [{
+          id: "unsafe",
+          name: "Unsafe",
+          role: "AGENT",
+          isOnline: true,
+          lastSeenAt: null,
+          freshness: "STALE",
+          hasLiveLocation: true,
+          liveLocation: point,
+          lastKnownLocation: point,
+        }],
+      },
+    })).toThrow(FieldContractError)
+
+    expect(parseFieldManagerTeam({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        agents: [{
+          id: "agent-1",
+          name: "Manager view agent",
+          role: "AGENT",
+          status: "ACTIVE",
+          teamId: "team-1",
+          isOnline: true,
+          lastSeenAt: "2026-07-15T05:00:00.000Z",
+          workday: {
+            id: "workday-1",
+            status: "STARTED",
+            startedAt: "2026-07-15T04:00:00.000Z",
+            pausedAt: null,
+          },
+        }],
+      },
+    }).agents[0]).toMatchObject({ name: "Manager view agent", workday: { status: "STARTED" } })
+
+    expect(parseFieldManagerPlanning({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        date: "2026-07-15",
+        from: "2026-07-15",
+        to: "2026-07-15",
+        days: 1,
+        maxRangeDays: 42,
+        truncated: false,
+        agents: [{ id: "agent-1", name: "Manager view agent", role: "AGENT", status: "ACTIVE", teamId: "team-1" }],
+        routes: [{
+          id: "route-1",
+          agentId: "agent-1",
+          date: "2026-07-15T00:00:00.000Z",
+          name: "Tuesday route",
+          status: "PLANNED",
+          totalPoints: 4,
+          visitedPoints: 1,
+          startedAt: null,
+          completedAt: null,
+          agent: { id: "agent-1", name: "Manager view agent" },
+        }],
+      },
+    }).routes[0]).toMatchObject({ totalPoints: 4, visitedPoints: 1 })
+
+    expect(parseFieldManagerApprovals({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        counts: { hrm: 1, routeChanges: 0, customers: 0, contactChanges: 0 },
+        hrm: [{
+          id: "hrm-1",
+          agentId: "agent-1",
+          type: "LEAVE",
+          startDate: "2026-07-16T00:00:00.000Z",
+          endDate: "2026-07-16T00:00:00.000Z",
+          reason: "Leave request",
+          submittedAt: "2026-07-15T05:00:00.000Z",
+          agent: { name: "Manager view agent" },
+        }],
+        routeChanges: [],
+        customers: [],
+        contactChanges: [],
+      },
+    }).counts).toEqual({ hrm: 1, routeChanges: 0, customers: 0, contactChanges: 0 })
   })
 
   it("rejects invalid workday transitions and location coordinates at the boundary", () => {
