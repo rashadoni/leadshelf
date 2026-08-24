@@ -4,10 +4,12 @@ import {
   addOptimisticVisitPhoto,
   addOptimisticVisitAction,
   buildVisitActionEvidence,
+  emptyVisitActionDraft,
   hasFutureVisitNextAction,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
   setVisitWorkspaceSyncState,
+  visitActionDraftIssue,
 } from "./visit-workspace"
 
 const workspace = {
@@ -118,16 +120,93 @@ describe("field visit workspace", () => {
   })
 
   it("sends a waiver reason instead of ordinary completed-action evidence", () => {
+    const draft = { ...emptyVisitActionDraft(), waiverReason: "Customer refused access" }
     expect(buildVisitActionEvidence({
       actionKey: "CHECKLIST",
       status: "WAIVED",
-      note: "Customer refused access",
+      draft,
+      completedAt: "2026-07-15T08:20:00.000Z",
     })).toEqual({ reason: "Customer refused access" })
+  })
+
+  it("matches the web evidence contracts for every structured visit action", () => {
+    const completedAt = "2026-07-15T08:20:00.000Z"
+    const draft = {
+      ...emptyVisitActionDraft("2026-07-16"),
+      presentationMaterial: "Detailing aid",
+      presentationVersion: "v2",
+      presentationTopic: "Launch",
+      stockProduct: "Product A",
+      stockState: "AVAILABLE" as const,
+      stockQuantity: "12",
+      checklistResult: "Shelf and price checked",
+      finalNote: "Customer requested a follow-up",
+      discussedTopics: "launch, pricing",
+      feedback: "Positive",
+      nextActionTitle: "Call the buyer",
+      nextDueTime: "10:45",
+      nextPriority: "HIGH" as const,
+    }
+    expect(buildVisitActionEvidence({
+      actionKey: "PRESENTATION",
+      status: "COMPLETED",
+      draft,
+      completedAt,
+    })).toEqual({
+      material: "Detailing aid",
+      version: "v2",
+      topic: "Launch",
+      openedAt: completedAt,
+      completedAt,
+    })
+    expect(buildVisitActionEvidence({
+      actionKey: "STOCK_CHECK",
+      status: "COMPLETED",
+      draft,
+      completedAt,
+    })).toEqual({ product: "Product A", state: "AVAILABLE", quantity: 12 })
     expect(buildVisitActionEvidence({
       actionKey: "CHECKLIST",
       status: "COMPLETED",
-      note: "Shelf checked",
-    })).toEqual({ note: "Shelf checked" })
+      draft,
+      completedAt,
+    })).toEqual({ result: "Shelf and price checked" })
+    expect(buildVisitActionEvidence({
+      actionKey: "VISIT_NOTE",
+      status: "COMPLETED",
+      draft,
+      completedAt,
+    })).toEqual({
+      finalNote: "Customer requested a follow-up",
+      discussedTopics: ["launch", "pricing"],
+    })
+    expect(buildVisitActionEvidence({
+      actionKey: "FEEDBACK",
+      status: "COMPLETED",
+      draft,
+      completedAt,
+    })).toEqual({ feedback: "Positive" })
+    expect(buildVisitActionEvidence({
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      draft,
+      completedAt,
+    })).toEqual({
+      title: "Call the buyer",
+      dueDate: new Date(2026, 6, 16, 10, 45).toISOString(),
+      priority: "HIGH",
+    })
+    expect(visitActionDraftIssue({
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      draft,
+      afterDateKey: "2026-07-15",
+    })).toBeNull()
+    expect(visitActionDraftIssue({
+      actionKey: "STOCK_CHECK",
+      status: "COMPLETED",
+      draft: { ...draft, stockQuantity: "-2" },
+    })).toBe("STOCK_QUANTITY")
   })
 
   it("keeps the workspace visit open after a rejected checkout", () => {

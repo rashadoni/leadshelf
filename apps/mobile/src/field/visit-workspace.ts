@@ -70,28 +70,149 @@ export function addOptimisticVisitAction(
   }
 }
 
+export type FieldVisitActionDraft = {
+  waiverReason: string
+  presentationMaterial: string
+  presentationVersion: string
+  presentationTopic: string
+  stockProduct: string
+  stockState: "AVAILABLE" | "NOT_AVAILABLE" | "UNKNOWN"
+  stockQuantity: string
+  checklistResult: string
+  finalNote: string
+  discussedTopics: string
+  feedback: string
+  nextActionTitle: string
+  nextDueDate: string
+  nextDueTime: string
+  nextPriority: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+}
+
+export type FieldVisitActionDraftIssue =
+  | "REQUIRED"
+  | "STOCK_QUANTITY"
+  | "NEXT_ACTION_DATE"
+
+export function emptyVisitActionDraft(nextDueDate = ""): FieldVisitActionDraft {
+  return {
+    waiverReason: "",
+    presentationMaterial: "",
+    presentationVersion: "",
+    presentationTopic: "",
+    stockProduct: "",
+    stockState: "UNKNOWN",
+    stockQuantity: "",
+    checklistResult: "",
+    finalNote: "",
+    discussedTopics: "",
+    feedback: "",
+    nextActionTitle: "",
+    nextDueDate,
+    nextDueTime: "09:00",
+    nextPriority: "MEDIUM",
+  }
+}
+
+function localDateTimeToIso(dateKey: string, time: string): string | null {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time)
+  if (!dateMatch || !timeMatch) return null
+  const year = Number(dateMatch[1])
+  const month = Number(dateMatch[2])
+  const day = Number(dateMatch[3])
+  const hour = Number(timeMatch[1])
+  const minute = Number(timeMatch[2])
+  const local = new Date(year, month - 1, day, hour, minute)
+  if (
+    local.getFullYear() !== year ||
+    local.getMonth() !== month - 1 ||
+    local.getDate() !== day ||
+    local.getHours() !== hour ||
+    local.getMinutes() !== minute
+  ) return null
+  return local.toISOString()
+}
+
+function normalizedTopics(value: string): string[] {
+  return value.split(",").map((item) => item.trim()).filter(Boolean)
+}
+
 /**
- * Waivers are intentionally distinct from ordinary completion notes. The
- * server validates a reason for a waiver, while completed actions retain
- * their action evidence. Keeping the shape here makes the local outbox and
- * optimistic workspace agree.
+ * Mobile action evidence intentionally follows the web workspace contracts.
+ * Keeping the transformations here prevents an offline outbox item from
+ * silently degrading a structured presentation, stock check, or follow-up
+ * into an opaque note.
  */
+export function visitActionDraftIssue(input: {
+  actionKey: FieldVisitActionPayload["actionKey"]
+  status: FieldVisitActionPayload["status"]
+  draft: FieldVisitActionDraft
+  afterDateKey?: string
+}): FieldVisitActionDraftIssue | null {
+  const { actionKey, status, draft } = input
+  if (status === "WAIVED") return draft.waiverReason.trim().length >= 2 ? null : "REQUIRED"
+
+  if (actionKey === "PRESENTATION") return draft.presentationMaterial.trim() ? null : "REQUIRED"
+  if (actionKey === "STOCK_CHECK") {
+    if (!draft.stockProduct.trim()) return "REQUIRED"
+    if (!draft.stockQuantity.trim()) return null
+    const quantity = Number(draft.stockQuantity)
+    return Number.isFinite(quantity) && quantity >= 0 ? null : "STOCK_QUANTITY"
+  }
+  if (actionKey === "CHECKLIST") return draft.checklistResult.trim() ? null : "REQUIRED"
+  if (actionKey === "VISIT_NOTE") {
+    return draft.finalNote.trim() || normalizedTopics(draft.discussedTopics).length ? null : "REQUIRED"
+  }
+  if (actionKey === "FEEDBACK") return draft.feedback.trim() ? null : "REQUIRED"
+  if (actionKey === "NEXT_ACTION") {
+    if (!draft.nextActionTitle.trim()) return "REQUIRED"
+    if (!localDateTimeToIso(draft.nextDueDate, draft.nextDueTime)) return "NEXT_ACTION_DATE"
+    if (input.afterDateKey && draft.nextDueDate <= input.afterDateKey) return "NEXT_ACTION_DATE"
+  }
+  return null
+}
+
 export function buildVisitActionEvidence(input: {
   actionKey: FieldVisitActionPayload["actionKey"]
   status: FieldVisitActionPayload["status"]
-  note: string
-  nextDueAt?: string
-  nextPriority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+  draft: FieldVisitActionDraft
+  completedAt: string
 }): Record<string, unknown> {
-  if (input.status === "WAIVED") return { reason: input.note }
-  if (input.actionKey === "NEXT_ACTION") {
+  const { actionKey, status, draft } = input
+  if (status === "WAIVED") return { reason: draft.waiverReason.trim() }
+
+  if (actionKey === "PRESENTATION") {
     return {
-      title: input.note,
-      dueDate: input.nextDueAt ?? null,
-      priority: input.nextPriority ?? "MEDIUM",
+      material: draft.presentationMaterial.trim(),
+      version: draft.presentationVersion.trim(),
+      topic: draft.presentationTopic.trim(),
+      openedAt: input.completedAt,
+      completedAt: input.completedAt,
     }
   }
-  return { note: input.note }
+  if (actionKey === "STOCK_CHECK") {
+    return {
+      product: draft.stockProduct.trim(),
+      state: draft.stockState,
+      quantity: draft.stockQuantity.trim() ? Number(draft.stockQuantity) : null,
+    }
+  }
+  if (actionKey === "CHECKLIST") return { result: draft.checklistResult.trim() }
+  if (actionKey === "VISIT_NOTE") {
+    return {
+      finalNote: draft.finalNote.trim() || null,
+      discussedTopics: normalizedTopics(draft.discussedTopics),
+    }
+  }
+  if (actionKey === "FEEDBACK") return { feedback: draft.feedback.trim() }
+  if (actionKey === "NEXT_ACTION") {
+    return {
+      title: draft.nextActionTitle.trim(),
+      dueDate: localDateTimeToIso(draft.nextDueDate, draft.nextDueTime),
+      priority: draft.nextPriority,
+    }
+  }
+  return {}
 }
 
 export function setVisitWorkspaceSyncState(

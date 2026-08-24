@@ -39,6 +39,7 @@ import {
   addOptimisticVisitAction,
   addOptimisticVisitPhoto,
   buildVisitActionEvidence,
+  emptyVisitActionDraft,
   hasFutureVisitNextAction,
   localFieldVisitWorkspace,
   mergeServerVisitWorkspace,
@@ -46,6 +47,8 @@ import {
   setVisitActionSyncState,
   setVisitPhotoSyncState,
   setVisitWorkspaceSyncState,
+  type FieldVisitActionDraft,
+  visitActionDraftIssue,
   visitRequirementProgress,
 } from "../../../src/field/visit-workspace"
 import { persistAndQueueFieldVisitPhoto } from "../../../src/field/visit-photo-store"
@@ -63,6 +66,8 @@ import { TabIcon } from "../../../src/components/TabIcon"
 
 const outcomes: FieldVisitOutcome[] = ["SUCCESSFUL", "PARTIAL", "NO_CONTACT", "RESCHEDULE"]
 const potentials: FieldVisitPotential[] = ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
+const stockStates = ["AVAILABLE", "NOT_AVAILABLE", "UNKNOWN"] as const
+const nextPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const
 const RESCHEDULE_FOLLOW_UP_REQUIREMENT: FieldVisitRequirement = {
   actionKey: "NEXT_ACTION",
   mode: "REQUIRED",
@@ -103,8 +108,7 @@ export default function FieldVisitWorkspaceScreen() {
   const local = localFieldVisitWorkspace(field.week, visitId, field.profile?.agent.id ?? "")
   const [workspace, setWorkspace] = useState<FieldVisitWorkspaceData | null>(cached ?? local)
   const [activeRequirement, setActiveRequirement] = useState<FieldVisitRequirement | null>(null)
-  const [evidence, setEvidence] = useState("")
-  const [nextDueDate, setNextDueDate] = useState(tomorrowDateKey)
+  const [actionDraft, setActionDraft] = useState<FieldVisitActionDraft>(() => emptyVisitActionDraft(tomorrowDateKey()))
   const [outcome, setOutcome] = useState<FieldVisitOutcome>("SUCCESSFUL")
   const [potential, setPotential] = useState<FieldVisitPotential>("UNKNOWN")
   const [resultNote, setResultNote] = useState("")
@@ -142,12 +146,23 @@ export default function FieldVisitWorkspaceScreen() {
     writeFieldCache(cacheKey, next)
   }
 
-  function openRescheduleFollowUp() {
-    setActiveRequirement(RESCHEDULE_FOLLOW_UP_REQUIREMENT)
-    setEvidence("")
+  function openActionEditor(requirement: FieldVisitRequirement) {
+    setActiveRequirement(requirement)
+    setActionDraft(emptyVisitActionDraft(tomorrowDateKey()))
     setTimeout(() => {
       visitScroll.current?.scrollTo({ y: Math.max(0, editorOffset.current - 14), animated: true })
     }, 48)
+  }
+
+  function updateActionDraft<Key extends keyof FieldVisitActionDraft>(
+    key: Key,
+    value: FieldVisitActionDraft[Key],
+  ) {
+    setActionDraft((current) => ({ ...current, [key]: value } as FieldVisitActionDraft))
+  }
+
+  function openRescheduleFollowUp() {
+    openActionEditor(RESCHEDULE_FOLLOW_UP_REQUIREMENT)
   }
 
   async function refreshWorkspace(base: FieldVisitWorkspaceData | null = workspace) {
@@ -170,14 +185,21 @@ export default function FieldVisitWorkspaceScreen() {
   async function saveAction(status: "COMPLETED" | "WAIVED") {
     if (!activeRequirement || !workspace) return
     if (activeRequirement.actionKey === "PHOTO") return
-    const trimmed = evidence.trim()
-    if (trimmed.length < 2) return
     if (status === "WAIVED" && !activeRequirement.allowWaiver) return
-    if (
-      activeRequirement.actionKey === "NEXT_ACTION" &&
-      (!/^\d{4}-\d{2}-\d{2}$/.test(nextDueDate) || nextDueDate <= todayDateKey())
-    ) {
-      Alert.alert(t("fieldVisitFutureDateRequired"))
+    const issue = visitActionDraftIssue({
+      actionKey: activeRequirement.actionKey,
+      status,
+      draft: actionDraft,
+      afterDateKey: status === "COMPLETED" ? todayDateKey() : undefined,
+    })
+    if (issue) {
+      Alert.alert(t(
+        issue === "NEXT_ACTION_DATE"
+          ? "fieldVisitFutureDateRequired"
+          : issue === "STOCK_QUANTITY"
+            ? "fieldVisitStockQuantityInvalid"
+            : "fieldVisitFormRequired",
+      ))
       return
     }
     setSaving(true)
@@ -192,8 +214,8 @@ export default function FieldVisitWorkspaceScreen() {
         evidence: buildVisitActionEvidence({
           actionKey: activeRequirement.actionKey,
           status,
-          note: trimmed,
-          nextDueAt: nextDueDate + "T09:00:00.000Z",
+          draft: actionDraft,
+          completedAt,
         }),
         completedAt,
       } as const
@@ -201,7 +223,7 @@ export default function FieldVisitWorkspaceScreen() {
       const optimistic = addOptimisticVisitAction(workspace, payload)
       persist(optimistic)
       setActiveRequirement(null)
-      setEvidence("")
+      setActionDraft(emptyVisitActionDraft(tomorrowDateKey()))
       await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
@@ -363,7 +385,7 @@ export default function FieldVisitWorkspaceScreen() {
         <CameraView ref={cameraRef} style={styles.camera} facing="back" mode="picture" />
         <View style={styles.cameraTop}>
           <Text style={styles.cameraTitle}>{t("visitAction_PHOTO")}</Text>
-          <Text style={styles.cameraHint}>{t("photoActionComing")}</Text>
+          <Text style={styles.cameraHint}>{t("fieldVisitPhotoCaptureHint")}</Text>
         </View>
         <View style={styles.cameraActions}>
           <Pressable disabled={saving} onPress={() => setPhotoCameraOpen(false)} style={styles.cameraCancel}>
@@ -391,6 +413,21 @@ export default function FieldVisitWorkspaceScreen() {
 
   const customerName = workspace.visit.contact?.displayName ?? workspace.visit.customer.name
   const isCompleted = workspace.visit.status === "CHECKED_OUT"
+  const completedDraftIssue = activeRequirement && activeRequirement.actionKey !== "PHOTO"
+    ? visitActionDraftIssue({
+      actionKey: activeRequirement.actionKey,
+      status: "COMPLETED",
+      draft: actionDraft,
+      afterDateKey: todayDateKey(),
+    })
+    : null
+  const waiverDraftIssue = activeRequirement?.allowWaiver
+    ? visitActionDraftIssue({
+      actionKey: activeRequirement.actionKey,
+      status: "WAIVED",
+      draft: actionDraft,
+    })
+    : null
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -425,12 +462,18 @@ export default function FieldVisitWorkspaceScreen() {
           const progress = outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION"
             ? { completed: hasRescheduleFollowUp ? 1 : 0, required: 1, satisfied: hasRescheduleFollowUp }
             : requirementProgress
+          const nextActionAlreadySaved = requirement.actionKey === "NEXT_ACTION" && progress.satisfied
           return (
             <Pressable
               key={requirement.actionKey}
-              disabled={isCompleted}
-              onPress={() => { setActiveRequirement(requirement); setEvidence("") }}
-              style={({ pressed }) => [styles.actionCard, progress.satisfied && styles.actionCardDone, pressed && styles.pressed]}
+              disabled={isCompleted || nextActionAlreadySaved}
+              onPress={() => openActionEditor(requirement)}
+              style={({ pressed }) => [
+                styles.actionCard,
+                progress.satisfied && styles.actionCardDone,
+                (isCompleted || nextActionAlreadySaved) && styles.actionCardDisabled,
+                pressed && styles.pressed,
+              ]}
             >
               <View style={[styles.actionMark, progress.satisfied && styles.actionMarkDone]}><Text style={[styles.actionMarkText, progress.satisfied && styles.actionMarkTextDone]}>{progress.satisfied ? "✓" : requirement.mode === "REQUIRED" ? "!" : "+"}</Text></View>
               <View style={styles.actionBody}>
@@ -447,28 +490,90 @@ export default function FieldVisitWorkspaceScreen() {
             <Text style={styles.editorTitle}>{actionLabel(activeRequirement)}</Text>
             {activeRequirement.actionKey === "PHOTO" ? (
               <>
-                <Text style={styles.editorHint}>{t("photoActionComing")}</Text>
+                <Text style={styles.editorHint}>{t("fieldVisitPhotoCaptureHint")}</Text>
                 <Pressable disabled={saving} onPress={() => void openPhotoCamera()} style={styles.photoButton}>
                   <Text style={styles.photoButtonText}>{t("takePhoto")}</Text>
                 </Pressable>
               </>
             ) : (
               <>
-                <Text style={styles.label}>{activeRequirement.actionKey === "NEXT_ACTION" ? t("fieldVisitNextActionTitle") : t("fieldVisitEvidence")}</Text>
-                <TextInput value={evidence} onChangeText={setEvidence} multiline textAlignVertical="top" style={styles.textarea} />
+                {activeRequirement.actionKey === "PRESENTATION" ? (
+                  <>
+                    <Text style={styles.label}>{t("fieldVisitPresentationMaterial")}</Text>
+                    <TextInput value={actionDraft.presentationMaterial} onChangeText={(value) => updateActionDraft("presentationMaterial", value)} style={styles.input} />
+                    <Text style={styles.label}>{t("fieldVisitPresentationVersion")}</Text>
+                    <TextInput value={actionDraft.presentationVersion} onChangeText={(value) => updateActionDraft("presentationVersion", value)} style={styles.input} />
+                    <Text style={styles.label}>{t("fieldVisitPresentationTopic")}</Text>
+                    <TextInput value={actionDraft.presentationTopic} onChangeText={(value) => updateActionDraft("presentationTopic", value)} style={styles.input} />
+                  </>
+                ) : null}
+                {activeRequirement.actionKey === "STOCK_CHECK" ? (
+                  <>
+                    <Text style={styles.label}>{t("fieldVisitStockProduct")}</Text>
+                    <TextInput value={actionDraft.stockProduct} onChangeText={(value) => updateActionDraft("stockProduct", value)} style={styles.input} />
+                    <Text style={styles.label}>{t("fieldVisitStockState")}</Text>
+                    <View style={styles.chips}>
+                      {stockStates.map((state) => (
+                        <Pressable key={state} onPress={() => updateActionDraft("stockState", state)} style={[styles.chip, actionDraft.stockState === state && styles.chipSelected]}>
+                          <Text style={[styles.chipText, actionDraft.stockState === state && styles.chipTextSelected]}>{t(`fieldVisitStockState_${state}` as MessageKey)}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Text style={styles.label}>{t("fieldVisitStockQuantity")}</Text>
+                    <TextInput value={actionDraft.stockQuantity} onChangeText={(value) => updateActionDraft("stockQuantity", value)} keyboardType="decimal-pad" style={styles.input} />
+                  </>
+                ) : null}
+                {activeRequirement.actionKey === "CHECKLIST" ? (
+                  <>
+                    <Text style={styles.label}>{t("fieldVisitChecklistResult")}</Text>
+                    <TextInput value={actionDraft.checklistResult} onChangeText={(value) => updateActionDraft("checklistResult", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                  </>
+                ) : null}
+                {activeRequirement.actionKey === "VISIT_NOTE" ? (
+                  <>
+                    <Text style={styles.label}>{t("fieldVisitDiscussedTopics")}</Text>
+                    <TextInput value={actionDraft.discussedTopics} onChangeText={(value) => updateActionDraft("discussedTopics", value)} placeholder={t("fieldVisitDiscussedTopicsHint")} style={styles.input} />
+                    <Text style={styles.label}>{t("fieldVisitFinalNote")}</Text>
+                    <TextInput value={actionDraft.finalNote} onChangeText={(value) => updateActionDraft("finalNote", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                  </>
+                ) : null}
+                {activeRequirement.actionKey === "FEEDBACK" ? (
+                  <>
+                    <Text style={styles.label}>{t("fieldVisitFeedback")}</Text>
+                    <TextInput value={actionDraft.feedback} onChangeText={(value) => updateActionDraft("feedback", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                  </>
+                ) : null}
                 {activeRequirement.actionKey === "NEXT_ACTION" ? (
                   <>
                     <Text style={styles.editorHint}>{t("fieldVisitNextActionHint")}</Text>
+                    <Text style={styles.label}>{t("fieldVisitNextActionTitle")}</Text>
+                    <TextInput value={actionDraft.nextActionTitle} onChangeText={(value) => updateActionDraft("nextActionTitle", value)} style={styles.input} />
                     <Text style={styles.label}>{t("due")}</Text>
-                    <TextInput value={nextDueDate} onChangeText={setNextDueDate} placeholder={t("dateInputHint")} style={styles.input} />
+                    <TextInput value={actionDraft.nextDueDate} onChangeText={(value) => updateActionDraft("nextDueDate", value)} placeholder={t("dateInputHint")} style={styles.input} />
+                    <Text style={styles.label}>{t("fieldVisitNextActionTime")}</Text>
+                    <TextInput value={actionDraft.nextDueTime} onChangeText={(value) => updateActionDraft("nextDueTime", value)} placeholder="09:00" keyboardType="numbers-and-punctuation" style={styles.input} />
+                    <Text style={styles.label}>{t("fieldVisitPriority")}</Text>
+                    <View style={styles.chips}>
+                      {nextPriorities.map((priority) => (
+                        <Pressable key={priority} onPress={() => updateActionDraft("nextPriority", priority)} style={[styles.chip, actionDraft.nextPriority === priority && styles.chipSelected]}>
+                          <Text style={[styles.chipText, actionDraft.nextPriority === priority && styles.chipTextSelected]}>{t(`agentTaskPriority_${priority}` as MessageKey)}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+                {activeRequirement.allowWaiver ? (
+                  <>
+                    <Text style={styles.label}>{t("fieldVisitWaiverReason")}</Text>
+                    <TextInput value={actionDraft.waiverReason} onChangeText={(value) => updateActionDraft("waiverReason", value)} multiline textAlignVertical="top" style={styles.textarea} />
                   </>
                 ) : null}
               </>
             )}
             <View style={styles.editorActions}>
               <Pressable onPress={() => setActiveRequirement(null)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
-              {activeRequirement.actionKey !== "PHOTO" && activeRequirement.allowWaiver ? <Pressable disabled={saving || evidence.trim().length < 2} onPress={() => void saveAction("WAIVED")} style={styles.waiveButton}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
-              {activeRequirement.actionKey !== "PHOTO" ? <Pressable disabled={saving || evidence.trim().length < 2} onPress={() => void saveAction("COMPLETED")} style={[styles.primaryButton, (saving || evidence.trim().length < 2) && styles.disabled]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable> : null}
+              {activeRequirement.actionKey !== "PHOTO" && activeRequirement.allowWaiver ? <Pressable disabled={saving || Boolean(waiverDraftIssue)} onPress={() => void saveAction("WAIVED")} style={[styles.waiveButton, (saving || Boolean(waiverDraftIssue)) && styles.disabled]}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
+              {activeRequirement.actionKey !== "PHOTO" ? <Pressable disabled={saving || Boolean(completedDraftIssue)} onPress={() => void saveAction("COMPLETED")} style={[styles.primaryButton, (saving || Boolean(completedDraftIssue)) && styles.disabled]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable> : null}
             </View>
           </View>
         ) : null}
@@ -592,6 +697,7 @@ const styles = StyleSheet.create({
   requiredCountText: { color: colors.missed, fontSize: 11, fontWeight: "900" },
   actionCard: { marginHorizontal: 14, marginTop: 8, minHeight: 70, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 11 },
   actionCardDone: { borderColor: colors.successBorder, backgroundColor: colors.successBg },
+  actionCardDisabled: { opacity: 0.76 },
   actionMark: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   actionMarkDone: { backgroundColor: colors.card },
   actionMarkText: { color: colors.warning, fontSize: 16, fontWeight: "900" }, actionMarkTextDone: { color: colors.successDark },
