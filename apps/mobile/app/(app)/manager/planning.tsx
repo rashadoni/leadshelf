@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
@@ -36,7 +36,11 @@ function routeStatus(route: FieldManagerPlanningRoute): { label: string; backgro
 export default function ManagerPlanningScreen() {
   const locale = useLocale()
   const field = useField()
-  const [date, setDate] = useState(() => field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10))
+  const { date: requestedDate } = useLocalSearchParams<{ date?: string }>()
+  const initialDate = typeof requestedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate.slice(0, 10))
+    ? requestedDate.slice(0, 10)
+    : field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
+  const [date, setDate] = useState(initialDate)
   const [rangeDays, setRangeDays] = useState(1)
   const [data, setData] = useState<FieldManagerPlanningData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -72,6 +76,18 @@ export default function ManagerPlanningScreen() {
   const routes = data?.routes ?? []
   const plannedAgentIds = useMemo(() => new Set(routes.map((route) => route.agentId)), [routes])
   const noRouteAgents = (data?.agents ?? []).filter((agent) => !plannedAgentIds.has(agent.id))
+
+  function planRouteFor(agent: FieldManagerPlanningData["agents"][number]) {
+    router.push({
+      pathname: "/(app)/routes/new",
+      params: {
+        managerPlan: "1",
+        managerAgentId: agent.id,
+        managerAgentName: agent.name,
+        date,
+      },
+    } as never)
+  }
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -151,7 +167,7 @@ export default function ManagerPlanningScreen() {
             )}
 
             <View style={styles.sectionHeading}>
-              <View><Text style={styles.sectionTitle}>{t("managerNoRouteAgents")}</Text><Text style={styles.sectionHint}>{t("managerNoRouteAgentsHint")}</Text></View>
+              <View><Text style={styles.sectionTitle}>{t("managerNoRouteAgents")}</Text><Text style={styles.sectionHint}>{t(rangeDays === 1 ? "managerNoRouteAgentsHint" : "managerRoutePlanDayOnly")}</Text></View>
               <Text style={styles.sectionCount}>{noRouteAgents.length}</Text>
             </View>
             {noRouteAgents.length === 0 ? (
@@ -159,10 +175,18 @@ export default function ManagerPlanningScreen() {
             ) : (
               <View style={styles.agentCard}>
                 {noRouteAgents.map((agent, index) => (
-                  <View key={agent.id} style={[styles.agentRow, index > 0 && styles.agentBorder]}>
+                  <Pressable
+                    key={agent.id}
+                    accessibilityRole={rangeDays === 1 ? "button" : undefined}
+                    accessibilityLabel={rangeDays === 1 ? t("managerPlanRouteFor", { name: agent.name }) : undefined}
+                    disabled={rangeDays !== 1}
+                    onPress={() => planRouteFor(agent)}
+                    style={({ pressed }) => [styles.agentRow, index > 0 && styles.agentBorder, rangeDays === 1 && pressed && styles.pressed]}
+                  >
                     <View style={styles.agentAvatar}><Text style={styles.agentAvatarText}>{agent.name.charAt(0).toUpperCase()}</Text></View>
                     <View style={styles.agentBody}><Text style={styles.agentName}>{agent.name}</Text><Text style={styles.agentRole}>{agentRoleLabel(agent.role)}</Text></View>
-                  </View>
+                    {rangeDays === 1 ? <View style={styles.agentPlan}><Text style={styles.agentPlanText}>{t("managerPlanRoute")}</Text><Text style={styles.agentPlanArrow}>›</Text></View> : null}
+                  </Pressable>
                 ))}
               </View>
             )}
@@ -224,6 +248,9 @@ const styles = StyleSheet.create({
   agentBody: { flex: 1 },
   agentName: { color: colors.text, fontSize: 12, fontWeight: "900" },
   agentRole: { color: colors.muted, fontSize: 9, marginTop: 2, fontWeight: "800" },
+  agentPlan: { flexDirection: "row", alignItems: "center", gap: 3 },
+  agentPlanText: { color: colors.primary, fontSize: 9, fontWeight: "900" },
+  agentPlanArrow: { color: colors.primary, fontSize: 21, lineHeight: 21 },
   empty: { minHeight: 112, marginHorizontal: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 9, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },
@@ -233,4 +260,5 @@ const styles = StyleSheet.create({
   stateText: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 7 },
   retry: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   retryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
 })

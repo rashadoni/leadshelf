@@ -511,13 +511,15 @@ export const fieldApi = {
     date: string
     name?: string | null
     notes?: string | null
+    /** Managers publish a scoped plan immediately; agents keep the offline draft flow. */
+    status?: "DRAFT" | "PLANNED"
     points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
   }) => {
     const body = await request<{ success?: boolean; data?: { id?: unknown } }>("/api/v1/mtm/routes", json({
       agentId: input.agentId,
       assignments: [{ agentId: input.agentId, role: "PRIMARY" }],
       date: input.date,
-      status: "DRAFT",
+      status: input.status ?? "DRAFT",
       name: input.name ?? null,
       notes: input.notes ?? null,
       points: input.points,
@@ -600,6 +602,7 @@ export const fieldApi = {
     date: string
     name?: string | null
     notes?: string | null
+    status?: "DRAFT" | "PLANNED"
     points: Array<{ customerId: string; contactId?: string | null; plannedTime: string | null }>
   }): Promise<{ id: string }>
   updateRoute(routeId: string, input: {

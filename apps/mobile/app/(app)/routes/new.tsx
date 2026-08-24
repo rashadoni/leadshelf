@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useField } from "../../../src/field/field-context"
+import { fieldApi } from "../../../src/api/mobile-client"
 import { RouteTargetPicker, type RouteTarget } from "../../../src/field/route-target-picker"
 import {
   addMinutesToRouteTime,
@@ -48,13 +49,33 @@ const ROUTE_WIZARD_STEPS = [
 
 export default function NewRouteScreen() {
   const locale = useLocale()
-  const { copyFrom, date: requestedDate } = useLocalSearchParams<{ copyFrom?: string; date?: string }>()
+  const {
+    copyFrom,
+    date: requestedDate,
+    managerPlan,
+    managerAgentId,
+    managerAgentName,
+  } = useLocalSearchParams<{
+    copyFrom?: string
+    date?: string
+    managerPlan?: string
+    managerAgentId?: string
+    managerAgentName?: string
+  }>()
   const field = useField()
   const { sync } = useSync()
   const insets = useSafeAreaInsets()
   const availableDays = field.week?.days ?? []
-  const canCreateRoute = field.week?.capabilities.createOwnDraft === true
-  const calendarDate = typeof requestedDate === "string" ? requestedDate.slice(0, 10) : null
+  const requestedDateKey = typeof requestedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate.slice(0, 10))
+    ? requestedDate.slice(0, 10)
+    : null
+  const managerMode = managerPlan === "1" && Boolean(
+    requestedDateKey &&
+    typeof managerAgentId === "string" && managerAgentId &&
+    typeof managerAgentName === "string" && managerAgentName,
+  )
+  const canCreateRoute = managerMode || field.week?.capabilities.createOwnDraft === true
+  const calendarDate = requestedDateKey
   const initialDate = calendarDate ?? availableDays.find((day) => day.isToday && day.routePlanningAllowed)?.date ?? availableDays.find((day) => day.routePlanningAllowed)?.date ?? null
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate)
   const [name, setName] = useState("")
@@ -70,15 +91,22 @@ export default function NewRouteScreen() {
   const selectedDateLabel = selectedCalendarDate
     ? selectedCalendarDate.weekday + ", " + selectedCalendarDate.date
     : null
+  const selectedAgent = managerMode
+    ? { id: managerAgentId as string, name: managerAgentName as string }
+    : field.profile?.agent
 
   useEffect(() => {
+    if (managerMode && requestedDateKey) {
+      if (selectedDate !== requestedDateKey) setSelectedDate(requestedDateKey)
+      return
+    }
     const selectable = availableDays.filter((day) => (
       day.routePlanningAllowed && day.date !== copySource?.date.slice(0, 10)
     ))
     if (!selectedDate || !selectable.some((day) => day.date === selectedDate)) {
       setSelectedDate(selectable.find((day) => day.isToday)?.date ?? selectable[0]?.date ?? null)
     }
-  }, [availableDays, copySource?.date, selectedDate])
+  }, [availableDays, copySource?.date, managerMode, requestedDateKey, selectedDate])
 
   useEffect(() => {
     if (!copyFrom || copySource || !field.week) return
@@ -133,7 +161,7 @@ export default function NewRouteScreen() {
       return
     }
     if (step === 1) {
-      if (!selectedDate || !field.profile?.agent.id) {
+      if (!selectedDate || !selectedAgent?.id) {
         setError(t("routeCreateRequired"))
         return
       }
@@ -158,8 +186,8 @@ export default function NewRouteScreen() {
       setError(t("routePlanningUnavailable"))
       return
     }
-    const agentId = field.profile?.agent.id
-    const timezone = field.week?.timezone ?? "UTC"
+    const agentId = selectedAgent?.id
+    const timezone = field.profile?.todaySummary.timezone ?? field.week?.timezone ?? "UTC"
     const plannedTimes = targets.map((target) => (
       target.time ? routePlannedTime(selectedDate ?? "", target.time, timezone) : null
     ))
@@ -188,6 +216,14 @@ export default function NewRouteScreen() {
           contactId: target.contact?.id ?? null,
           plannedTime: plannedTimes[index] ?? null,
         })),
+      }
+      if (managerMode) {
+        await fieldApi.createRoute({ ...input, status: "PLANNED" })
+        Alert.alert(t("managerRoutePublished"), undefined, [{
+          text: t("ok"),
+          onPress: () => router.replace({ pathname: "/(app)/manager/planning", params: { date: selectedDate } } as never),
+        }])
+        return
       }
       const queued = enqueueFieldRouteCreate(input)
       const week = field.week!
@@ -222,7 +258,7 @@ export default function NewRouteScreen() {
         router.replace("/(app)/routes" as never)
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("fieldDataError"))
+      setError(managerMode ? t("managerRoutePublishFailed") : cause instanceof Error ? cause.message : t("fieldDataError"))
     } finally {
       setSaving(false)
     }
@@ -236,7 +272,7 @@ export default function NewRouteScreen() {
       >
         <View style={styles.header}>
           <Pressable onPress={goBack} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
-          <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("routeHubTitle").toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("copyRoute") : t("createRoute")}</Text></View>
+          <View style={styles.headerBody}><Text style={styles.eyebrow}>{(managerMode ? t("managerPlanningTitle") : t("routeHubTitle")).toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("copyRoute") : managerMode ? t("managerPlanRoute") : t("createRoute")}</Text></View>
         </View>
 
         {!canCreateRoute && field.week ? <View style={styles.error}><Text style={styles.errorText}>{t("routePlanningUnavailable")}</Text></View> : null}
@@ -275,29 +311,41 @@ export default function NewRouteScreen() {
               <View style={styles.agentIcon}><TabIcon name="profile" color={colors.primary} size={20} /></View>
               <View style={styles.agentBody}>
                 <Text style={styles.agentLabel}>{t("routeWizardAgent")}</Text>
-                <Text style={styles.agentName}>{field.profile?.agent.name ?? t("fieldDataError")}</Text>
-                <Text style={styles.agentHint}>{t("routeWizardAgentHint")}</Text>
+                <Text style={styles.agentName}>{selectedAgent?.name ?? t("fieldDataError")}</Text>
+                <Text style={styles.agentHint}>{t(managerMode ? "managerRouteWizardAgentHint" : "routeWizardAgentHint")}</Text>
               </View>
             </View>
             <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
             {selectedDateLabel ? <Text style={styles.selectedDate}>{selectedDateLabel}</Text> : null}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-              {availableDays.map((day) => {
-                const selected = selectedDate === day.date
-                const disabled = !day.routePlanningAllowed || day.date === copySource?.date.slice(0, 10)
-                return (
-                  <Pressable key={day.date} disabled={disabled} onPress={() => selectDate(day.date)} style={[styles.day, selected && styles.daySelected, disabled && styles.dayDisabled]}>
-                    <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>{day.date.slice(8)}</Text>
-                    <Text style={[styles.dayMonth, selected && styles.dayMonthSelected]}>{day.date.slice(5, 7)}</Text>
-                    {!day.isWorkingDay ? <Text style={[styles.dayOff, selected && styles.dayMonthSelected]}>●</Text> : null}
-                  </Pressable>
-                )
-              })}
-            </ScrollView>
-            <View style={styles.weekNavigation}>
-              <Pressable onPress={() => void moveWeek(-7)} style={styles.weekButton}><Text style={styles.weekButtonText}>‹ {t("previousWeek")}</Text></Pressable>
-              <Pressable onPress={() => void moveWeek(7)} style={styles.weekButton}><Text style={styles.weekButtonText}>{t("nextWeek")} ›</Text></Pressable>
-            </View>
+            {managerMode ? (
+              <>
+                <Text style={styles.managerSelectionHint}>{t("managerRouteWizardDateHint")}</Text>
+                <Pressable onPress={() => router.replace({ pathname: "/(app)/manager/planning", params: { date: selectedDate ?? "" } } as never)} style={styles.managerChangeSelection}>
+                  <TabIcon name="week" color={colors.primary} size={17} />
+                  <Text style={styles.managerChangeSelectionText}>{t("managerChangeRouteSelection")}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
+                  {availableDays.map((day) => {
+                    const selected = selectedDate === day.date
+                    const disabled = !day.routePlanningAllowed || day.date === copySource?.date.slice(0, 10)
+                    return (
+                      <Pressable key={day.date} disabled={disabled} onPress={() => selectDate(day.date)} style={[styles.day, selected && styles.daySelected, disabled && styles.dayDisabled]}>
+                        <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>{day.date.slice(8)}</Text>
+                        <Text style={[styles.dayMonth, selected && styles.dayMonthSelected]}>{day.date.slice(5, 7)}</Text>
+                        {!day.isWorkingDay ? <Text style={[styles.dayOff, selected && styles.dayMonthSelected]}>●</Text> : null}
+                      </Pressable>
+                    )
+                  })}
+                </ScrollView>
+                <View style={styles.weekNavigation}>
+                  <Pressable onPress={() => void moveWeek(-7)} style={styles.weekButton}><Text style={styles.weekButtonText}>‹ {t("previousWeek")}</Text></Pressable>
+                  <Pressable onPress={() => void moveWeek(7)} style={styles.weekButton}><Text style={styles.weekButtonText}>{t("nextWeek")} ›</Text></Pressable>
+                </View>
+              </>
+            )}
           </>
         ) : null}
 
@@ -336,7 +384,7 @@ export default function NewRouteScreen() {
               <Text style={styles.wizardHint}>{t("routeWizardReviewHint")}</Text>
             </View>
             <View style={styles.reviewSummary}>
-              <View style={styles.reviewRow}><TabIcon name="profile" color={colors.primary} size={18} /><Text style={styles.reviewValue}>{field.profile?.agent.name ?? t("fieldDataError")}</Text></View>
+              <View style={styles.reviewRow}><TabIcon name="profile" color={colors.primary} size={18} /><Text style={styles.reviewValue}>{selectedAgent?.name ?? t("fieldDataError")}</Text></View>
               {selectedDateLabel ? <View style={styles.reviewRow}><TabIcon name="today" color={colors.primary} size={18} /><Text style={styles.reviewValue}>{selectedDateLabel}</Text></View> : null}
               <View style={styles.reviewRow}><TabIcon name="organizations" color={colors.primary} size={18} /><Text style={styles.reviewValue}>{targets.length} {t("routePointsLabel")}</Text></View>
             </View>
@@ -346,6 +394,7 @@ export default function NewRouteScreen() {
               <Text style={styles.label}>{t("routeNotes")}</Text>
               <TextInput value={notes} onChangeText={setNotes} style={[styles.input, styles.notes]} multiline textAlignVertical="top" placeholderTextColor={colors.faint} />
             </View>
+            {managerMode ? <View style={styles.managerPublishNotice}><TabIcon name="info" color={colors.info} size={18} /><Text style={styles.managerPublishNoticeText}>{t("managerRouteOnlineRequired")}</Text></View> : null}
             <View style={styles.pointsHeader}><Text style={styles.sectionTitleInline}>{t("routeRoadmap")}</Text><Text style={styles.count}>{targets.length}</Text></View>
             {targets.length > 0 ? <Pressable onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable> : null}
             {targets.map((target, index) => (
@@ -380,7 +429,7 @@ export default function NewRouteScreen() {
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
         <View style={styles.footer}>
           {step > 1 ? <Pressable disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
-          <Pressable disabled={saving} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, saving && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : step === 3 ? copySource ? t("copyRoute") : t("createRoute") : t("routeWizardContinue")}</Text></Pressable>
+          <Pressable disabled={saving} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, saving && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : step === 3 ? copySource ? t("copyRoute") : managerMode ? t("managerRoutePublish") : t("createRoute") : t("routeWizardContinue")}</Text></Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -415,6 +464,9 @@ const styles = StyleSheet.create({
   agentName: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
   agentHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   selectedDate: { color: colors.primary, fontSize: 12, fontWeight: "800", marginHorizontal: 16, marginBottom: 10 },
+  managerSelectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginHorizontal: 16, marginBottom: 10 },
+  managerChangeSelection: { minHeight: 46, marginHorizontal: 14, borderRadius: 13, paddingHorizontal: 13, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  managerChangeSelectionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   days: { paddingHorizontal: 14, gap: 8 },
   day: { width: 57, height: 65, borderRadius: 16, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   daySelected: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -437,6 +489,8 @@ const styles = StyleSheet.create({
   reviewSummary: { marginHorizontal: 14, marginTop: 13, borderRadius: radii.card, padding: 13, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   reviewRow: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 9 },
   reviewValue: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "800" },
+  managerPublishNotice: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  managerPublishNoticeText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "800" },
   label: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 5, marginBottom: 6 },
   input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
   notes: { minHeight: 80, paddingTop: 11 },
