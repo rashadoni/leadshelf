@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Alert,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +12,7 @@ import {
 } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import * as Crypto from "expo-crypto"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../src/field/route-target-picker"
@@ -30,6 +32,9 @@ import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-s
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
+import { resolveFieldRouteFlow, type FieldRouteStepState } from "../../../src/field/route-flow"
+import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
+import { TabIcon } from "../../../src/components/TabIcon"
 import {
   setOptimisticFieldVisitSyncState,
   startOptimisticFieldVisit,
@@ -53,11 +58,20 @@ function reorder(points: FieldRoutePoint[], from: number, to: number): FieldRout
   return next.map((point, index) => ({ ...point, orderIndex: index + 1 }))
 }
 
+function routeStepLabel(state: FieldRouteStepState): string {
+  if (state === "completed") return t("routeCompletedStop")
+  if (state === "active") return t("routeCurrentVisit")
+  if (state === "next") return t("routeNextStop")
+  if (state === "missed") return t("routeMissedStop")
+  return t("routeUpcomingStop")
+}
+
 export default function FieldRouteDetailScreen() {
   useLocale()
   const { routeId } = useLocalSearchParams<{ routeId: string }>()
   const field = useField()
   const { sync, status: syncStatus } = useSync()
+  const insets = useSafeAreaInsets()
   const routeData = useMemo(
     () => field.week?.days.flatMap((day) => day.routes).find((route) => route.id === routeId) ?? null,
     [field.week, routeId],
@@ -115,7 +129,23 @@ export default function FieldRouteDetailScreen() {
   const activeVisit = field.week?.days
     .flatMap((day) => day.visits.items)
     .find((visit) => visit.status === "CHECKED_IN") ?? null
+  const routePoints = routeData.canEdit ? points : routeData.points
+  const routeFlow = resolveFieldRouteFlow({ id: routeData.id, points: routePoints }, activeVisit)
+  const activeVisitForRoute = activeVisit?.routeId === routeData.id ? activeVisit : null
+  const primaryRoutePoint = activeVisit
+    ? activeVisitForRoute
+      ? routeFlow.activePoint
+      : null
+    : routeFlow.primaryPoint
   const canStartVisits = routeData.canExecute && routeData.date === field.week?.today
+  const navigationPlatform: RouteNavigationPlatform = Platform.OS === "android"
+    ? "android"
+    : Platform.OS === "ios"
+      ? "ios"
+      : "other"
+  const canNavigatePrimaryPoint = primaryRoutePoint
+    ? routeNavigationUrls(primaryRoutePoint, navigationPlatform).length > 0
+    : false
 
   async function startVisit(point: FieldRoutePoint) {
     if (activeVisit) {
@@ -167,6 +197,25 @@ export default function FieldRouteDetailScreen() {
       Alert.alert(t("locationUnavailable"), error instanceof Error ? error.message : String(error))
     } finally {
       setCheckingInPointId(null)
+    }
+  }
+
+  async function openNavigation(point: FieldRoutePoint) {
+    const urls = routeNavigationUrls(point, navigationPlatform)
+    if (urls.length === 0) {
+      Alert.alert(t("routeNoCoordinates"))
+      return
+    }
+    try {
+      for (const url of urls) {
+        if (await Linking.canOpenURL(url)) {
+          await Linking.openURL(url)
+          return
+        }
+      }
+      Alert.alert(t("routeNavigationUnavailable"))
+    } catch {
+      Alert.alert(t("routeNavigationUnavailable"))
     }
   }
 
@@ -372,7 +421,10 @@ export default function FieldRouteDetailScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}>
@@ -398,9 +450,60 @@ export default function FieldRouteDetailScreen() {
           )}
         </View>
 
+        {!routeData.canEdit && (activeVisit || routeFlow.primaryPoint) ? (
+          <View style={[styles.missionCard, activeVisit && styles.missionCardActive]}>
+            <View style={styles.missionTop}>
+              <View style={[styles.missionIcon, activeVisit ? styles.missionIconActive : styles.missionIconNext]}>
+                <TabIcon name="visit" color={activeVisit ? colors.successDark : colors.primary} size={22} />
+              </View>
+              <View style={styles.missionBody}>
+                <View style={styles.missionEyebrowRow}>
+                  <Text style={styles.missionEyebrow}>{activeVisit ? t("routeCurrentVisit").toUpperCase() : t("routeNextStop").toUpperCase()}</Text>
+                  <Text style={styles.missionProgress}>{routeFlow.completed}/{routeData.totalPoints}</Text>
+                </View>
+                <Text style={styles.missionName} numberOfLines={2}>
+                  {activeVisit
+                    ? activeVisit.contact?.displayName ?? activeVisit.customer.name
+                    : primaryRoutePoint?.contact?.displayName ?? primaryRoutePoint?.customer.name}
+                </Text>
+                {activeVisit?.contact ? <Text style={styles.missionMeta}>{activeVisit.customer.name}</Text> : null}
+                {!activeVisit && primaryRoutePoint?.plannedTime ? <Text style={styles.missionMeta}>{formatRouteTime(primaryRoutePoint.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
+              </View>
+            </View>
+            <View style={styles.missionTrack}><View style={[styles.missionFill, { width: routeFlow.progressPercent + "%" }]} /></View>
+            <View style={styles.missionActions}>
+              {!activeVisit && primaryRoutePoint && canNavigatePrimaryPoint ? (
+                <Pressable onPress={() => void openNavigation(primaryRoutePoint)} style={styles.navigationButton}>
+                  <Text style={styles.navigationButtonText}>{t("routeOpenNavigation")}</Text>
+                </Pressable>
+              ) : null}
+              {activeVisit || canStartVisits ? (
+                <Pressable
+                  disabled={saving || (!activeVisit && checkingInPointId !== null)}
+                  onPress={() => {
+                    if (activeVisit) {
+                      router.push(("/(app)/field-visits/" + activeVisit.id) as never)
+                    } else if (primaryRoutePoint) {
+                      void startVisit(primaryRoutePoint)
+                    }
+                  }}
+                  style={[styles.missionActionButton, (saving || (!activeVisit && checkingInPointId !== null)) && styles.disabled]}
+                >
+                  <Text style={styles.missionActionText}>
+                    {activeVisit ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.pointsHeader}>
-          <Text style={styles.sectionTitle}>{t("routePointsLabel")}</Text>
-          <Text style={styles.pointsCount}>{points.length}</Text>
+          <View>
+            <Text style={styles.sectionTitle}>{routeData.canEdit ? t("routePointsLabel") : t("routeRoadmap")}</Text>
+            {!routeData.canEdit ? <Text style={styles.roadmapSummary}>{routeFlow.completed}/{routeData.totalPoints} {t("routeVisitedLabel")}</Text> : null}
+          </View>
+          <Text style={styles.pointsCount}>{routePoints.length}</Text>
         </View>
         {routeData.canEdit && points.length > 0 ? (
           <Pressable onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable>
@@ -415,67 +518,110 @@ export default function FieldRouteDetailScreen() {
           </Pressable>
         ) : null}
         {pickerOpen ? <RouteTargetPicker excluded={excludedTargets} onSelect={selectTarget} onCancel={() => setPickerOpen(false)} /> : null}
-        {points.length === 0 ? <View style={styles.card}><Text style={styles.noPoints}>{t("noRoutePoints")}</Text></View> : null}
-        {points.map((point, index) => (
-          <View key={point.id} style={styles.pointCard}>
-            <View style={styles.pointTop}>
-              <View style={styles.indexBadge}><Text style={styles.indexText}>{index + 1}</Text></View>
-              <View style={styles.pointBody}>
-                <Text style={styles.pointName}>{point.contact?.displayName ?? point.customer.name}</Text>
-                {point.contact ? <Text style={styles.pointSubject}>{point.contact.specialtyName ?? point.contact.type} · {point.customer.name}</Text> : null}
-                <Text style={styles.pointMeta}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
-                {routeData.canEdit ? (
-                  <View style={styles.timeRow}>
-                    <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
-                    <TextInput
-                      value={timeInputs[point.id] ?? ""}
-                      onChangeText={(value) => setTimeInputs((current) => ({ ...current, [point.id]: value }))}
-                      placeholder="09:30"
-                      placeholderTextColor={colors.faint}
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={5}
-                      style={[styles.timeInput, !isValidRouteTime(timeInputs[point.id] ?? "") && styles.timeInputInvalid]}
-                    />
+        {routePoints.length === 0 ? <View style={styles.card}><Text style={styles.noPoints}>{t("noRoutePoints")}</Text></View> : null}
+        {routeFlow.steps.map((step) => {
+          const point = step.point
+          const index = points.findIndex((item) => item.id === point.id)
+          const isPrimaryPoint = !activeVisit && primaryRoutePoint?.id === point.id
+          const canNavigatePoint = routeNavigationUrls(point, navigationPlatform).length > 0
+          return (
+            <View key={point.id} style={styles.roadmapRow}>
+              {!routeData.canEdit ? (
+                <View style={styles.roadmapRail}>
+                  <View style={[
+                    styles.roadmapMarker,
+                    step.state === "completed" && styles.roadmapMarkerCompleted,
+                    step.state === "active" && styles.roadmapMarkerActive,
+                    step.state === "next" && styles.roadmapMarkerNext,
+                    step.state === "missed" && styles.roadmapMarkerMissed,
+                  ]}>
+                    <Text style={[
+                      styles.roadmapMarkerText,
+                      (step.state === "completed" || step.state === "active" || step.state === "next") && styles.roadmapMarkerTextInverted,
+                    ]}>{step.state === "completed" ? "✓" : step.position}</Text>
                   </View>
-                ) : point.plannedTime ? <Text style={styles.pointTime}>{formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
+                  {step.position < routeFlow.steps.length ? <View style={[styles.roadmapLine, step.state === "completed" && styles.roadmapLineCompleted]} /> : null}
+                </View>
+              ) : null}
+              <View style={[
+                styles.pointCard,
+                !routeData.canEdit && styles.roadmapCard,
+                step.state === "active" && styles.roadmapCardActive,
+                step.state === "next" && styles.roadmapCardNext,
+                step.state === "completed" && styles.roadmapCardCompleted,
+                step.state === "missed" && styles.roadmapCardMissed,
+              ]}>
+                <View style={styles.pointTop}>
+                  {routeData.canEdit ? <View style={styles.indexBadge}><Text style={styles.indexText}>{step.position}</Text></View> : null}
+                  <View style={styles.pointBody}>
+                    {!routeData.canEdit ? <View style={[
+                      styles.stepState,
+                      step.state === "completed" && styles.stepStateCompleted,
+                      step.state === "active" && styles.stepStateActive,
+                      step.state === "next" && styles.stepStateNext,
+                      step.state === "missed" && styles.stepStateMissed,
+                    ]}><Text style={[
+                      styles.stepStateText,
+                      (step.state === "completed" || step.state === "active" || step.state === "next") && styles.stepStateTextInverted,
+                    ]}>{routeStepLabel(step.state)}</Text></View> : null}
+                    <Text style={styles.pointName}>{point.contact?.displayName ?? point.customer.name}</Text>
+                    {point.contact ? <Text style={styles.pointSubject}>{point.contact.specialtyName ?? point.contact.type} · {point.customer.name}</Text> : null}
+                    <Text style={styles.pointMeta}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
+                    {routeData.canEdit ? (
+                      <View style={styles.timeRow}>
+                        <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
+                        <TextInput
+                          value={timeInputs[point.id] ?? ""}
+                          onChangeText={(value) => setTimeInputs((current) => ({ ...current, [point.id]: value }))}
+                          placeholder="09:30"
+                          placeholderTextColor={colors.faint}
+                          keyboardType="numbers-and-punctuation"
+                          maxLength={5}
+                          style={[styles.timeInput, !isValidRouteTime(timeInputs[point.id] ?? "") && styles.timeInputInvalid]}
+                        />
+                      </View>
+                    ) : point.plannedTime ? <Text style={styles.pointTime}>{formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
+                  </View>
+                </View>
+                {routeData.canEdit ? (
+                  <View style={styles.pointActions}>
+                    <Pressable disabled={index <= 0} onPress={() => setPoints((current) => reorder(current, index, index - 1))} style={[styles.smallButton, index <= 0 && styles.disabled]}>
+                      <Text style={styles.smallButtonText}>↑ {t("moveUp")}</Text>
+                    </Pressable>
+                    <Pressable disabled={index === points.length - 1} onPress={() => setPoints((current) => reorder(current, index, index + 1))} style={[styles.smallButton, index === points.length - 1 && styles.disabled]}>
+                      <Text style={styles.smallButtonText}>↓ {t("moveDown")}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => removeDraftPoint(index)} style={[styles.smallButton, styles.removeButton]}>
+                      <Text style={styles.removeText}>{t("removeStop")}</Text>
+                    </Pressable>
+                  </View>
+                ) : point.effectiveStatus === "PENDING" ? (
+                  <View style={styles.executionActions}>
+                    {isPrimaryPoint ? null : canStartVisits && !activeVisit ? (
+                      <Pressable
+                        disabled={checkingInPointId !== null}
+                        onPress={() => void startVisit(point)}
+                        style={[styles.secondaryVisitButton, checkingInPointId !== null && styles.disabled]}
+                      >
+                        <Text style={styles.secondaryVisitText}>{checkingInPointId === point.id ? t("locationLoading") : t("routeStartOutOfOrder")}</Text>
+                      </Pressable>
+                    ) : null}
+                    {canNavigatePoint ? (
+                      <Pressable onPress={() => void openNavigation(point)} style={styles.pointNavigationButton}>
+                        <Text style={styles.pointNavigationText}>{t("routeOpenNavigation")}</Text>
+                      </Pressable>
+                    ) : null}
+                    {canRequestStopRemoval ? (
+                      <Pressable onPress={() => setRequestPoint(point)} style={styles.requestButton}>
+                        <Text style={styles.requestText}>{t("requestRouteChange")}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             </View>
-            {routeData.canEdit ? (
-              <View style={styles.pointActions}>
-                <Pressable disabled={index === 0} onPress={() => setPoints((current) => reorder(current, index, index - 1))} style={[styles.smallButton, index === 0 && styles.disabled]}>
-                  <Text style={styles.smallButtonText}>↑ {t("moveUp")}</Text>
-                </Pressable>
-                <Pressable disabled={index === points.length - 1} onPress={() => setPoints((current) => reorder(current, index, index + 1))} style={[styles.smallButton, index === points.length - 1 && styles.disabled]}>
-                  <Text style={styles.smallButtonText}>↓ {t("moveDown")}</Text>
-                </Pressable>
-                <Pressable onPress={() => removeDraftPoint(index)} style={[styles.smallButton, styles.removeButton]}>
-                  <Text style={styles.removeText}>{t("removeStop")}</Text>
-                </Pressable>
-              </View>
-            ) : point.effectiveStatus === "PENDING" ? (
-              <View style={styles.executionActions}>
-                {activeVisit?.routePointId === point.id ? (
-                  <Pressable onPress={() => router.push(`/(app)/field-visits/${activeVisit.id}` as never)} style={styles.startVisitButton}>
-                    <Text style={styles.startVisitText}>{t("continueFieldVisit")}</Text>
-                  </Pressable>
-                ) : canStartVisits && !activeVisit ? (
-                  <Pressable
-                    disabled={checkingInPointId !== null}
-                    onPress={() => void startVisit(point)}
-                    style={[styles.startVisitButton, checkingInPointId !== null && styles.disabled]}
-                  >
-                    <Text style={styles.startVisitText}>{checkingInPointId === point.id ? t("locationLoading") : t("startFieldVisit")}</Text>
-                  </Pressable>
-                ) : null}
-                {canRequestStopRemoval ? (
-                  <Pressable onPress={() => setRequestPoint(point)} style={styles.requestButton}>
-                    <Text style={styles.requestText}>{t("requestRouteChange")}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        ))}
+          )
+        })}
 
         {requestPoint ? (
           <View style={[styles.card, styles.requestCard]}>
@@ -540,15 +686,58 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 9, marginBottom: 6 },
   input: { minHeight: 48, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: "#FAFAFB", paddingHorizontal: 12, color: colors.text, fontSize: 14 },
   notes: { minHeight: 86, paddingTop: 12 },
+  missionCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 15, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
+  missionCardActive: { backgroundColor: colors.successBg, borderColor: colors.successBorder },
+  missionTop: { flexDirection: "row", alignItems: "flex-start", gap: 11 },
+  missionIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  missionIconNext: { backgroundColor: colors.card },
+  missionIconActive: { backgroundColor: colors.card },
+  missionBody: { flex: 1, minWidth: 0 },
+  missionEyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  missionEyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  missionProgress: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  missionName: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
+  missionMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  missionTrack: { height: 6, borderRadius: radii.pill, backgroundColor: colors.card, overflow: "hidden", marginTop: 14 },
+  missionFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
+  missionActions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  navigationButton: { flex: 1, minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 9 },
+  navigationButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900", textAlign: "center" },
+  missionActionButton: { flex: 1.25, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 9 },
+  missionActionText: { color: colors.headerText, fontSize: 11, fontWeight: "900", textAlign: "center" },
   pointsHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 8 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  roadmapSummary: { color: colors.muted, fontSize: 10, marginTop: 3 },
   pointsCount: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.primarySoft, color: colors.primary, textAlign: "center", lineHeight: 24, fontSize: 11, fontWeight: "900" },
   noPoints: { color: colors.muted, textAlign: "center", paddingVertical: 18 },
+  roadmapRow: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", alignItems: "stretch" },
+  roadmapRail: { width: 38, alignItems: "center" },
+  roadmapMarker: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", zIndex: 1 },
+  roadmapMarkerCompleted: { backgroundColor: colors.success, borderColor: colors.success },
+  roadmapMarkerActive: { backgroundColor: colors.success, borderColor: colors.success },
+  roadmapMarkerNext: { backgroundColor: colors.primary, borderColor: colors.primary },
+  roadmapMarkerMissed: { backgroundColor: colors.missedBg, borderColor: colors.missedBorder },
+  roadmapMarkerText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  roadmapMarkerTextInverted: { color: colors.headerText },
+  roadmapLine: { flex: 1, width: 2, minHeight: 18, backgroundColor: colors.border },
+  roadmapLineCompleted: { backgroundColor: colors.success },
   pointCard: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  roadmapCard: { flex: 1, minWidth: 0, marginHorizontal: 0, marginTop: 0 },
+  roadmapCardActive: { borderColor: colors.success, backgroundColor: colors.successBg },
+  roadmapCardNext: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  roadmapCardCompleted: { borderColor: colors.successBorder },
+  roadmapCardMissed: { borderColor: colors.missedBorder, backgroundColor: colors.missedBg },
   pointTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   indexBadge: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   indexText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   pointBody: { flex: 1 },
+  stepState: { alignSelf: "flex-start", borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.draftBg, marginBottom: 7 },
+  stepStateCompleted: { backgroundColor: colors.successBg },
+  stepStateActive: { backgroundColor: colors.success },
+  stepStateNext: { backgroundColor: colors.primary },
+  stepStateMissed: { backgroundColor: colors.missedBg },
+  stepStateText: { color: colors.muted, fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
+  stepStateTextInverted: { color: colors.headerText },
   pointName: { color: colors.text, fontSize: 14, fontWeight: "900" },
   pointSubject: { color: colors.primary, fontSize: 10, fontWeight: "800", marginTop: 3 },
   pointMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
@@ -563,9 +752,11 @@ const styles = StyleSheet.create({
   removeButton: { backgroundColor: colors.missedBg },
   removeText: { color: colors.missed, fontSize: 10, fontWeight: "900" },
   executionActions: { gap: 8, marginTop: 10 },
-  startVisitButton: { minHeight: 48, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
-  startVisitText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
-  requestButton: { marginTop: 10, minHeight: 41, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
+  secondaryVisitButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  secondaryVisitText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  pointNavigationButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  pointNavigationText: { color: colors.text, fontSize: 10, fontWeight: "800" },
+  requestButton: { marginTop: 10, minHeight: 44, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   requestText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   requestCard: { borderWidth: 1, borderColor: colors.warning },
   requestTargetMeta: { color: colors.muted, fontSize: 11, marginTop: 4 },

@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { countOpenTasks, listVisits } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
+import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
 import type { FieldWorkdayStatus } from "../../../src/field/contracts"
 import { formatLongDate, formatTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
@@ -70,6 +71,23 @@ export default function TodayTab() {
   const routePoints = summary?.routePoints ?? today?.routes.reduce((sum, route) => sum + route.totalPoints, 0) ?? 0
   const visitedPoints = summary?.routeVisited ?? today?.routes.reduce((sum, route) => sum + route.visitedPoints, 0) ?? 0
   const progress = routePoints > 0 ? Math.min(100, Math.round((visitedPoints / routePoints) * 100)) : 0
+  const activeVisit = field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
+  const activeRoute = activeVisit?.routeId ? today?.routes.find((route) => route.id === activeVisit.routeId) ?? null : null
+  const nextRoute = activeRoute ?? today?.routes.find((route) => resolveFieldRouteFlow(route, activeVisit).primaryPoint !== null) ?? null
+  const nextRouteFlow = nextRoute ? resolveFieldRouteFlow(nextRoute, activeVisit) : null
+  const nextStopName = nextRouteFlow?.primaryPoint
+    ? nextRouteFlow.primaryPoint.contact?.displayName ?? nextRouteFlow.primaryPoint.customer.name
+    : null
+  const routeActionHref = activeVisit
+    ? "/(app)/field-visits/" + activeVisit.id
+    : nextRoute
+      ? "/(app)/routes/" + nextRoute.id
+      : "/(app)/(tabs)/week"
+  const routeActionLabel = activeVisit
+    ? t("continueFieldVisit")
+    : nextStopName
+      ? t("routeNextStop") + ": " + nextStopName
+      : t("openRoute")
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const workdayActive = workdayStatus === "STARTED"
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
@@ -189,8 +207,8 @@ export default function TodayTab() {
           ) : (
             <Text style={styles.emptyText}>{t("noRouteToday")}</Text>
           )}
-          <Pressable onPress={() => router.push("/(app)/(tabs)/week" as never)} style={styles.primaryAction}>
-            <Text style={styles.primaryActionText}>{t("openRoute")}</Text>
+          <Pressable onPress={() => router.push(routeActionHref as never)} style={styles.primaryAction}>
+            <Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text>
             <Text style={styles.primaryArrow}>→</Text>
           </Pressable>
         </View>

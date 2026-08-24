@@ -10,6 +10,7 @@ import {
 } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-format"
+import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 
@@ -115,6 +116,26 @@ export default function WeekTab() {
                 </View>
               ) : null}
 
+              {day.tasks.total > 0 || day.visits.total > 0 ? (
+                <View style={styles.dayMission}>
+                  <Text style={styles.dayMissionTitle}>{t("dailyMission")}</Text>
+                  <View style={styles.dayMissionStats}>
+                    {day.tasks.total > 0 ? (
+                      <View style={styles.dayMissionStat}>
+                        <TabIcon name="tasks" color={colors.primary} size={15} />
+                        <Text style={styles.dayMissionText}>{day.tasks.completed}/{day.tasks.total} {t("dayTasks")}</Text>
+                      </View>
+                    ) : null}
+                    {day.visits.total > 0 ? (
+                      <View style={styles.dayMissionStat}>
+                        <TabIcon name="visit" color={colors.successDark} size={15} />
+                        <Text style={styles.dayMissionText}>{day.visits.completed}/{day.visits.total} {t("dayVisits")}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+
               {day.routes.length === 0 ? (
                 <View style={styles.emptyDay}>
                   <Text style={styles.noPlans}>{t("noPlansForDay")}</Text>
@@ -148,10 +169,10 @@ export default function WeekTab() {
                           </View>
                         </View>
                         <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.min(100, percent)}%`, backgroundColor: tone.dot }]} /></View>
-                        {route.points.slice(0, 3).map((point) => (
+                        {route.points.slice(0, 3).map((point, pointIndex) => (
                           <View key={point.id} style={styles.pointRow}>
                             <View style={[styles.pointIndex, point.effectiveStatus === "VISITED" && styles.pointVisited, point.effectiveStatus === "MISSED" && styles.pointMissed]}>
-                              <Text style={styles.pointIndexText}>{point.orderIndex}</Text>
+                              <Text style={styles.pointIndexText}>{pointIndex + 1}</Text>
                             </View>
                             <View style={styles.pointBody}>
                               <Text style={styles.pointName} numberOfLines={1}>{point.customer.name}</Text>
@@ -224,6 +245,11 @@ const styles = StyleSheet.create({
   dayOffLine: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 11, padding: 9, borderRadius: radii.inner, backgroundColor: "rgba(255,255,255,0.58)" },
   holidayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.holiday },
   dayOffText: { color: colors.holiday, fontSize: 12, fontWeight: "800" },
+  dayMission: { marginTop: 11, padding: 10, borderRadius: radii.inner, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: "rgba(255,90,0,0.14)" },
+  dayMissionTitle: { color: colors.primary, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 },
+  dayMissionStats: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 7 },
+  dayMissionStat: { flexDirection: "row", alignItems: "center", gap: 5 },
+  dayMissionText: { color: colors.text, fontSize: 10, fontWeight: "800" },
   emptyDay: { paddingTop: 6 },
   noPlans: { color: colors.muted, fontSize: 13, paddingVertical: 11, textAlign: "center" },
   createRouteAction: { minHeight: 44, marginTop: 2, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
