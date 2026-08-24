@@ -164,11 +164,10 @@ export default function FieldRouteDetailScreen() {
     }
     setCheckingInPointId(point.id)
     try {
-      const location = await getCurrentDeviceLocation()
-      if (!location) {
-        Alert.alert(t("locationPermissionDenied"))
-        return
-      }
+      // Visit coordinates are optional until a tenant visit policy explicitly
+      // requires them. Never request a surprise permission or block the route
+      // because the device has no GPS fix.
+      const location = await getCurrentDeviceLocation({ requestPermission: false }).catch(() => null)
       const visitId = `field-visit-${Crypto.randomUUID()}`
       const checkInAt = new Date().toISOString()
       const queued = enqueueFieldVisitCheckIn({
@@ -178,9 +177,9 @@ export default function FieldRouteDetailScreen() {
         routeId: routeData!.id,
         routePointId: point.id,
         checkInAt,
-        checkInLat: location.latitude,
-        checkInLng: location.longitude,
-        accuracyM: location.accuracyM,
+        checkInLat: location?.latitude ?? null,
+        checkInLng: location?.longitude ?? null,
+        accuracyM: location?.accuracyM ?? null,
       })
       const week = field.week!
       field.applyLocalWeek(startOptimisticFieldVisit(week, {
@@ -204,7 +203,7 @@ export default function FieldRouteDetailScreen() {
       if (result?.status !== "applied") Alert.alert(t("fieldVisitQueued"))
       router.push(`/(app)/field-visits/${visitId}` as never)
     } catch (error) {
-      Alert.alert(t("locationUnavailable"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
       setCheckingInPointId(null)
     }

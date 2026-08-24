@@ -38,6 +38,7 @@ import {
 import {
   addOptimisticVisitAction,
   addOptimisticVisitPhoto,
+  hasFutureVisitNextAction,
   localFieldVisitWorkspace,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
@@ -49,16 +50,37 @@ import { persistAndQueueFieldVisitPhoto } from "../../../src/field/visit-photo-s
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
-import { formatTime } from "../../../src/i18n/date-format"
+import { formatShortDateTime, formatTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import {
+  agentTaskStatusLabel,
+  visitPhotoNeedsRetake,
+  visitPhotoStateLabel,
+} from "../../../src/field/labels"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 const outcomes: FieldVisitOutcome[] = ["SUCCESSFUL", "PARTIAL", "NO_CONTACT", "RESCHEDULE"]
 const potentials: FieldVisitPotential[] = ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
+const RESCHEDULE_FOLLOW_UP_REQUIREMENT: FieldVisitRequirement = {
+  actionKey: "NEXT_ACTION",
+  mode: "REQUIRED",
+  minCount: 1,
+  conditions: null,
+  allowWaiver: false,
+}
+
+function localDateKey(date: Date): string {
+  return String(date.getFullYear()) + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0")
+}
+
+function todayDateKey(): string {
+  return localDateKey(new Date())
+}
 
 function tomorrowDateKey(): string {
   const date = new Date()
   date.setDate(date.getDate() + 1)
-  return date.toISOString().slice(0, 10)
+  return localDateKey(date)
 }
 
 function actionLabel(requirement: FieldVisitRequirement): string {
@@ -66,12 +88,14 @@ function actionLabel(requirement: FieldVisitRequirement): string {
 }
 
 export default function FieldVisitWorkspaceScreen() {
-  useLocale()
+  const locale = useLocale()
   const { visitId } = useLocalSearchParams<{ visitId: string }>()
   const field = useField()
   const { sync } = useSync()
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const cameraRef = useRef<CameraView | null>(null)
+  const visitScroll = useRef<ScrollView | null>(null)
+  const editorOffset = useRef(0)
   const cacheKey = `field.visit.workspace.${visitId}`
   const cached = readFieldCache<FieldVisitWorkspaceData>(cacheKey)?.value ?? null
   const local = localFieldVisitWorkspace(field.week, visitId, field.profile?.agent.id ?? "")
@@ -92,10 +116,36 @@ export default function FieldVisitWorkspaceScreen() {
     () => workspace ? missingRequiredVisitActions(workspace) : [],
     [workspace],
   )
+  const hasRescheduleFollowUp = workspace
+    ? hasFutureVisitNextAction(workspace, todayDateKey())
+    : false
+  const visibleRequirements = outcome === "RESCHEDULE" && !requirements.some(
+    (requirement) => requirement.actionKey === "NEXT_ACTION",
+  )
+    ? [...requirements, RESCHEDULE_FOLLOW_UP_REQUIREMENT]
+    : requirements
+  const rescheduleFollowUpMissing = outcome === "RESCHEDULE" && !hasRescheduleFollowUp
+  const relatedWork = useMemo(() => {
+    if (!workspace) return []
+    const seen = new Set<string>()
+    return [...workspace.visit.tasks, ...workspace.reminders].filter((task) => {
+      if (seen.has(task.id)) return false
+      seen.add(task.id)
+      return true
+    })
+  }, [workspace])
 
   function persist(next: FieldVisitWorkspaceData) {
     setWorkspace(next)
     writeFieldCache(cacheKey, next)
+  }
+
+  function openRescheduleFollowUp() {
+    setActiveRequirement(RESCHEDULE_FOLLOW_UP_REQUIREMENT)
+    setEvidence("")
+    setTimeout(() => {
+      visitScroll.current?.scrollTo({ y: Math.max(0, editorOffset.current - 14), animated: true })
+    }, 48)
   }
 
   async function refreshWorkspace(base: FieldVisitWorkspaceData | null = workspace) {
@@ -121,6 +171,13 @@ export default function FieldVisitWorkspaceScreen() {
     const trimmed = evidence.trim()
     if (trimmed.length < 2) return
     if (status === "WAIVED" && !activeRequirement.allowWaiver) return
+    if (
+      activeRequirement.actionKey === "NEXT_ACTION" &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(nextDueDate) || nextDueDate <= todayDateKey())
+    ) {
+      Alert.alert(t("fieldVisitFutureDateRequired"))
+      return
+    }
     setSaving(true)
     try {
       const completedAt = new Date().toISOString()
@@ -174,7 +231,7 @@ export default function FieldVisitWorkspaceScreen() {
     try {
       const picture = await cameraRef.current?.takePictureAsync({ quality: 0.7, exif: true })
       if (!picture?.uri) return
-      const location = await getCurrentDeviceLocation().catch(() => null)
+      const location = await getCurrentDeviceLocation({ requestPermission: false }).catch(() => null)
       const takenAt = new Date().toISOString()
       const queued = await persistAndQueueFieldVisitPhoto({
         visitId,
@@ -222,6 +279,11 @@ export default function FieldVisitWorkspaceScreen() {
       Alert.alert(t("fieldVisitMissingActions", { actions: missing.map(actionLabel).join(", ") }))
       return
     }
+    if (rescheduleFollowUpMissing) {
+      openRescheduleFollowUp()
+      Alert.alert(t("fieldVisitRescheduleFollowUpRequired"))
+      return
+    }
     Alert.alert(t("fieldVisitCheckout"), t("fieldVisitCheckoutConfirm"), [
       { text: t("cancel"), style: "cancel" },
       { text: t("fieldVisitCheckout"), onPress: () => void submitCheckout() },
@@ -232,18 +294,14 @@ export default function FieldVisitWorkspaceScreen() {
     if (!workspace || !field.week) return
     setSaving(true)
     try {
-      const location = await getCurrentDeviceLocation()
-      if (!location) {
-        Alert.alert(t("locationPermissionDenied"))
-        return
-      }
+      const location = await getCurrentDeviceLocation({ requestPermission: false }).catch(() => null)
       const checkOutAt = new Date().toISOString()
       const queued = enqueueFieldVisitUpdate({
         visitId,
         status: "CHECKED_OUT",
         checkOutAt,
-        checkOutLat: location.latitude,
-        checkOutLng: location.longitude,
+        checkOutLat: location?.latitude ?? null,
+        checkOutLng: location?.longitude ?? null,
         outcome,
         potential,
         resultNotes: resultNote.trim() || null,
@@ -282,7 +340,7 @@ export default function FieldVisitWorkspaceScreen() {
       if (result?.status !== "applied") Alert.alert(t("fieldVisitResultQueued"))
       router.replace(`/(app)/routes/${workspace.visit.routeId}` as never)
     } catch (error) {
-      Alert.alert(t("locationUnavailable"), error instanceof Error ? error.message : String(error))
+      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
@@ -325,7 +383,7 @@ export default function FieldVisitWorkspaceScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={visitScroll} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}>
@@ -351,8 +409,11 @@ export default function FieldVisitWorkspaceScreen() {
           {missing.length ? <View style={styles.requiredCount}><Text style={styles.requiredCountText}>{missing.length}</Text></View> : null}
         </View>
 
-        {requirements.map((requirement) => {
-          const progress = visitRequirementProgress(workspace, requirement)
+        {visibleRequirements.map((requirement) => {
+          const requirementProgress = visitRequirementProgress(workspace, requirement)
+          const progress = outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION"
+            ? { completed: hasRescheduleFollowUp ? 1 : 0, required: 1, satisfied: hasRescheduleFollowUp }
+            : requirementProgress
           return (
             <Pressable
               key={requirement.actionKey}
@@ -363,7 +424,7 @@ export default function FieldVisitWorkspaceScreen() {
               <View style={[styles.actionMark, progress.satisfied && styles.actionMarkDone]}><Text style={[styles.actionMarkText, progress.satisfied && styles.actionMarkTextDone]}>{progress.satisfied ? "✓" : requirement.mode === "REQUIRED" ? "!" : "+"}</Text></View>
               <View style={styles.actionBody}>
                 <Text style={styles.actionTitle}>{actionLabel(requirement)}</Text>
-                <Text style={styles.actionMeta}>{requirement.mode === "REQUIRED" ? t("fieldVisitRequired") : t("fieldVisitOptional")} · {progress.completed}/{progress.required}</Text>
+                <Text style={styles.actionMeta}>{outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION" ? t("fieldVisitFollowUpNeeded") : requirement.mode === "REQUIRED" ? t("fieldVisitRequired") : t("fieldVisitOptional")} · {progress.completed}/{progress.required}</Text>
               </View>
               <Text style={styles.chevron}>›</Text>
             </Pressable>
@@ -371,7 +432,7 @@ export default function FieldVisitWorkspaceScreen() {
         })}
 
         {activeRequirement ? (
-          <View style={styles.editorCard}>
+          <View onLayout={(event) => { editorOffset.current = event.nativeEvent.layout.y }} style={styles.editorCard}>
             <Text style={styles.editorTitle}>{actionLabel(activeRequirement)}</Text>
             {activeRequirement.actionKey === "PHOTO" ? (
               <>
@@ -382,12 +443,13 @@ export default function FieldVisitWorkspaceScreen() {
               </>
             ) : (
               <>
-                <Text style={styles.label}>{t("fieldVisitEvidence")}</Text>
+                <Text style={styles.label}>{activeRequirement.actionKey === "NEXT_ACTION" ? t("fieldVisitNextActionTitle") : t("fieldVisitEvidence")}</Text>
                 <TextInput value={evidence} onChangeText={setEvidence} multiline textAlignVertical="top" style={styles.textarea} />
                 {activeRequirement.actionKey === "NEXT_ACTION" ? (
                   <>
+                    <Text style={styles.editorHint}>{t("fieldVisitNextActionHint")}</Text>
                     <Text style={styles.label}>{t("due")}</Text>
-                    <TextInput value={nextDueDate} onChangeText={setNextDueDate} placeholder="YYYY-MM-DD" style={styles.input} />
+                    <TextInput value={nextDueDate} onChangeText={setNextDueDate} placeholder={t("dateInputHint")} style={styles.input} />
                   </>
                 ) : null}
               </>
@@ -400,16 +462,94 @@ export default function FieldVisitWorkspaceScreen() {
           </View>
         ) : null}
 
+        <View style={styles.evidenceSection}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>{t("fieldVisitEvidenceHistory")}</Text>
+              <Text style={styles.sectionHint}>{t("fieldVisitEvidenceHistoryHint")}</Text>
+            </View>
+          </View>
+
+          <View style={styles.evidenceGroup}>
+            <View style={styles.evidenceGroupHeader}>
+              <View style={styles.evidenceGroupIcon}><TabIcon name="camera" color={colors.primary} size={18} /></View>
+              <Text style={styles.evidenceGroupTitle}>{t("fieldVisitPhotoEvidence")}</Text>
+            </View>
+            {workspace.visit.photos.length ? workspace.visit.photos.map((photo) => {
+              const needsRetake = visitPhotoNeedsRetake(photo.status, photo.syncState)
+              return (
+                <View key={photo.id} style={[styles.evidenceRow, needsRetake && styles.evidenceRowAttention]}>
+                  <View style={[styles.evidenceMark, needsRetake && styles.evidenceMarkAttention]}>
+                    <TabIcon name="camera" color={needsRetake ? colors.missed : colors.primary} size={17} />
+                  </View>
+                  <View style={styles.evidenceBody}>
+                    <Text style={[styles.evidenceState, needsRetake && styles.evidenceStateAttention]}>
+                      {visitPhotoStateLabel(photo.status, photo.syncState)}
+                    </Text>
+                    <Text style={styles.evidenceMeta}>{formatShortDateTime(photo.createdAt, locale)}</Text>
+                  </View>
+                  {needsRetake && !isCompleted ? (
+                    <Pressable accessibilityRole="button" onPress={() => void openPhotoCamera()} style={styles.retakeButton}>
+                      <Text style={styles.retakeText}>{t("retakeShot")}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )
+            }) : (
+              <View style={styles.evidenceEmpty}>
+                <Text style={styles.evidenceEmptyTitle}>{t("fieldVisitNoPhotoEvidence")}</Text>
+                <Text style={styles.evidenceEmptyHint}>{t("fieldVisitNoPhotoEvidenceHint")}</Text>
+                {!isCompleted ? (
+                  <Pressable accessibilityRole="button" onPress={() => void openPhotoCamera()} style={styles.photoProofButton}>
+                    <TabIcon name="camera" color={colors.headerText} size={17} />
+                    <Text style={styles.photoProofText}>{t("takePhoto")}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.evidenceGroup}>
+            <View style={styles.evidenceGroupHeader}>
+              <View style={styles.evidenceGroupIcon}><TabIcon name="tasks" color={colors.primary} size={18} /></View>
+              <Text style={styles.evidenceGroupTitle}>{t("fieldVisitLinkedWork")}</Text>
+            </View>
+            {relatedWork.length ? relatedWork.map((task) => (
+              <Pressable
+                key={task.id}
+                accessibilityRole="button"
+                accessibilityLabel={t("fieldVisitOpenTask")}
+                onPress={() => router.push(`/(app)/field-tasks/${task.id}` as never)}
+                style={({ pressed }) => [styles.workRow, pressed && styles.pressed]}
+              >
+                <View style={styles.workMark}><TabIcon name="tasks" color={colors.info} size={17} /></View>
+                <View style={styles.evidenceBody}>
+                  <Text numberOfLines={1} style={styles.workTitle}>{task.title}</Text>
+                  <Text numberOfLines={1} style={styles.evidenceMeta}>
+                    {agentTaskStatusLabel(task.status) + (task.dueDate ? ` · ${t("due")} ${formatShortDateTime(task.dueDate, locale)}` : "")}
+                  </Text>
+                </View>
+                <Text style={styles.workArrow}>›</Text>
+              </Pressable>
+            )) : (
+              <View style={styles.evidenceEmpty}>
+                <Text style={styles.evidenceEmptyTitle}>{t("fieldVisitNoLinkedWork")}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
         {!isCompleted ? (
           <View style={styles.resultCard}>
             <Text style={styles.sectionTitle}>{t("fieldVisitCheckout")}</Text>
             <Text style={styles.label}>{t("fieldVisitOutcome")}</Text>
-            <View style={styles.chips}>{outcomes.map((item) => <Pressable key={item} onPress={() => setOutcome(item)} style={[styles.chip, outcome === item && styles.chipSelected]}><Text style={[styles.chipText, outcome === item && styles.chipTextSelected]}>{t(`visitOutcome_${item}` as MessageKey)}</Text></Pressable>)}</View>
+            <View style={styles.chips}>{outcomes.map((item) => <Pressable key={item} onPress={() => { setOutcome(item); if (item === "RESCHEDULE" && !hasRescheduleFollowUp) openRescheduleFollowUp() }} style={[styles.chip, outcome === item && styles.chipSelected]}><Text style={[styles.chipText, outcome === item && styles.chipTextSelected]}>{t(`visitOutcome_${item}` as MessageKey)}</Text></Pressable>)}</View>
+            {outcome === "RESCHEDULE" ? <View style={[styles.followUpNotice, hasRescheduleFollowUp && styles.followUpNoticeReady]}><Text style={[styles.followUpNoticeText, hasRescheduleFollowUp && styles.followUpNoticeTextReady]}>{t(hasRescheduleFollowUp ? "fieldVisitFollowUpReady" : "fieldVisitRescheduleFollowUpRequired")}</Text></View> : null}
             <Text style={styles.label}>{t("fieldVisitPotential")}</Text>
             <View style={styles.chips}>{potentials.map((item) => <Pressable key={item} onPress={() => setPotential(item)} style={[styles.chip, potential === item && styles.chipSelected]}><Text style={[styles.chipText, potential === item && styles.chipTextSelected]}>{t(`visitPotential_${item}` as MessageKey)}</Text></Pressable>)}</View>
             <Text style={styles.label}>{t("fieldVisitResultNote")}</Text>
             <TextInput value={resultNote} onChangeText={setResultNote} multiline textAlignVertical="top" style={styles.textarea} />
-            <Pressable disabled={saving || missing.length > 0} onPress={checkout} style={[styles.checkoutButton, (saving || missing.length > 0) && styles.disabled]}><Text style={styles.checkoutText}>{missing.length ? t("fieldVisitMissingActions", { actions: String(missing.length) }) : t("fieldVisitCheckout")}</Text></Pressable>
+            <Pressable disabled={saving || missing.length > 0 || rescheduleFollowUpMissing} onPress={checkout} style={[styles.checkoutButton, (saving || missing.length > 0 || rescheduleFollowUpMissing) && styles.disabled]}><Text style={styles.checkoutText}>{missing.length ? t("fieldVisitMissingActions", { actions: String(missing.length) }) : rescheduleFollowUpMissing ? t("fieldVisitAddFollowUp") : t("fieldVisitCheckout")}</Text></Pressable>
           </View>
         ) : null}
       </ScrollView>
@@ -455,7 +595,32 @@ const styles = StyleSheet.create({
   waiveButton: { minHeight: 42, borderRadius: radii.inner, backgroundColor: colors.warningBg, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, waiveText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
   primaryButton: { minHeight: 42, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, primaryText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
   resultCard: { marginHorizontal: 14, marginTop: 20, borderRadius: radii.card, padding: 15, backgroundColor: colors.card, ...cardShadow },
+  evidenceSection: { marginTop: 20 },
+  evidenceGroup: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  evidenceGroupHeader: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 7 },
+  evidenceGroupIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  evidenceGroupTitle: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "900" },
+  evidenceRow: { minHeight: 54, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: colors.border },
+  evidenceRowAttention: { borderTopColor: colors.dangerBorder },
+  evidenceMark: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  evidenceMarkAttention: { backgroundColor: colors.dangerBg },
+  evidenceBody: { flex: 1, minWidth: 0 },
+  evidenceState: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  evidenceStateAttention: { color: colors.missed },
+  evidenceMeta: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 2 },
+  retakeButton: { minHeight: 38, borderRadius: radii.inner, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder },
+  retakeText: { color: colors.missed, fontSize: 9, fontWeight: "900" },
+  evidenceEmpty: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, paddingBottom: 2 },
+  evidenceEmptyTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  evidenceEmptyHint: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
+  photoProofButton: { alignSelf: "flex-start", minHeight: 40, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 7 },
+  photoProofText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  workRow: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: colors.border },
+  workMark: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.infoBg },
+  workTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  workArrow: { color: colors.faint, fontSize: 22, lineHeight: 24 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 38, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
+  followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
   checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", marginTop: 15, paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },

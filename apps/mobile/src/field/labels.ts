@@ -51,3 +51,36 @@ export function workdayStatusLabel(value: string | null | undefined): string {
   if (value === "COMPLETED") return t("workdayStatus_COMPLETED")
   return t("workdayStatus_NOT_STARTED")
 }
+
+export function agentTaskStatusLabel(value: string | null | undefined): string {
+  if (value === "PENDING") return t("agentTaskStatus_PENDING")
+  if (value === "IN_PROGRESS") return t("agentTaskStatus_IN_PROGRESS")
+  if (value === "COMPLETED") return t("agentTaskStatus_COMPLETED")
+  if (value === "CANCELLED") return t("agentTaskStatus_CANCELLED")
+  if (value === "OVERDUE") return t("agentTaskStatus_OVERDUE")
+  return t("lifecycleStatus_UNKNOWN")
+}
+
+/**
+ * A visit photo has two independent lifecycles: the field sync queue and
+ * the server review. The agent sees one actionable human label, never a
+ * backend enum.
+ */
+export function visitPhotoStateLabel(
+  status: string | null | undefined,
+  syncState: "PENDING" | "CONFLICT" | "REJECTED" | null | undefined,
+): string {
+  if (syncState === "REJECTED" || status === "REJECTED") return t("fieldPhotoState_REJECTED")
+  if (syncState === "CONFLICT") return t("fieldPhotoState_CONFLICT")
+  if (syncState === "PENDING" || status === "LOCAL_PENDING") return t("fieldPhotoState_LOCAL_PENDING")
+  if (status === "PENDING") return t("fieldPhotoState_PENDING")
+  if (status === "APPROVED") return t("fieldPhotoState_APPROVED")
+  return t("lifecycleStatus_UNKNOWN")
+}
+
+export function visitPhotoNeedsRetake(
+  status: string | null | undefined,
+  syncState: "PENDING" | "CONFLICT" | "REJECTED" | null | undefined,
+): boolean {
+  return status === "REJECTED" || syncState === "REJECTED" || syncState === "CONFLICT"
+}

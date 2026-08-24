@@ -63,4 +63,14 @@ describe("getCurrentDeviceLocation", () => {
     expect(locationMocks.getLastKnownPositionAsync).not.toHaveBeenCalled()
     expect(locationMocks.getCurrentPositionAsync).not.toHaveBeenCalled()
   })
+
+  it("does not request permission when a flow only collects coordinates opportunistically", async () => {
+    locationMocks.getForegroundPermissionsAsync.mockResolvedValue({ granted: false })
+
+    await expect(getCurrentDeviceLocation({ requestPermission: false })).resolves.toBeNull()
+
+    expect(locationMocks.requestForegroundPermissionsAsync).not.toHaveBeenCalled()
+    expect(locationMocks.getLastKnownPositionAsync).not.toHaveBeenCalled()
+    expect(locationMocks.getCurrentPositionAsync).not.toHaveBeenCalled()
+  })
 })

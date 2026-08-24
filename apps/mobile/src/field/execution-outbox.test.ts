@@ -49,6 +49,16 @@ describe("field execution outbox", () => {
       accuracyM: 12,
     })
     expect(() => parseFieldVisitCheckInPayload({ ...checkIn.payload, checkInLat: "40.4" })).toThrow()
+    expect(parseFieldVisitCheckInPayload({
+      ...checkIn.payload,
+      checkInLat: null,
+      checkInLng: null,
+      accuracyM: null,
+    })).toMatchObject({ checkInLat: null, checkInLng: null })
+    expect(() => parseFieldVisitCheckInPayload({
+      ...checkIn.payload,
+      checkInLat: null,
+    })).toThrow()
   })
 
   it("maps local operations to the existing idempotent LeadDrive protocol", () => {
@@ -63,6 +73,21 @@ describe("field execution outbox", () => {
         contactId: "doctor-1",
       }),
     })
+  })
+
+  it("omits optional visit coordinates from the server operation", () => {
+    const noGpsCheckIn: FieldExecutionPushOperation = {
+      ...checkIn,
+      payload: {
+        ...checkIn.payload,
+        checkInLat: null,
+        checkInLng: null,
+        accuracyM: null,
+      },
+    }
+    expect(toFieldServerOperation(noGpsCheckIn).data).not.toHaveProperty("checkInLat")
+    expect(toFieldServerOperation(noGpsCheckIn).data).not.toHaveProperty("checkInLng")
+    expect(toFieldServerOperation(noGpsCheckIn).data).not.toHaveProperty("accuracyM")
   })
 
   it("preserves causal workday ids for start and subsequent transitions", () => {

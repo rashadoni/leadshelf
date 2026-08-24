@@ -7,6 +7,10 @@ export interface DeviceLocation {
   recordedAt: string
 }
 
+export type DeviceLocationOptions = {
+  requestPermission?: boolean
+}
+
 const LAST_KNOWN_MAX_AGE_MS = 30_000
 const LAST_KNOWN_REQUIRED_ACCURACY_M = 100
 
@@ -19,9 +23,15 @@ function toDeviceLocation(reading: Location.LocationObject): DeviceLocation {
   }
 }
 
-export async function getCurrentDeviceLocation(): Promise<DeviceLocation | null> {
+export async function getCurrentDeviceLocation(
+  options: DeviceLocationOptions = {},
+): Promise<DeviceLocation | null> {
   const existing = await Location.getForegroundPermissionsAsync()
-  const permission = existing.granted ? existing : await Location.requestForegroundPermissionsAsync()
+  const permission = existing.granted
+    ? existing
+    : options.requestPermission === false
+      ? existing
+      : await Location.requestForegroundPermissionsAsync()
   if (!permission.granted) return null
 
   const lastKnown = await Location.getLastKnownPositionAsync({

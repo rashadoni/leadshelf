@@ -18,8 +18,8 @@ export type FieldVisitCheckInPayload = {
   routeId: string
   routePointId: string
   checkInAt: string
-  checkInLat: number
-  checkInLng: number
+  checkInLat: number | null
+  checkInLng: number | null
   accuracyM: number | null
   notes?: string | null
 }
@@ -37,8 +37,8 @@ export type FieldVisitUpdatePayload = {
   visitId: string
   status?: "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED"
   checkOutAt?: string
-  checkOutLat?: number
-  checkOutLng?: number
+  checkOutLat?: number | null
+  checkOutLng?: number | null
   outcome?: FieldVisitOutcome
   potential?: FieldVisitPotential
   notes?: string | null
@@ -295,6 +295,12 @@ function safeId(value: unknown): value is string {
 
 export function parseFieldVisitCheckInPayload(value: unknown): FieldVisitCheckInPayload {
   const payload = record(value)
+  const coordinatesValid = (
+    (payload?.checkInLat == null && payload?.checkInLng == null) ||
+    (finite(payload?.checkInLat) && finite(payload?.checkInLng) &&
+      payload.checkInLat >= -90 && payload.checkInLat <= 90 &&
+      payload.checkInLng >= -180 && payload.checkInLng <= 180)
+  )
   if (
     !payload ||
     !string(payload.visitId) ||
@@ -303,8 +309,7 @@ export function parseFieldVisitCheckInPayload(value: unknown): FieldVisitCheckIn
     !string(payload.routeId) ||
     !string(payload.routePointId) ||
     !parseDate(payload.checkInAt) ||
-    !finite(payload.checkInLat) ||
-    !finite(payload.checkInLng) ||
+    !coordinatesValid ||
     !(payload.accuracyM == null || finite(payload.accuracyM))
   ) throw new Error("Invalid field visit check-in payload")
   return payload as unknown as FieldVisitCheckInPayload
@@ -327,13 +332,18 @@ export function parseFieldVisitActionPayload(value: unknown): FieldVisitActionPa
 
 export function parseFieldVisitUpdatePayload(value: unknown): FieldVisitUpdatePayload {
   const payload = record(value)
+  const coordinatesValid = (
+    (payload?.checkOutLat == null && payload?.checkOutLng == null) ||
+    (finite(payload?.checkOutLat) && finite(payload?.checkOutLng) &&
+      payload.checkOutLat >= -90 && payload.checkOutLat <= 90 &&
+      payload.checkOutLng >= -180 && payload.checkOutLng <= 180)
+  )
   if (
     !payload ||
     !string(payload.visitId) ||
     !(payload.status == null || ["CHECKED_IN", "CHECKED_OUT", "CANCELLED"].includes(String(payload.status))) ||
     !(payload.checkOutAt == null || parseDate(payload.checkOutAt)) ||
-    !(payload.checkOutLat == null || finite(payload.checkOutLat)) ||
-    !(payload.checkOutLng == null || finite(payload.checkOutLng)) ||
+    !coordinatesValid ||
     !(payload.outcome == null || ["SUCCESSFUL", "PARTIAL", "NO_CONTACT", "RESCHEDULE"].includes(String(payload.outcome))) ||
     !(payload.potential == null || ["HIGH", "MEDIUM", "LOW", "UNKNOWN"].includes(String(payload.potential)))
   ) throw new Error("Invalid field visit update payload")
@@ -777,13 +787,22 @@ export function toFieldServerOperation(operation: FieldExecutionPushOperation): 
     }
   }
   if (operation.kind === "field.visit.checkin") {
-    const { visitId, accuracyM, ...payload } = operation.payload
+    const {
+      visitId,
+      checkInLat,
+      checkInLng,
+      accuracyM,
+      ...payload
+    } = operation.payload
+    const coordinates = checkInLat == null || checkInLng == null
+      ? {}
+      : { checkInLat, checkInLng, accuracyM }
     return {
       operationId: operation.clientOpId,
       op: "create",
       entity: "visits",
       clientTimestamp,
-      data: { id: visitId, ...payload, accuracyM },
+      data: { id: visitId, ...payload, ...coordinates },
     }
   }
   if (operation.kind === "field.visit.action") {
@@ -796,13 +815,21 @@ export function toFieldServerOperation(operation: FieldExecutionPushOperation): 
       data: { id: actionResultId, ...payload },
     }
   }
-  const { visitId, ...payload } = operation.payload
+  const {
+    visitId,
+    checkOutLat,
+    checkOutLng,
+    ...payload
+  } = operation.payload
+  const coordinates = checkOutLat == null || checkOutLng == null
+    ? {}
+    : { checkOutLat, checkOutLng }
   return {
     operationId: operation.clientOpId,
     op: "update",
     entity: "visits",
     clientTimestamp,
-    data: { id: visitId, ...payload },
+    data: { id: visitId, ...payload, ...coordinates },
   }
 }
 

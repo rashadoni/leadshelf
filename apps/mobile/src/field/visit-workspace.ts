@@ -149,6 +149,32 @@ export function missingRequiredVisitActions(
   ))
 }
 
+/**
+ * A rescheduled visit is only operationally complete when it has a real,
+ * future follow-up. Pending local actions count so an offline agent can queue
+ * the action and the checkout in causal order; rejected actions never count.
+ */
+export function hasFutureVisitNextAction(
+  workspace: FieldVisitWorkspaceData,
+  afterDateKey: string,
+): boolean {
+  const after = new Date(afterDateKey + "T23:59:59.999").getTime()
+  if (!Number.isFinite(after)) return false
+  return workspace.visit.actionResults.some((result) => {
+    if (
+      result.actionKey !== "NEXT_ACTION" ||
+      result.status !== "COMPLETED" ||
+      result.syncState === "REJECTED"
+    ) return false
+    const evidence = result.evidence
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false
+    const dueAt = (evidence as Record<string, unknown>).dueDate
+    if (typeof dueAt !== "string") return false
+    const due = new Date(dueAt).getTime()
+    return Number.isFinite(due) && due > after
+  })
+}
+
 export function mergeServerVisitWorkspace(
   local: FieldVisitWorkspaceData | null,
   server: FieldVisitWorkspaceData,

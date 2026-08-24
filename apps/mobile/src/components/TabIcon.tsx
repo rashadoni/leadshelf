@@ -20,6 +20,7 @@ export type TabIconName =
   | "profile"
   | "location"
   | "qr"
+  | "camera"
 
 export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: ColorValue; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24" }
@@ -150,6 +151,13 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Path d="M4 9V5.7A1.7 1.7 0 0 1 5.7 4H9M15 4h3.3A1.7 1.7 0 0 1 20 5.7V9M20 15v3.3a1.7 1.7 0 0 1-1.7 1.7H15M9 20H5.7A1.7 1.7 0 0 1 4 18.3V15" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
           <Path d="M9 9h2.3v2.3H9zM13.3 9h1.7v1.7h-1.7zM13.3 13.3h2.7V16h-2.7zM9 14.3h1.7V16H9z" stroke={color} strokeWidth={1.55} strokeLinejoin="round" />
+        </Svg>
+      )
+    case "camera":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M4.5 8.1h3l1.4-2h6.2l1.4 2h3A1.5 1.5 0 0 1 21 9.6v8.9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5V9.6a1.5 1.5 0 0 1 1.5-1.5Z" stroke={color} strokeWidth={1.7} strokeLinejoin="round" />
+          <Circle cx={12} cy={14} r={3.25} stroke={color} strokeWidth={1.7} />
         </Svg>
       )
   }

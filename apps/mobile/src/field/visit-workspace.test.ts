@@ -3,6 +3,7 @@ import type { FieldVisitWorkspaceData } from "./contracts"
 import {
   addOptimisticVisitPhoto,
   addOptimisticVisitAction,
+  hasFutureVisitNextAction,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
 } from "./visit-workspace"
@@ -90,5 +91,27 @@ describe("field visit workspace", () => {
       id: "mobile-photo-1",
       syncState: "PENDING",
     })
+  })
+
+  it("requires a completed future next action when rescheduling", () => {
+    const dueToday = addOptimisticVisitAction(workspace, {
+      actionResultId: "action-next-today",
+      visitId: "visit-1",
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      evidence: { title: "Call again", dueDate: "2026-07-15T09:00:00.000Z" },
+      completedAt: "2026-07-15T08:20:00.000Z",
+    })
+    expect(hasFutureVisitNextAction(dueToday, "2026-07-15")).toBe(false)
+
+    const future = addOptimisticVisitAction(workspace, {
+      actionResultId: "action-next-future",
+      visitId: "visit-1",
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      evidence: { title: "Call again", dueDate: "2026-07-16T09:00:00.000Z" },
+      completedAt: "2026-07-15T08:20:00.000Z",
+    })
+    expect(hasFutureVisitNextAction(future, "2026-07-15")).toBe(true)
   })
 })
