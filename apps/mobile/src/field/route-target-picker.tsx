@@ -30,25 +30,42 @@ export function RouteTargetPicker({
   const [organizations, setOrganizations] = useState<FieldOrganizationListData | null>(null)
   const [contacts, setContacts] = useState<FieldContactListData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(false)
   const sequence = useRef(0)
 
-  const load = useCallback(async (active: typeof tab, query: string) => {
+  const load = useCallback(async (active: typeof tab, query: string, page = 1, append = false) => {
     const request = ++sequence.current
-    setLoading(true)
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     setError(false)
     try {
       if (active === "organizations") {
-        const next = await fieldApi.organizations(query)
-        if (request === sequence.current) setOrganizations(next)
+        const next = await fieldApi.organizations(query, page)
+        if (request === sequence.current) {
+          setOrganizations((current) => {
+            if (!append || !current) return next
+            const ids = new Set(current.organizations.map((item) => item.id))
+            return { ...next, organizations: [...current.organizations, ...next.organizations.filter((item) => !ids.has(item.id))] }
+          })
+        }
       } else {
-        const next = await fieldApi.contacts(query)
-        if (request === sequence.current) setContacts(next)
+        const next = await fieldApi.contacts(query, page)
+        if (request === sequence.current) {
+          setContacts((current) => {
+            if (!append || !current) return next
+            const ids = new Set(current.contacts.map((item) => item.id))
+            return { ...next, contacts: [...current.contacts, ...next.contacts.filter((item) => !ids.has(item.id))] }
+          })
+        }
       }
     } catch {
       if (request === sequence.current) setError(true)
     } finally {
-      if (request === sequence.current) setLoading(false)
+      if (request === sequence.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [])
 
@@ -56,6 +73,10 @@ export function RouteTargetPicker({
     const id = setTimeout(() => void load(tab, search.trim()), 300)
     return () => clearTimeout(id)
   }, [load, search, tab])
+
+  const current = tab === "organizations" ? organizations : contacts
+  const loadedCount = tab === "organizations" ? organizations?.organizations.length ?? 0 : contacts?.contacts.length ?? 0
+  const hasMore = Boolean(current && loadedCount < current.total)
 
   return (
     <View style={styles.root}>
@@ -131,6 +152,16 @@ export function RouteTargetPicker({
             }) : <Text style={styles.noWorkplace}>{t("workplacesLabel")}: 0</Text>}
           </View>
         ))}
+        {hasMore ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={loading || loadingMore}
+            onPress={() => void load(tab, search.trim(), (current?.page ?? 0) + 1, true)}
+            style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
+          >
+            <Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   )
@@ -143,5 +174,5 @@ const styles = StyleSheet.create({
   search: { minHeight: 46, marginTop: 10, borderRadius: 11, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, searchIcon: { color: colors.faint, fontSize: 20 }, searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 12 }, error: { color: colors.missed, fontSize: 10, fontWeight: "800", marginTop: 8 }, loading: { color: colors.primary, fontSize: 22, textAlign: "center", marginTop: 15 },
   results: { marginTop: 5 }, resultsContent: { paddingBottom: 6 }, result: { minHeight: 62, marginTop: 8, borderRadius: 13, padding: 10, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9 }, orgMark: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, orgMarkText: { color: colors.info, fontSize: 15, fontWeight: "900" }, resultBody: { flex: 1, minWidth: 0 }, resultName: { color: colors.text, fontSize: 12, fontWeight: "900" }, resultMeta: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 }, added: { color: colors.successDark, fontSize: 8, fontWeight: "900", marginTop: 3 }, plus: { color: colors.primary, fontSize: 19, fontWeight: "900" },
   contactCard: { marginTop: 8, borderRadius: 14, padding: 10, backgroundColor: colors.bg }, contactTop: { flexDirection: "row", alignItems: "center", gap: 9 }, contactMark: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" }, contactMarkText: { color: colors.holiday, fontSize: 15, fontWeight: "900" },
-  workplace: { minHeight: 52, marginTop: 8, marginLeft: 47, borderRadius: 11, padding: 9, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 7 }, workplaceBody: { flex: 1, minWidth: 0 }, workplaceName: { color: colors.text, fontSize: 10, fontWeight: "900" }, workplaceMeta: { color: colors.muted, fontSize: 8, marginTop: 3 }, primary: { maxWidth: 56, color: colors.successDark, backgroundColor: colors.successBg, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 4, overflow: "hidden", fontSize: 7, fontWeight: "900", textAlign: "center" }, noWorkplace: { color: colors.faint, fontSize: 9, marginTop: 8, marginLeft: 47 }, disabled: { opacity: 0.45 },
+  workplace: { minHeight: 52, marginTop: 8, marginLeft: 47, borderRadius: 11, padding: 9, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 7 }, workplaceBody: { flex: 1, minWidth: 0 }, workplaceName: { color: colors.text, fontSize: 10, fontWeight: "900" }, workplaceMeta: { color: colors.muted, fontSize: 8, marginTop: 3 }, primary: { maxWidth: 56, color: colors.successDark, backgroundColor: colors.successBg, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 4, overflow: "hidden", fontSize: 7, fontWeight: "900", textAlign: "center" }, noWorkplace: { color: colors.faint, fontSize: 9, marginTop: 8, marginLeft: 47 }, loadMore: { minHeight: 43, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, disabled: { opacity: 0.45 },
 })

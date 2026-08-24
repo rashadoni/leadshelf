@@ -535,14 +535,14 @@ export const fieldApi = {
   }) => {
     await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}/change-requests`, json(input))
   },
-  organizations: (search = "") =>
-    request<unknown>(`/api/v1/mtm/organizations?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}`)
+  organizations: (search = "", page = 1, limit = 50) =>
+    request<unknown>(`/api/v1/mtm/organizations?limit=${encodeURIComponent(String(limit))}&page=${encodeURIComponent(String(page))}${search ? `&search=${encodeURIComponent(search)}` : ""}`)
       .then(parseFieldOrganizations),
   organization: (id: string) =>
     request<unknown>(`/api/v1/mtm/organizations/${encodeURIComponent(id)}`)
       .then(parseFieldOrganizationDetail),
-  contacts: (search = "") =>
-    request<unknown>(`/api/v1/mtm/contacts?limit=100${search ? `&search=${encodeURIComponent(search)}` : ""}`)
+  contacts: (search = "", page = 1, limit = 50) =>
+    request<unknown>(`/api/v1/mtm/contacts?limit=${encodeURIComponent(String(limit))}&page=${encodeURIComponent(String(page))}${search ? `&search=${encodeURIComponent(search)}` : ""}`)
       .then(parseFieldContacts),
   contact: (id: string) =>
     request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}`)
@@ -597,9 +597,9 @@ export const fieldApi = {
     reason: string
     payload?: Record<string, unknown>
   }): Promise<void>
-  organizations(search?: string): Promise<FieldOrganizationListData>
+  organizations(search?: string, page?: number, limit?: number): Promise<FieldOrganizationListData>
   organization(id: string): Promise<FieldOrganizationDetailData>
-  contacts(search?: string): Promise<FieldContactListData>
+  contacts(search?: string, page?: number, limit?: number): Promise<FieldContactListData>
   contact(id: string): Promise<FieldContactDetailData>
   customerRequests(): Promise<FieldCustomerRequestsData>
   createCustomerRequest(input: CreateFieldCustomerRequest): Promise<FieldCustomerRequest>
