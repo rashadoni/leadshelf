@@ -69,7 +69,7 @@ export default function WorkTab() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text>
           <Text style={styles.title}>{t("workTitle")}</Text>
-          <Text style={styles.subtitle}>{t("workSubtitle")}</Text>
+          <Text style={styles.subtitle}>{t(IS_LEADDRIVE_FIELD ? "fieldWorkSubtitle" : "workSubtitle")}</Text>
         </View>
 
         <View style={styles.identityCard}>

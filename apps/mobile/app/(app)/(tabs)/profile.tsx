@@ -151,17 +151,19 @@ export default function ProfileTab() {
               <Text style={styles.detailLabel}>{t("organization")}</Text>
               <Text style={styles.detailValue}>{agent.organizationName}</Text>
             </View>
-            <View style={styles.detailRow}>
+            <View style={[styles.detailRow, IS_LEADDRIVE_FIELD && styles.detailRowLast]}>
               <Text style={styles.detailLabel}>{t("manager")}</Text>
               <Text style={styles.detailValue}>{agent.manager?.name ?? "—"}</Text>
             </View>
-            <View style={[styles.detailRow, styles.detailRowLast]}>
-              <Text style={styles.detailLabel}>{t("shelfConnection")}</Text>
-              <View style={styles.connectionValue}>
-                <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
-                <Text style={styles.detailValue}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+            {!IS_LEADDRIVE_FIELD ? (
+              <View style={[styles.detailRow, styles.detailRowLast]}>
+                <Text style={styles.detailLabel}>{t("shelfConnection")}</Text>
+                <View style={styles.connectionValue}>
+                  <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
+                  <Text style={styles.detailValue}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+                </View>
               </View>
-            </View>
+            ) : null}
           </View>
         ) : null}
 
