@@ -18,6 +18,8 @@ export type TabIconName =
   | "organizations"
   | "contacts"
   | "profile"
+  | "location"
+  | "qr"
 
 export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: ColorValue; size?: number }) {
   const common = { width: size, height: size, viewBox: "0 0 24 24" }
@@ -134,6 +136,20 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Circle cx={12} cy={8.2} r={3.5} stroke={color} strokeWidth={1.9} />
           <Path d="M5.2 19.6a6.9 6.9 0 0 1 13.6 0" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+        </Svg>
+      )
+    case "location":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M12 21s6.4-5.7 6.4-11A6.4 6.4 0 1 0 5.6 10C5.6 15.3 12 21 12 21Z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+          <Circle cx={12} cy={10} r={2.25} stroke={color} strokeWidth={1.8} />
+        </Svg>
+      )
+    case "qr":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="M4 9V5.7A1.7 1.7 0 0 1 5.7 4H9M15 4h3.3A1.7 1.7 0 0 1 20 5.7V9M20 15v3.3a1.7 1.7 0 0 1-1.7 1.7H15M9 20H5.7A1.7 1.7 0 0 1 4 18.3V15" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+          <Path d="M9 9h2.3v2.3H9zM13.3 9h1.7v1.7h-1.7zM13.3 13.3h2.7V16h-2.7zM9 14.3h1.7V16H9z" stroke={color} strokeWidth={1.55} strokeLinejoin="round" />
         </Svg>
       )
   }

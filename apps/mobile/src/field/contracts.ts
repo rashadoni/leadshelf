@@ -467,6 +467,26 @@ export interface FieldWeekData {
 
 export type FieldWorkdayStatus = "STARTED" | "PAUSED" | "COMPLETED"
 export type FieldWorkdayAction = "START" | "PAUSE" | "RESUME" | "FINISH"
+export type FieldAttendanceClockEvidence = "NONE" | "GPS" | "QR"
+export type FieldAttendanceContinuousTracking = "OFF" | "ACTIVE_WORKDAY"
+
+/**
+ * The old server has no attendance-policy field. Absence must therefore be
+ * interpreted as the least invasive behaviour: no event location and no
+ * continuous tracking. This keeps a newer APK safe with a not-yet-upgraded
+ * tenant response.
+ */
+export const FIELD_ATTENDANCE_POLICY_DEFAULT = {
+  clockEvidence: "NONE",
+  continuousTracking: "OFF",
+  allowDifferentStartEndSites: true,
+} as const
+
+export interface FieldAttendancePolicy {
+  clockEvidence: FieldAttendanceClockEvidence
+  continuousTracking: FieldAttendanceContinuousTracking
+  allowDifferentStartEndSites: boolean
+}
 
 export interface FieldWorkdayEvent {
   id: string
@@ -503,6 +523,7 @@ export interface FieldWorkdayData {
   today: string
   timezone: string
   gpsIntervalSeconds: number
+  attendancePolicy: FieldAttendancePolicy
   workday: FieldWorkday | null
   activeWorkday: FieldWorkday | null
   availableActions: FieldWorkdayAction[]
@@ -1387,6 +1408,31 @@ function validWorkday(value: unknown): boolean {
   )
 }
 
+function parseFieldAttendancePolicy(value: unknown): FieldAttendancePolicy {
+  const policy = record(value)
+  const clockEvidence: FieldAttendanceClockEvidence = policy && (
+    policy.clockEvidence === "NONE" ||
+    policy.clockEvidence === "GPS" ||
+    policy.clockEvidence === "QR"
+  )
+    ? policy.clockEvidence as FieldAttendanceClockEvidence
+    : FIELD_ATTENDANCE_POLICY_DEFAULT.clockEvidence
+  const continuousTracking: FieldAttendanceContinuousTracking = policy && (
+    policy.continuousTracking === "OFF" ||
+    policy.continuousTracking === "ACTIVE_WORKDAY"
+  )
+    ? policy.continuousTracking as FieldAttendanceContinuousTracking
+    : FIELD_ATTENDANCE_POLICY_DEFAULT.continuousTracking
+  const allowDifferentStartEndSites = policy && typeof policy.allowDifferentStartEndSites === "boolean"
+    ? policy.allowDifferentStartEndSites
+    : FIELD_ATTENDANCE_POLICY_DEFAULT.allowDifferentStartEndSites
+  return {
+    clockEvidence,
+    continuousTracking,
+    allowDifferentStartEndSites,
+  }
+}
+
 export function parseFieldWorkday(value: unknown): FieldWorkdayData {
   const data = validEnvelope(value)
   if (
@@ -1402,7 +1448,10 @@ export function parseFieldWorkday(value: unknown): FieldWorkdayData {
   ) {
     throw new FieldContractError("mobile workday")
   }
-  return data as unknown as FieldWorkdayData
+  return {
+    ...data,
+    attendancePolicy: parseFieldAttendancePolicy(data.attendancePolicy),
+  } as unknown as FieldWorkdayData
 }
 
 export function parseFieldLocationHistory(value: unknown): FieldLocationHistoryData {

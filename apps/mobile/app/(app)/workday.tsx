@@ -15,6 +15,7 @@ import { router, useFocusEffect } from "expo-router"
 import * as Crypto from "expo-crypto"
 import Svg, { Circle, Path } from "react-native-svg"
 import { SafeAreaView } from "react-native-safe-area-context"
+import { TabIcon } from "../../src/components/TabIcon"
 import {
   enqueueFieldLocation,
   enqueueFieldWorkdayEvent,
@@ -199,6 +200,30 @@ export default function WorkdayScreen() {
     ? field.locations
     : { date, timezone, gpsIntervalSeconds: intervalSeconds, distanceMeters: 0, locations: [] }
   const workday = workdayData.workday
+  const attendancePolicy = workdayData.attendancePolicy
+  const requiresQrBeforeStart = attendancePolicy.clockEvidence === "QR"
+  const capturesEventGps = attendancePolicy.clockEvidence === "GPS"
+  const runsContinuousTracking = attendancePolicy.continuousTracking === "ACTIVE_WORKDAY" && !requiresQrBeforeStart
+  const usesGps = capturesEventGps || runsContinuousTracking
+  const policyEvidenceKey: MessageKey = requiresQrBeforeStart
+    ? "workdayEvidence_QR"
+    : usesGps
+      ? "workdayEvidence_GPS"
+      : "workdayEvidence_NONE"
+  const policyHintKey: MessageKey = requiresQrBeforeStart
+    ? "workdayPolicyQrPending"
+    : runsContinuousTracking
+      ? "workdayPolicyContinuousGps"
+      : capturesEventGps
+        ? "workdayPolicyEventGps"
+        : "workdayPolicyNoLocation"
+  const privacyBodyKey: MessageKey = requiresQrBeforeStart
+    ? "workdayPrivacyBodyQr"
+    : runsContinuousTracking
+      ? "workdayPrivacyBodyContinuousGps"
+      : capturesEventGps
+        ? "workdayPrivacyBodyEventGps"
+        : "workdayPrivacyBodyNoLocation"
   const displayStatus: DisplayStatus = workday?.status ?? "NOT_STARTED"
   const workedSeconds = currentWorkedSeconds(workday, nowMs)
   const pausedSeconds = currentPausedSeconds(workday, nowMs)
@@ -213,7 +238,11 @@ export default function WorkdayScreen() {
   }, [field.refreshActivity]))
 
   const refreshTracking = useCallback(async () => {
-    const state = await reconcileWorkdayTracking(workday?.status ?? null, intervalSeconds)
+    const state = await reconcileWorkdayTracking(
+      workday?.status ?? null,
+      intervalSeconds,
+      runsContinuousTracking,
+    )
       .catch((): WorkdayTrackingState => ({
         mode: "unavailable",
         issue: "tracking_start_failed",
@@ -221,12 +250,16 @@ export default function WorkdayScreen() {
         observedAt: new Date().toISOString(),
       }))
     setTracking(state)
-  }, [intervalSeconds, workday?.status])
+  }, [intervalSeconds, runsContinuousTracking, workday?.status])
 
   useEffect(() => {
     if (busyAction) return
     let active = true
-    void reconcileWorkdayTracking(workday?.status ?? null, intervalSeconds)
+    void reconcileWorkdayTracking(
+      workday?.status ?? null,
+      intervalSeconds,
+      runsContinuousTracking,
+    )
       .then((state) => { if (active) setTracking(state) })
       .catch(() => {
         if (active) setTracking({
@@ -237,7 +270,7 @@ export default function WorkdayScreen() {
         })
       })
     return () => { active = false }
-  }, [busyAction, intervalSeconds, workday?.status])
+  }, [busyAction, intervalSeconds, runsContinuousTracking, workday?.status])
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -259,12 +292,18 @@ export default function WorkdayScreen() {
   async function applyAction(action: FieldWorkdayAction) {
     const current = field.workday ?? emptyFieldWorkdayData(date, timezone, intervalSeconds)
     if (!current.availableActions.includes(action)) return
+    if (requiresQrBeforeStart && (action === "START" || action === "RESUME")) {
+      Alert.alert(t("workdayQrNotReadyTitle"), t("workdayQrNotReady"))
+      return
+    }
     let queuedClientOpId: string | null = null
     setBusyAction(action)
     setFeedback(null)
     try {
       const occurredAt = new Date().toISOString()
-      const location = await getCurrentDeviceLocation().catch(() => null)
+      const location = capturesEventGps
+        ? await getCurrentDeviceLocation().catch(() => null)
+        : null
       const workdayId = action === "START"
         ? `mobile-workday-${Crypto.randomUUID()}`
         : current.workday?.id
@@ -305,7 +344,7 @@ export default function WorkdayScreen() {
         field.applyLocalLocations(appendOptimisticFieldLocation(locationData, payload))
       }
 
-      if (action === "START" || action === "RESUME") {
+      if ((action === "START" || action === "RESUME") && runsContinuousTracking) {
         try {
           const state = await startWorkdayTracking(intervalSeconds)
           setTracking(state)
@@ -354,7 +393,7 @@ export default function WorkdayScreen() {
   }
 
   async function recoverTracking() {
-    if (tracking.recovery === "none" || trackingBusy) return
+    if (!runsContinuousTracking || tracking.recovery === "none" || trackingBusy) return
     setTrackingBusy(true)
     setFeedback(null)
     try {
@@ -443,23 +482,59 @@ export default function WorkdayScreen() {
           </View>
           <Text style={styles.timerLabel}>{t("workdayWorked")}</Text>
           <Text style={styles.timer}>{formatDuration(workedSeconds)}</Text>
-          <Text style={styles.statusHint}>{t("workdaySubtitle")}</Text>
+          <Text style={styles.statusHint}>{t(policyHintKey)}</Text>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
               <Text style={styles.statValue}>{formatDuration(pausedSeconds)}</Text>
               <Text style={styles.statLabel}>{t("workdayPaused")}</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatDistance(locationData.distanceMeters)}</Text>
-              <Text style={styles.statLabel}>{t("workdayDistance")}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{locationData.locations.length}</Text>
-              <Text style={styles.statLabel}>{t("workdayGpsShort")}</Text>
-            </View>
+            {usesGps ? (
+              <>
+                <View style={styles.statDivider} />
+                <View style={styles.stat}>
+                  <Text style={styles.statValue}>{formatDistance(locationData.distanceMeters)}</Text>
+                  <Text style={styles.statLabel}>{t("workdayDistance")}</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.stat}>
+                  <Text style={styles.statValue}>{locationData.locations.length}</Text>
+                  <Text style={styles.statLabel}>{t("workdayGpsShort")}</Text>
+                </View>
+              </>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={[
+          styles.policyCard,
+          requiresQrBeforeStart
+            ? styles.policyCardQr
+            : usesGps
+              ? styles.policyCardGps
+              : styles.policyCardNoLocation,
+        ]}>
+          <View style={[
+            styles.policyIcon,
+            requiresQrBeforeStart
+              ? styles.policyIconQr
+              : usesGps
+                ? styles.policyIconGps
+                : styles.policyIconNoLocation,
+          ]}>
+            <TabIcon
+              name={requiresQrBeforeStart ? "qr" : usesGps ? "location" : "work"}
+              color={requiresQrBeforeStart ? colors.warning : colors.primary}
+              size={25}
+            />
+          </View>
+          <View style={styles.policyBody}>
+            <Text style={styles.cardEyebrow}>{t("workdayPolicyTitle")}</Text>
+            <Text style={styles.cardTitle}>{t(policyEvidenceKey)}</Text>
+            <Text style={styles.cardHint}>{t(policyHintKey)}</Text>
+            {attendancePolicy.allowDifferentStartEndSites ? (
+              <Text style={styles.policyFlexibility}>{t("workdayPolicyFlexibleSites")}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -499,41 +574,53 @@ export default function WorkdayScreen() {
           <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
         ) : null}
 
-        <View style={styles.trackingCard}>
-          <View style={[styles.trackingIcon, tracking.mode === "background" ? styles.trackingIconOn : tracking.mode === "denied" || tracking.mode === "services_disabled" || tracking.mode === "unavailable" ? styles.trackingIconWarn : styles.trackingIconOff]}>
-            <Text style={styles.trackingIconText}>⌖</Text>
+        {runsContinuousTracking ? (
+          <View style={styles.trackingCard}>
+            <View style={[styles.trackingIcon, tracking.mode === "background" ? styles.trackingIconOn : tracking.mode === "denied" || tracking.mode === "services_disabled" || tracking.mode === "unavailable" ? styles.trackingIconWarn : styles.trackingIconOff]}>
+              <TabIcon name="location" color={colors.primary} size={25} />
+            </View>
+            <View style={styles.trackingBody}>
+              <Text style={styles.cardEyebrow}>{t("workdayTracking")}</Text>
+              <Text style={styles.cardTitle}>{t(trackingKeys[tracking.mode])}</Text>
+              <Text style={styles.cardHint}>{trackingHint}</Text>
+              <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt) })}</Text>
+              {trackingRecoveryKey && workday?.status === "STARTED" ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t(trackingRecoveryKey)}
+                  disabled={trackingBusy}
+                  onPress={() => void recoverTracking()}
+                  style={({ pressed }) => [styles.trackingRecovery, pressed && styles.pressed, trackingBusy && styles.disabled]}
+                >
+                  {trackingBusy ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={styles.trackingRecoveryText}>{t(trackingRecoveryKey)}</Text>
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-          <View style={styles.trackingBody}>
-            <Text style={styles.cardEyebrow}>{t("workdayTracking")}</Text>
-            <Text style={styles.cardTitle}>{t(trackingKeys[tracking.mode])}</Text>
-            <Text style={styles.cardHint}>{trackingHint}</Text>
-            <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt) })}</Text>
-            {trackingRecoveryKey && workday?.status === "STARTED" ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t(trackingRecoveryKey)}
-                disabled={trackingBusy}
-                onPress={() => void recoverTracking()}
-                style={({ pressed }) => [styles.trackingRecovery, pressed && styles.pressed, trackingBusy && styles.disabled]}
-              >
-                {trackingBusy ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Text style={styles.trackingRecoveryText}>{t(trackingRecoveryKey)}</Text>
-                )}
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
+        ) : null}
 
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>{t("workdayLocationTrail")}</Text>
-            <Text style={styles.sectionHint}>{t("workdayLocationTrailHint")}</Text>
-          </View>
-          <Text style={styles.sectionMetric}>{formatDistance(locationData.distanceMeters)}</Text>
-        </View>
-        <View style={styles.card}><LocationTrail data={locationData} /></View>
+        {usesGps ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>{t("workdayLocationTrail")}</Text>
+                <Text style={styles.sectionHint}>
+                  {t(runsContinuousTracking ? "workdayLocationTrailHint" : "workdayEventGpsTrailHint")}
+                </Text>
+              </View>
+              <Text style={styles.sectionMetric}>
+                {runsContinuousTracking
+                  ? formatDistance(locationData.distanceMeters)
+                  : t("workdayGpsPoints", { count: locationData.locations.length })}
+              </Text>
+            </View>
+            <View style={styles.card}><LocationTrail data={locationData} /></View>
+          </>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <View>
@@ -562,7 +649,7 @@ export default function WorkdayScreen() {
           <Text style={styles.privacyIcon}>i</Text>
           <View style={styles.privacyBody}>
             <Text style={styles.privacyTitle}>{t("workdayPrivacyTitle")}</Text>
-            <Text style={styles.privacyText}>{t("workdayPrivacyBody")}</Text>
+            <Text style={styles.privacyText}>{t(privacyBodyKey)}</Text>
           </View>
         </View>
       </ScrollView>
@@ -611,12 +698,21 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   feedback: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
   feedbackText: { color: colors.info, fontSize: 11, lineHeight: 17, fontWeight: "700" },
+  policyCard: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: radii.card, borderWidth: 1, padding: 15, marginTop: 14, ...cardShadow },
+  policyCardNoLocation: { backgroundColor: colors.card, borderColor: colors.border },
+  policyCardGps: { backgroundColor: colors.primarySoft, borderColor: "#D8D7F2" },
+  policyCardQr: { backgroundColor: colors.warningBg, borderColor: "#F6D788" },
+  policyIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  policyIconNoLocation: { backgroundColor: colors.draftBg },
+  policyIconGps: { backgroundColor: colors.card },
+  policyIconQr: { backgroundColor: colors.cardOverlay },
+  policyBody: { flex: 1 },
+  policyFlexibility: { color: colors.primary, fontSize: 10, lineHeight: 15, fontWeight: "800", marginTop: 6 },
   trackingCard: { flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card, borderRadius: radii.card, padding: 15, marginTop: 14, ...cardShadow },
   trackingIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   trackingIconOn: { backgroundColor: colors.successBg },
   trackingIconWarn: { backgroundColor: colors.warningBg },
   trackingIconOff: { backgroundColor: colors.draftBg },
-  trackingIconText: { color: colors.primary, fontSize: 24, fontWeight: "900" },
   trackingBody: { flex: 1 },
   cardEyebrow: { color: colors.faint, fontSize: 9, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },

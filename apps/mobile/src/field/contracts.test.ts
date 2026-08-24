@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  FIELD_ATTENDANCE_POLICY_DEFAULT,
   FieldContractError,
   parseFieldContactDetail,
   parseFieldCommitments,
@@ -496,7 +497,7 @@ describe("LeadDrive field contracts", () => {
         note: null,
       }],
     }
-    expect(parseFieldWorkday({
+    const parsed = parseFieldWorkday({
       success: true,
       data: {
         date: "2026-07-15",
@@ -507,7 +508,9 @@ describe("LeadDrive field contracts", () => {
         activeWorkday: workday,
         availableActions: ["PAUSE", "FINISH"],
       },
-    }).workday?.status).toBe("STARTED")
+    })
+    expect(parsed.workday?.status).toBe("STARTED")
+    expect(parsed.attendancePolicy).toEqual(FIELD_ATTENDANCE_POLICY_DEFAULT)
 
     expect(parseFieldLocationHistory({
       success: true,
@@ -531,6 +534,50 @@ describe("LeadDrive field contracts", () => {
         }],
       },
     }).locations[0]).toMatchObject({ latitude: 0, speed: 0, isMoving: false })
+  })
+
+  it("accepts only known attendance-policy values and falls back safely for malformed fields", () => {
+    const parsed = parseFieldWorkday({
+      success: true,
+      data: {
+        date: "2026-07-15",
+        today: "2026-07-15",
+        timezone: "Asia/Baku",
+        gpsIntervalSeconds: 30,
+        attendancePolicy: {
+          clockEvidence: "GPS",
+          continuousTracking: "ACTIVE_WORKDAY",
+          allowDifferentStartEndSites: false,
+        },
+        workday: null,
+        activeWorkday: null,
+        availableActions: ["START"],
+      },
+    })
+    expect(parsed.attendancePolicy).toEqual({
+      clockEvidence: "GPS",
+      continuousTracking: "ACTIVE_WORKDAY",
+      allowDifferentStartEndSites: false,
+    })
+
+    const malformed = parseFieldWorkday({
+      success: true,
+      data: {
+        date: "2026-07-15",
+        today: "2026-07-15",
+        timezone: "Asia/Baku",
+        gpsIntervalSeconds: 30,
+        attendancePolicy: {
+          clockEvidence: "STATIC_QR",
+          continuousTracking: "ALWAYS",
+          allowDifferentStartEndSites: "yes",
+        },
+        workday: null,
+        activeWorkday: null,
+        availableActions: ["START"],
+      },
+    })
+    expect(malformed.attendancePolicy).toEqual(FIELD_ATTENDANCE_POLICY_DEFAULT)
   })
 
   it("rejects invalid workday transitions and location coordinates at the boundary", () => {

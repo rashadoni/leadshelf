@@ -138,4 +138,18 @@ describe("workday tracking permission and recovery state", () => {
     expect(locationMocks.stopLocationUpdatesAsync).toHaveBeenCalledWith(WORKDAY_LOCATION_TASK)
     expect(locationMocks.watchPositionAsync).not.toHaveBeenCalled()
   })
+
+  it("does not request location when continuous tracking is disabled by policy", async () => {
+    locationMocks.hasStartedLocationUpdatesAsync.mockResolvedValue(true)
+
+    await expect(reconcileWorkdayTracking("STARTED", 30, false)).resolves.toMatchObject({
+      mode: "stopped",
+      issue: "none",
+      recovery: "none",
+    })
+
+    expect(locationMocks.stopLocationUpdatesAsync).toHaveBeenCalledWith(WORKDAY_LOCATION_TASK)
+    expect(locationMocks.getForegroundPermissionsAsync).not.toHaveBeenCalled()
+    expect(locationMocks.watchPositionAsync).not.toHaveBeenCalled()
+  })
 })

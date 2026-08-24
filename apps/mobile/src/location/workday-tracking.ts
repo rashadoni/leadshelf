@@ -182,8 +182,9 @@ export async function startWorkdayTracking(
 export async function reconcileWorkdayTracking(
   status: "STARTED" | "PAUSED" | "COMPLETED" | null,
   intervalSeconds: number,
+  enabled = true,
 ): Promise<WorkdayTrackingState> {
-  if (status !== "STARTED") {
+  if (status !== "STARTED" || !enabled) {
     await stopWorkdayTracking()
     return stoppedWorkdayTrackingState()
   }

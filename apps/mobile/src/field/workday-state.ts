@@ -1,10 +1,12 @@
 import type {
+  FieldAttendancePolicy,
   FieldLocationHistoryData,
   FieldWorkday,
   FieldWorkdayAction,
   FieldWorkdayData,
   FieldWorkdayEvent,
 } from "./contracts"
+import { FIELD_ATTENDANCE_POLICY_DEFAULT } from "./contracts"
 import type { FieldLocationPayload } from "./execution-outbox"
 
 type WorkdayEventDraft = {
@@ -32,12 +34,14 @@ export function emptyFieldWorkdayData(
   date: string,
   timezone: string,
   gpsIntervalSeconds = 30,
+  attendancePolicy: FieldAttendancePolicy = FIELD_ATTENDANCE_POLICY_DEFAULT,
 ): FieldWorkdayData {
   return {
     date,
     today: date,
     timezone,
     gpsIntervalSeconds,
+    attendancePolicy,
     workday: null,
     activeWorkday: null,
     availableActions: ["START"],
