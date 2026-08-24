@@ -22,7 +22,7 @@ on:
         options: [live-demo, local-emulator]
         default: live-demo
       record_guide:
-        description: "Run the AZ full-flow guide in an Android phone emulator"
+        description: "Run the variant-aware Android emulator smoke (LeadShelf guide or LeadDrive Field login/locale smoke)"
         required: false
         type: boolean
         default: false
@@ -168,7 +168,7 @@ jobs:
           printf 'MOBILE_SIGNING_KIND=%s\n' "$signing_kind" >> "$GITHUB_ENV"
           printf 'ANDROID_BUILD_TOOLS=%s\n' "$build_tools" >> "$GITHUB_ENV"
 
-      - name: Download verified guide APK artifact
+      - name: Download verified Android smoke APK artifact
         if: ${{ inputs.record_guide && inputs.apk_run_id != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -177,19 +177,19 @@ jobs:
           set -euo pipefail
           test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
           gh run download "$GUIDE_APK_RUN_ID" \
-            -p 'mobile-android-standalone-preview-x86_64-live-demo-*' \
+            -p "mobile-android-standalone-preview-${LEADSHELF_APP_VARIANT}-x86_64-*" \
             -D "$RUNNER_TEMP/guide-apk-artifact"
           mapfile -t apks < <(find "$RUNNER_TEMP/guide-apk-artifact" -type f -name '*.apk' -print)
           [ "${#apks[@]}" -eq 1 ]
-          cp "${apks[0]}" "$RUNNER_TEMP/leadshelf-guide.apk"
-          test -s "$RUNNER_TEMP/leadshelf-guide.apk"
+          cp "${apks[0]}" "$RUNNER_TEMP/mobile-smoke.apk"
+          test -s "$RUNNER_TEMP/mobile-smoke.apk"
 
-      - name: Resolve guide APK path
-        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
+      - name: Resolve Android smoke APK path
+        if: ${{ inputs.record_guide }}
         run: |
           set -euo pipefail
           if [ -n "${{ inputs.apk_run_id }}" ]; then
-            apk="$RUNNER_TEMP/leadshelf-guide.apk"
+            apk="$RUNNER_TEMP/mobile-smoke.apk"
           else
             apk="$GITHUB_WORKSPACE/apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
           fi
@@ -197,7 +197,7 @@ jobs:
           printf 'GUIDE_APK_PATH=%s\n' "$apk" >> "$GITHUB_ENV"
 
       - name: Install pinned Maestro CLI
-        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
+        if: ${{ inputs.record_guide }}
         run: |
           set -euo pipefail
           test "$LEADSHELF_ANDROID_ARCH" = "x86_64"
@@ -211,7 +211,7 @@ jobs:
             -d "$GITHUB_WORKSPACE/.maestro-bin"
 
       - name: Enable KVM acceleration for Android emulator
-        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
+        if: ${{ inputs.record_guide }}
         run: |
           set -euo pipefail
           test -e /dev/kvm
@@ -223,8 +223,8 @@ jobs:
           test -r /dev/kvm
           test -w /dev/kvm
 
-      - name: Run AZ full-flow guide in phone emulator
-        if: ${{ inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
+      - name: Run variant-aware Android smoke in phone emulator
+        if: ${{ inputs.record_guide }}
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 35
@@ -238,19 +238,27 @@ jobs:
           script: |
             test -s "$GUIDE_APK_PATH"
             adb install -r "$GUIDE_APK_PATH"
-            adb shell pm grant com.leadshelf.mobile android.permission.CAMERA || true
-            adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_FINE_LOCATION || true
-            adb shell pm grant com.leadshelf.mobile android.permission.ACCESS_COARSE_LOCATION || true
+            if [ "$LEADSHELF_APP_VARIANT" = "zeytunpharm" ]; then
+              app_id=org.leaddrive.field.zeytunpharm
+              flow=apps/mobile/e2e/field-login-smoke-az.yaml
+            else
+              app_id=com.leadshelf.mobile
+              flow=apps/mobile/e2e/mobile-guide-az.yaml
+            fi
+            adb shell pm grant "$app_id" android.permission.CAMERA || true
+            adb shell pm grant "$app_id" android.permission.ACCESS_FINE_LOCATION || true
+            adb shell pm grant "$app_id" android.permission.ACCESS_COARSE_LOCATION || true
             adb shell pm disable-user --user 0 com.google.android.apps.messaging || true
-            MAESTRO_CLI_NO_ANALYTICS=true MAESTRO_DRIVER_STARTUP_TIMEOUT=180000 "$GITHUB_WORKSPACE/.maestro-bin/maestro/bin/maestro" --no-ansi test apps/mobile/e2e/mobile-guide-az.yaml --format junit --output mobile-guide-results.xml --test-output-dir mobile-guide-results
+            test -f "$flow"
+            MAESTRO_CLI_NO_ANALYTICS=true MAESTRO_DRIVER_STARTUP_TIMEOUT=180000 "$GITHUB_WORKSPACE/.maestro-bin/maestro/bin/maestro" --no-ansi test "$flow" --format junit --output mobile-guide-results.xml --test-output-dir mobile-guide-results
 
       - name: Collect mobile guide recording
-        if: ${{ always() && inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
+        if: ${{ always() && inputs.record_guide }}
         run: |
           set -euo pipefail
           mkdir -p mobile-guide-artifact
           find "$GITHUB_WORKSPACE" "$HOME/.maestro" \
-            -type f \( -name 'mobile-guide-az-raw*.mp4' -o -name 'mobile-guide-*.png' \) \
+            -type f \( -name 'mobile-guide-az-raw*.mp4' -o -name 'mobile-guide-*.png' -o -name 'field-smoke-*.png' \) \
             -exec cp -n {} mobile-guide-artifact/ \; || true
           if [ -d mobile-guide-results ]; then
             cp -R mobile-guide-results mobile-guide-artifact/results
@@ -261,7 +269,7 @@ jobs:
           find mobile-guide-artifact -maxdepth 3 -type f -print
 
       - name: Upload mobile guide recording
-        if: ${{ always() && inputs.record_guide && (inputs.app_variant == '' || inputs.app_variant == 'leadshelf') }}
+        if: ${{ always() && inputs.record_guide }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mobile-guide-az-raw-${{ github.sha }}

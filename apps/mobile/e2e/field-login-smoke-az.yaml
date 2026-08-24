@@ -1,0 +1,32 @@
+appId: org.leaddrive.field.zeytunpharm
+name: LeadDrive Field install and locale smoke (AZ/RU)
+tags:
+  - smoke
+  - android
+  - field
+  - az
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "Hesaba giriş"
+    timeout: 30000
+- assertVisible: "LEADDRIVE · SAHƏ ƏMƏLİYYATLARI"
+- assertVisible: "Şirkət kodu"
+- assertVisible: "E-poçt"
+- assertVisible: "Şifrə"
+- tapOn: "RU"
+- extendedWaitUntil:
+    visible: "Вход в аккаунт"
+    timeout: 10000
+- assertVisible: "LEADDRIVE · ПОЛЕВЫЕ ОПЕРАЦИИ"
+- assertVisible: "Код компании"
+- assertVisible: "Эл. почта"
+- assertVisible: "Пароль"
+- tapOn: "AZ"
+- extendedWaitUntil:
+    visible: "Hesaba giriş"
+    timeout: 10000
+- takeScreenshot: field-smoke-login-az
