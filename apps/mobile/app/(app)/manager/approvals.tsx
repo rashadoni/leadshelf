@@ -1,14 +1,127 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
-import type { FieldManagerApprovalsData } from "../../../src/field/contracts"
+import type { FieldManagerApprovalDecisionInput, FieldManagerApprovalsData } from "../../../src/field/contracts"
+import { contactChangeKindLabel, hrmRequestTypeLabel, objectTypeLabel, routeChangeTypeLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
+
+type ApprovalKind = FieldManagerApprovalDecisionInput["kind"]
+type ApprovalDecision = "APPROVED" | "REJECTED" | "NEEDS_INFO" | "RESCHEDULE"
+
+type ReviewItem = {
+  id: string
+  kind: ApprovalKind
+  title: string
+  typeLabel: string
+  reason: string
+  requestedBy: string
+  submittedAt: string
+  canReschedule: boolean
+}
+
+function dateKey(value: Date): string {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, "0")
+  const day = String(value.getDate()).padStart(2, "0")
+  return year + "-" + month + "-" + day
+}
+
+function addDays(days: number): Date {
+  const date = new Date()
+  date.setHours(12, 0, 0, 0)
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+function isDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(value + "T12:00:00.000Z")
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+function decisionLabel(decision: ApprovalDecision): string {
+  if (decision === "APPROVED") return t("managerDecision_APPROVED")
+  if (decision === "REJECTED") return t("managerDecision_REJECTED")
+  if (decision === "NEEDS_INFO") return t("managerDecision_NEEDS_INFO")
+  return t("managerDecision_RESCHEDULE")
+}
+
+function decisionsFor(item: ReviewItem): ApprovalDecision[] {
+  if (item.kind === "HRM") return ["APPROVED", "REJECTED"]
+  if (item.kind === "ROUTE_CHANGE") {
+    return item.canReschedule
+      ? ["APPROVED", "REJECTED", "NEEDS_INFO", "RESCHEDULE"]
+      : ["APPROVED", "REJECTED", "NEEDS_INFO"]
+  }
+  return ["APPROVED", "REJECTED", "NEEDS_INFO"]
+}
+
+function decisionNeedsNote(item: ReviewItem, decision: ApprovalDecision | null): boolean {
+  return item.kind === "CONTACT_CHANGE" || decision === "REJECTED" || decision === "NEEDS_INFO"
+}
+
+function errorCode(error: unknown): string | null {
+  if (!(error instanceof HttpError) || !error.detail || typeof error.detail !== "object" || Array.isArray(error.detail)) return null
+  const value = error.detail as Record<string, unknown>
+  return typeof value.code === "string" ? value.code : null
+}
+
+function decisionError(error: unknown): string {
+  if (error instanceof HttpError && error.status === 403) return t("managerDecisionDenied")
+  if (error instanceof HttpError && error.status === 409) return t("managerDecisionConflict")
+  return t("managerDecisionFailed")
+}
+
+function buildDecisionInput(
+  item: ReviewItem,
+  decision: ApprovalDecision,
+  note: string,
+  rescheduleDate: string,
+  acknowledgeRouteConflicts: boolean,
+): FieldManagerApprovalDecisionInput {
+  const trimmedNote = note.trim()
+  if (item.kind === "HRM") {
+    if (decision !== "APPROVED" && decision !== "REJECTED") throw new Error("Unsupported HRM decision")
+    return {
+      kind: "HRM",
+      id: item.id,
+      decision,
+      ...(trimmedNote ? { note: trimmedNote } : {}),
+      ...(acknowledgeRouteConflicts ? { acknowledgeRouteConflicts: true } : {}),
+    }
+  }
+  if (item.kind === "ROUTE_CHANGE") {
+    return {
+      kind: "ROUTE_CHANGE",
+      id: item.id,
+      decision,
+      ...(trimmedNote ? { note: trimmedNote } : {}),
+      ...(decision === "RESCHEDULE" ? { rescheduleDate } : {}),
+    }
+  }
+  if (item.kind === "CUSTOMER_CREATE") {
+    if (decision === "RESCHEDULE") throw new Error("Unsupported customer decision")
+    return {
+      kind: "CUSTOMER_CREATE",
+      id: item.id,
+      decision,
+      ...(trimmedNote ? { note: trimmedNote } : {}),
+    }
+  }
+  if (decision === "RESCHEDULE") throw new Error("Unsupported contact decision")
+  return {
+    kind: "CONTACT_CHANGE",
+    id: item.id,
+    decision,
+    note: trimmedNote,
+  }
+}
 
 function RequestMeta({ by, at }: { by: string; at: string }) {
   const locale = useLocale()
@@ -44,11 +157,148 @@ function Section({
   )
 }
 
+function ApprovalRequest({
+  item,
+  index,
+  reviewing,
+  selectedDecision,
+  note,
+  rescheduleDate,
+  acknowledgeRouteConflicts,
+  saving,
+  actionError,
+  onOpen,
+  onClose,
+  onSelectDecision,
+  onChangeNote,
+  onChangeRescheduleDate,
+  onToggleRouteConflict,
+  onSubmit,
+}: {
+  item: ReviewItem
+  index: number
+  reviewing: boolean
+  selectedDecision: ApprovalDecision | null
+  note: string
+  rescheduleDate: string
+  acknowledgeRouteConflicts: boolean
+  saving: boolean
+  actionError: string | null
+  onOpen: () => void
+  onClose: () => void
+  onSelectDecision: (decision: ApprovalDecision) => void
+  onChangeNote: (value: string) => void
+  onChangeRescheduleDate: (value: string) => void
+  onToggleRouteConflict: () => void
+  onSubmit: () => void
+}) {
+  const options = decisionsFor(item)
+  const needsNote = decisionNeedsNote(item, selectedDecision)
+  return (
+    <View style={[styles.request, index > 0 && styles.requestBorder]}>
+      <View style={styles.requestTop}>
+        <View style={styles.requestBody}>
+          <Text style={styles.requestTitle}>{item.title}</Text>
+          <View style={styles.typePill}><Text style={styles.typePillText}>{item.typeLabel}</Text></View>
+        </View>
+        <Pressable accessibilityRole="button" onPress={reviewing ? onClose : onOpen} style={styles.reviewButton}>
+          <Text style={styles.reviewButtonText}>{reviewing ? t("managerApprovalCloseReview") : t("managerApprovalReview")}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.requestReason} numberOfLines={reviewing ? undefined : 3}>{item.reason}</Text>
+      <RequestMeta by={item.requestedBy} at={item.submittedAt} />
+
+      {reviewing ? (
+        <View style={styles.decisionPanel}>
+          <Text style={styles.decisionTitle}>{t("managerDecisionTitle")}</Text>
+          <Text style={styles.decisionHint}>{t("managerDecisionHint")}</Text>
+          <View style={styles.decisionChoices}>
+            {options.map((decision) => (
+              <Pressable
+                key={decision}
+                accessibilityRole="button"
+                onPress={() => onSelectDecision(decision)}
+                style={[styles.decisionChoice, selectedDecision === decision && styles.decisionChoiceSelected]}
+              >
+                <Text style={[styles.decisionChoiceText, selectedDecision === decision && styles.decisionChoiceTextSelected]}>{decisionLabel(decision)}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {selectedDecision === "RESCHEDULE" ? (
+            <View style={styles.datePanel}>
+              <Text style={styles.fieldLabel}>{t("managerDecisionDate")}</Text>
+              <TextInput
+                accessibilityLabel={t("managerDecisionDate")}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+                onChangeText={onChangeRescheduleDate}
+                placeholder="2026-08-24"
+                placeholderTextColor={colors.faint}
+                style={styles.dateInput}
+                value={rescheduleDate}
+              />
+              <View style={styles.datePresets}>
+                {[1, 7, 14].map((days) => {
+                  const candidate = dateKey(addDays(days))
+                  return <Pressable key={days} accessibilityRole="button" onPress={() => onChangeRescheduleDate(candidate)} style={[styles.datePreset, rescheduleDate === candidate && styles.datePresetSelected]}><Text style={[styles.datePresetText, rescheduleDate === candidate && styles.datePresetTextSelected]}>{candidate}</Text></Pressable>
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          {selectedDecision ? (
+            <View style={styles.notePanel}>
+              <Text style={styles.fieldLabel}>{t("managerDecisionNote")}{needsNote ? " *" : ""}</Text>
+              <TextInput
+                accessibilityLabel={t("managerDecisionNote")}
+                multiline
+                onChangeText={onChangeNote}
+                placeholder={t("managerDecisionNotePlaceholder")}
+                placeholderTextColor={colors.faint}
+                style={styles.noteInput}
+                textAlignVertical="top"
+                value={note}
+              />
+            </View>
+          ) : null}
+
+          {acknowledgeRouteConflicts ? (
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: true }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
+              <View style={styles.checkbox}><Text style={styles.checkboxText}>✓</Text></View>
+              <Text style={styles.conflictAcknowledgeText}>{t("managerHrmAcknowledgeConflict")}</Text>
+            </Pressable>
+          ) : actionError === t("managerHrmRouteConflict") && item.kind === "HRM" && selectedDecision === "APPROVED" ? (
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: false }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
+              <View style={styles.checkbox} />
+              <Text style={styles.conflictAcknowledgeText}>{t("managerHrmAcknowledgeConflict")}</Text>
+            </Pressable>
+          ) : null}
+
+          {actionError ? <Text style={styles.actionError}>{actionError}</Text> : null}
+          <Pressable disabled={!selectedDecision || saving} accessibilityRole="button" onPress={onSubmit} style={[styles.submit, (!selectedDecision || saving) && styles.disabled]}>
+            <Text style={styles.submitText}>{saving ? t("managerDecisionSaving") : t("managerDecisionConfirm")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
 export default function ManagerApprovalsScreen() {
   useLocale()
   const [data, setData] = useState<FieldManagerApprovalsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
+  const [reviewing, setReviewing] = useState<ReviewItem | null>(null)
+  const [selectedDecision, setSelectedDecision] = useState<ApprovalDecision | null>(null)
+  const [note, setNote] = useState("")
+  const [rescheduleDate, setRescheduleDate] = useState(() => dateKey(addDays(1)))
+  const [acknowledgeRouteConflicts, setAcknowledgeRouteConflicts] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [savingId, setSavingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -66,14 +316,109 @@ export default function ManagerApprovalsScreen() {
     void load()
   }, [load])
 
+  const beginReview = (item: ReviewItem) => {
+    setReviewing(item)
+    setSelectedDecision(null)
+    setNote("")
+    setRescheduleDate(dateKey(addDays(1)))
+    setAcknowledgeRouteConflicts(false)
+    setActionError(null)
+  }
+
+  const closeReview = () => {
+    setReviewing(null)
+    setSelectedDecision(null)
+    setNote("")
+    setAcknowledgeRouteConflicts(false)
+    setActionError(null)
+  }
+
+  const chooseDecision = (decision: ApprovalDecision) => {
+    setSelectedDecision(decision)
+    setAcknowledgeRouteConflicts(false)
+    setActionError(null)
+  }
+
+  const saveDecision = async () => {
+    if (!reviewing || !selectedDecision) return
+    if (decisionNeedsNote(reviewing, selectedDecision) && !note.trim()) {
+      setActionError(t("managerDecisionNoteRequired"))
+      return
+    }
+    if (selectedDecision === "RESCHEDULE" && !isDateKey(rescheduleDate)) {
+      setActionError(t("managerDecisionDateRequired"))
+      return
+    }
+    setSavingId(reviewing.id)
+    setActionError(null)
+    try {
+      await fieldApi.managerApprovalDecision(buildDecisionInput(
+        reviewing,
+        selectedDecision,
+        note,
+        rescheduleDate,
+        acknowledgeRouteConflicts,
+      ))
+      closeReview()
+      Alert.alert(t("managerDecisionSaved"))
+      await load()
+    } catch (reason) {
+      if (
+        reviewing.kind === "HRM" &&
+        selectedDecision === "APPROVED" &&
+        errorCode(reason) === "MTM_HRM_ROUTE_CONFLICT"
+      ) {
+        setActionError(t("managerHrmRouteConflict"))
+      } else {
+        setActionError(decisionError(reason))
+      }
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const confirmDecision = () => {
+    if (!reviewing || !selectedDecision) return
+    if (decisionNeedsNote(reviewing, selectedDecision) && !note.trim()) {
+      setActionError(t("managerDecisionNoteRequired"))
+      return
+    }
+    if (selectedDecision === "RESCHEDULE" && !isDateKey(rescheduleDate)) {
+      setActionError(t("managerDecisionDateRequired"))
+      return
+    }
+    Alert.alert(t("managerDecisionConfirmTitle"), t("managerDecisionConfirmBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("managerDecisionConfirm"), onPress: () => void saveDecision() },
+    ])
+  }
+
   const denied = error instanceof HttpError && error.status === 403
   const total = data
     ? data.counts.hrm + data.counts.routeChanges + data.counts.customers + data.counts.contactChanges
     : 0
+  const reviewProps = (item: ReviewItem, index: number) => ({
+    item,
+    index,
+    reviewing: reviewing?.id === item.id && reviewing.kind === item.kind,
+    selectedDecision,
+    note,
+    rescheduleDate,
+    acknowledgeRouteConflicts,
+    saving: savingId === item.id,
+    actionError,
+    onOpen: () => beginReview(item),
+    onClose: closeReview,
+    onSelectDecision: chooseDecision,
+    onChangeNote: setNote,
+    onChangeRescheduleDate: setRescheduleDate,
+    onToggleRouteConflict: () => setAcknowledgeRouteConflicts((value) => !value),
+    onSubmit: confirmDecision,
+  })
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}>
@@ -110,40 +455,16 @@ export default function ManagerApprovalsScreen() {
             ) : (
               <>
                 <Section title={t("managerApprovalHrm")} count={data.counts.hrm} icon="profile">
-                  {data.hrm.map((item, index) => (
-                    <View key={item.id} style={[styles.request, index > 0 && styles.requestBorder]}>
-                      <Text style={styles.requestTitle}>{item.agent.name}</Text>
-                      <Text style={styles.requestReason} numberOfLines={3}>{item.reason}</Text>
-                      <RequestMeta by={item.agent.name} at={item.submittedAt} />
-                    </View>
-                  ))}
+                  {data.hrm.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "HRM", title: item.agent.name, typeLabel: hrmRequestTypeLabel(item.type), reason: item.reason, requestedBy: item.agent.name, submittedAt: item.submittedAt, canReschedule: false }, index)} />)}
                 </Section>
                 <Section title={t("managerApprovalRoute")} count={data.counts.routeChanges} icon="route">
-                  {data.routeChanges.map((item, index) => (
-                    <View key={item.id} style={[styles.request, index > 0 && styles.requestBorder]}>
-                      <Text style={styles.requestTitle}>{item.requestedByAgent.name}</Text>
-                      <Text style={styles.requestReason} numberOfLines={3}>{item.reason}</Text>
-                      <RequestMeta by={item.requestedByAgent.name} at={item.submittedAt} />
-                    </View>
-                  ))}
+                  {data.routeChanges.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "ROUTE_CHANGE", title: item.requestedByAgent.name, typeLabel: routeChangeTypeLabel(item.changeType), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: item.changeType === "REMOVE_STOP" }, index)} />)}
                 </Section>
                 <Section title={t("managerApprovalCustomer")} count={data.counts.customers} icon="organizations">
-                  {data.customers.map((item, index) => (
-                    <View key={item.id} style={[styles.request, index > 0 && styles.requestBorder]}>
-                      <Text style={styles.requestTitle}>{item.name}</Text>
-                      <Text style={styles.requestReason} numberOfLines={3}>{item.reason}</Text>
-                      <RequestMeta by={item.requestedByAgent.name} at={item.submittedAt} />
-                    </View>
-                  ))}
+                  {data.customers.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "CUSTOMER_CREATE", title: item.name, typeLabel: objectTypeLabel(item.objectType), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: false }, index)} />)}
                 </Section>
                 <Section title={t("managerApprovalContact")} count={data.counts.contactChanges} icon="contacts">
-                  {data.contactChanges.map((item, index) => (
-                    <View key={item.id} style={[styles.request, index > 0 && styles.requestBorder]}>
-                      <Text style={styles.requestTitle}>{item.contact.displayName}</Text>
-                      <Text style={styles.requestReason} numberOfLines={3}>{item.reason}</Text>
-                      <RequestMeta by={item.requestedByAgent.name} at={item.submittedAt} />
-                    </View>
-                  ))}
+                  {data.contactChanges.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "CONTACT_CHANGE", title: item.contact.displayName, typeLabel: contactChangeKindLabel(item.kind), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: false }, index)} />)}
                 </Section>
               </>
             )}
@@ -181,11 +502,43 @@ const styles = StyleSheet.create({
   sectionCard: { marginHorizontal: 14, borderRadius: radii.card, backgroundColor: colors.card, paddingHorizontal: 14, ...cardShadow },
   request: { paddingVertical: 13 },
   requestBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  requestTop: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
+  requestBody: { flex: 1, minWidth: 0 },
   requestTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  requestReason: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
+  typePill: { alignSelf: "flex-start", marginTop: 5, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primarySoft },
+  typePillText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
+  reviewButton: { minHeight: 38, maxWidth: 130, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  reviewButtonText: { color: colors.primary, fontSize: 9, lineHeight: 12, textAlign: "center", fontWeight: "900" },
+  requestReason: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 8 },
   requestMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 2 },
   requestBy: { color: colors.primary, fontSize: 8, fontWeight: "800" },
   requestAt: { color: colors.faint, fontSize: 8, fontWeight: "700" },
+  decisionPanel: { marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, gap: 9 },
+  decisionTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  decisionHint: { color: colors.muted, fontSize: 9, lineHeight: 13 },
+  decisionChoices: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  decisionChoice: { minHeight: 38, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  decisionChoiceSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
+  decisionChoiceText: { color: colors.muted, fontSize: 9, fontWeight: "900" },
+  decisionChoiceTextSelected: { color: colors.headerText },
+  notePanel: { gap: 5 },
+  fieldLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45 },
+  noteInput: { minHeight: 76, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 9, color: colors.text, fontSize: 11, lineHeight: 16 },
+  datePanel: { gap: 6 },
+  dateInput: { minHeight: 44, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, color: colors.text, fontSize: 12, fontWeight: "900" },
+  datePresets: { flexDirection: "row", gap: 6 },
+  datePreset: { flex: 1, minHeight: 34, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  datePresetSelected: { backgroundColor: colors.primarySoft },
+  datePresetText: { color: colors.muted, fontSize: 8, fontWeight: "800" },
+  datePresetTextSelected: { color: colors.primary },
+  conflictAcknowledge: { minHeight: 44, borderRadius: 12, padding: 9, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.warningBg },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: colors.warning, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
+  checkboxText: { color: colors.warning, fontSize: 13, fontWeight: "900" },
+  conflictAcknowledgeText: { flex: 1, color: colors.warning, fontSize: 9, lineHeight: 13, fontWeight: "800" },
+  actionError: { color: colors.missed, fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  submit: { minHeight: 46, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  submitText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  disabled: { opacity: 0.42 },
   empty: { minHeight: 160, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 10, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },

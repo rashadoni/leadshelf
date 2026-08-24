@@ -87,6 +87,7 @@ import {
   type FieldHrmData,
   type FieldLocationHistoryData,
   type FieldManagerApprovalsData,
+  type FieldManagerApprovalDecisionInput,
   type FieldManagerLocationsData,
   type FieldManagerPlanningData,
   type FieldManagerTeamData,
@@ -388,6 +389,9 @@ export const fieldApi = {
       .then(parseFieldManagerPlanning),
   managerApprovals: () =>
     request<unknown>("/api/v1/mtm/mobile/manager/approvals").then(parseFieldManagerApprovals),
+  managerApprovalDecision: async (input: FieldManagerApprovalDecisionInput) => {
+    await request<unknown>("/api/v1/mtm/mobile/manager/approvals", json(input))
+  },
   uploadLocation: async (input: FieldLocationPayload) => {
     const body = await request<{ success?: boolean; data?: { location?: unknown } }>(
       locationsPath(),
@@ -567,6 +571,7 @@ export const fieldApi = {
   managerLocations(): Promise<FieldManagerLocationsData>
   managerPlanning(from: string, to?: string): Promise<FieldManagerPlanningData>
   managerApprovals(): Promise<FieldManagerApprovalsData>
+  managerApprovalDecision(input: FieldManagerApprovalDecisionInput): Promise<void>
   uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
   uploadVisitPhoto(input: FieldVisitPhotoPayload): Promise<Record<string, unknown>>

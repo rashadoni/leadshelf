@@ -61,6 +61,29 @@ export function agentTaskStatusLabel(value: string | null | undefined): string {
   return t("lifecycleStatus_UNKNOWN")
 }
 
+export function hrmRequestTypeLabel(value: string | null | undefined): string {
+  if (value === "LEAVE") return t("managerHrmType_LEAVE")
+  if (value === "ABSENCE") return t("managerHrmType_ABSENCE")
+  if (value === "TIME_CORRECTION") return t("managerHrmType_TIME_CORRECTION")
+  return t("managerApprovalTypeUnknown")
+}
+
+export function routeChangeTypeLabel(value: string | null | undefined): string {
+  if (value === "REMOVE_STOP") return t("managerRouteChange_REMOVE_STOP")
+  if (value === "ADD_STOP") return t("managerRouteChange_ADD_STOP")
+  if (value === "CONFLICT_OVERRIDE") return t("managerRouteChange_CONFLICT_OVERRIDE")
+  return t("managerApprovalTypeUnknown")
+}
+
+export function contactChangeKindLabel(value: string | null | undefined): string {
+  if (value === "CONTACT_UPDATE") return t("managerContactChange_CONTACT_UPDATE")
+  if (value === "WORKPLACE_UPSERT") return t("managerContactChange_WORKPLACE_UPSERT")
+  if (value === "WORKPLACE_END") return t("managerContactChange_WORKPLACE_END")
+  if (value === "DUPLICATE_REPORT") return t("managerContactChange_DUPLICATE_REPORT")
+  if (value === "DICTIONARY_ASSIGNMENTS") return t("managerContactChange_DICTIONARY_ASSIGNMENTS")
+  return t("managerApprovalTypeUnknown")
+}
+
 /**
  * A visit photo has two independent lifecycles: the field sync queue and
  * the server review. The agent sees one actionable human label, never a

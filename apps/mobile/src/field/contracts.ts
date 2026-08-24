@@ -702,6 +702,40 @@ export interface FieldManagerApprovalsData {
   contactChanges: FieldManagerContactChangeApproval[]
 }
 
+/**
+ * Deliberately mirrors the narrow mobile manager-decision endpoint. The
+ * server remains authoritative and delegates each decision to its established
+ * domain handler; this type only prevents the app from mixing fields across
+ * approval kinds.
+ */
+export type FieldManagerApprovalDecisionInput =
+  | {
+    kind: "HRM"
+    id: string
+    decision: "APPROVED" | "REJECTED"
+    note?: string
+    acknowledgeRouteConflicts?: boolean
+  }
+  | {
+    kind: "ROUTE_CHANGE"
+    id: string
+    decision: "APPROVED" | "REJECTED" | "NEEDS_INFO" | "RESCHEDULE"
+    note?: string
+    rescheduleDate?: string
+  }
+  | {
+    kind: "CUSTOMER_CREATE"
+    id: string
+    decision: "APPROVED" | "REJECTED" | "NEEDS_INFO"
+    note?: string
+  }
+  | {
+    kind: "CONTACT_CHANGE"
+    id: string
+    decision: "APPROVED" | "REJECTED" | "NEEDS_INFO"
+    note: string
+  }
+
 export interface FieldNotification {
   id: string
   title: string
