@@ -85,6 +85,7 @@ import {
   type FieldRouteChangeRequestPayload,
   type FieldRouteUpdatePayload,
 } from "../field/route-outbox"
+import { parseFieldNotificationReadPayload } from "../field/notification-read-outbox"
 import {
   parseFieldVisitActionPayload,
   parseFieldVisitCheckInPayload,
@@ -131,6 +132,7 @@ import type {
   FieldMessage,
   FieldMessagesData,
   FieldMessageThreadData,
+  FieldNotificationsData,
   FieldWorkdayData,
 } from "../field/contracts"
 import {
@@ -586,6 +588,85 @@ export function readFieldCache<T>(key: string): { value: T; updatedAt: string } 
 export const FIELD_MESSAGES_CACHE_KEY = "field.messages.current"
 export const FIELD_DOCUMENTS_CACHE_KEY = "field.documents.current"
 export const FIELD_HRM_CACHE_KEY = "field.hrm.current"
+export const FIELD_NOTIFICATIONS_CACHE_KEY = "field.notifications"
+
+function projectedFieldNotificationReads(next: FieldNotificationsData): FieldNotificationsData {
+  const readIds = new Set(
+    db.getAllSync<{ payload: string }>(
+      `SELECT payload FROM outbox_ops
+       WHERE kind='field.notification.read'
+         AND status IN ('pending','applied','conflict','rejected')`,
+    ).flatMap((row) => {
+      try {
+        return [parseFieldNotificationReadPayload(JSON.parse(row.payload) as unknown).notificationId]
+      } catch {
+        // A malformed legacy row must not make current notification data unusable.
+        return []
+      }
+    }),
+  )
+  if (readIds.size === 0) return next
+
+  let dismissedUnread = 0
+  let changed = false
+  const items = next.items.map((item) => {
+    if (item.isRead || !readIds.has(item.id)) return item
+    changed = true
+    dismissedUnread += 1
+    return { ...item, isRead: true }
+  })
+  if (!changed) return next
+  return {
+    ...next,
+    unread: Math.max(0, next.unread - dismissedUnread),
+    items,
+  }
+}
+
+/**
+ * Reapply locally acknowledged notifications after a server refresh. An
+ * operation remains an idempotent setter in the durable outbox, so a stale GET
+ * response must not resurrect the badge the agent just dismissed.
+ */
+export function cacheFieldNotifications(next: FieldNotificationsData): FieldNotificationsData {
+  const projected = projectedFieldNotificationReads(next)
+  writeFieldCache(FIELD_NOTIFICATIONS_CACHE_KEY, projected)
+  return projected
+}
+
+export function enqueueFieldNotificationRead(
+  notificationId: string,
+  current: FieldNotificationsData,
+): { clientOpId: string; notifications: FieldNotificationsData } | null {
+  const existingItem = current.items.find((item) => item.id === notificationId)
+  if (!existingItem || existingItem.isRead) return null
+  const payload = parseFieldNotificationReadPayload({ notificationId })
+  const createdAt = new Date().toISOString()
+  let clientOpId = ""
+  let notifications = current
+
+  db.withTransactionSync(() => {
+    const existing = db.getFirstSync<{ clientOpId: string }>(
+      `SELECT clientOpId FROM outbox_ops
+       WHERE kind='field.notification.read'
+         AND json_extract(payload, '$.notificationId')=?
+         AND status IN ('pending','applied')
+       ORDER BY rowid DESC LIMIT 1`,
+      [payload.notificationId],
+    )
+    clientOpId = existing?.clientOpId ?? `field-notification-read-${Crypto.randomUUID()}`
+    if (!existing) {
+      db.runSync(
+        "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+        [clientOpId, "field.notification.read", JSON.stringify(payload), createdAt],
+      )
+    }
+    notifications = projectedFieldNotificationReads(current)
+    writeFieldCache(FIELD_NOTIFICATIONS_CACHE_KEY, notifications)
+  })
+
+  return { clientOpId, notifications }
+}
 
 function fieldMessageThreadCacheKey(threadId: string): string {
   return `field.messages.thread.${threadId}`
@@ -1110,6 +1191,16 @@ export const localStore: LocalStore = {
             clientOpId: r.clientOpId,
             kind: "field.message.receipt",
             payload: parseFieldMessageReceiptPayload(rawPayload),
+            clientCreatedAt: r.clientCreatedAt ?? undefined,
+            status: "pending",
+            attempts: r.attempts,
+          }
+        }
+        if (r.kind === "field.notification.read") {
+          return {
+            clientOpId: r.clientOpId,
+            kind: "field.notification.read",
+            payload: parseFieldNotificationReadPayload(rawPayload),
             clientCreatedAt: r.clientCreatedAt ?? undefined,
             status: "pending",
             attempts: r.attempts,

@@ -6,6 +6,7 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldMessages, readFieldMessages } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { notificationDestination } from "../../../src/field/notification-target"
+import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -41,7 +42,7 @@ export default function InboxTab() {
     queued: "Göndərilmə növbəsində",
     refreshError: "Mesajlar yenilənmədi — telefondakı nüsxə göstərilir.",
     localThread: "Mesaj telefonda saxlanılıb. Sinxronlaşdıqdan sonra dialoq açılacaq.",
-    notificationReadError: "Bildiriş yenilənmədi. İnterneti yoxlayıb yenidən cəhd edin.",
+    notificationReadError: "Bildiriş telefonda saxlanılmadı. Yenidən cəhd edin.",
   } : {
     title: "Входящие",
     subtitle: "Сообщения и важные уведомления в одном месте",
@@ -55,9 +56,10 @@ export default function InboxTab() {
     queued: "В очереди на отправку",
     refreshError: "Сообщения не обновились — показана копия с телефона.",
     localThread: "Сообщение сохранено на телефоне. Диалог откроется после синхронизации.",
-    notificationReadError: "Уведомление не обновилось. Проверьте интернет и повторите попытку.",
+    notificationReadError: "Не удалось сохранить уведомление на телефоне. Повторите попытку.",
   }
   const { items, unread: notificationUnread } = field.notifications
+  const { sync } = useSync()
   const refreshMessages = useCallback(async (showWarning = true) => {
     try {
       const next = cacheFieldMessages(await fieldApi.messages())
@@ -88,14 +90,14 @@ export default function InboxTab() {
     router.push(`/(app)/messages/${threadId}` as never)
   }
 
-  async function openNotification(item: typeof items[number]) {
-    try {
-      await field.markNotificationRead(item.id)
-      const destination = notificationDestination(item)
-      if (destination) router.push(destination as never)
-    } catch {
-      setWarning(copy.notificationReadError)
-    }
+  function openNotification(item: typeof items[number]) {
+    const destination = notificationDestination(item)
+    // Do not make navigation wait for a network PATCH. The durable outbox owns
+    // the scoped read update and SyncProvider retries it after a real outage.
+    if (destination) router.push(destination as never)
+    void field.markNotificationRead(item.id)
+      .then(() => sync())
+      .catch(() => setWarning(copy.notificationReadError))
   }
 
   return (

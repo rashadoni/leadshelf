@@ -10,7 +10,15 @@ import {
 import { router } from "expo-router"
 import { fieldApi } from "../api/mobile-client"
 import { tokenStore } from "../auth/token-store"
-import { cacheFieldMessages, readFieldCache, readFieldMessages, writeFieldCache } from "../db/local-store"
+import {
+  cacheFieldMessages,
+  cacheFieldNotifications,
+  enqueueFieldNotificationRead,
+  FIELD_NOTIFICATIONS_CACHE_KEY,
+  readFieldCache,
+  readFieldMessages,
+  writeFieldCache,
+} from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
@@ -55,7 +63,6 @@ type FieldContextValue = {
 
 const PROFILE_KEY = "field.profile"
 const CURRENT_WEEK_KEY = "field.week.current"
-const NOTIFICATIONS_KEY = "field.notifications"
 const WORKDAY_KEY = "field.workday.current"
 const LOCATIONS_KEY = "field.locations.current"
 const Ctx = createContext<FieldContextValue | null>(null)
@@ -221,8 +228,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       updated = true
     }
     if (notificationsResult.status === "fulfilled") {
-      setNotifications(notificationsResult.value)
-      writeFieldCache(NOTIFICATIONS_KEY, notificationsResult.value)
+      setNotifications(cacheFieldNotifications(notificationsResult.value))
       updated = true
     }
     if (messagesResult.status === "fulfilled") {
@@ -262,24 +268,16 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       items: notifications.items.map((item) => ({ ...item, isRead: true })),
     }
     setNotifications(next)
-    writeFieldCache(NOTIFICATIONS_KEY, next)
+    writeFieldCache(FIELD_NOTIFICATIONS_CACHE_KEY, next)
   }, [notifications])
 
-  const markNotificationRead = useCallback(async (id: string) => {
-    const current = notifications.items.find((item) => item.id === id)
-    if (!current || current.isRead) return
-    const next = {
-      unread: Math.max(0, notifications.unread - 1),
-      items: notifications.items.map((item) => item.id === id ? { ...item, isRead: true } : item),
-    }
-    setNotifications(next)
-    writeFieldCache(NOTIFICATIONS_KEY, next)
+  const markNotificationRead = useCallback((id: string) => {
     try {
-      await fieldApi.markNotificationsRead({ ids: [id], isRead: true })
+      const queued = enqueueFieldNotificationRead(id, notifications)
+      if (queued) setNotifications(queued.notifications)
+      return Promise.resolve()
     } catch (error) {
-      setNotifications(notifications)
-      writeFieldCache(NOTIFICATIONS_KEY, notifications)
-      throw error
+      return Promise.reject(error)
     }
   }, [notifications])
 
@@ -313,7 +311,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const profileCache = readFieldCache<FieldProfileData>(PROFILE_KEY)
     const weekCache = readFieldCache<FieldWeekData>(CURRENT_WEEK_KEY)
-    const notificationsCache = readFieldCache<FieldNotificationsData>(NOTIFICATIONS_KEY)
+    const notificationsCache = readFieldCache<FieldNotificationsData>(FIELD_NOTIFICATIONS_CACHE_KEY)
     const workdayCache = readFieldCache<FieldWorkdayData>(WORKDAY_KEY)
     const locationsCache = readFieldCache<FieldLocationHistoryData>(LOCATIONS_KEY)
     const agentTasksCache = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)

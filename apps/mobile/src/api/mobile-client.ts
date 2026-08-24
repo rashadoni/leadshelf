@@ -32,6 +32,10 @@ import { tokenStore } from "../auth/token-store"
 import { prepareMobileSessionScope } from "../db/local-store"
 import { isFieldRoutePushOperation, sendFieldRouteOperation } from "../field/route-outbox"
 import {
+  isFieldNotificationReadPushOperation,
+  sendFieldNotificationReadOperation,
+} from "../field/notification-read-outbox"
+import {
   isFieldExecutionPushOperation,
   isFieldDocumentUploadPushOperation,
   isFieldLocationPushOperation,
@@ -661,6 +665,13 @@ export const syncApi: SyncApi = {
       await flushFieldExecution()
       if (isFieldRoutePushOperation(operation)) {
         results.push(await sendFieldRouteOperation(operation, fieldApi))
+      } else if (isFieldNotificationReadPushOperation(operation)) {
+        results.push(await sendFieldNotificationReadOperation(operation, {
+          markNotificationRead: (notificationId) => fieldApi.markNotificationsRead({
+            ids: [notificationId],
+            isRead: true,
+          }),
+        }))
       } else if (isFieldLocationPushOperation(operation)) {
         results.push(await sendFieldLocationOperation(operation, { upload: fieldApi.uploadLocation }))
       } else if (isFieldVisitPhotoPushOperation(operation)) {
