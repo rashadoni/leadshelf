@@ -22,6 +22,9 @@ import {
   readEncryptedMediaUsage,
 } from "../../../src/media/encrypted-media-store"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { TabIcon } from "../../../src/components/TabIcon"
+import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
+import { agentRoleLabel } from "../../../src/field/labels"
 
 const LOCALES: Locale[] = ["az", "ru"]
 
@@ -138,7 +141,7 @@ export default function ProfileTab() {
             <Text style={styles.accountName} numberOfLines={1}>
               {displayName ?? "—"}
             </Text>
-            {agent?.role ? <Text style={styles.accountMeta}>{agent.role}</Text> : null}
+            {agent?.role ? <Text style={styles.accountMeta}>{agentRoleLabel(agent.role)}</Text> : null}
           </View>
         </View>
 
@@ -175,6 +178,21 @@ export default function ProfileTab() {
           </View>
           <Text style={styles.kpiArrow}>›</Text>
         </Pressable>
+
+        {IS_LEADDRIVE_FIELD ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/hrm" as never)}
+            style={({ pressed }) => [styles.card, styles.hrmEntry, layout.isTablet && styles.cardTablet, pressed && styles.hrmEntryPressed]}
+          >
+            <View style={styles.hrmIcon}><TabIcon name="week" color={colors.primary} size={23} /></View>
+            <View style={styles.hrmBody}>
+              <Text style={styles.hrmTitle}>{t("moduleHrm")}</Text>
+              <Text style={styles.hrmHint}>{t("fieldHrmEntryHint")}</Text>
+            </View>
+            <Text style={styles.hrmArrow}>›</Text>
+          </Pressable>
+        ) : null}
           </View>
 
           <View style={layout.isTablet ? styles.profileColumn : undefined}>
@@ -307,6 +325,13 @@ const styles = StyleSheet.create({
   kpiHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
   kpiAction: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 7 },
   kpiArrow: { color: colors.primary, fontSize: 30, fontWeight: "500" },
+  hrmEntry: { minHeight: 88, flexDirection: "row", alignItems: "center", gap: 13 },
+  hrmEntryPressed: { backgroundColor: colors.primarySoft },
+  hrmIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  hrmBody: { flex: 1, minWidth: 0 },
+  hrmTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  hrmHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  hrmArrow: { color: colors.primary, fontSize: 30, fontWeight: "500" },
   detailRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   detailRowLast: { borderBottomWidth: 0 },
   detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "600" },

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -32,6 +33,7 @@ export default function WorkTab() {
   useLocale()
   const field = useField()
   const layout = useResponsiveLayout()
+  const [moreOpen, setMoreOpen] = useState(false)
   const shelfOpenTasks = IS_LEADDRIVE_FIELD ? 0 : countOpenTasks()
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
@@ -54,6 +56,12 @@ export default function WorkTab() {
         { label: t("tabShelves"), hint: t("shelvesSectionSubtitle"), icon: "shelves", href: "/(app)/(tabs)/shelves" },
         { label: t("tabPlanograms"), hint: t("planogramsSectionSubtitle"), icon: "planograms", href: "/(app)/(tabs)/planograms" },
       ]
+  const moreModules: Module[] = IS_LEADDRIVE_FIELD
+    ? [
+        { label: t("moduleDocuments"), hint: t("moduleDocumentsHint"), icon: "document", href: "/(app)/documents" },
+        { label: t("moduleCommitments"), hint: t("moduleCommitmentsHint"), icon: "visit", href: "/(app)/commitments" },
+      ]
+    : []
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -107,6 +115,44 @@ export default function WorkTab() {
             </Pressable>
           ))}
         </View>
+
+        {moreModules.length ? (
+          <View style={[styles.moreCard, layout.isTablet && styles.moreCardTablet]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: moreOpen }}
+              onPress={() => setMoreOpen((value) => !value)}
+              style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
+            >
+              <View style={styles.glyph}><TabIcon name="work" color={colors.primary} size={21} /></View>
+              <View style={styles.moduleBody}>
+                <Text style={styles.moduleLabel}>{t("workMoreForWork")}</Text>
+                <Text style={styles.moduleHint} numberOfLines={1}>{t("workMoreForWorkHint")}</Text>
+              </View>
+              <View style={styles.morePill}><Text style={styles.morePillText}>{t(moreOpen ? "workMoreHide" : "workMoreShow")}</Text></View>
+              <Text style={[styles.moreChevron, moreOpen && styles.moreChevronOpen]}>⌄</Text>
+            </Pressable>
+            {moreOpen ? (
+              <View style={styles.moreItems}>
+                {moreModules.map((module, index) => (
+                  <Pressable
+                    key={module.href}
+                    accessibilityRole="button"
+                    onPress={() => router.push(module.href as never)}
+                    style={({ pressed }) => [styles.moreItem, index > 0 && styles.moduleBorder, pressed && styles.pressed]}
+                  >
+                    <View style={styles.glyph}><TabIcon name={module.icon} color={colors.primary} size={21} /></View>
+                    <View style={styles.moduleBody}>
+                      <Text style={styles.moduleLabel}>{module.label}</Text>
+                      <Text style={styles.moduleHint} numberOfLines={1}>{module.hint}</Text>
+                    </View>
+                    <Text style={styles.open}>›</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   )
@@ -148,4 +194,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   moduleGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 12, borderWidth: 0, backgroundColor: "transparent", overflow: "visible" },
   moduleRowTablet: { flexBasis: "48%", flexGrow: 1, minHeight: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radii.card, backgroundColor: colors.card },
+  moreCard: { marginHorizontal: 20, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  moreCardTablet: { marginTop: 18 },
+  moreToggle: { minHeight: 72, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  morePill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.primarySoft },
+  morePillText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
+  moreChevron: { color: colors.faint, fontSize: 20, lineHeight: 22, marginLeft: -5 },
+  moreChevronOpen: { transform: [{ rotate: "180deg" }] },
+  moreItems: { borderTopWidth: 1, borderTopColor: colors.border },
+  moreItem: { minHeight: 66, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
 })

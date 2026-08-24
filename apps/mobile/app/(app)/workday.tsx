@@ -49,6 +49,7 @@ import {
 } from "../../src/location/workday-tracking"
 import { useSync } from "../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../src/theme"
+import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 
 type DisplayStatus = FieldWorkdayStatus | "NOT_STARTED"
 
@@ -647,6 +648,21 @@ export default function WorkdayScreen() {
             <Text style={styles.privacyText}>{t(privacyBodyKey)}</Text>
           </View>
         </View>
+
+        {IS_LEADDRIVE_FIELD ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/hrm" as never)}
+            style={({ pressed }) => [styles.hrmEntry, pressed && styles.pressed]}
+          >
+            <View style={styles.hrmIcon}><TabIcon name="week" color={colors.primary} size={22} /></View>
+            <View style={styles.hrmBody}>
+              <Text style={styles.hrmTitle}>{t("moduleHrm")}</Text>
+              <Text style={styles.hrmHint}>{t("fieldHrmEntryHint")}</Text>
+            </View>
+            <Text style={styles.hrmArrow}>›</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   )
@@ -741,4 +757,10 @@ const styles = StyleSheet.create({
   privacyBody: { flex: 1 },
   privacyTitle: { color: colors.info, fontSize: 12, fontWeight: "900" },
   privacyText: { color: colors.info, fontSize: 10, lineHeight: 16, marginTop: 3 },
+  hrmEntry: { minHeight: 74, marginTop: 12, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 11, ...cardShadow },
+  hrmIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  hrmBody: { flex: 1, minWidth: 0 },
+  hrmTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  hrmHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  hrmArrow: { color: colors.primary, fontSize: 28, lineHeight: 30 },
 })
