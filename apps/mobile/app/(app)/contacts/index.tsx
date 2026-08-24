@@ -18,23 +18,32 @@ export default function ContactsScreen() {
   const [data, setData] = useState<FieldContactListData | null>(cached?.value ?? null)
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(!cached)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const sequence = useRef(0)
   const layout = useResponsiveLayout()
 
-  const load = useCallback(async (query = "") => {
+  const load = useCallback(async (query = "", page = 1, append = false) => {
     const request = ++sequence.current
-    setLoading(true)
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     setError(null)
     try {
-      const next = await fieldApi.contacts(query)
+      const next = await fieldApi.contacts(query, page)
       if (request !== sequence.current) return
-      setData(next)
-      if (!query) writeFieldCache(CACHE_KEY, next)
+      setData((current) => {
+        if (!append || !current) return next
+        const ids = new Set(current.contacts.map((item) => item.id))
+        return { ...next, contacts: [...current.contacts, ...next.contacts.filter((item) => !ids.has(item.id))] }
+      })
+      if (!query && !append) writeFieldCache(CACHE_KEY, next)
     } catch (reason) {
       if (request === sequence.current) setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      if (request === sequence.current) setLoading(false)
+      if (request === sequence.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [])
 
@@ -42,6 +51,8 @@ export default function ContactsScreen() {
     const id = setTimeout(() => void load(search.trim()), 350)
     return () => clearTimeout(id)
   }, [load, search])
+
+  const hasMore = Boolean(data && data.contacts.length < data.total)
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -66,6 +77,7 @@ export default function ContactsScreen() {
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
 
         {data?.contacts.length ? (
+          <>
           <View style={[styles.list, layout.isTablet && styles.listTablet]}>
             {data.contacts.map((contact) => {
               const primary = contact.workplaces?.find((workplace) => workplace.isPrimary) ?? contact.workplaces?.[0]
@@ -83,6 +95,8 @@ export default function ContactsScreen() {
               )
             })}
           </View>
+          {hasMore ? <Pressable disabled={loading || loadingMore} onPress={() => void load(search.trim(), (data?.page ?? 0) + 1, true)} style={[styles.loadMore, (loading || loadingMore) && styles.pressed]}><Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text></Pressable> : null}
+          </>
         ) : !loading ? <View style={styles.empty}><Text style={styles.emptyText}>{t("contactsEmpty")}</Text></View> : null}
       </ScrollView>
     </SafeAreaView>
@@ -101,7 +115,7 @@ const styles = StyleSheet.create({
   list: { paddingTop: 4 }, card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, flexDirection: "row", alignItems: "flex-start", gap: 11, ...cardShadow },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" }, avatarText: { color: colors.holiday, fontSize: 17, fontWeight: "900" },
   body: { flex: 1, minWidth: 0 }, name: { color: colors.text, fontSize: 14, fontWeight: "900" }, meta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 }, workplace: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5 }, phone: { color: colors.successDark, fontSize: 10, fontWeight: "800", marginTop: 5 },
-  arrow: { color: colors.faint, fontSize: 26, lineHeight: 29 }, empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" }, emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" }, pressed: { opacity: 0.7 },
+  arrow: { color: colors.faint, fontSize: 26, lineHeight: 29 }, empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" }, emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" }, loadMore: { minHeight: 46, marginHorizontal: 14, marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, pressed: { opacity: 0.7 },
   listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
   cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
 })

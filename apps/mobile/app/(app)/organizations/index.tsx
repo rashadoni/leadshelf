@@ -18,23 +18,32 @@ export default function OrganizationsScreen() {
   const [data, setData] = useState<FieldOrganizationListData | null>(cached?.value ?? null)
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(!cached)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const sequence = useRef(0)
   const layout = useResponsiveLayout()
 
-  const load = useCallback(async (query = "") => {
+  const load = useCallback(async (query = "", page = 1, append = false) => {
     const request = ++sequence.current
-    setLoading(true)
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     setError(null)
     try {
-      const next = await fieldApi.organizations(query)
+      const next = await fieldApi.organizations(query, page)
       if (request !== sequence.current) return
-      setData(next)
-      if (!query) writeFieldCache(CACHE_KEY, next)
+      setData((current) => {
+        if (!append || !current) return next
+        const ids = new Set(current.organizations.map((item) => item.id))
+        return { ...next, organizations: [...current.organizations, ...next.organizations.filter((item) => !ids.has(item.id))] }
+      })
+      if (!query && !append) writeFieldCache(CACHE_KEY, next)
     } catch (reason) {
       if (request === sequence.current) setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      if (request === sequence.current) setLoading(false)
+      if (request === sequence.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [])
 
@@ -42,6 +51,8 @@ export default function OrganizationsScreen() {
     const id = setTimeout(() => void load(search.trim()), 350)
     return () => clearTimeout(id)
   }, [load, search])
+
+  const hasMore = Boolean(data && data.organizations.length < data.total)
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -75,6 +86,7 @@ export default function OrganizationsScreen() {
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
 
         {data?.organizations.length ? (
+          <>
           <View style={[styles.list, layout.isTablet && styles.listTablet]}>
             {data.organizations.map((organization) => (
               <Pressable
@@ -96,6 +108,8 @@ export default function OrganizationsScreen() {
               </Pressable>
             ))}
           </View>
+          {hasMore ? <Pressable disabled={loading || loadingMore} onPress={() => void load(search.trim(), (data?.page ?? 0) + 1, true)} style={[styles.loadMore, (loading || loadingMore) && styles.pressed]}><Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text></Pressable> : null}
+          </>
         ) : !loading ? (
           <View style={styles.empty}><Text style={styles.emptyText}>{t("organizationsEmpty")}</Text></View>
         ) : null}
@@ -134,6 +148,8 @@ const styles = StyleSheet.create({
   arrow: { color: colors.faint, fontSize: 26, lineHeight: 29 },
   empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" },
   emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" },
+  loadMore: { minHeight: 46, marginHorizontal: 14, marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   pressed: { opacity: 0.7 },
   listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
   cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
