@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { router } from "expo-router"
 import { fieldApi } from "../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../src/db/local-store"
+import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 import { t, useLocale } from "../../src/i18n"
 import { formatShortDateTime } from "../../src/i18n/date-format"
 import type {
@@ -121,7 +122,7 @@ export default function PersonalKpiScreen() {
   }, [load, period])
 
   const refreshing = phase === "refreshing"
-  const commercial = data?.commercial.availability === "READY" ? data.commercial.data : null
+  const commercial = !IS_LEADDRIVE_FIELD && data?.commercial.availability === "READY" ? data.commercial.data : null
   const uncovered = data?.coverage.overall.uncovered ?? []
   const exceptionCount = uncovered.length + (data?.tasks.overdue ?? 0) +
     (data?.gps.daysWithoutPoints.length ?? 0) + (data?.visits.missed ?? 0)
@@ -219,39 +220,43 @@ export default function PersonalKpiScreen() {
               <MetricCard tablet={layout.isTablet} label={t("kpiDistance")} value={formatDistance(data.gps.distanceMeters)} detail={`${t("kpiAverageAccuracy")}: ${data.gps.averageAccuracyMeters == null ? "—" : `${data.gps.averageAccuracyMeters} ${t("kpiMetersShort")}`}`} warning={data.gps.truncated} />
             </View>
 
-            <SectionTitle title={t("kpiCommercial")} hint={t("kpiCommercialHint")} />
-            {commercial ? (
-              <View style={styles.card}>
-                <View style={styles.commercialHeader}>
-                  <View style={styles.sourceBadge}><Text style={styles.sourceBadgeText}>LEADSHELF</Text></View>
-                  <Text style={styles.commercialTime}>{formatShortDateTime(commercial.generatedAt, locale)}</Text>
-                </View>
-                <Text style={styles.subsectionTitle}>{t("kpiOrders")}</Text>
-                <View style={styles.statRow}>
-                  <Stat label={t("kpiPlaced")} value={commercial.orders.placed} />
-                  <Stat label={t("kpiDelivered")} value={commercial.orders.delivered} tone="good" />
-                  <Stat label={t("kpiMissed")} value={commercial.orders.cancelled} tone={commercial.orders.cancelled > 0 ? "warning" : "default"} />
-                </View>
-                {commercial.orders.amounts.map((amount) => (
-                  <View key={amount.currency} style={styles.amountRow}>
-                    <View><Text style={styles.amountLabel}>{t("kpiAmount")}</Text><Text style={styles.amountValue}>{formatAmount(amount.totalAmount, amount.currency, locale)}</Text></View>
-                    <Text style={styles.discount}>{t("kpiDiscount")}: {formatAmount(amount.discountAmount, amount.currency, locale)}</Text>
+            {!IS_LEADDRIVE_FIELD ? (
+              <>
+                <SectionTitle title={t("kpiCommercial")} hint={t("kpiCommercialHint")} />
+                {commercial ? (
+                  <View style={styles.card}>
+                    <View style={styles.commercialHeader}>
+                      <View style={styles.sourceBadge}><Text style={styles.sourceBadgeText}>LEADSHELF</Text></View>
+                      <Text style={styles.commercialTime}>{formatShortDateTime(commercial.generatedAt, locale)}</Text>
+                    </View>
+                    <Text style={styles.subsectionTitle}>{t("kpiOrders")}</Text>
+                    <View style={styles.statRow}>
+                      <Stat label={t("kpiPlaced")} value={commercial.orders.placed} />
+                      <Stat label={t("kpiDelivered")} value={commercial.orders.delivered} tone="good" />
+                      <Stat label={t("kpiMissed")} value={commercial.orders.cancelled} tone={commercial.orders.cancelled > 0 ? "warning" : "default"} />
+                    </View>
+                    {commercial.orders.amounts.map((amount) => (
+                      <View key={amount.currency} style={styles.amountRow}>
+                        <View><Text style={styles.amountLabel}>{t("kpiAmount")}</Text><Text style={styles.amountValue}>{formatAmount(amount.totalAmount, amount.currency, locale)}</Text></View>
+                        <Text style={styles.discount}>{t("kpiDiscount")}: {formatAmount(amount.discountAmount, amount.currency, locale)}</Text>
+                      </View>
+                    ))}
+                    <View style={styles.divider} />
+                    <Text style={styles.subsectionTitle}>{t("kpiPromotions")}</Text>
+                    <View style={styles.statRow}>
+                      <Stat label={t("kpiActivePromos")} value={commercial.promotions.active} />
+                      <Stat label={t("kpiPromoOrders")} value={commercial.promotions.ordersWithPromotion} tone="good" />
+                      <Stat label={t("kpiShelfTasks")} value={`${commercial.shelfTasks.completed}/${commercial.shelfTasks.assigned}`} tone={commercial.shelfTasks.overdue > 0 ? "warning" : "good"} />
+                    </View>
                   </View>
-                ))}
-                <View style={styles.divider} />
-                <Text style={styles.subsectionTitle}>{t("kpiPromotions")}</Text>
-                <View style={styles.statRow}>
-                  <Stat label={t("kpiActivePromos")} value={commercial.promotions.active} />
-                  <Stat label={t("kpiPromoOrders")} value={commercial.promotions.ordersWithPromotion} tone="good" />
-                  <Stat label={t("kpiShelfTasks")} value={`${commercial.shelfTasks.completed}/${commercial.shelfTasks.assigned}`} tone={commercial.shelfTasks.overdue > 0 ? "warning" : "good"} />
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.card, styles.commercialUnavailable]}>
-                <View style={styles.unavailableIcon}><Text style={styles.unavailableIconText}>↯</Text></View>
-                <View style={styles.unavailableBody}><Text style={styles.unavailableTitle}>LEADSHELF</Text><Text style={styles.unavailableText}>{t("kpiCommercialUnavailable")}</Text></View>
-              </View>
-            )}
+                ) : (
+                  <View style={[styles.card, styles.commercialUnavailable]}>
+                    <View style={styles.unavailableIcon}><Text style={styles.unavailableIconText}>↯</Text></View>
+                    <View style={styles.unavailableBody}><Text style={styles.unavailableTitle}>LEADSHELF</Text><Text style={styles.unavailableText}>{t("kpiCommercialUnavailable")}</Text></View>
+                  </View>
+                )}
+              </>
+            ) : null}
 
             <SectionTitle title={t("kpiAttention")} />
             <View style={[styles.card, exceptionCount === 0 && styles.allGoodCard]}>
