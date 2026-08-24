@@ -70,6 +70,40 @@ export function addOptimisticVisitAction(
   }
 }
 
+/**
+ * Waivers are intentionally distinct from ordinary completion notes. The
+ * server validates a reason for a waiver, while completed actions retain
+ * their action evidence. Keeping the shape here makes the local outbox and
+ * optimistic workspace agree.
+ */
+export function buildVisitActionEvidence(input: {
+  actionKey: FieldVisitActionPayload["actionKey"]
+  status: FieldVisitActionPayload["status"]
+  note: string
+  nextDueAt?: string
+  nextPriority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+}): Record<string, unknown> {
+  if (input.status === "WAIVED") return { reason: input.note }
+  if (input.actionKey === "NEXT_ACTION") {
+    return {
+      title: input.note,
+      dueDate: input.nextDueAt ?? null,
+      priority: input.nextPriority ?? "MEDIUM",
+    }
+  }
+  return { note: input.note }
+}
+
+export function setVisitWorkspaceSyncState(
+  workspace: FieldVisitWorkspaceData,
+  syncState: "PENDING" | "CONFLICT" | "REJECTED",
+): FieldVisitWorkspaceData {
+  return {
+    ...workspace,
+    visit: { ...workspace.visit, syncState },
+  }
+}
+
 export function setVisitActionSyncState(
   workspace: FieldVisitWorkspaceData,
   actionResultId: string,

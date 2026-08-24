@@ -38,12 +38,14 @@ import {
 import {
   addOptimisticVisitAction,
   addOptimisticVisitPhoto,
+  buildVisitActionEvidence,
   hasFutureVisitNextAction,
   localFieldVisitWorkspace,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
   setVisitActionSyncState,
   setVisitPhotoSyncState,
+  setVisitWorkspaceSyncState,
   visitRequirementProgress,
 } from "../../../src/field/visit-workspace"
 import { persistAndQueueFieldVisitPhoto } from "../../../src/field/visit-photo-store"
@@ -187,9 +189,12 @@ export default function FieldVisitWorkspaceScreen() {
         visitId,
         actionKey: activeRequirement.actionKey,
         status,
-        evidence: activeRequirement.actionKey === "NEXT_ACTION"
-          ? { title: trimmed, dueDate: `${nextDueDate}T09:00:00.000Z`, priority: "MEDIUM" }
-          : { note: trimmed },
+        evidence: buildVisitActionEvidence({
+          actionKey: activeRequirement.actionKey,
+          status,
+          note: trimmed,
+          nextDueAt: nextDueDate + "T09:00:00.000Z",
+        }),
         completedAt,
       } as const
       const queued = enqueueFieldVisitAction(payload)
@@ -292,6 +297,8 @@ export default function FieldVisitWorkspaceScreen() {
 
   async function submitCheckout() {
     if (!workspace || !field.week) return
+    const checkedInWeek = field.week
+    const checkedInWorkspace = workspace
     setSaving(true)
     try {
       const location = await getCurrentDeviceLocation({ requestPermission: false }).catch(() => null)
@@ -329,11 +336,15 @@ export default function FieldVisitWorkspaceScreen() {
       await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
+        const syncState = result.status === "conflict" ? "CONFLICT" : "REJECTED"
         field.applyLocalWeek(setOptimisticFieldVisitSyncState(
-          optimisticWeek,
+          checkedInWeek,
           visitId,
-          result.status === "conflict" ? "CONFLICT" : "REJECTED",
+          syncState,
         ))
+        const recovered = setVisitWorkspaceSyncState(checkedInWorkspace, syncState)
+        persist(recovered)
+        await refreshWorkspace(recovered)
         Alert.alert(t("syncNeedsAttention"))
         return
       }

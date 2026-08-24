@@ -3,9 +3,11 @@ import type { FieldVisitWorkspaceData } from "./contracts"
 import {
   addOptimisticVisitPhoto,
   addOptimisticVisitAction,
+  buildVisitActionEvidence,
   hasFutureVisitNextAction,
   mergeServerVisitWorkspace,
   missingRequiredVisitActions,
+  setVisitWorkspaceSyncState,
 } from "./visit-workspace"
 
 const workspace = {
@@ -113,5 +115,30 @@ describe("field visit workspace", () => {
       completedAt: "2026-07-15T08:20:00.000Z",
     })
     expect(hasFutureVisitNextAction(future, "2026-07-15")).toBe(true)
+  })
+
+  it("sends a waiver reason instead of ordinary completed-action evidence", () => {
+    expect(buildVisitActionEvidence({
+      actionKey: "CHECKLIST",
+      status: "WAIVED",
+      note: "Customer refused access",
+    })).toEqual({ reason: "Customer refused access" })
+    expect(buildVisitActionEvidence({
+      actionKey: "CHECKLIST",
+      status: "COMPLETED",
+      note: "Shelf checked",
+    })).toEqual({ note: "Shelf checked" })
+  })
+
+  it("keeps the workspace visit open after a rejected checkout", () => {
+    const checkedIn = {
+      ...workspace,
+      visit: { ...workspace.visit, status: "CHECKED_IN", checkOutAt: null },
+    } as unknown as FieldVisitWorkspaceData
+    expect(setVisitWorkspaceSyncState(checkedIn, "REJECTED").visit).toMatchObject({
+      status: "CHECKED_IN",
+      checkOutAt: null,
+      syncState: "REJECTED",
+    })
   })
 })
