@@ -379,8 +379,12 @@ export const fieldApi = {
     request<unknown>("/api/v1/mtm/mobile/manager/team").then(parseFieldManagerTeam),
   managerLocations: () =>
     request<unknown>("/api/v1/mtm/mobile/manager/locations?limit=200").then(parseFieldManagerLocations),
-  managerPlanning: (date: string) =>
-    request<unknown>("/api/v1/mtm/mobile/manager/planning?date=" + encodeURIComponent(date))
+  managerPlanning: (from: string, to?: string) =>
+    request<unknown>(
+      to
+        ? `/api/v1/mtm/mobile/manager/planning?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        : "/api/v1/mtm/mobile/manager/planning?date=" + encodeURIComponent(from),
+    )
       .then(parseFieldManagerPlanning),
   managerApprovals: () =>
     request<unknown>("/api/v1/mtm/mobile/manager/approvals").then(parseFieldManagerApprovals),
@@ -561,7 +565,7 @@ export const fieldApi = {
   locations(date?: string): Promise<FieldLocationHistoryData>
   managerTeam(): Promise<FieldManagerTeamData>
   managerLocations(): Promise<FieldManagerLocationsData>
-  managerPlanning(date: string): Promise<FieldManagerPlanningData>
+  managerPlanning(from: string, to?: string): Promise<FieldManagerPlanningData>
   managerApprovals(): Promise<FieldManagerApprovalsData>
   uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>

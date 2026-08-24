@@ -14,6 +14,7 @@ import { cardShadow, colors, radii } from "../../../src/theme"
 import { agentRoleLabel } from "../../../src/field/labels"
 
 const knownRouteStatus = new Set(["DRAFT", "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "MISSED"])
+const RANGE_OPTIONS = [1, 5, 7]
 const tones: Record<RouteStatusTone, { background: string; foreground: string }> = {
   draft: { background: colors.draftBg, foreground: colors.draft },
   planned: { background: colors.infoBg, foreground: colors.info },
@@ -36,25 +37,27 @@ export default function ManagerPlanningScreen() {
   const locale = useLocale()
   const field = useField()
   const [date, setDate] = useState(() => field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10))
+  const [rangeDays, setRangeDays] = useState(1)
   const [data, setData] = useState<FieldManagerPlanningData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
 
-  const load = useCallback(async (nextDate = date) => {
+  const load = useCallback(async (nextDate = date, nextRangeDays = rangeDays) => {
     setLoading(true)
     setError(null)
     try {
-      setData(await fieldApi.managerPlanning(nextDate))
+      const rangeEnd = nextRangeDays > 1 ? shiftDateKey(nextDate, nextRangeDays - 1) : undefined
+      setData(await fieldApi.managerPlanning(nextDate, rangeEnd))
     } catch (reason) {
       setError(reason)
     } finally {
       setLoading(false)
     }
-  }, [date])
+  }, [date, rangeDays])
 
   useEffect(() => {
-    void load(date)
-  }, [date, load])
+    void load(date, rangeDays)
+  }, [date, load, rangeDays])
 
   const selectDate = (nextDate: string) => {
     if (nextDate === date) return
@@ -62,6 +65,9 @@ export default function ManagerPlanningScreen() {
   }
 
   const calendar = formatCalendarDay(date, locale)
+  const endDate = shiftDateKey(date, rangeDays - 1)
+  const endCalendar = formatCalendarDay(endDate, locale)
+  const dateLabel = rangeDays === 1 ? calendar.date : calendar.date + " — " + endCalendar.date
   const denied = error instanceof HttpError && error.status === 403
   const routes = data?.routes ?? []
   const plannedAgentIds = useMemo(() => new Set(routes.map((route) => route.agentId)), [routes])
@@ -69,7 +75,7 @@ export default function ManagerPlanningScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(date)} tintColor={colors.primary} />}>
+      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(date, rangeDays)} tintColor={colors.primary} />}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}>
@@ -77,16 +83,23 @@ export default function ManagerPlanningScreen() {
             <Text style={styles.title}>{t("managerPlanningTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerPlanningHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load(date)} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load(date, rangeDays)} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
         </View>
 
         <View style={styles.dateNavigator}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("managerPreviousDay")} onPress={() => selectDate(shiftDateKey(date, -1))} style={styles.dateArrow}><Text style={styles.dateArrowText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t(rangeDays === 1 ? "managerPreviousDay" : "managerPreviousRange")} onPress={() => selectDate(shiftDateKey(date, -rangeDays))} style={styles.dateArrow}><Text style={styles.dateArrowText}>‹</Text></Pressable>
           <View style={styles.dateCenter}>
-            <Text style={styles.dateWeekday}>{calendar.weekday}</Text>
-            <Text style={styles.dateLabel}>{calendar.date}</Text>
+            <Text style={styles.dateWeekday}>{rangeDays === 1 ? calendar.weekday : t("managerPlanningRange", { count: rangeDays })}</Text>
+            <Text style={styles.dateLabel}>{dateLabel}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("managerNextDay")} onPress={() => selectDate(shiftDateKey(date, 1))} style={styles.dateArrow}><Text style={styles.dateArrowText}>›</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")} onPress={() => selectDate(shiftDateKey(date, rangeDays))} style={styles.dateArrow}><Text style={styles.dateArrowText}>›</Text></Pressable>
+        </View>
+        <View style={styles.rangePicker}>
+          {RANGE_OPTIONS.map((days) => (
+            <Pressable key={days} accessibilityRole="button" onPress={() => setRangeDays(days)} style={[styles.rangeChoice, rangeDays === days && styles.rangeChoiceSelected]}>
+              <Text style={[styles.rangeChoiceText, rangeDays === days && styles.rangeChoiceTextSelected]}>{t("managerPlanningRange", { count: days })}</Text>
+            </Pressable>
+          ))}
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -95,7 +108,7 @@ export default function ManagerPlanningScreen() {
             <View style={styles.stateIcon}><TabIcon name="week" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load(date)} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void load(date, rangeDays)} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -122,7 +135,7 @@ export default function ManagerPlanningScreen() {
                         <View style={styles.routeIcon}><TabIcon name="route" color={colors.primary} size={21} /></View>
                         <View style={styles.routeBody}>
                           <Text style={styles.routeName} numberOfLines={1}>{route.name ?? t("tabRoute")}</Text>
-                          <Text style={styles.routeAgent}>{route.agent.name}</Text>
+                          <Text style={styles.routeAgent}>{route.agent.name}{rangeDays > 1 ? " · " + formatCalendarDay(route.date, locale).date : ""}</Text>
                         </View>
                         <View style={[styles.status, { backgroundColor: status.background }]}><Text style={[styles.statusText, { color: status.foreground }]}>{status.label}</Text></View>
                       </View>
@@ -178,6 +191,11 @@ const styles = StyleSheet.create({
   dateCenter: { alignItems: "center", flex: 1 },
   dateWeekday: { color: colors.headerSubtext, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
   dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
+  rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
+  rangeChoice: { flex: 1, minHeight: 38, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  rangeChoiceSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  rangeChoiceText: { color: colors.muted, fontSize: 9, fontWeight: "900" },
+  rangeChoiceTextSelected: { color: colors.headerText },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788", padding: 11 },
   noticeText: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
   sectionHeading: { marginHorizontal: 16, marginTop: 22, marginBottom: 7, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12 },
