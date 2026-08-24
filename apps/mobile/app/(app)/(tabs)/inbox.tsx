@@ -9,16 +9,18 @@ import { notificationDestination } from "../../../src/field/notification-target"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
+import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type InboxMode = "messages" | "notifications"
 
-function notificationTone(type: string) {
-  if (type === "alert" || type === "error") return { bg: colors.missedBg, color: colors.missed, glyph: "!" }
-  if (type === "warning") return { bg: colors.warningBg, color: colors.warning, glyph: "!" }
-  if (type === "task") return { bg: colors.successBg, color: colors.successDark, glyph: "✓" }
-  return { bg: colors.infoBg, color: colors.info, glyph: "i" }
+function notificationTone(type: string): { bg: string; color: string; icon: TabIconName } {
+  if (type === "alert" || type === "error") return { bg: colors.missedBg, color: colors.missed, icon: "alert" }
+  if (type === "warning") return { bg: colors.warningBg, color: colors.warning, icon: "alert" }
+  if (type === "task") return { bg: colors.successBg, color: colors.successDark, icon: "tasks" }
+  if (type === "message") return { bg: colors.primarySoft, color: colors.primary, icon: "inbox" }
+  return { bg: colors.infoBg, color: colors.info, icon: "info" }
 }
 
 export default function InboxTab() {
@@ -203,7 +205,7 @@ export default function InboxTab() {
                       ]}
                     >
                       <View style={[styles.typeIcon, { backgroundColor: tone.bg }]}>
-                        <Text style={[styles.typeGlyph, { color: tone.color }]}>{tone.glyph}</Text>
+                        <TabIcon name={tone.icon} color={tone.color} size={20} />
                       </View>
                       <View style={styles.messageBody}>
                         <Text style={styles.messageTitle}>{item.title}</Text>
@@ -277,7 +279,6 @@ const styles = StyleSheet.create({
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   chevron: { color: colors.faint, fontSize: 25, fontWeight: "400" },
   typeIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  typeGlyph: { fontSize: 16, fontWeight: "900" },
   notificationDate: { color: colors.faint, fontSize: 9, fontWeight: "600", marginTop: 7 },
   emptyCard: { margin: 14, minHeight: 310, padding: 28, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   emptyIcon: { width: 68, height: 68, borderRadius: 23, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 16 },
