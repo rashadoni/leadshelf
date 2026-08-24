@@ -120,8 +120,20 @@ export default function ManagerHomeScreen() {
   const deniedEverywhere = [team.error, locations.error, planning.error, approvals.error]
     .every((reason) => reason != null && isForbidden(reason))
   const teamAgents = team.data?.agents ?? []
-  const activeWorkdays = teamAgents.filter((agent) => agent.workday?.status === "STARTED").length
-  const pausedWorkdays = teamAgents.filter((agent) => agent.workday?.status === "PAUSED").length
+  const supportsTodayContract = team.data?.today != null
+  const activeWorkdays = teamAgents.filter((agent) => (
+    supportsTodayContract
+      ? agent.todayWorkday?.status === "STARTED"
+      : agent.workday?.status === "STARTED"
+  )).length
+  const pausedWorkdays = teamAgents.filter((agent) => (
+    supportsTodayContract
+      ? agent.todayWorkday?.status === "PAUSED"
+      : agent.workday?.status === "PAUSED"
+  )).length
+  const completedWorkdays = supportsTodayContract
+    ? teamAgents.filter((agent) => agent.todayWorkday?.status === "COMPLETED").length
+    : 0
   const locationAgents = locations.data?.locations ?? []
   const liveLocations = locationAgents.filter((agent) => agent.freshness === "ONLINE").length
   const lastKnownLocations = locationAgents.filter((agent) => agent.freshness === "DELAYED" || agent.freshness === "STALE").length
@@ -183,7 +195,11 @@ export default function ManagerHomeScreen() {
                 hint={t("managerTeamCardHint")}
                 icon="profile"
                 value={String(teamAgents.length)}
-                detail={String(activeWorkdays) + " " + t("managerWorkingNow") + " · " + String(pausedWorkdays) + " " + t("managerPaused")}
+                detail={
+                  String(activeWorkdays) + " " + t("managerWorkingNow") +
+                  " · " + String(pausedWorkdays) + " " + t("managerPaused") +
+                  (supportsTodayContract ? " · " + String(completedWorkdays) + " " + t("managerCompleted") : "")
+                }
                 tone="primary"
                 loading={loading}
                 error={team.error}

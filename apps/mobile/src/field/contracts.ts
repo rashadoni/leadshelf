@@ -580,6 +580,31 @@ export interface FieldManagerWorkday {
   pausedAt: string | null
 }
 
+/**
+ * A same-day workday row intentionally differs from the legacy open-workday
+ * field above. It lets a manager distinguish a completed day from an active
+ * shift that was left open on an earlier date, without inventing lateness or
+ * attendance discipline from incomplete data.
+ */
+export interface FieldManagerTodayWorkday {
+  id: string
+  workDate: string
+  status: FieldWorkdayStatus
+  startedAt: string
+  pausedAt: string | null
+  completedAt: string | null
+  totalPausedSeconds: number
+  workedSeconds: number
+  durationAnomalous: boolean
+  durationReason: string | null
+}
+
+export interface FieldManagerToday {
+  date: string
+  timezone: string
+  generatedAt: string
+}
+
 export interface FieldManagerTeamAgent {
   id: string
   name: string
@@ -589,10 +614,16 @@ export interface FieldManagerTeamAgent {
   isOnline: boolean
   lastSeenAt: string | null
   workday: FieldManagerWorkday | null
+  todayWorkday: FieldManagerTodayWorkday | null
 }
 
 export interface FieldManagerTeamData {
   scope: FieldManagerScope
+  /**
+   * Null keeps a new APK safe against a server that has not shipped the
+   * additive manager-Today contract yet.
+   */
+  today: FieldManagerToday | null
   agents: FieldManagerTeamAgent[]
 }
 
@@ -1800,9 +1831,56 @@ function managerWorkday(value: unknown): FieldManagerWorkday | null {
   }
 }
 
+function managerTodayWorkday(value: unknown): FieldManagerTodayWorkday | null {
+  if (value == null) return null
+  const workday = record(value)
+  if (
+    !workday ||
+    !string(workday.id) ||
+    !timestamp(workday.workDate) ||
+    !string(workday.status) ||
+    !workdayStatuses.has(workday.status as FieldWorkdayStatus) ||
+    !timestamp(workday.startedAt) ||
+    !nullableTimestamp(workday.pausedAt) ||
+    !nullableTimestamp(workday.completedAt) ||
+    !number(workday.totalPausedSeconds) ||
+    !number(workday.workedSeconds) ||
+    !boolean(workday.durationAnomalous) ||
+    !(workday.durationReason == null || string(workday.durationReason))
+  ) {
+    return null
+  }
+  return {
+    id: workday.id,
+    workDate: workday.workDate,
+    status: workday.status as FieldWorkdayStatus,
+    startedAt: workday.startedAt,
+    pausedAt: workday.pausedAt == null ? null : workday.pausedAt,
+    completedAt: workday.completedAt == null ? null : workday.completedAt,
+    totalPausedSeconds: workday.totalPausedSeconds,
+    workedSeconds: workday.workedSeconds,
+    durationAnomalous: workday.durationAnomalous,
+    durationReason: workday.durationReason == null ? null : workday.durationReason,
+  }
+}
+
+function managerToday(value: unknown): FieldManagerToday | null {
+  if (value == null) return null
+  const today = record(value)
+  if (!today || !dateKey(today.date) || !string(today.timezone) || !timestamp(today.generatedAt)) {
+    return null
+  }
+  return {
+    date: today.date,
+    timezone: today.timezone,
+    generatedAt: today.generatedAt,
+  }
+}
+
 function managerTeamAgent(value: unknown): FieldManagerTeamAgent | null {
   const agent = record(value)
   const workday = managerWorkday(agent?.workday)
+  const todayWorkday = managerTodayWorkday(agent?.todayWorkday)
   if (
     !agent ||
     !string(agent.id) ||
@@ -1812,7 +1890,8 @@ function managerTeamAgent(value: unknown): FieldManagerTeamAgent | null {
     !(agent.teamId == null || string(agent.teamId)) ||
     !boolean(agent.isOnline) ||
     !nullableTimestamp(agent.lastSeenAt) ||
-    (agent.workday != null && !workday)
+    (agent.workday != null && !workday) ||
+    (agent.todayWorkday != null && !todayWorkday)
   ) {
     return null
   }
@@ -1825,6 +1904,7 @@ function managerTeamAgent(value: unknown): FieldManagerTeamAgent | null {
     isOnline: agent.isOnline,
     lastSeenAt: agent.lastSeenAt == null ? null : agent.lastSeenAt,
     workday,
+    todayWorkday,
   }
 }
 
@@ -1833,11 +1913,15 @@ export function parseFieldManagerTeam(value: unknown): FieldManagerTeamData {
   if (!data || !managerScope(data.scope) || !Array.isArray(data.agents)) {
     throw new FieldContractError("mobile manager team")
   }
+  const today = managerToday(data.today)
+  if (data.today != null && !today) {
+    throw new FieldContractError("mobile manager team")
+  }
   const agents = data.agents.map(managerTeamAgent)
   if (agents.some((agent) => agent == null)) {
     throw new FieldContractError("mobile manager team")
   }
-  return { scope: data.scope, agents: agents as FieldManagerTeamAgent[] }
+  return { scope: data.scope, today, agents: agents as FieldManagerTeamAgent[] }
 }
 
 function managerLocationAgent(value: unknown): FieldManagerLocationAgent | null {

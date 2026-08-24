@@ -665,7 +665,7 @@ describe("LeadDrive field contracts", () => {
       },
     })).toThrow(FieldContractError)
 
-    expect(parseFieldManagerTeam({
+    const legacyManagerTeam = parseFieldManagerTeam({
       success: true,
       data: {
         scope: "TEAM_OR_REGION",
@@ -685,7 +685,47 @@ describe("LeadDrive field contracts", () => {
           },
         }],
       },
-    }).agents[0]).toMatchObject({ name: "Manager view agent", workday: { status: "STARTED" } })
+    })
+    expect(legacyManagerTeam).toMatchObject({ today: null })
+    expect(legacyManagerTeam.agents[0]).toMatchObject({ name: "Manager view agent", workday: { status: "STARTED" }, todayWorkday: null })
+
+    const managerToday = parseFieldManagerTeam({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        today: {
+          date: "2026-07-15",
+          timezone: "Asia/Baku",
+          generatedAt: "2026-07-15T05:01:00.000Z",
+        },
+        agents: [{
+          id: "agent-2",
+          name: "Completed today",
+          role: "AGENT",
+          status: "ACTIVE",
+          teamId: "team-1",
+          isOnline: false,
+          lastSeenAt: null,
+          workday: null,
+          todayWorkday: {
+            id: "workday-completed",
+            workDate: "2026-07-15T00:00:00.000Z",
+            status: "COMPLETED",
+            startedAt: "2026-07-15T01:00:00.000Z",
+            pausedAt: null,
+            completedAt: "2026-07-15T04:00:00.000Z",
+            totalPausedSeconds: 300,
+            workedSeconds: 10500,
+            durationAnomalous: false,
+            durationReason: null,
+          },
+        }],
+      },
+    })
+    expect(managerToday).toMatchObject({
+      today: { date: "2026-07-15", timezone: "Asia/Baku" },
+      agents: [{ todayWorkday: { status: "COMPLETED", workedSeconds: 10500 } }],
+    })
 
     expect(parseFieldManagerPlanning({
       success: true,

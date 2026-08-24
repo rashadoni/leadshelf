@@ -11,14 +11,92 @@ import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { agentRoleLabel } from "../../../src/field/labels"
 
-function workdayMeta(agent: FieldManagerTeamAgent): { label: string; background: string; color: string } {
+type WorkdayMeta = {
+  label: string
+  background: string
+  color: string
+  startedAt: string | null
+  workedSeconds: number | null
+}
+
+function compactWorkedTime(totalSeconds: number): string {
+  const minutes = Math.max(0, Math.floor(totalSeconds / 60))
+  const hours = Math.floor(minutes / 60)
+  return String(hours).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0")
+}
+
+function workdayMeta(agent: FieldManagerTeamAgent, supportsTodayContract: boolean): WorkdayMeta {
+  const today = agent.todayWorkday
+  if (supportsTodayContract && today?.status === "STARTED") {
+    return {
+      label: t("managerWorkdayActive"),
+      background: colors.successBg,
+      color: colors.successDark,
+      startedAt: today.startedAt,
+      workedSeconds: today.durationAnomalous ? null : today.workedSeconds,
+    }
+  }
+  if (supportsTodayContract && today?.status === "PAUSED") {
+    return {
+      label: t("managerWorkdayPaused"),
+      background: colors.warningBg,
+      color: colors.warning,
+      startedAt: today.startedAt,
+      workedSeconds: today.durationAnomalous ? null : today.workedSeconds,
+    }
+  }
+  if (supportsTodayContract && today?.status === "COMPLETED") {
+    return {
+      label: t("managerWorkdayCompleted"),
+      background: colors.successBg,
+      color: colors.successDark,
+      startedAt: today.startedAt,
+      workedSeconds: today.durationAnomalous ? null : today.workedSeconds,
+    }
+  }
+  if (supportsTodayContract && agent.workday) {
+    return {
+      label: t("managerWorkdayCarryOver"),
+      background: colors.warningBg,
+      color: colors.warning,
+      startedAt: agent.workday.startedAt,
+      workedSeconds: null,
+    }
+  }
+  if (supportsTodayContract) {
+    return {
+      label: t("managerWorkdayNoEntry"),
+      background: colors.draftBg,
+      color: colors.draft,
+      startedAt: null,
+      workedSeconds: null,
+    }
+  }
   if (agent.workday?.status === "STARTED") {
-    return { label: t("managerWorkdayActive"), background: colors.successBg, color: colors.successDark }
+    return {
+      label: t("managerWorkdayActive"),
+      background: colors.successBg,
+      color: colors.successDark,
+      startedAt: agent.workday.startedAt,
+      workedSeconds: null,
+    }
   }
   if (agent.workday?.status === "PAUSED") {
-    return { label: t("managerWorkdayPaused"), background: colors.warningBg, color: colors.warning }
+    return {
+      label: t("managerWorkdayPaused"),
+      background: colors.warningBg,
+      color: colors.warning,
+      startedAt: agent.workday.startedAt,
+      workedSeconds: null,
+    }
   }
-  return { label: t("managerWorkdayNone"), background: colors.draftBg, color: colors.draft }
+  return {
+    label: t("managerWorkdayNone"),
+    background: colors.draftBg,
+    color: colors.draft,
+    startedAt: null,
+    workedSeconds: null,
+  }
 }
 
 export default function ManagerTeamScreen() {
@@ -44,6 +122,11 @@ export default function ManagerTeamScreen() {
   }, [load])
 
   const denied = error instanceof HttpError && error.status === 403
+  const supportsTodayContract = data?.today !== null && data?.today !== undefined
+  const todayAgents = data?.agents.filter((agent) => agent.todayWorkday != null) ?? []
+  const activeToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "STARTED").length
+  const pausedToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "PAUSED").length
+  const completedToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "COMPLETED").length
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -75,16 +158,32 @@ export default function ManagerTeamScreen() {
               <Text style={styles.scopeText}>{data.scope === "ORGANIZATION" ? t("managerScopeOrganization") : t("managerScopeTeam")}</Text>
               {error ? <Text style={styles.staleText}>{t("managerUnavailable")}</Text> : null}
             </View>
+            {supportsTodayContract && data.today ? (
+              <View style={styles.todaySummary}>
+                <View style={styles.todaySummaryTop}>
+                  <View style={styles.todaySummaryIcon}><TabIcon name="today" color={colors.primary} size={21} /></View>
+                  <View style={styles.todaySummaryBody}>
+                    <Text style={styles.todaySummaryTitle}>{t("managerTodayWorkdays")}</Text>
+                    <Text style={styles.todaySummaryHint}>{t("managerTodaySnapshot", { time: formatShortDateTime(data.today.generatedAt, locale) })}</Text>
+                  </View>
+                </View>
+                <View style={styles.todayStats}>
+                  <View style={styles.todayStat}><Text style={[styles.todayStatValue, { color: colors.successDark }]}>{activeToday}</Text><Text style={styles.todayStatLabel}>{t("managerWorkingNow")}</Text></View>
+                  <View style={styles.todayStat}><Text style={[styles.todayStatValue, { color: colors.warning }]}>{pausedToday}</Text><Text style={styles.todayStatLabel}>{t("managerPaused")}</Text></View>
+                  <View style={styles.todayStat}><Text style={[styles.todayStatValue, { color: colors.info }]}>{completedToday}</Text><Text style={styles.todayStatLabel}>{t("managerCompleted")}</Text></View>
+                </View>
+              </View>
+            ) : null}
             {data.agents.length === 0 ? (
               <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="profile" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{t("managerNoTeam")}</Text></View>
             ) : (
               <View style={styles.list}>
                 {data.agents.map((agent) => {
-                  const workday = workdayMeta(agent)
+                  const workday = workdayMeta(agent, supportsTodayContract)
                   return (
                     <View key={agent.id} style={styles.card}>
                       <View style={styles.cardTop}>
-                        <View style={styles.avatar}><Text style={styles.avatarText}>{agent.name.charAt(0).toUpperCase()}</Text></View>
+                        <View style={styles.avatar}><TabIcon name="profile" color={colors.primary} size={22} /></View>
                         <View style={styles.cardBody}>
                           <Text style={styles.name}>{agent.name}</Text>
                           <Text style={styles.role}>{agentRoleLabel(agent.role)}</Text>
@@ -99,7 +198,8 @@ export default function ManagerTeamScreen() {
                         <View style={styles.workday}>
                           <View style={[styles.workdayDot, { backgroundColor: workday.color }]} />
                           <Text style={[styles.workdayText, { color: workday.color }]}>{workday.label}</Text>
-                          {agent.workday?.startedAt ? <Text style={styles.workdaySince}>{formatTime(agent.workday.startedAt)}</Text> : null}
+                          {workday.workedSeconds != null ? <Text style={styles.workdaySince}>{t("managerWorkedTime", { time: compactWorkedTime(workday.workedSeconds) })}</Text> : null}
+                          {workday.workedSeconds == null && workday.startedAt ? <Text style={styles.workdaySince}>{t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt) })}</Text> : null}
                         </View>
                         <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale) : "—"}</Text>
                       </View>
@@ -130,11 +230,20 @@ const styles = StyleSheet.create({
   scope: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.inner, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
   scopeText: { flex: 1, color: colors.primary, fontSize: 10, fontWeight: "900" },
   staleText: { color: colors.warning, fontSize: 9, fontWeight: "800" },
+  todaySummary: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, ...cardShadow },
+  todaySummaryTop: { flexDirection: "row", alignItems: "center", gap: 9 },
+  todaySummaryIcon: { width: 39, height: 39, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  todaySummaryBody: { flex: 1, minWidth: 0 },
+  todaySummaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  todaySummaryHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 2 },
+  todayStats: { marginTop: 13, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row" },
+  todayStat: { flex: 1, alignItems: "center", paddingHorizontal: 4 },
+  todayStatValue: { fontSize: 19, lineHeight: 22, fontWeight: "900" },
+  todayStatLabel: { color: colors.muted, fontSize: 8, lineHeight: 11, fontWeight: "800", textAlign: "center", marginTop: 2 },
   list: { paddingTop: 3 },
   card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 14, ...cardShadow },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.primary, fontSize: 16, fontWeight: "900" },
   cardBody: { flex: 1, minWidth: 0 },
   name: { color: colors.text, fontSize: 14, fontWeight: "900" },
   role: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 },
