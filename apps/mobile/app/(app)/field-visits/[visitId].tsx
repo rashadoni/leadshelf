@@ -14,7 +14,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import * as Crypto from "expo-crypto"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import {
   enqueueFieldVisitAction,
@@ -119,6 +119,7 @@ export default function FieldVisitWorkspaceScreen() {
   const { visitId } = useLocalSearchParams<{ visitId: string }>()
   const field = useField()
   const { sync } = useSync()
+  const insets = useSafeAreaInsets()
   const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? "UTC"
   const tenantToday = field.week?.today ?? field.workday?.today ?? tenantDateKey(new Date(), tenantTimeZone) ?? new Date().toISOString().slice(0, 10)
   const defaultFollowUpDate = shiftDateKey(tenantToday, 1)
@@ -654,8 +655,8 @@ export default function FieldVisitWorkspaceScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView ref={visitScroll} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <ScrollView ref={visitScroll} contentContainerStyle={[styles.scroll, { paddingBottom: !isCompleted ? Math.max(insets.bottom, 20) + 108 : Math.max(insets.bottom, 20) + 28 }]} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
@@ -1002,10 +1003,15 @@ export default function FieldVisitWorkspaceScreen() {
             <View style={styles.chips}>{potentials.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityLabel={t(`visitPotential_${item}` as MessageKey)} accessibilityState={{ selected: potential === item }} onPress={() => setPotential(item)} style={({ pressed }) => [styles.chip, potential === item && styles.chipSelected, pressed && styles.pressed]}><Text style={[styles.chipText, potential === item && styles.chipTextSelected]}>{t(`visitPotential_${item}` as MessageKey)}</Text></Pressable>)}</View>
             <Text style={styles.label}>{t("fieldVisitResultNote")}</Text>
             <TextInput accessibilityLabel={t("fieldVisitResultNote")} value={resultNote} onChangeText={setResultNote} multiline textAlignVertical="top" style={styles.textarea} />
-            <Pressable accessibilityRole="button" accessibilityLabel={checkoutButtonText} accessibilityHint={checkoutHint} accessibilityState={{ disabled: checkoutDisabled, busy: saving }} disabled={checkoutDisabled} onPress={checkout} style={({ pressed }) => [styles.checkoutButton, checkoutDisabled && styles.disabled, pressed && !checkoutDisabled && styles.pressed]}><Text style={styles.checkoutText}>{checkoutButtonText}</Text></Pressable>
           </View>
         ) : null}
       </ScrollView>
+      {!isCompleted ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
+          {checkoutHint ? <Text style={styles.stickyFooterHint}>{checkoutHint}</Text> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel={checkoutButtonText} accessibilityHint={checkoutHint} accessibilityState={{ disabled: checkoutDisabled, busy: saving }} disabled={checkoutDisabled} onPress={checkout} style={({ pressed }) => [styles.checkoutButton, checkoutDisabled && styles.disabled, pressed && !checkoutDisabled && styles.pressed]}><Text style={styles.checkoutText}>{checkoutButtonText}</Text></Pressable>
+        </View>
+      ) : null}
     </SafeAreaView>
   )
 }
@@ -1083,7 +1089,7 @@ const styles = StyleSheet.create({
   workTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
   followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
-  checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", marginTop: 15, paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
+  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 8 }, stickyFooterHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginBottom: 7, textAlign: "center" }, checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
   photoButton: { minHeight: 50, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
