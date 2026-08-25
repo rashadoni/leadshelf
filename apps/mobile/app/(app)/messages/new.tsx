@@ -1,20 +1,22 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
-import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { enqueueFieldMessage, readFieldMessages, type FieldDocumentDraft } from "../../../src/db/local-store"
+import { enqueueFieldMessage, type FieldDocumentDraft } from "../../../src/db/local-store"
 import { formatFileSize, pickFieldDocument } from "../../../src/field/document-files"
 import { fieldErrorMessage } from "../../../src/field/error-message"
+import { useField } from "../../../src/field/field-context"
 import { agentRoleLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
 
 export default function NewMessageScreen() {
   const locale = useLocale()
+  const field = useField()
   const { sync } = useSync()
-  const inbox = readFieldMessages()
+  const inbox = field.messages
   const [recipientId, setRecipientId] = useState<string | null>(null)
   const [body, setBody] = useState("")
   const [attachment, setAttachment] = useState<FieldDocumentDraft | null>(null)
@@ -33,6 +35,12 @@ export default function NewMessageScreen() {
     required: "Əməkdaş seçin və mesaj və ya fayl əlavə edin.",
     queuedTitle: "Mesaj saxlanıldı",
     queuedBody: "Göndərmə növbəsinə əlavə edildi.",
+    recipientsLoading: "Əlçatan əməkdaşlar yüklənir…",
+    noRecipients: "Yeni dialoq üçün əlçatan əməkdaş yoxdur.",
+    noRecipientsHint: "Gələnlər bölməsinə qayıdın və məlumatı yeniləyin və ya rəhbərə müraciət edin.",
+    discardTitle: "Mesajı ləğv edək?",
+    discardBody: "Yazdığınız mətn və seçilmiş fayl silinəcək.",
+    discardConfirm: "Ləğv et",
   } : {
     eyebrow: "СООБЩЕНИЯ",
     title: "Новый диалог",
@@ -46,7 +54,21 @@ export default function NewMessageScreen() {
     required: "Выберите получателя и добавьте сообщение или файл.",
     queuedTitle: "Сообщение сохранено",
     queuedBody: "Оно добавлено в очередь на отправку.",
+    recipientsLoading: "Загружаем доступных сотрудников…",
+    noRecipients: "Нет доступных сотрудников для нового диалога.",
+    noRecipientsHint: "Вернитесь во «Входящие» и обновите данные или обратитесь к руководителю.",
+    discardTitle: "Отменить сообщение?",
+    discardBody: "Набранный текст и выбранный файл будут удалены.",
+    discardConfirm: "Отменить",
   }
+
+  const canSend = Boolean(recipientId && (body.trim() || attachment))
+
+  useEffect(() => {
+    if (recipientId && !inbox.availableRecipients.some((person) => person.id === recipientId)) {
+      setRecipientId(null)
+    }
+  }, [inbox.availableRecipients, recipientId])
 
   async function chooseFile() {
     setError(null)
@@ -59,7 +81,7 @@ export default function NewMessageScreen() {
   }
 
   async function send() {
-    if (!recipientId || (!body.trim() && !attachment) || busy) {
+    if (!recipientId || !canSend || busy) {
       setError(copy.required)
       return
     }
@@ -67,7 +89,7 @@ export default function NewMessageScreen() {
     setError(null)
     try {
       enqueueFieldMessage({ threadId: null, recipientAgentId: recipientId, body: body.trim() || null }, attachment)
-      Alert.alert(copy.queuedTitle, copy.queuedBody, [{ text: t("ok"), onPress: () => router.back() }])
+      Alert.alert(copy.queuedTitle, copy.queuedBody, [{ text: t("ok"), onPress: () => safeFieldBack("/(app)/(tabs)/inbox") }])
       void sync().catch(() => {})
     } catch (cause) {
       setError(fieldErrorMessage(cause, "messageActionFailed"))
@@ -76,12 +98,24 @@ export default function NewMessageScreen() {
     }
   }
 
+  function goBack() {
+    if (busy) return
+    if (!body.trim() && !attachment) {
+      safeFieldBack("/(app)/(tabs)/inbox")
+      return
+    }
+    Alert.alert(copy.discardTitle, copy.discardBody, [
+      { text: t("cancel"), style: "cancel" },
+      { text: copy.discardConfirm, style: "destructive", onPress: () => safeFieldBack("/(app)/(tabs)/inbox") },
+    ])
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: busy }} disabled={busy} onPress={goBack} style={[styles.back, busy && styles.disabled]}>
               <TabIcon name="chevronLeft" color={colors.text} size={21} />
             </Pressable>
             <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
@@ -90,13 +124,13 @@ export default function NewMessageScreen() {
 
           <Text style={styles.sectionTitle}>{copy.recipient}</Text>
           <View style={styles.recipients}>
-            {inbox.availableRecipients.map((person) => (
+            {inbox.availableRecipients.length > 0 ? inbox.availableRecipients.map((person) => (
               <Pressable key={person.id} accessibilityRole="button" accessibilityState={{ selected: recipientId === person.id }} accessibilityLabel={`${person.name}, ${agentRoleLabel(person.role)}`} onPress={() => setRecipientId(person.id)} style={[styles.recipient, recipientId === person.id && styles.recipientSelected]}>
                 <View style={[styles.avatar, recipientId === person.id && styles.avatarSelected]}><Text style={[styles.avatarText, recipientId === person.id && styles.avatarTextSelected]}>{person.name.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.recipientBody}><Text style={[styles.recipientName, recipientId === person.id && styles.recipientNameSelected]} numberOfLines={1}>{person.name}</Text><Text style={[styles.recipientRole, recipientId === person.id && styles.recipientRoleSelected]}>{agentRoleLabel(person.role)}</Text></View>
                 {recipientId === person.id ? <TabIcon name="check" color={colors.headerText} size={20} /> : null}
               </Pressable>
-            ))}
+            )) : <View style={styles.recipientsEmpty}><TabIcon name="inbox" color={colors.info} size={20} /><View style={styles.recipientsEmptyBody}><Text style={styles.recipientsEmptyTitle}>{field.phase === "loading" || field.phase === "refreshing" ? copy.recipientsLoading : copy.noRecipients}</Text>{field.phase === "loading" || field.phase === "refreshing" ? null : <Text style={styles.recipientsEmptyHint}>{copy.noRecipientsHint}</Text>}</View></View>}
           </View>
 
           <Text style={styles.sectionTitle}>{copy.message}</Text>
@@ -115,7 +149,7 @@ export default function NewMessageScreen() {
 
           <View style={styles.privacy}><TabIcon name="info" color={colors.successDark} size={18} /><Text style={styles.privacyText}>{copy.local}</Text></View>
           {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.send} disabled={busy} onPress={() => void send()} style={({ pressed }) => [styles.send, (pressed || busy) && styles.pressed]}><Text style={styles.sendText}>{busy ? "…" : copy.send}</Text>{!busy ? <TabIcon name="route" color={colors.headerText} size={20} /> : null}</Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.send} accessibilityState={{ disabled: busy || !canSend, busy }} disabled={busy || !canSend} onPress={() => void send()} style={({ pressed }) => [styles.send, (pressed || busy || !canSend) && styles.pressed]}><Text style={styles.sendText}>{busy ? "…" : copy.send}</Text>{!busy ? <TabIcon name="route" color={colors.headerText} size={20} /> : null}</Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -132,6 +166,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginHorizontal: 16, marginTop: 22, marginBottom: 9 },
   recipients: { gap: 8, paddingHorizontal: 14 },
   recipient: { minHeight: 64, borderRadius: 17, padding: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 },
+  recipientsEmpty: { minHeight: 74, borderRadius: 17, padding: 12, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "flex-start", gap: 9 }, recipientsEmptyBody: { flex: 1 }, recipientsEmptyTitle: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "900" }, recipientsEmptyHint: { color: colors.info, fontSize: 9, lineHeight: 14, marginTop: 3 },
   recipientSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, avatarSelected: { backgroundColor: "rgba(255,255,255,0.18)" },
   avatarText: { color: colors.primary, fontSize: 15, fontWeight: "900" }, avatarTextSelected: { color: colors.headerText },
