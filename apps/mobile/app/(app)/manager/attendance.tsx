@@ -242,12 +242,12 @@ export default function ManagerAttendanceScreen() {
         </View>
 
         <View style={styles.dateNavigator}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t("managerAttendancePreviousPeriod")}: ${formatCalendarDay(shiftDateKey(endDate, -rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectEndDate(shiftDateKey(endDate, -rangeDays))} style={styles.dateArrow}><TabIcon name="chevronLeft" color={colors.headerText} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t("managerAttendancePreviousPeriod")}: ${formatCalendarDay(shiftDateKey(endDate, -rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectEndDate(shiftDateKey(endDate, -rangeDays))} style={styles.dateArrow}><TabIcon name="chevronLeft" color={colors.primary} size={23} /></Pressable>
           <View style={styles.dateCenter}>
             <Text style={styles.dateWeekday}>{rangeDays === 1 ? endCalendar.weekday : t("managerPlanningRange", { count: rangeDays })}</Text>
             <Text style={styles.dateLabel}>{dateLabel}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t("managerAttendanceNextPeriod")}: ${formatCalendarDay(shiftDateKey(endDate, rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectEndDate(shiftDateKey(endDate, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t("managerAttendanceNextPeriod")}: ${formatCalendarDay(shiftDateKey(endDate, rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectEndDate(shiftDateKey(endDate, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.primary} size={23} /></Pressable>
         </View>
         {!isTodayContext ? (
           <Pressable
@@ -366,32 +366,32 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  dateNavigator: { marginHorizontal: 14, marginTop: 16, minHeight: 74, borderRadius: radii.card, backgroundColor: colors.navy, padding: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...cardShadow },
-  dateArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  dateNavigator: { marginHorizontal: 14, marginTop: 16, minHeight: 74, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...cardShadow },
+  dateArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   dateCenter: { alignItems: "center", flex: 1 },
-  dateWeekday: { color: colors.headerSubtext, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
-  dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
+  dateWeekday: { color: colors.muted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 },
+  dateLabel: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
   todayAction: { minHeight: 44, marginHorizontal: 14, marginTop: 9, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   todayActionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
   rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   rangeChoiceSelected: { borderWidth: 2, backgroundColor: colors.primary, borderColor: colors.primary },
   rangeChoiceContent: { flexDirection: "row", alignItems: "center", gap: 5 },
-  rangeChoiceText: { color: colors.muted, fontSize: 10, fontWeight: "900" },
+  rangeChoiceText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
   rangeChoiceTextSelected: { color: colors.headerText },
   scope: { minHeight: 44, marginHorizontal: 14, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 8 },
-  scopeText: { flex: 1, color: colors.primary, fontSize: 10, fontWeight: "900" },
-  staleText: { maxWidth: "42%", color: colors.warning, fontSize: 9, fontWeight: "800", textAlign: "right" },
+  scopeText: { flex: 1, color: colors.primary, fontSize: 11, fontWeight: "900" },
+  staleText: { maxWidth: "42%", color: colors.warning, fontSize: 11, fontWeight: "800", textAlign: "right" },
   recordedOnlyCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 10, padding: 12, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   recordedOnlyIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   recordedOnlyBody: { flex: 1, minWidth: 0 },
   recordedOnlyTitle: { color: colors.info, fontSize: 11, fontWeight: "900" },
-  recordedOnlyText: { color: colors.info, fontSize: 9, lineHeight: 13, marginTop: 2, fontWeight: "700" },
-  timezone: { color: colors.muted, fontSize: 8, lineHeight: 12, marginTop: 4, fontWeight: "800" },
+  recordedOnlyText: { color: colors.info, fontSize: 11, lineHeight: 16, marginTop: 2, fontWeight: "700" },
+  timezone: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4, fontWeight: "800" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
   pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },

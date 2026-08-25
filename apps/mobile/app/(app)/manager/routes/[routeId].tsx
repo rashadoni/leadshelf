@@ -125,14 +125,14 @@ export default function ManagerRouteDetailScreen() {
               style={styles.routeHero}
             >
               <View style={styles.routeHeroTop}>
-                <View style={styles.routeIcon}><TabIcon name="route" color={colors.headerText} size={23} /></View>
+                <View style={styles.routeIcon}><TabIcon name="route" color={colors.primary} size={23} /></View>
                 <View style={styles.routeBody}>
                   <Text style={styles.routeName}>{route.name ?? t("tabRoute")}</Text>
                   <Text style={styles.routeAgent}>{route.agent.name}</Text>
                 </View>
                 <View style={[styles.status, { backgroundColor: status.background }]}><Text style={[styles.statusText, { color: status.foreground }]}>{status.label}</Text></View>
               </View>
-              <View style={styles.routeDate}><TabIcon name="week" color={colors.headerSubtext} size={15} /><Text style={styles.routeDateText}>{calendar.weekday}, {calendar.date}</Text></View>
+              <View style={styles.routeDate}><TabIcon name="week" color={colors.muted} size={15} /><Text style={styles.routeDateText}>{calendar.weekday}, {calendar.date}</Text></View>
             </View>
 
             <View
@@ -194,24 +194,24 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  routeHero: { marginHorizontal: 14, marginTop: 16, padding: 15, borderRadius: radii.card, backgroundColor: colors.navy, ...cardShadow },
+  routeHero: { marginHorizontal: 14, marginTop: 16, padding: 15, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   routeHeroTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  routeIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  routeIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   routeBody: { flex: 1, minWidth: 0 },
-  routeName: { color: colors.headerText, fontSize: 15, fontWeight: "900" },
-  routeAgent: { color: colors.headerSubtext, fontSize: 10, fontWeight: "800", marginTop: 3 },
+  routeName: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  routeAgent: { color: colors.muted, fontSize: 12, fontWeight: "800", marginTop: 3 },
   status: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6 },
   statusText: { fontSize: 8, fontWeight: "900" },
   routeDate: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 6 },
-  routeDateText: { color: colors.headerSubtext, fontSize: 10, fontWeight: "800" },
+  routeDateText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   progressCard: { minHeight: 88, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, flexDirection: "row", alignItems: "center", ...cardShadow },
   progressStat: { flex: 1, alignItems: "center" },
   progressValue: { color: colors.text, fontSize: 23, lineHeight: 27, fontWeight: "900" },
-  progressLabel: { color: colors.muted, fontSize: 9, lineHeight: 12, textAlign: "center", fontWeight: "800", marginTop: 2 },
+  progressLabel: { color: colors.muted, fontSize: 11, lineHeight: 14, textAlign: "center", fontWeight: "800", marginTop: 2 },
   progressDivider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch", backgroundColor: colors.border },
   sectionHeading: { marginHorizontal: 16, marginTop: 22, marginBottom: 7, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
@@ -222,11 +222,11 @@ const styles = StyleSheet.create({
   pointNumberText: { fontSize: 12, fontWeight: "900" },
   pointBody: { flex: 1, minWidth: 0 },
   pointName: { color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "900" },
-  pointSubtitle: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3, fontWeight: "800" },
+  pointSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3, fontWeight: "800" },
   pointMeta: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
   pointStatus: { borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 5 },
-  pointStatusText: { fontSize: 8, fontWeight: "900" },
-  pointTime: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  pointStatusText: { fontSize: 10, fontWeight: "900" },
+  pointTime: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   empty: { minHeight: 112, marginHorizontal: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 9, paddingHorizontal: 18, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },

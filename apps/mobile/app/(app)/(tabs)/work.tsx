@@ -35,6 +35,8 @@ export default function WorkTab() {
   const field = useField()
   const layout = useResponsiveLayout()
   const [moreOpen, setMoreOpen] = useState(false)
+  const [customersOpen, setCustomersOpen] = useState(false)
+  const [teamOpen, setTeamOpen] = useState(false)
   const shelfOpenTasks = IS_LEADDRIVE_FIELD ? 0 : countOpenTasks()
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
@@ -69,11 +71,12 @@ export default function WorkTab() {
         { label: t("moduleCommitments"), hint: t("moduleCommitmentsHint"), icon: "visit", href: "/(app)/commitments" },
       ]
     : []
-  // Keep the first screen focused on the three actions that move a field
-  // employee through the day. Customer, manager, and record tools stay one
-  // intentional tap away instead of competing with the daily flow.
+  // The day has three primary moves. Customers and the team remain visible by
+  // job name instead of disappearing behind one ambiguous "more" section.
   const primaryModules = modules.slice(0, 3)
-  const secondaryModules = [...modules.slice(3), ...moreModules]
+  const customerModules = IS_LEADDRIVE_FIELD ? modules.slice(3, 5) : []
+  const managerModules = IS_LEADDRIVE_FIELD ? modules.slice(5) : []
+  const secondaryModules = IS_LEADDRIVE_FIELD ? moreModules : [...modules.slice(3), ...moreModules]
   const moduleAccessibilityHint = (module: Module) => module.badge === undefined ? module.hint : `${module.hint} ${t("tasksOpenLabel")}: ${module.badge}`
 
   return (
@@ -128,16 +131,82 @@ export default function WorkTab() {
                 <Text style={styles.moduleLabel}>{module.label}</Text>
                 <Text style={styles.moduleHint} numberOfLines={1}>{module.hint}</Text>
               </View>
-              <TabIcon name="chevronRight" color={colors.faint} size={20} />
+              <TabIcon name="chevronRight" color={colors.muted} size={20} />
             </Pressable>
           ))}
         </View>
+
+        {customerModules.length ? (
+          <View style={[styles.namedGroup, layout.isTablet && styles.namedGroupTablet]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workCustomersGroup")}
+              accessibilityHint={t(customersOpen ? "workMoreHide" : "workMoreShow")}
+              accessibilityState={{ expanded: customersOpen }}
+              onPress={() => setCustomersOpen((value) => !value)}
+              style={({ pressed }) => [styles.groupHeading, pressed && styles.pressed]}
+            >
+              <View style={styles.groupHeadingIcon}><TabIcon name="organizations" color={colors.primary} size={18} /></View>
+              <Text style={styles.groupHeadingText}>{t("workCustomersGroup")}</Text>
+              <Text style={styles.moreAction}>{t(customersOpen ? "workMoreHide" : "workMoreShow")}</Text>
+              <View style={[styles.moreChevron, customersOpen && styles.moreChevronOpen]}><TabIcon name="chevronDown" color={colors.muted} size={19} /></View>
+            </Pressable>
+            {customersOpen ? <View style={styles.groupRows}>
+              {customerModules.map((module, index) => (
+                <Pressable
+                  key={module.href}
+                  accessibilityRole="button"
+                  accessibilityLabel={module.label}
+                  accessibilityHint={moduleAccessibilityHint(module)}
+                  onPress={() => router.push(module.href as never)}
+                  style={({ pressed }) => [styles.groupRow, index > 0 && styles.moduleBorder, pressed && styles.pressed]}
+                >
+                  <View style={styles.compactGlyph}><TabIcon name={module.icon} color={colors.primary} size={18} /></View>
+                  <Text style={styles.groupRowText}>{module.label}</Text>
+                  <TabIcon name="chevronRight" color={colors.muted} size={19} />
+                </Pressable>
+              ))}
+            </View> : null}
+          </View>
+        ) : null}
+
+        {managerModules.length ? (
+          <View style={[styles.namedGroup, layout.isTablet && styles.namedGroupTablet]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workTeamGroup")}
+              accessibilityHint={t(teamOpen ? "workMoreHide" : "workMoreShow")}
+              accessibilityState={{ expanded: teamOpen }}
+              onPress={() => setTeamOpen((value) => !value)}
+              style={({ pressed }) => [styles.groupHeading, pressed && styles.pressed]}
+            >
+              <View style={styles.groupHeadingIcon}><TabIcon name="dashboard" color={colors.primary} size={18} /></View>
+              <Text style={styles.groupHeadingText}>{t("workTeamGroup")}</Text>
+              <Text style={styles.moreAction}>{t(teamOpen ? "workMoreHide" : "workMoreShow")}</Text>
+              <View style={[styles.moreChevron, teamOpen && styles.moreChevronOpen]}><TabIcon name="chevronDown" color={colors.muted} size={19} /></View>
+            </Pressable>
+            {teamOpen ? <View style={styles.groupRows}>{managerModules.map((module) => (
+              <Pressable
+                key={module.href}
+                accessibilityRole="button"
+                accessibilityLabel={module.label}
+                accessibilityHint={moduleAccessibilityHint(module)}
+                onPress={() => router.push(module.href as never)}
+                style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}
+              >
+                <View style={styles.compactGlyph}><TabIcon name={module.icon} color={colors.primary} size={18} /></View>
+                <Text style={styles.groupRowText}>{module.label}</Text>
+                <TabIcon name="chevronRight" color={colors.muted} size={19} />
+              </Pressable>
+            ))}</View> : null}
+          </View>
+        ) : null}
 
         {secondaryModules.length ? (
           <View style={[styles.moreCard, layout.isTablet && styles.moreCardTablet]}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t("workMoreForWork")}
+              accessibilityLabel={IS_LEADDRIVE_FIELD ? t("workRecordsGroup") : t("workMoreForWork")}
               accessibilityHint={t(moreOpen ? "workMoreHide" : "workMoreShow")}
               accessibilityState={{ expanded: moreOpen }}
               onPress={() => setMoreOpen((value) => !value)}
@@ -145,10 +214,10 @@ export default function WorkTab() {
             >
               <View style={styles.glyph}><TabIcon name="work" color={colors.primary} size={21} /></View>
               <View style={styles.moduleBody}>
-                <Text style={styles.moduleLabel}>{t("workMoreForWork")}</Text>
+                <Text style={styles.moduleLabel}>{IS_LEADDRIVE_FIELD ? t("workRecordsGroup") : t("workMoreForWork")}</Text>
               </View>
               <Text style={styles.moreAction}>{t(moreOpen ? "workMoreHide" : "workMoreShow")}</Text>
-              <View style={[styles.moreChevron, moreOpen && styles.moreChevronOpen]}><TabIcon name="chevronDown" color={colors.faint} size={19} /></View>
+              <View style={[styles.moreChevron, moreOpen && styles.moreChevronOpen]}><TabIcon name="chevronDown" color={colors.muted} size={19} /></View>
             </Pressable>
             {moreOpen ? (
               <View style={styles.moreItems}>
@@ -166,7 +235,7 @@ export default function WorkTab() {
                       <Text style={styles.moduleLabel}>{module.label}</Text>
                       <Text style={styles.moduleHint} numberOfLines={1}>{module.hint}</Text>
                     </View>
-                    <TabIcon name="chevronRight" color={colors.faint} size={20} />
+                    <TabIcon name="chevronRight" color={colors.muted} size={20} />
                   </Pressable>
                 ))}
               </View>
@@ -189,14 +258,14 @@ const styles = StyleSheet.create({
   identityMark: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   identityInitial: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   identityBody: { flex: 1, minWidth: 0 },
-  identityLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
+  identityLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.7 },
   identityName: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 3 },
   connection: { maxWidth: 114, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
   connectionOn: { backgroundColor: colors.successBg },
   connectionPaused: { backgroundColor: colors.warningBg },
   connectionOff: { backgroundColor: colors.warningBg },
   connectionIdle: { backgroundColor: colors.draftBg },
-  connectionText: { flexShrink: 1, fontSize: 9, fontWeight: "800" },
+  connectionText: { flexShrink: 1, fontSize: 11, fontWeight: "800" },
   connectionTextOn: { color: colors.successDark },
   connectionTextOff: { color: colors.warning },
   connectionTextIdle: { color: colors.text },
@@ -209,7 +278,7 @@ const styles = StyleSheet.create({
   badgeText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
   moduleBody: { flex: 1, minWidth: 0 },
   moduleLabel: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  moduleHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  moduleHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   open: { color: colors.faint, fontSize: 25, fontWeight: "400" },
   pressed: { opacity: 0.7 },
   moduleGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 12, borderWidth: 0, backgroundColor: "transparent", overflow: "visible" },
@@ -222,4 +291,13 @@ const styles = StyleSheet.create({
   moreChevronOpen: { transform: [{ rotate: "180deg" }] },
   moreItems: { borderTopWidth: 1, borderTopColor: colors.border },
   moreItem: { minHeight: 60, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  namedGroup: { marginHorizontal: 20, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  namedGroupTablet: { marginTop: 18 },
+  groupHeading: { minHeight: 52, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: colors.surfaceMuted },
+  groupHeadingIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  groupHeadingText: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  groupRows: { borderTopWidth: 1, borderTopColor: colors.border },
+  groupRow: { minHeight: 56, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 10 },
+  compactGlyph: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  groupRowText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
 })

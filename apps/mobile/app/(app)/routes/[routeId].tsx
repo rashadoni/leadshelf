@@ -648,7 +648,7 @@ export default function FieldRouteDetailScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + (routeData.canEdit ? 146 : 24) }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
@@ -921,25 +921,6 @@ export default function FieldRouteDetailScreen() {
           </View>
         ) : null}
 
-        {routeData.canEdit ? (
-          <View style={styles.footerActions}>
-            {routeConflict ? <View style={styles.conflictCard}>
-              <Text style={styles.conflictTitle}>{t("routeConflictTitle")}</Text>
-              <Text style={styles.conflictText}>{fieldRouteConflictMessage(activeRouteConflictDetail, "syncNeedsAttention", field.week?.timezone ?? "UTC")}</Text>
-              {canReturnRouteToDraft ? <Pressable accessibilityRole="button" accessibilityLabel={t("routeReturnToDraft")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={confirmReturnToDraft} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("routeReturnToDraft")}</Text></Pressable> : null}
-              {routeConflict.kind === "version" ? <Pressable accessibilityRole="button" accessibilityLabel={t("syncCenterTitle")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("syncCenterTitle")}</Text></Pressable> : null}
-            </View> : null}
-            {!canSaveRoute ? <Text style={styles.syncHint}>{routeConflict ? fieldRouteConflictMessage(activeRouteConflictDetail, needsRouteReload ? "routeRefreshRequired" : "routeSyncBeforeChange", field.week?.timezone ?? "UTC") : needsRouteReload ? t("routeRefreshRequired") : t("routeSyncBeforeChange")}</Text> : null}
-            {needsRouteReload ? <Pressable accessibilityRole="button" accessibilityLabel={t("reloadRoute")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={() => void reloadRoute()} style={[styles.reloadButton, saving && styles.disabled]}><TabIcon name="refresh" color={colors.info} size={18} /><Text style={styles.reloadText}>{t("reloadRoute")}</Text></Pressable> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel={saving ? t("saving") : t("saveChanges")} accessibilityState={{ busy: saving, disabled: saving || !canSaveRoute }} disabled={saving || !canSaveRoute} onPress={() => void save()} style={[styles.saveButton, (saving || !canSaveRoute) && styles.disabled]}><TabIcon name="check" color={colors.headerText} size={19} /><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
-            {routeData.canPublish ? (
-              <>
-                {!canPublishRoute ? <Text style={styles.syncHint}>{t("routeSyncBeforePublish")}</Text> : null}
-                <Pressable accessibilityRole="button" accessibilityLabel={t("publishRoute")} accessibilityState={{ busy: saving, disabled: saving || !canPublishRoute }} disabled={saving || !canPublishRoute} onPress={publish} style={[styles.publishButton, (saving || !canPublishRoute) && styles.disabled]}><TabIcon name="check" color={colors.successDark} size={19} /><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable>
-              </>
-            ) : null}
-          </View>
-        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("copyRoute")}
@@ -954,6 +935,23 @@ export default function FieldRouteDetailScreen() {
           </View>
         </Pressable>
       </ScrollView>
+      {routeData.canEdit ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
+          {routeConflict ? <View style={styles.conflictCard}>
+            <Text style={styles.conflictTitle}>{t("routeConflictTitle")}</Text>
+            <Text style={styles.conflictText}>{fieldRouteConflictMessage(activeRouteConflictDetail, "syncNeedsAttention", field.week?.timezone ?? "UTC")}</Text>
+            {canReturnRouteToDraft ? <Pressable accessibilityRole="button" accessibilityLabel={t("routeReturnToDraft")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={confirmReturnToDraft} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("routeReturnToDraft")}</Text></Pressable> : null}
+            {routeConflict.kind === "version" ? <Pressable accessibilityRole="button" accessibilityLabel={t("syncCenterTitle")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("syncCenterTitle")}</Text></Pressable> : null}
+          </View> : null}
+          {!canSaveRoute ? <Text style={styles.syncHint}>{routeConflict ? fieldRouteConflictMessage(activeRouteConflictDetail, needsRouteReload ? "routeRefreshRequired" : "routeSyncBeforeChange", field.week?.timezone ?? "UTC") : needsRouteReload ? t("routeRefreshRequired") : t("routeSyncBeforeChange")}</Text> : null}
+          {needsRouteReload ? <Pressable accessibilityRole="button" accessibilityLabel={t("reloadRoute")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={() => void reloadRoute()} style={[styles.reloadButton, saving && styles.disabled]}><TabIcon name="refresh" color={colors.info} size={18} /><Text style={styles.reloadText}>{t("reloadRoute")}</Text></Pressable> : null}
+          {hasUnsavedRouteEdit || !canPublishRoute ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={saving ? t("saving") : t("saveChanges")} accessibilityState={{ busy: saving, disabled: saving || !canSaveRoute }} disabled={saving || !canSaveRoute} onPress={() => void save()} style={[styles.saveButton, (saving || !canSaveRoute) && styles.disabled]}><TabIcon name="check" color={colors.headerText} size={19} /><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
+          ) : (
+            <Pressable accessibilityRole="button" accessibilityLabel={t("publishRoute")} accessibilityState={{ busy: saving, disabled: saving || !canPublishRoute }} disabled={saving || !canPublishRoute} onPress={publish} style={[styles.publishButton, (saving || !canPublishRoute) && styles.disabled]}><TabIcon name="check" color={colors.successDark} size={19} /><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable>
+          )}
+        </View>
+      ) : null}
     </SafeAreaView>
   )
 }
@@ -1055,7 +1053,7 @@ const styles = StyleSheet.create({
   secondaryText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   primaryButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
-  footerActions: { marginHorizontal: 14, marginTop: 18, gap: 9 },
+  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10, gap: 9 },
   addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
   addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },

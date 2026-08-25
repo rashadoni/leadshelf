@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View, type ColorValue } from "react-native"
+import { useEffect, useState } from "react"
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type ColorValue } from "react-native"
 import { TabIcon } from "../components/TabIcon"
 import { t, useLocale } from "../i18n"
-import { formatCalendarDay, formatCalendarWeekdayShort } from "../i18n/date-format"
+import { formatCalendarDay, formatCalendarMonthShort, formatCalendarWeekdayShort } from "../i18n/date-format"
 import { useResponsiveLayout } from "../layout/responsive"
 import { colors, radii } from "../theme"
 
@@ -34,6 +35,41 @@ type FieldDayNavigatorProps = {
   getRangeLabel?: (range: number) => string
   dayHint?: string
   visibleHint?: string
+  calendarPicker?: boolean
+  todayDate?: string
+  /** A focused date chooser such as Route Builder: do not render a second week rail. */
+  compactDay?: boolean
+}
+
+function dateFromKey(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12)
+  return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3])
+    ? date
+    : null
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+}
+
+function monthStart(value: string | null | undefined): string | null {
+  const date = value ? dateFromKey(value) : null
+  return date ? dateKey(new Date(date.getFullYear(), date.getMonth(), 1, 12)) : null
+}
+
+function shiftMonth(value: string, amount: number): string {
+  const date = dateFromKey(value) ?? new Date()
+  return dateKey(new Date(date.getFullYear(), date.getMonth() + amount, 1, 12))
+}
+
+function monthGrid(value: string): string[] {
+  const first = dateFromKey(value)
+  if (!first) return []
+  const mondayOffset = (first.getDay() + 6) % 7
+  const start = new Date(first.getFullYear(), first.getMonth(), 1 - mondayOffset, 12)
+  return Array.from({ length: 42 }, (_, index) => dateKey(new Date(start.getFullYear(), start.getMonth(), start.getDate() + index, 12)))
 }
 
 /**
@@ -61,14 +97,52 @@ export function FieldDayNavigator({
   getRangeLabel,
   dayHint,
   visibleHint,
+  calendarPicker = false,
+  todayDate,
+  compactDay = false,
 }: FieldDayNavigatorProps) {
   const locale = useLocale()
   const layout = useResponsiveLayout()
   const hasNavigator = Boolean(onPrevious && onNext)
+  const rangeSelector = rangeOptions && rangeOptions.length > 0 && onSelectRange && selectedRange !== undefined && getRangeLabel
+    ? { options: rangeOptions, onSelect: onSelectRange, selected: selectedRange, label: getRangeLabel }
+    : null
+  const isDayMode = compactDay || rangeSelector?.selected === 1
+  const [rangeExpanded, setRangeExpanded] = useState(!isDayMode)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const calendarAnchorDate = selectedDate ?? todayDate ?? days.find((item) => item.isToday)?.date ?? days[0]?.date ?? null
+  const [calendarMonth, setCalendarMonth] = useState(() => monthStart(calendarAnchorDate) ?? "")
+  // A day is a destination, not a compressed week. Once a person selects a
+  // day, keep the calendar controls compact until they explicitly ask to see
+  // the wider period again.
+  useEffect(() => {
+    setRangeExpanded(!isDayMode)
+  }, [isDayMode])
   // Seven 44dp targets fit on ordinary phones, but compact Android handsets
   // need the surrounding frame to tighten rather than shrinking the targets.
   const compactPhone = !layout.isTablet && layout.width < 390
   const narrowPhone = !layout.isTablet && layout.width < 360
+  const calendarDays = calendarOpen ? monthGrid(calendarMonth) : []
+  const calendarWeekdays = calendarDays.slice(0, 7).map((date) => formatCalendarWeekdayShort(date, locale))
+  const calendarMonthLabel = calendarMonth
+    ? `${formatCalendarMonthShort(calendarMonth, locale)} ${calendarMonth.slice(0, 4)}`
+    : ""
+  const calendarEnabled = calendarPicker && Boolean(calendarAnchorDate)
+
+  function openCalendar() {
+    const nextMonth = monthStart(calendarAnchorDate)
+    if (!nextMonth) return
+    setCalendarMonth(nextMonth)
+    setCalendarOpen(true)
+  }
+
+  function selectCalendarDate(date: string) {
+    if (isDayMode) setRangeExpanded(false)
+    onSelectDate(date)
+    setCalendarOpen(false)
+  }
+
+  const calendarItemsByDate = new Map(days.map((item) => [item.date, item]))
 
   return (
     <View style={[styles.root, layout.isTablet && styles.rootTablet, compactPhone && styles.rootCompact, narrowPhone && styles.rootNarrow]}>
@@ -84,9 +158,25 @@ export function FieldDayNavigator({
           >
             <TabIcon name="chevronLeft" color={colors.primary} size={21} />
           </Pressable>
-          <View accessible accessibilityRole="text" accessibilityLabel={currentAccessibilityLabel ?? currentLabel ?? t("currentWeek")} style={styles.currentAction}>
-            <Text numberOfLines={1} style={styles.currentText}>{currentLabel ?? t("currentWeek")}</Text>
-          </View>
+          {calendarEnabled ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("calendarChooseDate")}
+              accessibilityHint={currentAccessibilityLabel ?? currentLabel ?? t("currentWeek")}
+              accessibilityState={{ disabled: busy, expanded: calendarOpen, busy }}
+              disabled={busy}
+              onPress={openCalendar}
+              style={({ pressed }) => [styles.currentAction, styles.currentActionPicker, (busy || pressed) && styles.pressed]}
+            >
+              <TabIcon name="week" color={colors.primary} size={17} />
+              <Text numberOfLines={1} style={styles.currentText}>{currentLabel ?? t("currentWeek")}</Text>
+              <TabIcon name="chevronDown" color={colors.primary} size={17} />
+            </Pressable>
+          ) : (
+            <View accessible accessibilityRole="text" accessibilityLabel={currentAccessibilityLabel ?? currentLabel ?? t("currentWeek")} style={styles.currentAction}>
+              <Text numberOfLines={1} style={styles.currentText}>{currentLabel ?? t("currentWeek")}</Text>
+            </View>
+          )}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={nextLabel ?? t("nextWeek")}
@@ -114,28 +204,47 @@ export function FieldDayNavigator({
         </Pressable>
       ) : null}
 
-      {rangeOptions?.length && onSelectRange && selectedRange !== undefined && getRangeLabel ? (
+      {rangeSelector && isDayMode && !rangeExpanded ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("calendarView")}
+          accessibilityHint={t("calendarViewHint")}
+          accessibilityState={{ expanded: false, disabled: busy, busy }}
+          disabled={busy}
+          onPress={() => setRangeExpanded(true)}
+          style={({ pressed }) => [styles.viewToggle, (busy || pressed) && styles.pressed]}
+        >
+          <TabIcon name="week" color={colors.primary} size={17} />
+          <Text style={styles.viewToggleText}>{t("calendarView")}</Text>
+          <TabIcon name="chevronDown" color={colors.primary} size={17} />
+        </Pressable>
+      ) : null}
+
+      {rangeSelector && (!isDayMode || rangeExpanded) ? (
         <View style={styles.rangeRail} accessibilityRole="tablist">
-          {rangeOptions.map((range) => {
-            const selected = range === selectedRange
+          {rangeSelector.options.map((range) => {
+            const selected = range === rangeSelector.selected
             return (
               <Pressable
                 key={range}
                 accessibilityRole="tab"
-                accessibilityLabel={getRangeLabel(range)}
+                accessibilityLabel={rangeSelector.label(range)}
                 accessibilityState={{ selected, disabled: busy, busy }}
                 disabled={busy}
-                onPress={() => onSelectRange(range)}
+                onPress={() => {
+                  rangeSelector.onSelect(range)
+                  if (range === 1) setRangeExpanded(false)
+                }}
                 style={({ pressed }) => [styles.rangeChoice, selected && styles.rangeChoiceSelected, (busy || pressed) && styles.pressed]}
               >
-                <Text style={[styles.rangeText, selected && styles.rangeTextSelected]}>{getRangeLabel(range)}</Text>
+                <Text style={[styles.rangeText, selected && styles.rangeTextSelected]}>{rangeSelector.label(range)}</Text>
               </Pressable>
             )
           })}
         </View>
       ) : null}
 
-      {days.length ? (
+      {days.length && !isDayMode ? (
         <>
           <View style={[styles.dayStrip, compactPhone && styles.dayStripCompact, narrowPhone && styles.dayStripNarrow, days.length === 1 && styles.dayStripSolo]}>
             {days.map((item) => {
@@ -179,6 +288,60 @@ export function FieldDayNavigator({
           {visibleHint ? <Text style={styles.visibleHint}>{visibleHint}</Text> : null}
         </>
       ) : null}
+
+      {calendarEnabled ? (
+        <Modal visible={calendarOpen} transparent animationType="fade" onRequestClose={() => setCalendarOpen(false)}>
+          <View style={styles.calendarOverlay}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("calendarClose")} onPress={() => setCalendarOpen(false)} style={styles.calendarBackdrop} />
+            <View accessibilityViewIsModal style={styles.calendarDialog}>
+              <View style={styles.calendarHeader}>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("calendarPreviousMonth")} onPress={() => setCalendarMonth((month) => shiftMonth(month, -1))} style={styles.calendarArrow}>
+                  <TabIcon name="chevronLeft" color={colors.primary} size={21} />
+                </Pressable>
+                <Text accessibilityRole="header" style={styles.calendarTitle}>{calendarMonthLabel}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("calendarNextMonth")} onPress={() => setCalendarMonth((month) => shiftMonth(month, 1))} style={styles.calendarArrow}>
+                  <TabIcon name="chevronRight" color={colors.primary} size={21} />
+                </Pressable>
+              </View>
+              <ScrollView style={styles.calendarBody} contentContainerStyle={styles.calendarBodyContent} showsVerticalScrollIndicator={false}>
+                <View style={styles.calendarWeekdays}>
+                  {calendarWeekdays.map((label, index) => <Text key={index} style={styles.calendarWeekday}>{label}</Text>)}
+                </View>
+                <View style={styles.calendarGrid}>
+                  {calendarDays.map((date) => {
+                    const formatted = formatCalendarDay(date, locale)
+                    const item = calendarItemsByDate.get(date)
+                    const inMonth = date.slice(0, 7) === calendarMonth.slice(0, 7)
+                    const selected = date === selectedDate
+                    const isToday = date === todayDate
+                    const disabled = busy || item?.disabled === true
+                    return (
+                      <Pressable
+                        key={date}
+                        accessibilityRole="button"
+                        accessibilityLabel={item?.accessibilityLabel ?? `${formatted.weekday}, ${formatted.date}`}
+                        accessibilityState={{ selected, disabled }}
+                        disabled={disabled}
+                        onPress={() => selectCalendarDate(date)}
+                        style={({ pressed }) => [styles.calendarDay, !inMonth && styles.calendarDayOutside, disabled && styles.calendarDayDisabled, selected && styles.calendarDaySelected, isToday && !selected && styles.calendarDayToday, (busy || pressed) && styles.pressed]}
+                      >
+                        <View style={styles.calendarDayContent}>
+                          <Text style={[styles.calendarDayText, !inMonth && styles.calendarDayTextOutside, selected && styles.calendarDayTextSelected]}>{formatted.day}</Text>
+                          {item?.dotColor ? <View style={[styles.calendarDayDot, { backgroundColor: item.dotColor }]} /> : null}
+                        </View>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </ScrollView>
+              <View style={styles.calendarFooter}>
+                {todayDate ? <Pressable accessibilityRole="button" accessibilityLabel={t("tabToday")} disabled={busy} onPress={() => selectCalendarDate(todayDate)} style={({ pressed }) => [styles.calendarToday, (busy || pressed) && styles.pressed]}><TabIcon name="today" color={colors.primary} size={16} /><Text style={styles.calendarTodayText}>{t("tabToday")}</Text></Pressable> : null}
+                <Pressable accessibilityRole="button" accessibilityLabel={t("calendarClose")} onPress={() => setCalendarOpen(false)} style={({ pressed }) => [styles.calendarClose, pressed && styles.pressed]}><Text style={styles.calendarCloseText}>{t("calendarClose")}</Text></Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   )
 }
@@ -191,9 +354,12 @@ const styles = StyleSheet.create({
   navigationRow: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   arrowButton: { width: 44, height: 44, borderRadius: radii.pill, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   currentAction: { minWidth: 0, flex: 1, minHeight: 44, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  currentActionPicker: { flexDirection: "row", gap: 4 },
   currentText: { color: colors.text, fontSize: 13, fontWeight: "900" },
   currentShortcut: { alignSelf: "center", minHeight: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   currentShortcutText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  viewToggle: { alignSelf: "center", minHeight: 40, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  viewToggleText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   rangeRail: { alignSelf: "center", flexDirection: "row", gap: 4, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, padding: 3, borderWidth: 1, borderColor: colors.border },
   rangeChoice: { minWidth: 44, minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   rangeChoiceSelected: { backgroundColor: colors.primary },
@@ -214,5 +380,31 @@ const styles = StyleSheet.create({
   dotSlot: { width: 6, height: 6, marginTop: 1, alignItems: "center", justifyContent: "center" },
   dot: { width: 6, height: 6, borderRadius: radii.pill },
   visibleHint: { color: colors.muted, fontSize: 11, lineHeight: 15, textAlign: "center", paddingHorizontal: 8 },
+  calendarOverlay: { flex: 1, justifyContent: "center", paddingHorizontal: 14, backgroundColor: "rgba(16,38,61,0.42)" },
+  calendarBackdrop: { ...StyleSheet.absoluteFillObject },
+  calendarDialog: { width: "100%", maxWidth: 500, maxHeight: "90%", alignSelf: "center", borderRadius: 24, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  calendarHeader: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
+  calendarArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  calendarTitle: { flex: 1, color: colors.text, fontSize: 17, fontWeight: "900", textAlign: "center", textTransform: "capitalize" },
+  calendarBody: { flexShrink: 1 },
+  calendarBodyContent: { paddingBottom: 2 },
+  calendarWeekdays: { flexDirection: "row", marginTop: 10 },
+  calendarWeekday: { width: "14.2857%", color: colors.muted, fontSize: 10, fontWeight: "900", textAlign: "center" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 5 },
+  calendarDay: { width: "14.2857%", minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  calendarDayOutside: { opacity: 0.42 },
+  calendarDayDisabled: { opacity: 0.34 },
+  calendarDayToday: { borderWidth: 1, borderColor: colors.primary },
+  calendarDaySelected: { backgroundColor: colors.primary },
+  calendarDayContent: { minHeight: 29, alignItems: "center", justifyContent: "flex-start" },
+  calendarDayText: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  calendarDayTextOutside: { color: colors.muted },
+  calendarDayTextSelected: { color: colors.headerText },
+  calendarDayDot: { width: 5, height: 5, borderRadius: radii.pill, marginTop: 2 },
+  calendarFooter: { minHeight: 48, marginTop: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  calendarToday: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  calendarTodayText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  calendarClose: { minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" },
+  calendarCloseText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
   pressed: { opacity: 0.72 },
 })

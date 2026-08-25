@@ -28,6 +28,7 @@ import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../..
 import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
 import { isRouteDraftDateAllowed, resolveRouteDraftDate } from "../../../src/field/route-planning-date"
 import { isRouteDraftDirty } from "../../../src/field/route-draft-state"
+import { startOfIsoWeek } from "../../../src/field/week-status"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
@@ -90,6 +91,11 @@ export default function NewRouteScreen() {
   const calendarDate = requestedDateKey
   const initialDate = calendarDate ?? availableDays.find((day) => day.isToday && day.routePlanningAllowed)?.date ?? availableDays.find((day) => day.routePlanningAllowed)?.date ?? null
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate)
+  // A month-picker selection may belong to a week that has not arrived yet.
+  // Keep the exact day while its server eligibility is loading; otherwise the
+  // generic seven-day resolver would silently replace it with an old week day.
+  const [pendingDateLoad, setPendingDateLoad] = useState<string | null>(null)
+  const [preserveSelectedDate, setPreserveSelectedDate] = useState(false)
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
   const [targets, setTargets] = useState<RouteDraftTarget[]>([])
@@ -107,15 +113,20 @@ export default function NewRouteScreen() {
   )
   const selectedCalendarDate = selectedDate ? formatCalendarDay(selectedDate, locale) : null
   const excludedDate = copySource?.date.slice(0, 10) ?? null
+  const selectedWeekIsLoading = Boolean(
+    !managerMode &&
+    pendingDateLoad &&
+    (!field.week || startOfIsoWeek(pendingDateLoad) !== field.week.weekStart),
+  )
   const selectedDateAllowed = managerMode || isRouteDraftDateAllowed(selectedDate, availableDays, excludedDate)
-  const selectedDateUnavailable = !managerMode && Boolean(selectedDate && field.week && !selectedDateAllowed)
+  const selectedDateUnavailable = !managerMode && !selectedWeekIsLoading && Boolean(selectedDate && field.week && !selectedDateAllowed)
   const selectedDateLabel = selectedCalendarDate
     ? selectedCalendarDate.weekday + ", " + selectedCalendarDate.date
     : null
   const selectedAgent = managerMode
     ? { id: managerAgentId as string, name: managerAgentName as string }
     : field.profile?.agent
-  const submitDisabled = saving || (step === 1 && selectedDateUnavailable)
+  const submitDisabled = saving || (step === 1 && (selectedWeekIsLoading || selectedDateUnavailable))
   const submitLabel = step === 3
     ? copySource
       ? t("copyRoute")
@@ -139,11 +150,23 @@ export default function NewRouteScreen() {
       if (selectedDate !== requestedDateKey) setSelectedDate(requestedDateKey)
       return
     }
+    if (pendingDateLoad && (!field.week || startOfIsoWeek(pendingDateLoad) !== field.week.weekStart)) return
+    if (pendingDateLoad) {
+      setPendingDateLoad(null)
+      return
+    }
+    if (preserveSelectedDate) return
     const nextDate = resolveRouteDraftDate(selectedDate, requestedDateKey, availableDays, excludedDate)
     if (nextDate !== selectedDate) {
       setSelectedDate(nextDate)
     }
-  }, [availableDays, excludedDate, managerMode, requestedDateKey, selectedDate])
+  }, [availableDays, excludedDate, field.week, managerMode, pendingDateLoad, preserveSelectedDate, requestedDateKey, selectedDate])
+
+  useEffect(() => {
+    if (!pendingDateLoad || (field.phase !== "error" && field.phase !== "stale")) return
+    setPendingDateLoad(null)
+    setError(t("fieldDataError"))
+  }, [field.phase, pendingDateLoad])
 
   useEffect(() => {
     if (!copyFrom || copySource || !field.week) return
@@ -159,12 +182,14 @@ export default function NewRouteScreen() {
       time: formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC"),
     })))
     setSelectedDate(null)
+    setPendingDateLoad(null)
+    setPreserveSelectedDate(false)
   }, [copyFrom, copySource, field.week])
 
-  async function moveWeek(days: number) {
-    if (!field.week) return
-    setSelectedDate(null)
-    await field.loadWeek(shiftDateKey(field.week.weekStart, days))
+  function moveDate(days: -1 | 1) {
+    const currentDate = selectedDate ?? field.week?.today ?? availableDays[0]?.date
+    if (!currentDate) return
+    selectDate(shiftDateKey(currentDate, days))
   }
 
   function autoSchedule() {
@@ -178,8 +203,15 @@ export default function NewRouteScreen() {
 
   function selectDate(date: string) {
     setSelectedDate(date)
+    setPreserveSelectedDate(true)
     setError(null)
     setRouteConflict(null)
+    if (field.week && startOfIsoWeek(date) !== field.week.weekStart) {
+      setPendingDateLoad(date)
+      void field.loadWeek(startOfIsoWeek(date))
+    } else {
+      setPendingDateLoad(null)
+    }
   }
 
   function goBack() {
@@ -341,7 +373,7 @@ export default function NewRouteScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 94 }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
@@ -439,14 +471,19 @@ export default function NewRouteScreen() {
                   })}
                   selectedDate={selectedDate}
                   onSelectDate={selectDate}
-                  onPrevious={() => void moveWeek(-7)}
-                  onNext={() => void moveWeek(7)}
-                  previousLabel={t("previousWeek")}
-                  nextLabel={t("nextWeek")}
+                  onPrevious={() => moveDate(-1)}
+                  onNext={() => moveDate(1)}
+                  previousLabel={t("weekPreviousDay")}
+                  nextLabel={t("weekNextDay")}
+                  onCurrent={field.week ? () => selectDate(field.week!.today) : undefined}
+                  currentActionLabel={t("tabToday")}
                   currentLabel={selectedDateLabel ?? t("routeDate")}
                   currentAccessibilityLabel={selectedDateLabel ?? t("routeDate")}
                   busy={saving}
                   dayHint={t("routeWizardDateHint")}
+                  calendarPicker
+                  todayDate={field.week?.today}
+                  compactDay
                 />
               )}
           </>
@@ -575,11 +612,13 @@ export default function NewRouteScreen() {
             <Text style={styles.openConflictRouteText}>{t("openRoute")}</Text>
           </Pressable>
         ) : null}
+      </ScrollView>
+      <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
         <View style={styles.footer}>
           {step > 1 ? <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving, busy: saving }} disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
           <Pressable accessibilityRole="button" accessibilityLabel={saving ? t("saving") : submitLabel} accessibilityState={{ disabled: submitDisabled, busy: saving }} disabled={submitDisabled} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, submitDisabled && styles.disabled]}><Text style={styles.submitText}>{saving ? t("saving") : submitLabel}</Text></Pressable>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   )
 }
@@ -668,7 +707,8 @@ const styles = StyleSheet.create({
   errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" },
   openConflictRoute: { marginHorizontal: 14, marginTop: 9, minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   openConflictRouteText: { color: colors.info, fontSize: 12, fontWeight: "900" },
-  footer: { marginHorizontal: 14, marginTop: 16, flexDirection: "row", gap: 8 },
+  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 },
+  footer: { flexDirection: "row", gap: 8 },
   footerBack: { minWidth: 96, minHeight: 52, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   footerBackText: { color: colors.text, fontSize: 13, fontWeight: "900" },
   submit: { flex: 1, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },

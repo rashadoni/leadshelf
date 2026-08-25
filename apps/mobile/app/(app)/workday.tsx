@@ -436,13 +436,13 @@ export default function WorkdayScreen() {
     }
   }
 
-  const statusTone = displayStatus === "STARTED"
-    ? styles.statusStarted
+  const statusPillTone = displayStatus === "STARTED"
+    ? styles.statusPillStarted
     : displayStatus === "PAUSED"
-      ? styles.statusPaused
+      ? styles.statusPillPaused
       : displayStatus === "COMPLETED"
-        ? styles.statusCompleted
-        : styles.statusReady
+        ? styles.statusPillCompleted
+        : styles.statusPillReady
   const statusDot = displayStatus === "STARTED"
     ? colors.success
     : displayStatus === "PAUSED"
@@ -476,7 +476,7 @@ export default function WorkdayScreen() {
   function renderWorkdayAction(action: FieldWorkdayAction, primary: boolean) {
     const finishing = action === "FINISH"
     const busy = busyAction === action
-    const actionColor = primary ? colors.headerText : finishing ? colors.danger : colors.warning
+    const actionColor = primary ? colors.headerText : colors.primary
     return (
       <Pressable
         key={action}
@@ -488,8 +488,8 @@ export default function WorkdayScreen() {
         style={({ pressed }) => [
           primary ? styles.primaryActionButton : styles.secondaryActionButton,
           primary
-            ? finishing ? styles.primaryFinishButton : action === "PAUSE" ? styles.primaryPauseButton : styles.primaryStartButton
-            : finishing ? styles.secondaryFinishButton : styles.secondaryPauseButton,
+            ? styles.primaryActionTone
+            : styles.secondaryActionTone,
           pressed && styles.pressed,
           busyAction !== null && styles.disabled,
         ]}
@@ -526,9 +526,9 @@ export default function WorkdayScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
-        <View style={[styles.statusCard, statusTone]}>
-          <View style={styles.statusTop}>
-            <View style={styles.statusPill}>
+          <View style={styles.statusCard}>
+            <View style={styles.statusTop}>
+            <View style={[styles.statusPill, statusPillTone]}>
               <View style={[styles.statusDot, { backgroundColor: statusDot }]} />
               <Text style={styles.statusText}>{t(statusKeys[displayStatus])}</Text>
             </View>
@@ -562,22 +562,19 @@ export default function WorkdayScreen() {
           </View>
         </View>
 
-        <View style={[
-          styles.policyCard,
-          requiresQrBeforeStart
-            ? styles.policyCardQr
-            : usesGps
-              ? styles.policyCardGps
-              : styles.policyCardNoLocation,
-        ]}>
-          <View style={[
-            styles.policyIcon,
-            requiresQrBeforeStart
-              ? styles.policyIconQr
-              : usesGps
-                ? styles.policyIconGps
-                : styles.policyIconNoLocation,
-          ]}>
+        {primaryWorkdayAction ? (
+          <View style={styles.actionGroup}>
+            {renderWorkdayAction(primaryWorkdayAction, true)}
+            {secondaryWorkdayActions.length > 0 ? (
+              <View style={styles.secondaryActionRow}>
+                {secondaryWorkdayActions.map((action) => renderWorkdayAction(action, false))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={styles.policyCard}>
+          <View style={[styles.policyIcon, requiresQrBeforeStart && styles.policyIconWarning]}>
             <TabIcon
               name={requiresQrBeforeStart ? "qr" : usesGps ? "location" : "work"}
               color={requiresQrBeforeStart ? colors.warning : colors.primary}
@@ -593,17 +590,6 @@ export default function WorkdayScreen() {
             ) : null}
           </View>
         </View>
-
-        {primaryWorkdayAction ? (
-          <View style={styles.actionGroup}>
-            {renderWorkdayAction(primaryWorkdayAction, true)}
-            {secondaryWorkdayActions.length > 0 ? (
-              <View style={styles.secondaryActionRow}>
-                {secondaryWorkdayActions.map((action) => renderWorkdayAction(action, false))}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
 
         {feedback ? (
           <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
@@ -713,67 +699,59 @@ const styles = StyleSheet.create({
   backButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   backText: { color: colors.text, fontSize: 33, fontWeight: "400", lineHeight: 35, marginTop: -3 },
   headerBody: { flex: 1, paddingHorizontal: 12 },
-  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.4, marginTop: 2 },
   refreshButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   refreshText: { color: colors.primary, fontSize: 24, fontWeight: "800" },
   scroll: { paddingHorizontal: 14, paddingBottom: 36 },
-  statusCard: { borderRadius: 26, padding: 20, borderWidth: 1, ...cardShadow },
-  statusReady: { backgroundColor: colors.card, borderColor: colors.border },
-  statusStarted: { backgroundColor: colors.successBg, borderColor: colors.successBorder },
-  statusPaused: { backgroundColor: colors.warningBg, borderColor: "#F6D788" },
-  statusCompleted: { backgroundColor: colors.primarySoft, borderColor: "#D8D7F2" },
+  statusCard: { borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, ...cardShadow },
   statusTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.cardOverlay, borderRadius: radii.pill, paddingHorizontal: 11, paddingVertical: 7 },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: radii.pill, paddingHorizontal: 11, paddingVertical: 7 },
+  statusPillReady: { backgroundColor: colors.surfaceMuted },
+  statusPillStarted: { backgroundColor: colors.successBg },
+  statusPillPaused: { backgroundColor: colors.warningBg },
+  statusPillCompleted: { backgroundColor: colors.primarySoft },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  statusText: { color: colors.text, fontSize: 12, fontWeight: "900" },
   pendingPill: { backgroundColor: colors.cardOverlay, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 7 },
-  pendingText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
-  timerLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 24, textTransform: "uppercase", letterSpacing: 0.7 },
-  timer: { color: colors.text, fontSize: 43, fontWeight: "900", letterSpacing: -1.5, fontVariant: ["tabular-nums"], marginTop: 2 },
+  pendingText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
+  timerLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 16, textTransform: "uppercase", letterSpacing: 0.7 },
+  timer: { color: colors.text, fontSize: 38, fontWeight: "900", letterSpacing: -1.2, fontVariant: ["tabular-nums"], marginTop: 2 },
   statusHint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6, maxWidth: 330 },
-  statsRow: { backgroundColor: colors.cardOverlay, borderRadius: 17, flexDirection: "row", alignItems: "center", marginTop: 20, paddingVertical: 13 },
+  statsRow: { backgroundColor: colors.surfaceMuted, borderRadius: 17, flexDirection: "row", alignItems: "center", marginTop: 14, paddingVertical: 11 },
   stat: { flex: 1, alignItems: "center", paddingHorizontal: 4 },
   statValue: { color: colors.text, fontSize: 14, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  statLabel: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 4, textAlign: "center" },
+  statLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", marginTop: 4, textAlign: "center" },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
   actionGroup: { marginTop: 12, gap: 9 },
   primaryActionButton: { minHeight: 60, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  primaryStartButton: { backgroundColor: colors.primary },
-  primaryPauseButton: { backgroundColor: colors.warning },
-  primaryFinishButton: { backgroundColor: colors.danger },
+  primaryActionTone: { backgroundColor: colors.primary },
   secondaryActionRow: { flexDirection: "row", gap: 9 },
   secondaryActionButton: { flex: 1, minHeight: 48, borderRadius: 15, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderWidth: 1 },
-  secondaryPauseButton: { backgroundColor: colors.warningBg, borderColor: "#F6D788" },
-  secondaryFinishButton: { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
+  secondaryActionTone: { backgroundColor: colors.card, borderColor: colors.border },
   actionText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
-  secondaryPauseText: { color: colors.warning },
-  secondaryFinishText: { color: colors.danger },
+  secondaryPauseText: { color: colors.primary },
+  secondaryFinishText: { color: colors.primary },
   actionContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   pressed: { opacity: 0.76, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.55 },
   feedback: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
   feedbackText: { color: colors.info, fontSize: 11, lineHeight: 17, fontWeight: "700" },
-  policyCard: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: radii.card, borderWidth: 1, padding: 15, marginTop: 14, ...cardShadow },
-  policyCardNoLocation: { backgroundColor: colors.card, borderColor: colors.border },
-  policyCardGps: { backgroundColor: colors.primarySoft, borderColor: "#D8D7F2" },
-  policyCardQr: { backgroundColor: colors.warningBg, borderColor: "#F6D788" },
-  policyIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  policyIconNoLocation: { backgroundColor: colors.draftBg },
-  policyIconGps: { backgroundColor: colors.card },
-  policyIconQr: { backgroundColor: colors.cardOverlay },
+  policyCard: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 15, marginTop: 14, ...cardShadow },
+  policyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  policyIconWarning: { backgroundColor: colors.warningBg },
   policyBody: { flex: 1 },
-  policyFlexibility: { color: colors.primary, fontSize: 10, lineHeight: 15, fontWeight: "800", marginTop: 6 },
+  policyFlexibility: { color: colors.primary, fontSize: 11, lineHeight: 16, fontWeight: "800", marginTop: 6 },
   trackingCard: { flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card, borderRadius: radii.card, padding: 15, marginTop: 14, ...cardShadow },
   trackingIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   trackingIconOn: { backgroundColor: colors.successBg },
   trackingIconWarn: { backgroundColor: colors.warningBg },
   trackingIconOff: { backgroundColor: colors.draftBg },
   trackingBody: { flex: 1 },
-  cardEyebrow: { color: colors.faint, fontSize: 9, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
+  cardEyebrow: { color: colors.muted, fontSize: 11, fontWeight: "900", letterSpacing: 0.7, textTransform: "uppercase" },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
-  cardHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  trackingObserved: { color: colors.faint, fontSize: 9, lineHeight: 13, marginTop: 5 },
+  cardHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  trackingObserved: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 5 },
   trackingRecovery: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", borderRadius: 12, backgroundColor: colors.primarySoft, paddingHorizontal: 13, marginTop: 10 },
   trackingRecoveryText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 24, marginBottom: 9, paddingHorizontal: 2 },

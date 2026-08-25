@@ -127,6 +127,7 @@ export default function WeekTab() {
             onSelectDate={(date) => {
               setSelectedDate(date)
               setViewRange(1)
+              if (startOfIsoWeek(date) !== week.weekStart) void field.loadWeek(startOfIsoWeek(date))
             }}
             onPrevious={() => move(-1)}
             onNext={() => move(1)}
@@ -147,6 +148,8 @@ export default function WeekTab() {
             getRangeLabel={(days) => t("weekRange", { count: days })}
             dayHint={t("dailyMission")}
             visibleHint={viewRange === 1 ? undefined : t("fieldDayNavigatorHint")}
+            calendarPicker
+            todayDate={week.today}
           />
         ) : null}
 

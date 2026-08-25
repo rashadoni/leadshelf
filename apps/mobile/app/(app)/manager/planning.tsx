@@ -270,6 +270,8 @@ export default function ManagerPlanningScreen() {
           onSelectRange={selectRange}
           getRangeLabel={(days) => t("managerPlanningRange", { count: days })}
           dayHint={t("fieldDayNavigatorHint")}
+          calendarPicker
+          todayDate={today}
         />
 
         {loading && !planning ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}

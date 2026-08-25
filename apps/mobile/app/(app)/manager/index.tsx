@@ -25,6 +25,14 @@ type SectionState<T> = {
   error: unknown | null
 }
 
+type ManagerAttention = {
+  title: string
+  detail: string
+  count: number
+  icon: TabIconName
+  href: string
+}
+
 function failed<T>(reason: unknown): SectionState<T> {
   return { data: null, error: reason }
 }
@@ -66,7 +74,7 @@ function ManagerCard({
   href: string
   wide?: boolean
 }) {
-  const iconColor = tone === "warning" ? colors.warning : tone === "success" ? colors.successDark : tone === "info" ? colors.info : colors.primary
+  const iconColor = tone === "warning" ? colors.warning : colors.primary
   const cardAccessibilityDetail = loading && !error
     ? t("managerLoading")
     : error
@@ -79,23 +87,28 @@ function ManagerCard({
       accessibilityLabel={title + ". " + cardAccessibilityDetail}
       accessibilityState={{ busy: loading && !error }}
       onPress={() => router.push(href as never)}
-      style={({ pressed }) => [styles.actionCard, wide && styles.actionCardWide, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.actionRow, wide && styles.actionRowWide, pressed && styles.pressed]}
     >
       <View style={[styles.cardIcon, tone === "warning" ? styles.cardIconWarning : tone === "success" ? styles.cardIconSuccess : tone === "info" ? styles.cardIconInfo : styles.cardIconPrimary]}>
-        <TabIcon name={icon} color={iconColor} size={23} />
+        <TabIcon name={icon} color={iconColor} size={21} />
       </View>
-      <Text style={styles.cardTitle}>{title}</Text>
-      {loading && !error ? (
-        <ActivityIndicator size="small" color={colors.primary} style={styles.cardSpinner} />
-      ) : error ? (
-        <Text style={styles.cardError}>{isForbidden(error) ? t("managerAccessDeniedBody") : t("managerUnavailable")}</Text>
-      ) : (
-        <>
-          <Text style={styles.cardValue}>{value}</Text>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        {loading && !error ? (
+          <ActivityIndicator size="small" color={colors.primary} style={styles.cardSpinner} />
+        ) : error ? (
+          <Text style={styles.cardError}>{isForbidden(error) ? t("managerAccessDeniedBody") : t("managerUnavailable")}</Text>
+        ) : (
           <Text style={styles.cardDetail} numberOfLines={2}>{detail}</Text>
-        </>
-      )}
-      <View style={styles.cardFooter}><Text style={styles.cardHint}>{hint}</Text><TabIcon name="chevronRight" color={colors.primary} size={18} /></View>
+        )}
+      </View>
+      {!loading && !error ? (
+        <View style={styles.cardMetric}>
+          <Text style={styles.cardValue}>{value}</Text>
+          <Text style={styles.cardHint} numberOfLines={1}>{hint}</Text>
+        </View>
+      ) : null}
+      <TabIcon name="chevronRight" color={colors.muted} size={20} />
     </Pressable>
   )
 }
@@ -141,6 +154,8 @@ export default function ManagerHomeScreen() {
 
   const deniedEverywhere = [team.error, locations.error, planning.error, approvals.error, attendance.error]
     .every((reason) => reason != null && isForbidden(reason))
+  const hasPartialFailure = [team.error, locations.error, planning.error, approvals.error, attendance.error]
+    .some((reason) => reason != null)
   const teamAgents = team.data?.agents ?? []
   const teamTotal = team.data?.page.total ?? teamAgents.length
   const supportsTodayContract = team.data?.today != null
@@ -173,6 +188,18 @@ export default function ManagerHomeScreen() {
   const attendanceSummary = attendance.data?.pageSummary
   const calendar = formatCalendarDay(selectedDate, locale)
   const scope = team.data?.scope ?? locations.data?.scope ?? planning.data?.scope ?? approvals.data?.scope ?? attendance.data?.scope ?? null
+  const attentionItems: ManagerAttention[] = [
+    !approvals.error && loadedApprovals > 0
+      ? { title: t("managerApprovalsCardTitle"), detail: t("managerApprovalsCardHint"), count: loadedApprovals, icon: "inbox", href: "/(app)/manager/approvals" }
+      : null,
+    !planning.error && withoutRoute > 0
+      ? { title: t("managerPlanningCardTitle"), detail: t("managerPlanningPageSummary", { routes: routes.length, missing: withoutRoute }), count: withoutRoute, icon: "week", href: "/(app)/manager/planning" }
+      : null,
+    !locations.error && noLocations > 0
+      ? { title: t("managerLocationsCardTitle"), detail: t("managerLocationsCardHint"), count: noLocations, icon: "location", href: "/(app)/manager/locations" }
+      : null,
+  ].filter((item): item is ManagerAttention => item !== null)
+  const contextStatusLabel = loading ? t("managerLoading") : hasPartialFailure ? t("managerUnavailable") : t("managerUpdated")
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -208,16 +235,40 @@ export default function ManagerHomeScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.hero}>
-              <View style={styles.heroIcon}><TabIcon name="dashboard" color={colors.headerText} size={25} /></View>
-              <View style={styles.heroBody}>
-                <Text style={styles.heroEyebrow}>{scope === "ORGANIZATION" ? t("managerScopeOrganization") : t("managerScopeTeam")}</Text>
-                <Text style={styles.heroDate}>{calendar.weekday}, {calendar.date}</Text>
+            <View style={styles.contextBar}>
+              <View style={styles.contextIcon}><TabIcon name="today" color={colors.primary} size={20} /></View>
+              <View style={styles.contextBody}>
+                <Text style={styles.contextEyebrow}>{scope === "ORGANIZATION" ? t("managerScopeOrganization") : t("managerScopeTeam")}</Text>
+                <Text style={styles.contextDate}>{calendar.weekday}, {calendar.date}</Text>
               </View>
-              <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={loading ? t("managerLoading") : t("managerUpdated")} style={styles.heroStatus}><View style={styles.heroDot} /><Text style={styles.heroStatusText}>{loading ? t("managerLoading") : t("managerUpdated")}</Text></View>
+              <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={contextStatusLabel} style={[styles.contextStatus, hasPartialFailure && styles.contextStatusWarning]}><View style={[styles.contextDot, hasPartialFailure && styles.contextDotWarning]} /><Text style={[styles.contextStatusText, hasPartialFailure && styles.contextStatusTextWarning]}>{contextStatusLabel}</Text></View>
             </View>
 
-            <View style={[styles.grid, layout.isTablet && styles.gridTablet]}>
+            {attentionItems.length ? (
+              <View style={styles.attentionList}>
+                <Text style={styles.attentionListTitle}>{t("managerAttentionTitle")}</Text>
+                {attentionItems.map((attention, index) => (
+                  <Pressable
+                    key={attention.href}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${attention.count}. ${attention.title}`}
+                    accessibilityHint={attention.detail}
+                    onPress={() => router.push(attention.href as never)}
+                    style={({ pressed }) => [styles.attentionCard, index > 0 && styles.attentionCardDivider, pressed && styles.pressed]}
+                  >
+                    <View style={styles.attentionIcon}><TabIcon name={attention.icon} color={colors.warning} size={21} /></View>
+                    <View style={styles.attentionBody}>
+                      <Text style={styles.attentionTitle}>{attention.title}</Text>
+                      <Text style={styles.attentionDetail} numberOfLines={1}>{attention.detail}</Text>
+                    </View>
+                    <Text style={styles.attentionCount}>{attention.count}</Text>
+                    <TabIcon name="chevronRight" color={colors.warning} size={20} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={[styles.operationList, layout.isTablet && styles.operationListTablet]}>
               <ManagerCard
                 title={t("managerTeamCardTitle")}
                 hint={t("managerTeamCardHint")}
@@ -309,9 +360,9 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
-  title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 1 },
+  title: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 2, letterSpacing: -0.45 },
+  subtitle: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   accessCard: { flexDirection: "row", alignItems: "center", gap: 12, margin: 14, padding: 15, borderRadius: radii.card, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788" },
   accessIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
@@ -320,31 +371,43 @@ const styles = StyleSheet.create({
   accessText: { color: colors.warning, fontSize: 10, lineHeight: 15, marginTop: 3 },
   accessRetry: { minHeight: 44, paddingHorizontal: 11, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   accessRetryText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
-  hero: { marginHorizontal: 14, marginTop: 16, padding: 16, borderRadius: 22, backgroundColor: colors.navy, flexDirection: "row", alignItems: "center", gap: 12, ...cardShadow },
-  heroIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  heroBody: { flex: 1, minWidth: 0 },
-  heroEyebrow: { color: colors.headerSubtext, fontSize: 9, lineHeight: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
-  heroDate: { color: colors.headerText, fontSize: 15, fontWeight: "900", marginTop: 3 },
-  heroStatus: { maxWidth: 92, borderRadius: radii.pill, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
-  heroDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
-  heroStatusText: { color: colors.headerText, fontSize: 8, fontWeight: "800", flexShrink: 1 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 14, marginTop: 14 },
-  gridTablet: { gap: 14 },
-  actionCard: { flexBasis: "48%", flexGrow: 1, minHeight: 184, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
-  actionCardWide: { flexBasis: "100%", minHeight: 146 },
+  contextBar: { marginHorizontal: 14, marginTop: 14, minHeight: 68, paddingHorizontal: 12, paddingVertical: 10, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 },
+  contextIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  contextBody: { flex: 1, minWidth: 0 },
+  contextEyebrow: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.55 },
+  contextDate: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 2 },
+  contextStatus: { maxWidth: 100, borderRadius: radii.pill, backgroundColor: colors.successBg, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
+  contextStatusWarning: { backgroundColor: colors.warningBg },
+  contextDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+  contextDotWarning: { backgroundColor: colors.warning },
+  contextStatusText: { color: colors.successDark, fontSize: 10, fontWeight: "800", flexShrink: 1 },
+  contextStatusTextWarning: { color: colors.warning },
+  attentionList: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788", overflow: "hidden" },
+  attentionListTitle: { color: colors.warning, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.6, paddingHorizontal: 12, paddingTop: 11, paddingBottom: 5 },
+  attentionCard: { minHeight: 66, paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 10 },
+  attentionCardDivider: { borderTopWidth: 1, borderTopColor: "#F6D788" },
+  attentionIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  attentionBody: { flex: 1, minWidth: 0 },
+  attentionTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  attentionDetail: { color: colors.warning, fontSize: 11, fontWeight: "700", marginTop: 2 },
+  attentionCount: { color: colors.warning, fontSize: 22, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  operationList: { gap: 9, paddingHorizontal: 14, marginTop: 12 },
+  operationListTablet: { alignSelf: "center", width: "94%", maxWidth: 780, paddingHorizontal: 0 },
+  actionRow: { minHeight: 86, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10, ...cardShadow },
+  actionRowWide: {},
   cardIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   cardIconPrimary: { backgroundColor: colors.primarySoft },
   cardIconSuccess: { backgroundColor: colors.successBg },
   cardIconWarning: { backgroundColor: colors.warningBg },
   cardIconInfo: { backgroundColor: colors.infoBg },
-  cardTitle: { color: colors.text, fontSize: 12, fontWeight: "900", marginTop: 12 },
-  cardValue: { color: colors.text, fontSize: 28, fontWeight: "900", letterSpacing: -0.7, marginTop: 5, fontVariant: ["tabular-nums"] },
-  cardDetail: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 2 },
-  cardSpinner: { alignSelf: "flex-start", marginTop: 14 },
-  cardError: { color: colors.warning, fontSize: 9, lineHeight: 13, marginTop: 9 },
-  cardFooter: { marginTop: "auto", paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", gap: 4 },
-  cardHint: { color: colors.faint, flex: 1, fontSize: 8, lineHeight: 11, fontWeight: "700" },
-  cardArrow: { color: colors.primary, fontSize: 22, lineHeight: 22 },
+  cardBody: { flex: 1, minWidth: 0 },
+  cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  cardValue: { color: colors.text, fontSize: 21, fontWeight: "900", letterSpacing: -0.4, fontVariant: ["tabular-nums"] },
+  cardDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  cardSpinner: { alignSelf: "flex-start", marginTop: 6 },
+  cardError: { color: colors.warning, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  cardMetric: { width: 76, alignItems: "flex-end", gap: 2 },
+  cardHint: { color: colors.muted, fontSize: 10, lineHeight: 13, fontWeight: "700", textAlign: "right" },
   noteCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 14, padding: 13, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   noteIcon: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.info, alignItems: "center", justifyContent: "center" },
   noteText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" },
