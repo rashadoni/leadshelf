@@ -101,7 +101,7 @@ export default function ManagerRouteDetailScreen() {
             <Text style={styles.title}>{t("managerRouteDetailTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerRouteDetailHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading, disabled: loading }} disabled={loading} onPress={() => void load()} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !route ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -110,14 +110,19 @@ export default function ManagerRouteDetailScreen() {
             <View style={styles.stateIcon}><TabIcon name="route" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerRouteDetailUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load()} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
         {route && status && calendar ? (
           <>
             {error ? <View style={styles.notice}><Text style={styles.noticeText}>{t("managerRouteDetailStale")}</Text></View> : null}
-            <View style={styles.routeHero}>
+            <View
+              accessible
+              accessibilityLabel={(route.name ?? t("tabRoute")) + ". " + route.agent.name + ". " + status.label + ". " + calendar.weekday + ", " + calendar.date}
+              accessibilityRole="text"
+              style={styles.routeHero}
+            >
               <View style={styles.routeHeroTop}>
                 <View style={styles.routeIcon}><TabIcon name="route" color={colors.headerText} size={23} /></View>
                 <View style={styles.routeBody}>
@@ -129,7 +134,12 @@ export default function ManagerRouteDetailScreen() {
               <View style={styles.routeDate}><TabIcon name="week" color={colors.headerSubtext} size={15} /><Text style={styles.routeDateText}>{calendar.weekday}, {calendar.date}</Text></View>
             </View>
 
-            <View style={styles.progressCard}>
+            <View
+              accessible
+              accessibilityLabel={t("managerRouteDetailPlannedStops") + ": " + String(route.totalPoints) + ". " + t("managerRouteDetailVisitedStops") + ": " + String(route.visitedPoints)}
+              accessibilityRole="text"
+              style={styles.progressCard}
+            >
               <View style={styles.progressStat}><Text style={styles.progressValue}>{route.totalPoints}</Text><Text style={styles.progressLabel}>{t("managerRouteDetailPlannedStops")}</Text></View>
               <View style={styles.progressDivider} />
               <View style={styles.progressStat}><Text style={[styles.progressValue, { color: colors.successDark }]}>{route.visitedPoints}</Text><Text style={styles.progressLabel}>{t("managerRouteDetailVisitedStops")}</Text></View>
@@ -146,15 +156,23 @@ export default function ManagerRouteDetailScreen() {
                 {route.points.map((point) => {
                   const pointState = pointStatus(point)
                   const subtitle = pointSubtitle(point)
+                  const name = point.contact ? point.contact.displayName + " · " + point.customer.name : point.customer.name
+                  const plannedTime = point.plannedTime ? t("managerRouteDetailTime", { time: formatTime(point.plannedTime, timezone) }) : null
                   return (
-                    <View key={point.id} style={styles.pointCard}>
+                    <View
+                      accessible
+                      accessibilityLabel={String(point.orderIndex + 1) + ". " + name + (subtitle ? ". " + subtitle : "") + ". " + pointState.label + (plannedTime ? ". " + plannedTime : "")}
+                      accessibilityRole="text"
+                      key={point.id}
+                      style={styles.pointCard}
+                    >
                       <View style={[styles.pointNumber, { backgroundColor: pointState.background }]}><Text style={[styles.pointNumberText, { color: pointState.foreground }]}>{point.orderIndex + 1}</Text></View>
                       <View style={styles.pointBody}>
-                        <Text style={styles.pointName}>{point.contact ? point.contact.displayName + " · " + point.customer.name : point.customer.name}</Text>
+                        <Text style={styles.pointName}>{name}</Text>
                         {subtitle ? <Text style={styles.pointSubtitle}>{subtitle}</Text> : null}
                         <View style={styles.pointMeta}>
                           <View style={[styles.pointStatus, { backgroundColor: pointState.background }]}><Text style={[styles.pointStatusText, { color: pointState.foreground }]}>{pointState.label}</Text></View>
-                          {point.plannedTime ? <Text style={styles.pointTime}>{t("managerRouteDetailTime", { time: formatTime(point.plannedTime, timezone) })}</Text> : null}
+                          {plannedTime ? <Text style={styles.pointTime}>{plannedTime}</Text> : null}
                         </View>
                       </View>
                     </View>
