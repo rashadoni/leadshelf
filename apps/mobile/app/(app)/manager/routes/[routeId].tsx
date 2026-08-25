@@ -95,13 +95,13 @@ export default function ManagerRouteDetailScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerRouteDetailTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerRouteDetailHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !route ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -174,13 +174,11 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 32 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  backText: { color: colors.text, fontSize: 31, lineHeight: 32 },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  refreshText: { color: colors.primary, fontSize: 23, fontWeight: "900" },
   routeHero: { marginHorizontal: 14, marginTop: 16, padding: 15, borderRadius: radii.card, backgroundColor: colors.navy, ...cardShadow },
   routeHeroTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   routeIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },

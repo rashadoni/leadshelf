@@ -155,13 +155,13 @@ export default function ManagerTeamScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerTeamTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerTeamHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -182,7 +182,7 @@ export default function ManagerTeamScreen() {
               {error ? <Text style={styles.staleText}>{t("managerUnavailable")}</Text> : null}
             </View>
             <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>⌕</Text>
+              <TabIcon name="search" color={colors.faint} size={20} />
               <TextInput
                 accessibilityLabel={t("managerSearch")}
                 autoCapitalize="none"
@@ -272,18 +272,15 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 32 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  backText: { color: colors.text, fontSize: 31, lineHeight: 32 },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  refreshText: { color: colors.primary, fontSize: 23, fontWeight: "900" },
   scope: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.inner, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
   scopeText: { flex: 1, color: colors.primary, fontSize: 10, fontWeight: "900" },
   staleText: { color: colors.warning, fontSize: 9, fontWeight: "800" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
-  searchIcon: { color: colors.faint, fontSize: 21 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
   pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },
   todaySummary: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, ...cardShadow },

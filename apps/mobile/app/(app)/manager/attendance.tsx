@@ -227,22 +227,22 @@ export default function ManagerAttendanceScreen() {
         refreshControl={<RefreshControl refreshing={loading && !loadingMore} onRefresh={() => void load(endDate, rangeDays, searchQuery)} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerAttendanceTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerAttendanceHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(endDate, rangeDays, searchQuery)} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(endDate, rangeDays, searchQuery)} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         <View style={styles.dateNavigator}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("managerAttendancePreviousPeriod")} onPress={() => selectEndDate(shiftDateKey(endDate, -rangeDays))} style={styles.dateArrow}><Text style={styles.dateArrowText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("managerAttendancePreviousPeriod")} onPress={() => selectEndDate(shiftDateKey(endDate, -rangeDays))} style={styles.dateArrow}><TabIcon name="chevronLeft" color={colors.headerText} size={23} /></Pressable>
           <View style={styles.dateCenter}>
             <Text style={styles.dateWeekday}>{rangeDays === 1 ? endCalendar.weekday : t("managerPlanningRange", { count: rangeDays })}</Text>
             <Text style={styles.dateLabel}>{dateLabel}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("managerAttendanceNextPeriod")} onPress={() => selectEndDate(shiftDateKey(endDate, rangeDays))} style={styles.dateArrow}><Text style={styles.dateArrowText}>›</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("managerAttendanceNextPeriod")} onPress={() => selectEndDate(shiftDateKey(endDate, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
         </View>
         <View style={styles.rangePicker}>
           {RANGE_OPTIONS.map((days) => (
@@ -278,7 +278,7 @@ export default function ManagerAttendanceScreen() {
               </View>
             </View>
             <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>⌕</Text>
+              <TabIcon name="search" color={colors.faint} size={20} />
               <TextInput
                 accessibilityLabel={t("managerSearch")}
                 autoCapitalize="none"
@@ -342,16 +342,13 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 32 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  backText: { color: colors.text, fontSize: 31, lineHeight: 32 },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  refreshText: { color: colors.primary, fontSize: 23, fontWeight: "900" },
   dateNavigator: { marginHorizontal: 14, marginTop: 16, minHeight: 74, borderRadius: radii.card, backgroundColor: colors.navy, padding: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...cardShadow },
   dateArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
-  dateArrowText: { color: colors.headerText, fontSize: 29, lineHeight: 30 },
   dateCenter: { alignItems: "center", flex: 1 },
   dateWeekday: { color: colors.headerSubtext, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
   dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
@@ -370,7 +367,6 @@ const styles = StyleSheet.create({
   recordedOnlyText: { color: colors.info, fontSize: 9, lineHeight: 13, marginTop: 2, fontWeight: "700" },
   timezone: { color: colors.muted, fontSize: 8, lineHeight: 12, marginTop: 4, fontWeight: "800" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
-  searchIcon: { color: colors.faint, fontSize: 21 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
   pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },
   pageSummary: { marginHorizontal: 14, marginTop: 9, padding: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },

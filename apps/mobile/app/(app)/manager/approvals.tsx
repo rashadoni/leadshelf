@@ -297,7 +297,7 @@ function ApprovalRequest({
 
           {acknowledgeRouteConflicts ? (
             <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: true }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
-              <View style={styles.checkbox}><Text style={styles.checkboxText}>✓</Text></View>
+              <View style={styles.checkbox}><TabIcon name="check" color={colors.warning} size={15} /></View>
               <Text style={styles.conflictAcknowledgeText}>{t("managerHrmAcknowledgeConflict")}</Text>
             </Pressable>
           ) : actionError === t("managerHrmRouteConflict") && item.kind === "HRM" && selectedDecision === "APPROVED" ? (
@@ -450,13 +450,13 @@ export default function ManagerApprovalsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerApprovalsTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerApprovalsHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -524,13 +524,11 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 32 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  backText: { color: colors.text, fontSize: 31, lineHeight: 32 },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  refreshText: { color: colors.primary, fontSize: 23, fontWeight: "900" },
   summary: { marginHorizontal: 14, marginTop: 16, padding: 14, borderRadius: radii.card, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788", flexDirection: "row", alignItems: "center", gap: 10 },
   summaryIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   summaryBody: { flex: 1 },
@@ -587,7 +585,6 @@ const styles = StyleSheet.create({
   datePresetTextSelected: { color: colors.primary },
   conflictAcknowledge: { minHeight: 44, borderRadius: 12, padding: 9, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.warningBg },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: colors.warning, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
-  checkboxText: { color: colors.warning, fontSize: 13, fontWeight: "900" },
   conflictAcknowledgeText: { flex: 1, color: colors.warning, fontSize: 9, lineHeight: 13, fontWeight: "800" },
   actionError: { color: colors.missed, fontSize: 10, lineHeight: 14, fontWeight: "800" },
   submit: { minHeight: 46, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },

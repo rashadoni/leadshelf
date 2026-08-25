@@ -24,6 +24,7 @@ export type TabIconName =
   | "document"
   | "alert"
   | "info"
+  | "search"
   | "chevronLeft"
   | "chevronRight"
   | "chevronDown"
@@ -191,6 +192,13 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Circle cx={12} cy={12} r={8.5} stroke={color} strokeWidth={1.8} />
           <Path d="M12 10.7v5M12 8v.1" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+        </Svg>
+      )
+    case "search":
+      return (
+        <Svg {...common} fill="none">
+          <Circle cx={10.6} cy={10.6} r={5.7} stroke={color} strokeWidth={1.9} />
+          <Path d="m15 15 4.2 4.2" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
         </Svg>
       )
     case "chevronLeft":
