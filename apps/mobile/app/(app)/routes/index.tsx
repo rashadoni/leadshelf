@@ -1,10 +1,10 @@
-import { useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useField } from "../../../src/field/field-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type Locale, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatCalendarMonthShort } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useSync } from "../../../src/sync/sync-context"
@@ -12,13 +12,24 @@ import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import type { FieldWeekDay } from "../../../src/field/contracts"
+
+type RouteHubItem = FieldWeekDay["routes"][number] & { day: FieldWeekDay }
 
 export default function RoutesScreen() {
   const locale = useLocale()
   const field = useField()
   const { status: syncStatus } = useSync()
-  const routes = field.week?.days.flatMap((day) => day.routes.map((route) => ({ ...route, day }))) ?? []
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const routes = useMemo<RouteHubItem[]>(() => field.week?.days.flatMap((day) => day.routes.map((route) => ({ ...route, day }))) ?? [], [field.week])
   const canCreateRoute = field.week?.capabilities.createOwnDraft === true
+  const nowRoutes = routes.filter((route) => route.effectiveStatus === "IN_PROGRESS")
+  const groupedRouteIds = new Set(nowRoutes.map((route) => route.id))
+  const todayRoutes = routes.filter((route) => route.day.date === field.week?.today && !groupedRouteIds.has(route.id))
+  todayRoutes.forEach((route) => groupedRouteIds.add(route.id))
+  const upcomingRoutes = routes.filter((route) => route.day.date > (field.week?.today ?? "") && !groupedRouteIds.has(route.id))
+  upcomingRoutes.forEach((route) => groupedRouteIds.add(route.id))
+  const historyRoutes = routes.filter((route) => !groupedRouteIds.has(route.id))
   useEffect(() => {
     if (syncStatus.lastSyncAt && syncStatus.pendingOps === 0) void field.refresh()
   // Refresh the CRM cache once after a completed outbox cycle.
@@ -50,63 +61,12 @@ export default function RoutesScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>{t("tabWeek")}</Text>
-        {routes.length ? routes.map(({ day, ...route }) => {
-          const meta = routeStatusMeta(route.effectiveStatus)
-          const tone = tones[meta.tone]
-          const calendarDay = formatCalendarDay(day.date, locale)
-          const routeName = route.name ?? t("tabRoute")
-          const progressText = `${route.visitedPoints}/${route.totalPoints} ${t("routeVisitedLabel")}`
-          const nextPoint = route.points.find((point) => point.effectiveStatus === "PENDING") ?? route.points[0]
-          const nextStopName = nextPoint?.contact?.displayName ?? nextPoint?.customer.name
-          const nextStopMeta = nextPoint?.customer.address ?? nextPoint?.customer.city ?? null
-          const syncText = route.syncState === "PENDING" ? t("queued") : route.syncState ? t("syncNeedsAttention") : null
-          const routeLabel = [
-            routeName,
-            progressText,
-            nextStopName ? `${t("routeNextStop")}: ${nextStopName}` : null,
-            t(meta.labelKey),
-            syncText,
-          ].filter(Boolean).join(". ")
-          const progress = route.totalPoints > 0 ? Math.min(100, Math.round((route.visitedPoints / route.totalPoints) * 100)) : 0
-          return (
-            <Pressable key={route.id} accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCardModern, pressed && styles.pressed]}>
-              <View style={styles.routeTopModern}>
-                <View style={styles.dateBadgeModern}>
-                  <Text style={styles.dateDayModern}>{calendarDay.day || day.date.slice(8)}</Text>
-                  <Text style={styles.dateMonthModern}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text>
-                </View>
-                <View style={styles.routeHeadingModern}>
-                  <Text style={styles.routeNameModern} numberOfLines={1}>{routeName}</Text>
-                  <Text style={styles.routeDateModern} numberOfLines={1}>{calendarDay.weekday}, {calendarDay.date}</Text>
-                </View>
-                <View style={styles.routeStateModern}>
-                  {syncText ? <Text style={styles.syncStateModern} numberOfLines={1}>{syncText}</Text> : null}
-                  <View style={[styles.statusModern, { backgroundColor: tone.background }]}><Text style={[styles.statusTextModern, { color: tone.foreground }]}>{t(meta.labelKey)}</Text></View>
-                </View>
-              </View>
-              <View style={styles.progressSectionModern}>
-                <View style={styles.progressHeaderModern}>
-                  <Text style={styles.routeMetaModern}>{progressText}</Text>
-                  <Text style={styles.progressPercentModern}>{progress}%</Text>
-                </View>
-                <View style={styles.progressTrackModern}><View style={[styles.progressFillModern, { width: `${progress}%` }]} /></View>
-              </View>
-              {nextStopName ? (
-                <View style={styles.nextStopSurfaceModern}>
-                  <View style={styles.nextStopIconModern}><TabIcon name="location" color={colors.primary} size={20} /></View>
-                  <View style={styles.nextStopBodyModern}>
-                    <Text style={styles.nextStopLabelModern}>{t("routeNextStop")}</Text>
-                    <Text style={styles.nextStopModern} numberOfLines={1}>{nextStopName}</Text>
-                    {nextStopMeta ? <Text style={styles.nextStopMetaModern} numberOfLines={1}>{nextStopMeta}</Text> : null}
-                  </View>
-                  <TabIcon name="chevronRight" color={colors.primary} size={21} />
-                </View>
-              ) : null}
-              <View style={styles.openRouteModern}><Text style={styles.openRouteTextModern}>{t("openRoute")}</Text><TabIcon name="chevronRight" color={colors.primary} size={18} /></View>
-            </Pressable>
-          )
-        }) : canCreateRoute ? (
+        {routes.length ? <>
+          {nowRoutes.length ? <RouteGroup title={t("routeNow")} routes={nowRoutes} locale={locale} featured /> : null}
+          {todayRoutes.length ? <RouteGroup title={t("todayWord")} routes={todayRoutes} locale={locale} featured={!nowRoutes.length} /> : null}
+          {upcomingRoutes.length ? <RouteGroup title={t("routeUpcomingRoutes")} routes={upcomingRoutes} locale={locale} /> : null}
+          {historyRoutes.length ? <RouteGroup title={t("routeHistory")} routes={historyRoutes} locale={locale} collapsible expanded={historyOpen} onToggle={() => setHistoryOpen((open) => !open)} /> : null}
+        </> : canCreateRoute ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("createRoute")}
@@ -135,6 +95,78 @@ export default function RoutesScreen() {
   )
 }
 
+function RouteGroup({ title, routes, locale, featured = false, collapsible = false, expanded = true, onToggle }: {
+  title: string
+  routes: readonly RouteHubItem[]
+  locale: Locale
+  featured?: boolean
+  collapsible?: boolean
+  expanded?: boolean
+  onToggle?: () => void
+}) {
+  const visible = !collapsible || expanded
+  return <View style={styles.routeGroupModern}>
+    {collapsible ? <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? t("routeHideRoutes") : t("routeShowRoutes")}: ${title}`} accessibilityState={{ expanded }} onPress={onToggle} style={({ pressed }) => [styles.routeGroupToggleModern, pressed && styles.pressed]}>
+      <View style={styles.routeGroupLabelModern}><Text style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>
+      <View style={styles.routeGroupToggleActionModern}><Text style={styles.routeGroupToggleTextModern}>{expanded ? t("routeHideRoutes") : t("routeShowRoutes")}</Text><TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+    </Pressable> : <View style={styles.routeGroupHeadingModern}><Text style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>}
+    {visible ? routes.map((route, index) => <RouteCard key={route.id} route={route} locale={locale} featured={featured && index === 0} />) : null}
+  </View>
+}
+
+function RouteCard({ route, locale, featured }: { route: RouteHubItem; locale: Locale; featured: boolean }) {
+  const meta = routeStatusMeta(route.effectiveStatus)
+  const tone = tones[meta.tone]
+  const calendarDay = formatCalendarDay(route.day.date, locale)
+  const routeName = route.name ?? t("tabRoute")
+  const progressText = `${route.visitedPoints}/${route.totalPoints} ${t("routeVisitedLabel")}`
+  const nextPoint = route.points.find((point) => point.effectiveStatus === "PENDING") ?? route.points[0]
+  const nextStopName = nextPoint?.contact?.displayName ?? nextPoint?.customer.name
+  const nextStopMeta = nextPoint?.customer.address ?? nextPoint?.customer.city ?? null
+  const syncText = route.syncState === "PENDING" ? t("queued") : route.syncState ? t("syncNeedsAttention") : null
+  const routeLabel = [
+    routeName,
+    progressText,
+    nextStopName ? `${t("routeNextStop")}: ${nextStopName}` : null,
+    t(meta.labelKey),
+    syncText,
+  ].filter(Boolean).join(". ")
+  const progress = route.totalPoints > 0 ? Math.min(100, Math.round((route.visitedPoints / route.totalPoints) * 100)) : 0
+  return <Pressable accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCardModern, featured && styles.routeCardFeaturedModern, pressed && styles.pressed]}>
+    <View style={styles.routeTopModern}>
+      <View style={styles.dateBadgeModern}>
+        <Text style={styles.dateDayModern}>{calendarDay.day || route.day.date.slice(8)}</Text>
+        <Text style={styles.dateMonthModern}>{formatCalendarMonthShort(route.day.date, locale) || route.day.date.slice(5, 7)}</Text>
+      </View>
+      <View style={styles.routeHeadingModern}>
+        <Text style={styles.routeNameModern} numberOfLines={1}>{routeName}</Text>
+        <Text style={styles.routeDateModern} numberOfLines={1}>{calendarDay.weekday}, {calendarDay.date}</Text>
+      </View>
+      <View style={styles.routeStateModern}>
+        {syncText ? <Text style={styles.syncStateModern} numberOfLines={1}>{syncText}</Text> : null}
+        <View style={[styles.statusModern, { backgroundColor: tone.background }]}><Text style={[styles.statusTextModern, { color: tone.foreground }]}>{t(meta.labelKey)}</Text></View>
+      </View>
+    </View>
+    <View style={styles.progressSectionModern}>
+      <View style={styles.progressHeaderModern}>
+        <Text style={styles.routeMetaModern}>{progressText}</Text>
+        <Text style={styles.progressPercentModern}>{progress}%</Text>
+      </View>
+      <View style={styles.progressTrackModern}><View style={[styles.progressFillModern, { width: `${progress}%` }]} /></View>
+    </View>
+    {nextStopName ? <View style={styles.nextStopSurfaceModern}>
+      <View style={styles.nextStopIconModern}><TabIcon name="location" color={colors.primary} size={20} /></View>
+      <View style={styles.nextStopBodyModern}>
+        <Text style={styles.nextStopLabelModern}>{t("routeNextStop")}</Text>
+        <Text style={styles.nextStopModern} numberOfLines={1}>{nextStopName}</Text>
+        {nextStopMeta ? <Text style={styles.nextStopMetaModern} numberOfLines={1}>{nextStopMeta}</Text> : null}
+      </View>
+      <TabIcon name="chevronRight" color={colors.primary} size={21} />
+    </View> : null}
+    <View style={styles.openRouteModern}><Text style={styles.openRouteTextModern}>{t("openRoute")}</Text><TabIcon name="chevronRight" color={colors.primary} size={18} /></View>
+  </Pressable>
+}
+
 const tones: Record<RouteStatusTone, { background: string; foreground: string }> = {
   draft: { background: colors.draftBg, foreground: colors.draft }, planned: { background: colors.infoBg, foreground: colors.info }, inProgress: { background: colors.warningBg, foreground: colors.warning }, completed: { background: colors.successBg, foreground: colors.successDark }, cancelled: { background: colors.draftBg, foreground: colors.draft }, missed: { background: colors.missedBg, foreground: colors.missed },
 }
@@ -153,7 +185,17 @@ const styles = StyleSheet.create({
   subtitleModern: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   headerCreateModern: { minHeight: 44, borderRadius: 14, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5 },
   headerCreateTextModern: { color: colors.primary, fontSize: 12, fontWeight: "900" },
-  routeCardModern: { marginHorizontal: 14, marginTop: 11, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  routeGroupModern: { marginTop: 18 },
+  routeGroupHeadingModern: { minHeight: 38, marginHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8 },
+  routeGroupToggleModern: { minHeight: 52, marginHorizontal: 14, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  routeGroupLabelModern: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
+  routeGroupTitleModern: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  routeGroupCountModern: { minWidth: 24, height: 24, borderRadius: radii.pill, paddingHorizontal: 6, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  routeGroupCountTextModern: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  routeGroupToggleActionModern: { flexDirection: "row", alignItems: "center", gap: 4 },
+  routeGroupToggleTextModern: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  routeCardModern: { marginHorizontal: 14, marginTop: 7, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  routeCardFeaturedModern: { borderColor: colors.primary, shadowOpacity: 0.085, elevation: 2 },
   routeTopModern: { flexDirection: "row", alignItems: "center", gap: 10 },
   dateBadgeModern: { width: 50, height: 56, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   dateDayModern: { color: colors.primary, fontSize: 20, fontWeight: "900" },
