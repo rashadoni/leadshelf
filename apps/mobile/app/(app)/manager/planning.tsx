@@ -230,21 +230,24 @@ export default function ManagerPlanningScreen() {
             <Text style={styles.title}>{t("managerPlanningTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerPlanningHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(date, rangeDays, searchQuery)} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading || loadingMore, disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(date, rangeDays, searchQuery)} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         <View style={styles.dateNavigator}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t(rangeDays === 1 ? "managerPreviousDay" : "managerPreviousRange")} onPress={() => selectDate(shiftDateKey(date, -rangeDays))} style={styles.dateArrow}><TabIcon name="chevronLeft" color={colors.headerText} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t(rangeDays === 1 ? "managerPreviousDay" : "managerPreviousRange")}: ${formatCalendarDay(shiftDateKey(date, -rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectDate(shiftDateKey(date, -rangeDays))} style={styles.dateArrow}><TabIcon name="chevronLeft" color={colors.headerText} size={23} /></Pressable>
           <View style={styles.dateCenter}>
             <Text style={styles.dateWeekday}>{rangeDays === 1 ? calendar.weekday : t("managerPlanningRange", { count: rangeDays })}</Text>
             <Text style={styles.dateLabel}>{dateLabel}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")} onPress={() => selectDate(shiftDateKey(date, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")}: ${formatCalendarDay(shiftDateKey(date, rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectDate(shiftDateKey(date, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
         </View>
         <View style={styles.rangePicker}>
           {RANGE_OPTIONS.map((days) => (
-            <Pressable key={days} accessibilityRole="button" accessibilityState={{ selected: rangeDays === days }} onPress={() => selectRange(days)} style={[styles.rangeChoice, rangeDays === days && styles.rangeChoiceSelected]}>
-              <Text style={[styles.rangeChoiceText, rangeDays === days && styles.rangeChoiceTextSelected]}>{t("managerPlanningRange", { count: days })}</Text>
+            <Pressable key={days} accessibilityRole="button" accessibilityLabel={t("managerPlanningRange", { count: days })} accessibilityState={{ busy: loading, selected: rangeDays === days }} onPress={() => selectRange(days)} style={[styles.rangeChoice, rangeDays === days && styles.rangeChoiceSelected]}>
+              <View style={styles.rangeChoiceContent}>
+                <Text style={[styles.rangeChoiceText, rangeDays === days && styles.rangeChoiceTextSelected]}>{t("managerPlanningRange", { count: days })}</Text>
+                {rangeDays === days ? <TabIcon name="check" color={colors.headerText} size={14} /> : null}
+              </View>
             </Pressable>
           ))}
         </View>
@@ -255,7 +258,7 @@ export default function ManagerPlanningScreen() {
             <View style={styles.stateIcon}><TabIcon name="week" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load(date, rangeDays, searchQuery)} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load(date, rangeDays, searchQuery)} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -270,6 +273,7 @@ export default function ManagerPlanningScreen() {
               <TabIcon name="search" color={colors.faint} size={20} />
               <TextInput
                 accessibilityLabel={t("managerSearch")}
+                accessibilityHint={t("managerSearchHint")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={120}
@@ -307,7 +311,8 @@ export default function ManagerPlanningScreen() {
                     <Pressable
                       key={route.id}
                       accessibilityRole="button"
-                      accessibilityLabel={t("managerOpenRoute", { name: route.name ?? t("tabRoute"), agent: route.agent.name })}
+                      accessibilityHint={t("routeDetails")}
+                      accessibilityLabel={t("managerOpenRoute", { name: route.name ?? t("tabRoute"), agent: route.agent.name }) + ". " + status.label + ". " + t("managerStopProgress", { visited: route.visitedPoints, total: route.totalPoints }) + ". " + Math.round(progress) + "%"}
                       onPress={() => openRoute(route)}
                       style={({ pressed }) => [styles.routeCard, pressed && styles.pressed]}
                     >
@@ -392,6 +397,7 @@ export default function ManagerPlanningScreen() {
                       <Pressable
                         key={agent.id}
                         accessibilityRole="button"
+                        accessibilityHint={t("managerPlanRoute")}
                         accessibilityLabel={t("managerPlanRouteFor", { name: agent.name })}
                         onPress={() => planRouteFor(agent)}
                         style={({ pressed }) => [styles.agentRow, index > 0 && styles.agentBorder, pressed && styles.pressed]}
@@ -409,6 +415,8 @@ export default function ManagerPlanningScreen() {
             {planning.page.hasMore && !hasPendingSearch ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}
+                accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
                 disabled={loading || loadingMore}
                 onPress={() => void load(date, rangeDays, searchQuery, planning.page.number + 1, true)}
                 style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
@@ -440,7 +448,8 @@ const styles = StyleSheet.create({
   dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
   rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
   rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  rangeChoiceSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  rangeChoiceSelected: { borderWidth: 2, backgroundColor: colors.primary, borderColor: colors.primary },
+  rangeChoiceContent: { flexDirection: "row", alignItems: "center", gap: 5 },
   rangeChoiceText: { color: colors.muted, fontSize: 10, fontWeight: "900" },
   rangeChoiceTextSelected: { color: colors.headerText },
   scope: { minHeight: 44, marginHorizontal: 14, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 8 },
