@@ -10,6 +10,7 @@ import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/fiel
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
+import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
 type Filter = "OPEN" | "ALL" | "IN_PROGRESS" | "COMPLETED"
@@ -137,14 +138,14 @@ export default function AgentTasksScreen() {
         refreshControl={<RefreshControl refreshing={field.taskPhase === "refreshing"} onRefresh={() => void refresh()} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text>
             <Text style={styles.title}>{t("agentTasksTitle")}</Text>
             <Text style={styles.subtitle}>{t("agentTasksSubtitle")}</Text>
           </View>
           {field.agentTasks?.capabilities.createSelfTask !== false ? (
-            <Pressable onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.add}><Text style={styles.addText}>＋</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.add}><TabIcon name="add" color={colors.headerText} size={22} /></Pressable>
           ) : null}
         </View>
 
@@ -154,7 +155,7 @@ export default function AgentTasksScreen() {
           <SummaryMetric value={overdue} label={t("agentTasksSummaryOverdue")} color={colors.missed} />
         </View>
 
-        <View style={styles.searchBox}><Text style={styles.searchIcon}>⌕</Text><TextInput value={search} onChangeText={setSearch} placeholder={t("agentTasksSearch")} placeholderTextColor={colors.faint} style={styles.searchInput} /></View>
+        <View style={styles.searchBox}><TabIcon name="search" color={colors.faint} size={20} /><TextInput accessibilityLabel={t("agentTasksSearch")} value={search} onChangeText={setSearch} placeholder={t("agentTasksSearch")} placeholderTextColor={colors.faint} style={styles.searchInput} /></View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           <FilterChip selected={filter === "OPEN"} label={t("agentTasksFilterOpen")} onPress={() => setFilter("OPEN")} />
           <FilterChip selected={filter === "IN_PROGRESS"} label={t("agentTasksFilterProgress")} onPress={() => setFilter("IN_PROGRESS")} />
@@ -170,7 +171,7 @@ export default function AgentTasksScreen() {
             : task.persistedStatus === "IN_PROGRESS" ? t("agentTaskComplete") : t("agentTaskStart")
           const actionable = task.persistedStatus === "PENDING" || task.persistedStatus === "IN_PROGRESS"
           return (
-            <Pressable key={task.id} onPress={() => router.push(`/(app)/field-tasks/${task.id}` as never)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+            <Pressable key={task.id} accessibilityRole="button" accessibilityLabel={t("agentTaskDetails") + ": " + task.title} onPress={() => router.push(`/(app)/field-tasks/${task.id}` as never)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
               <View style={styles.cardTop}>
                 <View style={[styles.priorityDot, { backgroundColor: priorityColor(task.priority) }]} />
                 <View style={styles.cardBody}>
@@ -180,20 +181,20 @@ export default function AgentTasksScreen() {
                 <View style={[styles.status, { backgroundColor: tone.bg }]}><Text style={[styles.statusText, { color: tone.color }]}>{statusLabel(task.status)}</Text></View>
               </View>
               <View style={styles.metaRow}>
-                <Text style={styles.metaIcon}>◷</Text><Text style={[styles.meta, task.status === "OVERDUE" && styles.overdue]}>{task.dueDate ? formatShortDateTime(task.dueDate, locale) : t("agentTaskDueNone")}</Text>
+                <TabIcon name="week" color={colors.faint} size={16} /><Text style={[styles.meta, task.status === "OVERDUE" && styles.overdue]}>{task.dueDate ? formatShortDateTime(task.dueDate, locale) : t("agentTaskDueNone")}</Text>
               </View>
-              <View style={styles.metaRow}><Text style={styles.metaIcon}>⌂</Text><Text style={styles.meta} numberOfLines={1}>{task.customer?.name ?? t("agentTaskNoCustomer")}</Text></View>
+              <View style={styles.metaRow}><TabIcon name="organizations" color={colors.faint} size={16} /><Text style={styles.meta} numberOfLines={1}>{task.customer?.name ?? t("agentTaskNoCustomer")}</Text></View>
               {task.syncState ? <SyncNotice state={task.syncState} /> : null}
               <View style={styles.cardFooter}>
                 <Text style={styles.version}>{t("agentTaskVersion", { version: task.version })}</Text>
-                {actionable ? <Pressable disabled={busyId === task.id} onPress={(event) => { event.stopPropagation(); quickAction(task) }} style={[styles.action, task.persistedStatus === "IN_PROGRESS" && styles.actionDone]}><Text style={styles.actionText}>{busyId === task.id ? "…" : action}</Text></Pressable> : <Text style={styles.openArrow}>→</Text>}
+                {actionable ? <Pressable accessibilityRole="button" accessibilityLabel={action} disabled={busyId === task.id} onPress={(event) => { event.stopPropagation(); quickAction(task) }} style={[styles.action, task.persistedStatus === "IN_PROGRESS" && styles.actionDone]}><Text style={styles.actionText}>{busyId === task.id ? "…" : action}</Text></Pressable> : <TabIcon name="chevronRight" color={colors.primary} size={21} />}
               </View>
             </Pressable>
           )
         })}
 
         {visible.length === 0 && field.taskPhase !== "loading" ? (
-          <View style={styles.empty}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>✓</Text></View><Text style={styles.emptyTitle}>{t("agentTasksEmpty")}</Text><Text style={styles.emptyHint}>{t("agentTasksEmptyHint")}</Text>{field.agentTasks?.capabilities.createSelfTask !== false ? <Pressable onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.emptyButton}><Text style={styles.emptyButtonText}>{t("agentTaskCreate")}</Text></Pressable> : null}</View>
+          <View style={styles.empty}><View style={styles.emptyMark}><TabIcon name="check" color={colors.success} size={27} /></View><Text style={styles.emptyTitle}>{t("agentTasksEmpty")}</Text><Text style={styles.emptyHint}>{t("agentTasksEmptyHint")}</Text>{field.agentTasks?.capabilities.createSelfTask !== false ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.emptyButton}><TabIcon name="add" color={colors.headerText} size={18} /><Text style={styles.emptyButtonText}>{t("agentTaskCreate")}</Text></Pressable> : null}</View>
         ) : null}
         {field.taskPhase === "loading" ? <View style={styles.loading}>{[1, 2, 3].map((item) => <View key={item} style={styles.skeleton} />)}</View> : null}
       </ScrollView>
@@ -206,20 +207,23 @@ function SummaryMetric({ value, label, color }: { value: number; label: string; 
 }
 
 function FilterChip({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.filter, selected && styles.filterSelected]}><Text style={[styles.filterText, selected && styles.filterTextSelected]}>{label}</Text></Pressable>
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.filter, selected && styles.filterSelected]}><Text style={[styles.filterText, selected && styles.filterTextSelected]}>{label}</Text></Pressable>
 }
 
 function SyncNotice({ state }: { state: "PENDING" | "CONFLICT" | "REJECTED" }) {
   const conflict = state === "CONFLICT"
   const rejected = state === "REJECTED"
-  return <View style={[styles.syncNotice, conflict && styles.syncConflict, rejected && styles.syncRejected]}><Text style={[styles.syncText, (conflict || rejected) && styles.syncTextError]}>{state === "PENDING" ? `◌ ${t("agentTaskOfflineQueued")}` : state === "CONFLICT" ? `! ${t("agentTaskSyncConflict")}` : `! ${t("agentTaskSyncRejected")}`}</Text></View>
+  const icon = state === "PENDING" ? "refresh" : "alert"
+  const label = state === "PENDING" ? t("agentTaskOfflineQueued") : state === "CONFLICT" ? t("agentTaskSyncConflict") : t("agentTaskSyncRejected")
+  const color = conflict || rejected ? colors.missed : colors.primary
+  return <View style={[styles.syncNotice, conflict && styles.syncConflict, rejected && styles.syncRejected]}><TabIcon name={icon} color={color} size={15} /><Text style={[styles.syncText, (conflict || rejected) && styles.syncTextError]}>{label}</Text></View>
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 34 },
-  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "flex-start", gap: 10 }, back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, backText: { color: colors.text, fontSize: 30, lineHeight: 31 }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 }, add: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, addText: { color: colors.headerText, fontSize: 23, lineHeight: 25 },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "flex-start", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 }, add: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   summary: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.card, padding: 8, backgroundColor: colors.card, flexDirection: "row", ...cardShadow }, metric: { flex: 1, minHeight: 65, alignItems: "center", justifyContent: "center" }, metricValue: { fontSize: 22, fontWeight: "900" }, metricLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 2 },
-  searchBox: { marginHorizontal: 14, marginTop: 14, minHeight: 47, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }, searchIcon: { color: colors.faint, fontSize: 21 }, searchInput: { flex: 1, minHeight: 45, color: colors.text, fontSize: 12, paddingHorizontal: 8 }, filters: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2, gap: 8 }, filter: { minHeight: 37, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, filterSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, filterText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
-  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, pressed: { opacity: 0.75, transform: [{ scale: 0.993 }] }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 9 }, priorityDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 }, cardBody: { flex: 1, minWidth: 0 }, cardTitle: { color: colors.text, fontSize: 14, lineHeight: 19, fontWeight: "900" }, source: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 4 }, status: { maxWidth: 100, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, statusText: { fontSize: 8, fontWeight: "900" }, metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10 }, metaIcon: { width: 16, color: colors.faint, fontSize: 12, textAlign: "center" }, meta: { flex: 1, color: colors.muted, fontSize: 10, fontWeight: "700" }, overdue: { color: colors.missed }, syncNotice: { marginTop: 10, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: colors.primarySoft }, syncConflict: { backgroundColor: colors.warningBg }, syncRejected: { backgroundColor: colors.dangerBg }, syncText: { color: colors.primary, fontSize: 9, fontWeight: "900" }, syncTextError: { color: colors.missed }, cardFooter: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, version: { color: colors.faint, fontSize: 8, fontWeight: "800" }, action: { minHeight: 36, borderRadius: 11, paddingHorizontal: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, actionDone: { backgroundColor: colors.success }, actionText: { color: colors.headerText, fontSize: 10, fontWeight: "900" }, openArrow: { color: colors.primary, fontSize: 18, fontWeight: "900" },
-  error: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, fontWeight: "800" }, empty: { margin: 14, minHeight: 300, borderRadius: radii.card, padding: 24, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow }, emptyMark: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" }, emptyMarkText: { color: colors.success, fontSize: 27, fontWeight: "900" }, emptyTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center", marginTop: 14 }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 6 }, emptyButton: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, emptyButtonText: { color: colors.headerText, fontSize: 11, fontWeight: "900" }, loading: { paddingHorizontal: 14, paddingTop: 8, gap: 10 }, skeleton: { height: 150, borderRadius: radii.card, backgroundColor: colors.skeleton },
+  searchBox: { marginHorizontal: 14, marginTop: 14, minHeight: 47, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }, searchInput: { flex: 1, minHeight: 45, color: colors.text, fontSize: 12, paddingHorizontal: 8 }, filters: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2, gap: 8 }, filter: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, filterSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, filterText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
+  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, pressed: { opacity: 0.75, transform: [{ scale: 0.993 }] }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 9 }, priorityDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 }, cardBody: { flex: 1, minWidth: 0 }, cardTitle: { color: colors.text, fontSize: 14, lineHeight: 19, fontWeight: "900" }, source: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 4 }, status: { maxWidth: 100, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, statusText: { fontSize: 8, fontWeight: "900" }, metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10 }, meta: { flex: 1, color: colors.muted, fontSize: 10, fontWeight: "700" }, overdue: { color: colors.missed }, syncNotice: { marginTop: 10, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 6 }, syncConflict: { backgroundColor: colors.warningBg }, syncRejected: { backgroundColor: colors.dangerBg }, syncText: { color: colors.primary, fontSize: 9, fontWeight: "900" }, syncTextError: { color: colors.missed }, cardFooter: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, version: { color: colors.faint, fontSize: 8, fontWeight: "800" }, action: { minHeight: 44, borderRadius: 11, paddingHorizontal: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, actionDone: { backgroundColor: colors.success }, actionText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  error: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, fontWeight: "800" }, empty: { margin: 14, minHeight: 300, borderRadius: radii.card, padding: 24, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow }, emptyMark: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" }, emptyTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center", marginTop: 14 }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 6 }, emptyButton: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 }, emptyButtonText: { color: colors.headerText, fontSize: 11, fontWeight: "900" }, loading: { paddingHorizontal: 14, paddingTop: 8, gap: 10 }, skeleton: { height: 150, borderRadius: radii.card, backgroundColor: colors.skeleton },
 })
