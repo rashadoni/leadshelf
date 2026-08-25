@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
-import { router, useFocusEffect } from "expo-router"
+import { useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldHrm, enqueueFieldHrmCancel, enqueueFieldHrmRequest, readFieldHrm } from "../../../src/db/local-store"
@@ -14,11 +14,21 @@ import {
   formatCalendarWeekdayShort,
   formatShortDateTime,
 } from "../../../src/i18n/date-format"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 
 type HrmMode = "schedule" | "requests"
+type HrmRequestDraft = {
+  type: FieldHrmRequestType
+  startDate: string
+  endDate: string
+  workdayId: string | null
+  startTime: string
+  endTime: string
+  reason: string
+}
 
 function dateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
@@ -53,6 +63,7 @@ export default function HrmScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
+  const formBaseline = useRef<HrmRequestDraft | null>(null)
   const copy = locale === "az" ? {
     eyebrow: "İŞ MƏRKƏZİ", title: "Qrafik və müraciətlər", hint: "İş günləri, məzuniyyət, yoxluq və vaxt düzəlişi bir ekranda.",
     schedule: "Qrafik", requests: "Müraciətlər", newRequest: "Yeni müraciət", working: "İş günü", dayOff: "İstirahət",
@@ -62,6 +73,7 @@ export default function HrmScreen() {
     reason: "Səbəb", reasonPlaceholder: "Qısa izah yazın…", submit: "Müraciəti saxla", cancel: "Bağla", cancelRequest: "Müraciəti ləğv et",
     required: "Tarixləri, səbəbi və düzəliş üçün iş gününü düzgün seçin.", queued: "Müraciət telefonda saxlanıldı və göndərmə növbəsinə əlavə edildi.",
     refreshError: "Qrafik yenilənmədi — telefondakı nüsxə göstərilir.", decision: "Qərar", pending: "Baxılır", approved: "Təsdiqlənib", rejected: "Rədd edilib", cancelled: "Ləğv edilib", sync: "Növbədə",
+    discardTitle: "Saxlanmamış müraciəti silmək?", discardBody: "Seçilmiş tarixlər, vaxtlar və səbəb yadda saxlanmayacaq.", discardConfirm: "Qaralamanı sil",
   } : {
     eyebrow: "РАБОЧИЙ ЦЕНТР", title: "График и заявки", hint: "Рабочие дни, отпуск, отсутствие и корректировка времени в одном экране.",
     schedule: "График", requests: "Мои заявки", newRequest: "Новая заявка", working: "Рабочий день", dayOff: "Выходной",
@@ -71,10 +83,21 @@ export default function HrmScreen() {
     reason: "Причина", reasonPlaceholder: "Коротко объясните причину…", submit: "Сохранить заявку", cancel: "Закрыть", cancelRequest: "Отменить заявку",
     required: "Проверьте даты, причину и рабочий день для корректировки.", queued: "Заявка сохранена на телефоне и добавлена в очередь отправки.",
     refreshError: "График не обновился — показана копия с телефона.", decision: "Решение", pending: "На рассмотрении", approved: "Одобрено", rejected: "Отклонено", cancelled: "Отменено", sync: "В очереди",
+    discardTitle: "Отменить несохранённую заявку?", discardBody: "Выбранные даты, время и причина не сохранятся.", discardConfirm: "Удалить черновик",
   }
 
   const upcomingDates = useMemo(() => Array.from({ length: 21 }, (_, index) => addDays(index)), [])
   const correctionDays = useMemo(() => data?.days.filter((day) => day.workday).slice(-20).reverse() ?? [], [data?.days])
+  const currentDraft: HrmRequestDraft = { type, startDate, endDate, workdayId, startTime, endTime, reason }
+  const isFormDirty = formOpen && formBaseline.current != null && (
+    formBaseline.current.type !== currentDraft.type ||
+    formBaseline.current.startDate !== currentDraft.startDate ||
+    formBaseline.current.endDate !== currentDraft.endDate ||
+    formBaseline.current.workdayId !== currentDraft.workdayId ||
+    formBaseline.current.startTime !== currentDraft.startTime ||
+    formBaseline.current.endTime !== currentDraft.endTime ||
+    formBaseline.current.reason !== currentDraft.reason
+  )
   const load = useCallback(async (showWarning = false) => {
     try {
       setData(cacheFieldHrm(await fieldApi.hrm(addDays(-14), addDays(45))))
@@ -88,6 +111,53 @@ export default function HrmScreen() {
   useFocusEffect(useCallback(() => { setData(readFieldHrm()); void load(false) }, [load]))
 
   async function refresh() { setRefreshing(true); await load(true); setRefreshing(false) }
+
+  function openNewRequest() {
+    const date = addDays(1)
+    const baseline: HrmRequestDraft = {
+      type: "LEAVE",
+      startDate: date,
+      endDate: date,
+      workdayId: null,
+      startTime: "09:00",
+      endTime: "18:00",
+      reason: "",
+    }
+    formBaseline.current = baseline
+    setType(baseline.type)
+    setStartDate(baseline.startDate)
+    setEndDate(baseline.endDate)
+    setWorkdayId(baseline.workdayId)
+    setStartTime(baseline.startTime)
+    setEndTime(baseline.endTime)
+    setReason(baseline.reason)
+    setWarning(null)
+    setFormOpen(true)
+  }
+
+  function discardForm(onDiscard: () => void) {
+    if (busy) return
+    if (!isFormDirty) {
+      formBaseline.current = null
+      onDiscard()
+      return
+    }
+    Alert.alert(copy.discardTitle, copy.discardBody, [
+      { text: t("cancel"), style: "cancel" },
+      { text: copy.discardConfirm, style: "destructive", onPress: () => {
+        formBaseline.current = null
+        onDiscard()
+      } },
+    ])
+  }
+
+  function closeForm() {
+    discardForm(() => setFormOpen(false))
+  }
+
+  function goBack() {
+    discardForm(() => safeFieldBack("/(app)/workday"))
+  }
 
   function selectType(next: FieldHrmRequestType) {
     setType(next)
@@ -122,6 +192,7 @@ export default function HrmScreen() {
       })
       setData(readFieldHrm())
       setFormOpen(false)
+      formBaseline.current = null
       setMode("requests")
       setReason("")
       setWarning(null)
@@ -144,11 +215,11 @@ export default function HrmScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: busy }} disabled={busy} onPress={goBack} style={[styles.back, busy && styles.disabled]}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.newRequest} accessibilityState={{ disabled: false }} onPress={() => setFormOpen(true)} style={styles.newButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.newRequest} accessibilityState={{ disabled: busy || formOpen }} disabled={busy || formOpen} onPress={openNewRequest} style={[styles.newButton, (busy || formOpen) && styles.disabled]}>
             <TabIcon name="add" color={colors.headerText} size={18} />
             <Text style={styles.newText}>{copy.newRequest}</Text>
           </Pressable>
@@ -164,7 +235,7 @@ export default function HrmScreen() {
           <View style={styles.formCard}>
             <View style={styles.formHeader}>
               <View><Text style={styles.formEyebrow}>{copy.newRequest.toUpperCase()}</Text><Text style={styles.formTitle}>{typeLabel(type, copy)}</Text></View>
-              <Pressable accessibilityRole="button" accessibilityLabel={copy.cancel} accessibilityState={{ disabled: false }} onPress={() => setFormOpen(false)} style={styles.close}>
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.cancel} accessibilityState={{ disabled: busy }} disabled={busy} onPress={closeForm} style={[styles.close, busy && styles.disabled]}>
                 <TabIcon name="close" color={colors.muted} size={21} />
               </Pressable>
             </View>
@@ -199,7 +270,7 @@ export default function HrmScreen() {
             <Text style={styles.label}>{copy.reason}</Text>
             <TextInput accessibilityLabel={copy.reason} accessibilityHint={copy.reasonPlaceholder} value={reason} onChangeText={setReason} multiline maxLength={1000} textAlignVertical="top" placeholder={copy.reasonPlaceholder} placeholderTextColor={colors.faint} style={styles.reasonInput} />
             <View style={styles.formActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel={copy.cancel} accessibilityState={{ disabled: false }} onPress={() => setFormOpen(false)} style={styles.formCancel}><Text style={styles.formCancelText}>{copy.cancel}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.cancel} accessibilityState={{ disabled: busy }} disabled={busy} onPress={closeForm} style={[styles.formCancel, busy && styles.disabled]}><Text style={styles.formCancelText}>{copy.cancel}</Text></Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={copy.submit} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void submit()} style={[styles.formSubmit, busy && styles.disabled]}>
                 {busy ? <TabIcon name="refresh" color={colors.headerText} size={17} /> : null}<Text style={styles.formSubmitText}>{copy.submit}</Text>
               </Pressable>
