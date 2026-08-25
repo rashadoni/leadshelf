@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   empty: { minHeight: 112, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 9, paddingHorizontal: 18, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },
-  stateWarning: { backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788" },
+  stateWarning: { backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder },
   stateIcon: { width: 50, height: 50, borderRadius: 17, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 12 },
   stateTitle: { color: colors.text, fontSize: 15, fontWeight: "900", textAlign: "center" },
   stateText: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 7 },

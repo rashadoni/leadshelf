@@ -32,6 +32,7 @@ export const colors = {
   dangerBorder: "#F3C8C8",
   warningBg: "#FFF5DF",
   warning: "#A56412",
+  warningBorder: "#F6D788",
   infoBg: "#EAF1FF",
   infoBorder: "#C5D7FF",
   info: "#245CC7",

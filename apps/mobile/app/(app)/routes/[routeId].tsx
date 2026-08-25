@@ -60,7 +60,7 @@ import {
 const tones: Record<RouteStatusTone, { bg: string; border: string; text: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
   planned: { bg: colors.infoBg, border: colors.infoBorder, text: colors.info },
-  inProgress: { bg: colors.warningBg, border: "#F6D788", text: colors.warning },
+  inProgress: { bg: colors.warningBg, border: colors.warningBorder, text: colors.warning },
   completed: { bg: colors.successBg, border: colors.successBorder, text: colors.successDark },
   cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
   missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed },
@@ -970,7 +970,7 @@ const styles = StyleSheet.create({
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 13 },
   readOnly: { color: colors.info, fontSize: 12, lineHeight: 18, fontWeight: "700" },
   label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 9, marginBottom: 6 },
-  input: { minHeight: 48, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: "#FAFAFB", paddingHorizontal: 12, color: colors.text, fontSize: 14 },
+  input: { minHeight: 48, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted, paddingHorizontal: 12, color: colors.text, fontSize: 14 },
   notes: { minHeight: 86, paddingTop: 12 },
   missionCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 15, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   missionCardActive: { backgroundColor: colors.successBg, borderColor: colors.successBorder },

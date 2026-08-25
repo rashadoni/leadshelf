@@ -28,7 +28,7 @@ import { IS_LEADDRIVE_FIELD, mobileVariant } from "../../../src/config/mobile-va
 const toneStyles: Record<RouteStatusTone, { bg: string; border: string; text: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
   planned: { bg: colors.infoBg, border: colors.infoBorder, text: colors.info },
-  inProgress: { bg: colors.warningBg, border: "#F6D788", text: colors.warning },
+  inProgress: { bg: colors.warningBg, border: colors.warningBorder, text: colors.warning },
   completed: { bg: colors.successBg, border: colors.successBorder, text: colors.successDark },
   cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
   missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed },

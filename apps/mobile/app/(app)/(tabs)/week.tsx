@@ -23,7 +23,7 @@ import { useResponsiveLayout } from "../../../src/layout/responsive"
 const tones: Record<RouteStatusTone, { bg: string; border: string; text: string; dot: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft, dot: colors.draft },
   planned: { bg: colors.infoBg, border: colors.infoBorder, text: colors.info, dot: colors.info },
-  inProgress: { bg: colors.warningBg, border: "#F6D788", text: colors.warning, dot: "#D97706" },
+  inProgress: { bg: colors.warningBg, border: colors.warningBorder, text: colors.warning, dot: colors.warning },
   completed: { bg: colors.successBg, border: colors.successBorder, text: colors.successDark, dot: colors.success },
   cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft, dot: colors.faint },
   missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed, dot: colors.missed },
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { color: colors.text, fontSize: 11, fontWeight: "600" },
-  offlineNotice: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788", padding: 11, flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  offlineNotice: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder, padding: 11, flexDirection: "row", justifyContent: "space-between", gap: 10 },
   offlineText: { flex: 1, color: colors.warning, fontSize: 12, fontWeight: "700" },
   retryAction: { minHeight: 44, minWidth: 44, marginVertical: -11, marginRight: -11, paddingHorizontal: 11, alignItems: "center", justifyContent: "center" },
   retry: { color: colors.primary, fontSize: 12, fontWeight: "900" },

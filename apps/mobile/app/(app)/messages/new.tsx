@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   recipientBody: { flex: 1 }, recipientName: { color: colors.text, fontSize: 13, fontWeight: "900" }, recipientNameSelected: { color: colors.headerText }, recipientRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 }, recipientRoleSelected: { color: colors.headerSubtext },
   composer: { marginHorizontal: 14, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, ...cardShadow },
   input: { minHeight: 130, color: colors.text, fontSize: 14, lineHeight: 21, padding: 2 },
-  attach: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: "#DFDDF7", borderStyle: "dashed", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  attach: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.infoBorder, borderStyle: "dashed", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   attachText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   fileCard: { minHeight: 58, borderRadius: 14, padding: 9, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 9 },
   fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, fileIconText: { color: colors.info, fontSize: 8, fontWeight: "900" }, fileBody: { flex: 1 }, fileName: { color: colors.text, fontSize: 11, fontWeight: "900" }, fileMeta: { color: colors.info, fontSize: 9, fontWeight: "700", marginTop: 3 }, remove: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
