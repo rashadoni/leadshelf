@@ -118,6 +118,22 @@ describe("field visit workspace", () => {
       completedAt: "2026-07-15T08:20:00.000Z",
     })
     expect(hasFutureVisitNextAction(future, "2026-07-15")).toBe(true)
+
+    const tenantTomorrow = addOptimisticVisitAction(workspace, {
+      actionResultId: "action-next-tenant-tomorrow",
+      visitId: "visit-1",
+      actionKey: "NEXT_ACTION",
+      status: "COMPLETED",
+      evidence: { title: "Call after midnight", dueDate: "2026-08-24T20:15:00.000Z" },
+      completedAt: "2026-08-24T18:20:00.000Z",
+    })
+    expect(hasFutureVisitNextAction(tenantTomorrow, "2026-08-24", "Asia/Baku")).toBe(true)
+    expect(visitActionDraftFromEvidence(
+      "NEXT_ACTION",
+      tenantTomorrow.visit.actionResults[0]?.evidence,
+      "2026-08-25",
+      "Asia/Baku",
+    )).toMatchObject({ nextDueDate: "2026-08-25", nextDueTime: "00:15" })
   })
 
   it("sends a waiver reason instead of ordinary completed-action evidence", () => {

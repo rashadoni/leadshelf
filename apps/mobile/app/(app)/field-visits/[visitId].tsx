@@ -61,7 +61,8 @@ import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatShortDateTime, formatTime } from "../../../src/i18n/date-format"
-import { formatRouteTime } from "../../../src/field/route-time"
+import { formatRouteTime, shiftDateKey } from "../../../src/field/route-time"
+import { tenantDateKey } from "../../../src/field/tenant-time"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import {
@@ -83,20 +84,6 @@ const RESCHEDULE_FOLLOW_UP_REQUIREMENT: FieldVisitRequirement = {
   allowWaiver: false,
 }
 
-function localDateKey(date: Date): string {
-  return String(date.getFullYear()) + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0")
-}
-
-function todayDateKey(): string {
-  return localDateKey(new Date())
-}
-
-function tomorrowDateKey(): string {
-  const date = new Date()
-  date.setDate(date.getDate() + 1)
-  return localDateKey(date)
-}
-
 function actionLabel(requirement: FieldVisitRequirement): string {
   return t(`visitAction_${requirement.actionKey}` as MessageKey)
 }
@@ -106,6 +93,9 @@ export default function FieldVisitWorkspaceScreen() {
   const { visitId } = useLocalSearchParams<{ visitId: string }>()
   const field = useField()
   const { sync } = useSync()
+  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? "UTC"
+  const tenantToday = field.week?.today ?? field.workday?.today ?? tenantDateKey(new Date(), tenantTimeZone) ?? new Date().toISOString().slice(0, 10)
+  const defaultFollowUpDate = shiftDateKey(tenantToday, 1)
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const cameraRef = useRef<CameraView | null>(null)
   const visitScroll = useRef<ScrollView | null>(null)
@@ -115,7 +105,7 @@ export default function FieldVisitWorkspaceScreen() {
   const local = localFieldVisitWorkspace(field.week, visitId, field.profile?.agent.id ?? "")
   const [workspace, setWorkspace] = useState<FieldVisitWorkspaceData | null>(cached ?? local)
   const [activeRequirement, setActiveRequirement] = useState<FieldVisitRequirement | null>(null)
-  const [actionDraft, setActionDraft] = useState<FieldVisitActionDraft>(() => emptyVisitActionDraft(tomorrowDateKey()))
+  const [actionDraft, setActionDraft] = useState<FieldVisitActionDraft>(() => emptyVisitActionDraft(defaultFollowUpDate))
   const [outcome, setOutcome] = useState<FieldVisitOutcome>("SUCCESSFUL")
   const [potential, setPotential] = useState<FieldVisitPotential>("UNKNOWN")
   const [resultNote, setResultNote] = useState("")
@@ -130,7 +120,7 @@ export default function FieldVisitWorkspaceScreen() {
     [workspace],
   )
   const hasRescheduleFollowUp = workspace
-    ? hasFutureVisitNextAction(workspace, todayDateKey())
+    ? hasFutureVisitNextAction(workspace, tenantToday, tenantTimeZone)
     : false
   const visibleRequirements = outcome === "RESCHEDULE" && !requirements.some(
     (requirement) => requirement.actionKey === "NEXT_ACTION",
@@ -161,7 +151,8 @@ export default function FieldVisitWorkspaceScreen() {
     setActionDraft(visitActionDraftFromEvidence(
       requirement.actionKey,
       existingAction?.evidence,
-      tomorrowDateKey(),
+      defaultFollowUpDate,
+      tenantTimeZone,
     ))
     setTimeout(() => {
       visitScroll.current?.scrollTo({ y: Math.max(0, editorOffset.current - 14), animated: true })
@@ -204,7 +195,8 @@ export default function FieldVisitWorkspaceScreen() {
       actionKey: activeRequirement.actionKey,
       status,
       draft: actionDraft,
-      afterDateKey: status === "COMPLETED" ? todayDateKey() : undefined,
+      afterDateKey: status === "COMPLETED" ? tenantToday : undefined,
+      timeZone: tenantTimeZone,
     })
     if (issue) {
       Alert.alert(t(
@@ -235,6 +227,7 @@ export default function FieldVisitWorkspaceScreen() {
           status,
           draft: actionDraft,
           completedAt,
+          timeZone: tenantTimeZone,
         }),
         completedAt,
       } as const
@@ -242,7 +235,7 @@ export default function FieldVisitWorkspaceScreen() {
       const optimistic = addOptimisticVisitAction(workspace, payload)
       persist(optimistic)
       setActiveRequirement(null)
-      setActionDraft(emptyVisitActionDraft(tomorrowDateKey()))
+      setActionDraft(emptyVisitActionDraft(defaultFollowUpDate))
       await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
@@ -465,7 +458,7 @@ export default function FieldVisitWorkspaceScreen() {
   }
   const visitNavigationUrls = routeNavigationUrls(visitNavigationPoint, navigationPlatform)
   const plannedVisitTime = workspace.visit.routePoint?.plannedTime
-    ? formatRouteTime(workspace.visit.routePoint.plannedTime, field.week?.timezone ?? "UTC")
+    ? formatRouteTime(workspace.visit.routePoint.plannedTime, tenantTimeZone)
     : ""
   const hasVisitContext = Boolean(visitAddress || visitPhone || plannedVisitTime || visitNavigationUrls.length)
   const completedDraftIssue = activeRequirement && activeRequirement.actionKey !== "PHOTO"
@@ -473,7 +466,8 @@ export default function FieldVisitWorkspaceScreen() {
       actionKey: activeRequirement.actionKey,
       status: "COMPLETED",
       draft: actionDraft,
-      afterDateKey: todayDateKey(),
+      afterDateKey: tenantToday,
+      timeZone: tenantTimeZone,
     })
     : null
   const waiverDraftIssue = activeRequirement?.allowWaiver
@@ -518,7 +512,7 @@ export default function FieldVisitWorkspaceScreen() {
         </View>
 
         <View style={styles.summaryCard}>
-          <View><Text style={styles.summaryLabel}>{t("checkIn")}</Text><Text style={styles.summaryValue}>{formatTime(workspace.visit.checkInAt)}</Text></View>
+          <View><Text style={styles.summaryLabel}>{t("checkIn")}</Text><Text style={styles.summaryValue}>{formatTime(workspace.visit.checkInAt, tenantTimeZone)}</Text></View>
           <View style={styles.summaryDivider} />
           <View><Text style={styles.summaryLabel}>{t("fieldVisitPolicy")}</Text><Text style={styles.summaryValue}>{requirements.length}</Text></View>
           <View style={styles.summaryDivider} />
@@ -715,7 +709,7 @@ export default function FieldVisitWorkspaceScreen() {
                     <Text style={[styles.evidenceState, needsRetake && styles.evidenceStateAttention]}>
                       {visitPhotoStateLabel(photo.status, photo.syncState)}
                     </Text>
-                    <Text style={styles.evidenceMeta}>{formatShortDateTime(photo.createdAt, locale)}</Text>
+                    <Text style={styles.evidenceMeta}>{formatShortDateTime(photo.createdAt, locale, tenantTimeZone)}</Text>
                   </View>
                   {needsRetake && !isCompleted ? (
                     <Pressable accessibilityRole="button" onPress={() => void openPhotoCamera()} style={styles.retakeButton}>
@@ -755,7 +749,7 @@ export default function FieldVisitWorkspaceScreen() {
                 <View style={styles.evidenceBody}>
                   <Text numberOfLines={1} style={styles.workTitle}>{task.title}</Text>
                   <Text numberOfLines={1} style={styles.evidenceMeta}>
-                    {agentTaskStatusLabel(task.status) + (task.dueDate ? ` · ${t("due")} ${formatShortDateTime(task.dueDate, locale)}` : "")}
+                    {agentTaskStatusLabel(task.status) + (task.dueDate ? ` · ${t("due")} ${formatShortDateTime(task.dueDate, locale, tenantTimeZone)}` : "")}
                   </Text>
                 </View>
                 <Text style={styles.workArrow}>›</Text>

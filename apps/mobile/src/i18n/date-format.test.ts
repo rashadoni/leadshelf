@@ -3,6 +3,7 @@ import {
   formatCalendarDate,
   formatCalendarDay,
   formatCalendarRange,
+  formatLongCalendarDate,
   formatShortDateTime,
   formatTime,
   isSameLocalDay,
@@ -36,5 +37,12 @@ describe("offline date formatting", () => {
     expect(formatCalendarDate("2026-08-24", "ru")).toBe("24 августа 2026")
     expect(formatCalendarRange("2026-08-24", "2026-08-31", "az")).toBe("24 avqust — 30 avqust 2026")
     expect(formatCalendarRange("2026-12-28", "2027-01-04", "ru")).toBe("28 декабря 2026 — 3 января 2027")
+    expect(formatLongCalendarDate("2026-08-24", "az")).toBe("bazar ertəsi, 24 avqust")
+  })
+
+  it("uses the tenant timezone when one is supplied", () => {
+    const instant = "2026-08-24T20:15:00.000Z"
+    expect(formatTime(instant, "Asia/Baku")).toBe("00:15")
+    expect(formatShortDateTime(instant, "ru", "Asia/Baku")).toBe("25 августа, 00:15")
   })
 })

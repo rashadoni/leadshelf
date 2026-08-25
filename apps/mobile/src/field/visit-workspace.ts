@@ -5,6 +5,7 @@ import type {
   FieldVisitWorkspaceData,
   FieldWeekData,
 } from "./contracts"
+import { tenantDateKey, tenantDateTimeParts, tenantDateTimeToIso } from "./tenant-time"
 import type { FieldVisitActionPayload } from "./execution-outbox"
 import { findFieldVisit, routePointVisitPolicy } from "./visit-cache"
 
@@ -161,6 +162,12 @@ function localDateTimeToIso(dateKey: string, time: string): string | null {
   return local.toISOString()
 }
 
+function evidenceDateTimeToIso(dateKey: string, time: string, timeZone?: string): string | null {
+  return timeZone
+    ? tenantDateTimeToIso(dateKey, time, timeZone)
+    : localDateTimeToIso(dateKey, time)
+}
+
 function normalizedTopics(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean)
 }
@@ -174,10 +181,19 @@ function localDateTimeParts(value: unknown): { date: string; time: string } | nu
   }
 }
 
+function evidenceDateTimeParts(value: unknown, timeZone?: string): { date: string; time: string } | null {
+  if (timeZone && typeof value === "string") {
+    const tenantParts = tenantDateTimeParts(value, timeZone)
+    return tenantParts ? { date: tenantParts.dateKey, time: tenantParts.time } : null
+  }
+  return localDateTimeParts(value)
+}
+
 export function visitActionDraftFromEvidence(
   actionKey: FieldVisitActionPayload["actionKey"],
   evidence: unknown,
   defaultNextDueDate = "",
+  timeZone?: string,
 ): FieldVisitActionDraft {
   const draft = emptyVisitActionDraft(defaultNextDueDate)
   const value = recordValue(evidence)
@@ -212,7 +228,7 @@ export function visitActionDraftFromEvidence(
   }
   if (actionKey === "FEEDBACK") return { ...draft, feedback: stringValue(value.feedback) }
   if (actionKey === "NEXT_ACTION") {
-    const dateTime = localDateTimeParts(value.dueDate)
+    const dateTime = evidenceDateTimeParts(value.dueDate, timeZone)
     const priority = value.priority
     return {
       ...draft,
@@ -237,6 +253,7 @@ export function visitActionDraftIssue(input: {
   status: FieldVisitActionPayload["status"]
   draft: FieldVisitActionDraft
   afterDateKey?: string
+  timeZone?: string
 }): FieldVisitActionDraftIssue | null {
   const { actionKey, status, draft } = input
   if (status === "WAIVED") return draft.waiverReason.trim().length >= 2 ? null : "REQUIRED"
@@ -255,7 +272,7 @@ export function visitActionDraftIssue(input: {
   if (actionKey === "FEEDBACK") return draft.feedback.trim() ? null : "REQUIRED"
   if (actionKey === "NEXT_ACTION") {
     if (!draft.nextActionTitle.trim()) return "REQUIRED"
-    if (!localDateTimeToIso(draft.nextDueDate, draft.nextDueTime)) return "NEXT_ACTION_DATE"
+    if (!evidenceDateTimeToIso(draft.nextDueDate, draft.nextDueTime, input.timeZone)) return "NEXT_ACTION_DATE"
     if (input.afterDateKey && draft.nextDueDate <= input.afterDateKey) return "NEXT_ACTION_DATE"
   }
   return null
@@ -266,6 +283,7 @@ export function buildVisitActionEvidence(input: {
   status: FieldVisitActionPayload["status"]
   draft: FieldVisitActionDraft
   completedAt: string
+  timeZone?: string
 }): Record<string, unknown> {
   const { actionKey, status, draft } = input
   if (status === "WAIVED") return { reason: draft.waiverReason.trim() }
@@ -297,7 +315,7 @@ export function buildVisitActionEvidence(input: {
   if (actionKey === "NEXT_ACTION") {
     return {
       title: draft.nextActionTitle.trim(),
-      dueDate: localDateTimeToIso(draft.nextDueDate, draft.nextDueTime),
+      dueDate: evidenceDateTimeToIso(draft.nextDueDate, draft.nextDueTime, input.timeZone),
       priority: draft.nextPriority,
     }
   }
@@ -401,6 +419,7 @@ export function missingRequiredVisitActions(
 export function hasFutureVisitNextAction(
   workspace: FieldVisitWorkspaceData,
   afterDateKey: string,
+  timeZone?: string,
 ): boolean {
   const after = new Date(afterDateKey + "T23:59:59.999").getTime()
   if (!Number.isFinite(after)) return false
@@ -414,6 +433,10 @@ export function hasFutureVisitNextAction(
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false
     const dueAt = (evidence as Record<string, unknown>).dueDate
     if (typeof dueAt !== "string") return false
+    if (timeZone) {
+      const dueDateKey = tenantDateKey(dueAt, timeZone)
+      return dueDateKey !== null && dueDateKey > afterDateKey
+    }
     const due = new Date(dueAt).getTime()
     return Number.isFinite(due) && due > after
   })

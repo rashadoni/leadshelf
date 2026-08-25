@@ -2,6 +2,7 @@
 // Свои словари вместо Intl: Hermes/ICU на части Android-сборок не содержит
 // az-локали, а дата должна работать полностью офлайн.
 import type { Locale } from "./index"
+import { tenantDateTimeParts } from "../field/tenant-time"
 
 const WEEKDAYS: Record<Locale, string[]> = {
   az: ["bazar", "bazar ertəsi", "çərşənbə axşamı", "çərşənbə", "cümə axşamı", "cümə", "şənbə"],
@@ -115,6 +116,12 @@ export function formatLongDate(date: Date, locale: Locale): string {
   return `${weekday}, ${date.getDate()} ${month}`
 }
 
+/** A server-provided tenant calendar key is safer than the phone clock for Today. */
+export function formatLongCalendarDate(dateKey: string, locale: Locale): string {
+  const date = calendarDateFromKey(dateKey)
+  return date ? `${WEEKDAYS[locale][date.weekdayIndex]}, ${localizedCalendarDateText(date, locale)}` : ""
+}
+
 /** Целые минуты между двумя моментами, не меньше нуля. */
 export function minutesBetween(fromIso: string, to: Date): number {
   const from = new Date(fromIso).getTime()
@@ -127,16 +134,25 @@ function pad2(value: number): string {
 }
 
 /** Локальное время без зависимости от системной ICU-локали. */
-export function formatTime(iso: string): string {
+export function formatTime(iso: string, timeZone?: string): string {
   const date = new Date(iso)
   if (!Number.isFinite(date.getTime())) return ""
+  if (timeZone) {
+    const parts = tenantDateTimeParts(date, timeZone)
+    return parts ? parts.time : iso.slice(11, 16)
+  }
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
 }
 
 /** Короткая дата и время для истории операций. */
-export function formatShortDateTime(iso: string, locale: Locale): string {
+export function formatShortDateTime(iso: string, locale: Locale, timeZone?: string): string {
   const date = new Date(iso)
   if (!Number.isFinite(date.getTime())) return ""
+  if (timeZone) {
+    const parts = tenantDateTimeParts(date, timeZone)
+    if (parts) return `${parts.day} ${MONTHS_GENITIVE[locale][parts.month - 1]}, ${parts.time}`
+    return `${iso.slice(8, 10)} ${MONTHS_GENITIVE[locale][Number(iso.slice(5, 7)) - 1] ?? ""}, ${iso.slice(11, 16)}`
+  }
   return `${date.getDate()} ${MONTHS_GENITIVE[locale][date.getMonth()]}, ${formatTime(iso)}`
 }
 

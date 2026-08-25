@@ -15,7 +15,7 @@ import { presentFieldAttendancePolicy } from "../../../src/field/attendance-poli
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import type { FieldWorkdayStatus } from "../../../src/field/contracts"
 import { resolveFieldTodayPrimaryAction } from "../../../src/field/today-primary-action"
-import { formatLongDate, formatTime } from "../../../src/i18n/date-format"
+import { formatLongCalendarDate, formatLongDate, formatTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { BrandMark } from "../../../src/components/BrandMark"
@@ -61,6 +61,7 @@ export default function TodayTab() {
     [field.week],
   )
   const summary = field.profile?.todaySummary
+  const tenantToday = today?.date ?? field.week?.today ?? field.workday?.today ?? null
   const shelfRunning = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(shelf.status.phase)
   const refreshing = field.phase === "refreshing" || shelfRunning
 
@@ -132,7 +133,7 @@ export default function TodayTab() {
           <View style={styles.heroCopy}>
             <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
             <Text style={styles.heroTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
-            <Text style={styles.heroDate}>{formatLongDate(new Date(), locale)}</Text>
+            <Text style={styles.heroDate}>{tenantToday ? formatLongCalendarDate(tenantToday, locale) : formatLongDate(new Date(), locale)}</Text>
           </View>
         </View>
 

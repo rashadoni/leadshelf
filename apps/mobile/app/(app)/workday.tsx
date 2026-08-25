@@ -139,7 +139,7 @@ function formatDistance(meters: number): string {
   return meters >= 1_000 ? `${(meters / 1_000).toFixed(1)} km` : `${Math.round(meters)} m`
 }
 
-function LocationTrail({ data }: { data: FieldLocationHistoryData }) {
+function LocationTrail({ data, timeZone }: { data: FieldLocationHistoryData; timeZone: string }) {
   const points = useMemo(() => {
     const source = data.locations.slice(-120)
     if (source.length === 0) return []
@@ -179,7 +179,7 @@ function LocationTrail({ data }: { data: FieldLocationHistoryData }) {
       </Svg>
       <View style={styles.trailLegend}>
         <Text style={styles.trailLegendText}>{t("workdayGpsPoints", { count: data.locations.length })}</Text>
-        <Text style={styles.trailLegendText}>{t("workdayLastPoint")}: {formatTime(last.recordedAt)}</Text>
+        <Text style={styles.trailLegendText}>{t("workdayLastPoint")}: {formatTime(last.recordedAt, timeZone)}</Text>
       </View>
     </View>
   )
@@ -584,7 +584,7 @@ export default function WorkdayScreen() {
               <Text style={styles.cardEyebrow}>{t("workdayTracking")}</Text>
               <Text style={styles.cardTitle}>{t(trackingKeys[tracking.mode])}</Text>
               <Text style={styles.cardHint}>{trackingHint}</Text>
-              <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt) })}</Text>
+              <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt, timezone) })}</Text>
               {trackingRecoveryKey && workday?.status === "STARTED" ? (
                 <Pressable
                   accessibilityRole="button"
@@ -619,7 +619,7 @@ export default function WorkdayScreen() {
                   : t("workdayGpsPoints", { count: locationData.locations.length })}
               </Text>
             </View>
-            <View style={styles.card}><LocationTrail data={locationData} /></View>
+            <View style={styles.card}><LocationTrail data={locationData} timeZone={timezone} /></View>
           </>
         ) : null}
 
@@ -638,7 +638,7 @@ export default function WorkdayScreen() {
               <View style={styles.eventBody}>
                 <Text style={styles.eventTitle}>{t(eventKeys[event.type])}</Text>
                 <Text style={styles.eventMeta}>
-                  {formatTime(event.occurredAt)} · {event.latitude == null ? t("workdayWithoutGps") : t("workdayWithGps")}
+                  {formatTime(event.occurredAt, timezone)} · {event.latitude == null ? t("workdayWithoutGps") : t("workdayWithGps")}
                 </Text>
               </View>
               {event.syncState === "PENDING" ? <Text style={styles.eventPending}>{t("queued")}</Text> : null}
