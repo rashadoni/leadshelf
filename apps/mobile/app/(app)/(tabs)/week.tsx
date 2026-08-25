@@ -1,12 +1,16 @@
+import { useEffect, useMemo, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useField } from "../../../src/field/field-context"
 import {
   routeStatusMeta,
+  FIELD_WEEK_VIEW_RANGES,
   shiftDateKey,
   startOfIsoWeek,
+  type FieldWeekViewRange,
   type RouteStatusTone,
+  visibleFieldWeekDays,
 } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-format"
@@ -30,11 +34,50 @@ export default function WeekTab() {
   const busy = field.phase === "loading" || field.phase === "refreshing"
   const layout = useResponsiveLayout()
   const isCurrentWeek = Boolean(week && week.weekStart === startOfIsoWeek(week.today))
+  const [viewRange, setViewRange] = useState<FieldWeekViewRange>(7)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const activeDate = selectedDate ?? week?.days.find((day) => day.isToday)?.date ?? week?.today ?? null
+  const visibleDays = useMemo(
+    () => visibleFieldWeekDays(week?.days ?? [], activeDate, viewRange),
+    [activeDate, viewRange, week?.days],
+  )
 
-  const move = (days: number) => {
+  useEffect(() => {
     if (!week) return
-    void field.loadWeek(shiftDateKey(week.weekStart, days))
+    setSelectedDate((current) => (
+      current && week.days.some((day) => day.date === current)
+        ? current
+        : week.days.find((day) => day.isToday)?.date ?? week.today
+    ))
+  }, [week?.weekStart])
+
+  const move = (days: -1 | 1) => {
+    if (!week) return
+    if (viewRange === 1) {
+      const nextDate = shiftDateKey(activeDate ?? week.today, days)
+      setSelectedDate(nextDate)
+      if (startOfIsoWeek(nextDate) !== week.weekStart) void field.loadWeek(startOfIsoWeek(nextDate))
+      return
+    }
+    void field.loadWeek(shiftDateKey(week.weekStart, days * 7))
   }
+
+  const previousTarget = week
+    ? shiftDateKey(viewRange === 1 ? activeDate ?? week.today : week.weekStart, viewRange === 1 ? -1 : -7)
+    : null
+  const nextTarget = week
+    ? shiftDateKey(viewRange === 1 ? activeDate ?? week.today : week.weekStart, viewRange === 1 ? 1 : 7)
+    : null
+  const navigationLabel = viewRange === 1 ? t("weekPreviousDay") : t("previousWeek")
+  const nextNavigationLabel = viewRange === 1 ? t("weekNextDay") : t("nextWeek")
+  const currentNavigationLabel = viewRange === 1 ? t("tabToday") : t("currentWeek")
+  const isCurrentContext = viewRange === 1 ? activeDate === week?.today : isCurrentWeek
+  const headerRange = viewRange === 1 && activeDate
+    ? (() => {
+        const day = formatCalendarDay(activeDate, locale)
+        return `${day.weekday}, ${day.date}`
+      })()
+    : week ? formatCalendarRange(week.weekStart, week.weekEndExclusive, locale) : null
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -45,17 +88,17 @@ export default function WeekTab() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>{t("tabWeek").toUpperCase()}</Text>
           <Text accessibilityRole="header" style={styles.title}>{t("weekSchedule")}</Text>
-          {week ? <Text style={styles.range}>{formatCalendarRange(week.weekStart, week.weekEndExclusive, locale)}</Text> : null}
+          {headerRange ? <Text style={styles.range}>{headerRange}</Text> : null}
         </View>
 
         <View style={styles.navigator}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t("previousWeek")}
+            accessibilityLabel={previousTarget ? `${navigationLabel}: ${formatCalendarDay(previousTarget, locale).date}` : navigationLabel}
             accessibilityHint={t("weekSchedule")}
             accessibilityState={{ disabled: !week, busy }}
             disabled={!week}
-            onPress={() => move(-7)}
+            onPress={() => move(-1)}
             style={({ pressed }) => [styles.navButton, !week && styles.disabled, pressed && week && styles.pressed]}
           >
             <TabIcon name="chevronLeft" color={colors.primary} size={23} />
@@ -63,25 +106,45 @@ export default function WeekTab() {
           <Pressable
             disabled={!week}
             accessibilityRole="button"
-            accessibilityLabel={t("currentWeek")}
+            accessibilityLabel={currentNavigationLabel}
             accessibilityHint={t("weekSchedule")}
-            accessibilityState={{ disabled: !week, busy, selected: isCurrentWeek }}
-            onPress={() => week && void field.loadWeek(startOfIsoWeek(week.today))}
+            accessibilityState={{ disabled: !week, busy, selected: isCurrentContext }}
+            onPress={() => {
+              if (!week) return
+              setSelectedDate(week.today)
+              void field.loadWeek(startOfIsoWeek(week.today))
+            }}
             style={({ pressed }) => [styles.currentButton, !week && styles.disabled, pressed && week && styles.pressed]}
           >
-            <Text style={styles.currentText}>{t("currentWeek")}</Text>
+            <Text style={styles.currentText}>{currentNavigationLabel}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t("nextWeek")}
+            accessibilityLabel={nextTarget ? `${nextNavigationLabel}: ${formatCalendarDay(nextTarget, locale).date}` : nextNavigationLabel}
             accessibilityHint={t("weekSchedule")}
             accessibilityState={{ disabled: !week, busy }}
             disabled={!week}
-            onPress={() => move(7)}
+            onPress={() => move(1)}
             style={({ pressed }) => [styles.navButton, !week && styles.disabled, pressed && week && styles.pressed]}
           >
             <TabIcon name="chevronRight" color={colors.primary} size={23} />
           </Pressable>
+        </View>
+
+        <View style={styles.rangePicker}>
+          {FIELD_WEEK_VIEW_RANGES.map((days) => (
+            <Pressable
+              key={days}
+              accessibilityRole="button"
+              accessibilityLabel={t("weekRange", { count: days })}
+              accessibilityState={{ selected: viewRange === days, busy }}
+              onPress={() => setViewRange(days)}
+              style={({ pressed }) => [styles.rangeChoice, viewRange === days && styles.rangeChoiceSelected, pressed && styles.pressed]}
+            >
+              <Text style={[styles.rangeChoiceText, viewRange === days && styles.rangeChoiceTextSelected]}>{t("weekRange", { count: days })}</Text>
+              {viewRange === days ? <TabIcon name="check" color={colors.headerText} size={14} /> : null}
+            </Pressable>
+          ))}
         </View>
 
         <View style={styles.legendCard}>
@@ -132,7 +195,7 @@ export default function WeekTab() {
         ) : null}
 
         <View style={[styles.dayGrid, layout.isTablet && styles.dayGridTablet]}>
-        {week?.days.map((day) => {
+        {visibleDays.map((day) => {
           const formatted = formatCalendarDay(day.date, locale)
           const isDayOff = !day.isWorkingDay
           const dayLabel = [formatted.weekday, formatted.date, day.isToday ? t("tabToday") : null, isDayOff ? day.nonWorkingReason ?? t("dayOff") : null].filter(Boolean).join(", ")
@@ -265,6 +328,23 @@ export default function WeekTab() {
           )
         })}
         </View>
+
+        {week && visibleDays.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text accessibilityLiveRegion="polite" style={styles.emptyTitle}>{busy ? t("weekLoadingDay") : t("fieldDataError")}</Text>
+            {!busy ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("refresh")}
+                accessibilityHint={t("weekSchedule")}
+                onPress={() => void field.refresh()}
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryText}>{t("refresh")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   )
@@ -281,6 +361,11 @@ const styles = StyleSheet.create({
   navButton: { width: 48, height: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   currentButton: { minHeight: 44, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   currentText: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  rangePicker: { marginHorizontal: 14, marginTop: 10, padding: 4, borderRadius: radii.card, flexDirection: "row", gap: 4, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, alignItems: "center", justifyContent: "center" },
+  rangeChoiceSelected: { backgroundColor: colors.primary },
+  rangeChoiceText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
+  rangeChoiceTextSelected: { color: colors.headerText },
   legendCard: { marginHorizontal: 14, marginTop: 12, backgroundColor: colors.card, borderRadius: radii.card, padding: 13, borderWidth: 1, borderColor: colors.border },
   legendTitle: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
   legendRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 9 },
