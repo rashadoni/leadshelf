@@ -13,7 +13,7 @@ import {
   visibleFieldWeekDays,
 } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
-import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-format"
+import { formatCalendarDay, formatCalendarRange, formatCalendarWeekdayShort } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
@@ -41,6 +41,10 @@ export default function WeekTab() {
   const visibleDays = useMemo(
     () => visibleFieldWeekDays(week?.days ?? [], activeDate, viewRange),
     [activeDate, viewRange, week?.days],
+  )
+  const selectedDay = useMemo(
+    () => week?.days.find((day) => day.date === activeDate) ?? null,
+    [activeDate, week?.days],
   )
 
   useEffect(() => {
@@ -145,25 +149,52 @@ export default function WeekTab() {
               style={({ pressed }) => [styles.rangeChoice, viewRange === days && styles.rangeChoiceSelected, pressed && styles.pressed]}
             >
               <Text style={[styles.rangeChoiceText, viewRange === days && styles.rangeChoiceTextSelected]}>{t("weekRange", { count: days })}</Text>
-              {viewRange === days ? <TabIcon name="check" color={colors.headerText} size={14} /> : null}
             </Pressable>
           ))}
         </View>
 
-        <View style={styles.legendCard}>
-          <Text style={styles.legendTitle}>{t("statusLegend")}</Text>
-          <View style={styles.legendRow}>
-            {(["PLANNED", "IN_PROGRESS", "COMPLETED", "MISSED"] as const).map((status) => {
-              const meta = routeStatusMeta(status)
-              return (
-                <View key={status} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: tones[meta.tone].dot }]} />
-                  <Text style={styles.legendText}>{t(meta.labelKey)}</Text>
-                </View>
-              )
-            })}
+        {week ? (
+          <View style={[styles.calendarPanel, layout.isTablet && styles.calendarPanelTablet]}>
+            <View style={styles.calendarStrip}>
+              {visibleDays.map((day) => {
+                const formatted = formatCalendarDay(day.date, locale)
+                const isSelected = day.date === activeDate
+                const route = day.routes[0]
+                const routeDot = route ? tones[routeStatusMeta(route.effectiveStatus).tone].dot : null
+                const dayLabel = [
+                  formatted.weekday,
+                  formatted.date,
+                  day.isToday ? t("tabToday") : null,
+                  day.routes.length > 0 ? `${day.routes.length} ${t("tabRoute")}` : null,
+                  day.tasks.total > 0 ? `${day.tasks.completed}/${day.tasks.total} ${t("dayTasks")}` : null,
+                  !day.isWorkingDay ? day.nonWorkingReason ?? t("dayOff") : null,
+                ].filter(Boolean).join(", ")
+                return (
+                  <Pressable
+                    key={day.date}
+                    accessibilityRole="button"
+                    accessibilityLabel={dayLabel}
+                    accessibilityHint={t("dailyMission")}
+                    accessibilityState={{ selected: isSelected, disabled: false, busy }}
+                    onPress={() => setSelectedDate(day.date)}
+                    style={({ pressed }) => [
+                      styles.calendarDay,
+                      isSelected && styles.calendarDaySelected,
+                      !day.isWorkingDay && styles.calendarDayOff,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.calendarWeekday, isSelected && styles.calendarWeekdaySelected]}>{formatCalendarWeekdayShort(day.date, locale)}</Text>
+                    <Text style={[styles.calendarDate, isSelected && styles.calendarDateSelected]}>{formatted.day}</Text>
+                    <View style={styles.calendarDayStatus}>
+                      <View style={[styles.calendarDayDot, { backgroundColor: routeDot ?? (day.isWorkingDay ? colors.borderStrong : colors.holiday) }]} />
+                    </View>
+                  </Pressable>
+                )
+              })}
+            </View>
           </View>
-        </View>
+        ) : null}
 
         {field.phase === "stale" || field.phase === "error" ? (
           <View style={styles.offlineNotice}>
@@ -197,66 +228,59 @@ export default function WeekTab() {
           </View>
         ) : null}
 
-        <View style={[styles.dayGrid, layout.isTablet && styles.dayGridTablet]}>
-        {visibleDays.map((day) => {
-          const formatted = formatCalendarDay(day.date, locale)
-          const isDayOff = !day.isWorkingDay
-          const dayLabel = [formatted.weekday, formatted.date, day.isToday ? t("tabToday") : null, isDayOff ? day.nonWorkingReason ?? t("dayOff") : null].filter(Boolean).join(", ")
+        {selectedDay ? (() => {
+          const formatted = formatCalendarDay(selectedDay.date, locale)
+          const isDayOff = !selectedDay.isWorkingDay
+          const dayLabel = [formatted.weekday, formatted.date, selectedDay.isToday ? t("tabToday") : null, isDayOff ? selectedDay.nonWorkingReason ?? t("dayOff") : null].filter(Boolean).join(", ")
           const missionLabel = [
             t("dailyMission"),
-            day.tasks.total > 0 ? `${day.tasks.completed}/${day.tasks.total} ${t("dayTasks")}` : null,
-            day.visits.total > 0 ? `${day.visits.completed}/${day.visits.total} ${t("dayVisits")}` : null,
+            selectedDay.tasks.total > 0 ? `${selectedDay.tasks.completed}/${selectedDay.tasks.total} ${t("dayTasks")}` : null,
+            selectedDay.visits.total > 0 ? `${selectedDay.visits.completed}/${selectedDay.visits.total} ${t("dayVisits")}` : null,
           ].filter(Boolean).join(", ")
           return (
-            <View key={day.date} style={[styles.dayCard, layout.isTablet && styles.dayCardTablet, day.isToday && styles.todayCard, isDayOff && styles.dayOffCard]}>
-              <View accessible accessibilityRole="header" accessibilityLabel={dayLabel} style={styles.dayHeader}>
-                <View style={[styles.dateBadge, day.isToday && styles.todayBadge, isDayOff && styles.dayOffBadge]}>
-                  <Text style={[styles.dateBadgeText, day.isToday && styles.todayBadgeText, isDayOff && styles.dayOffBadgeText]}>{formatted.day}</Text>
+            <View style={[styles.missionSurface, layout.isTablet && styles.missionSurfaceTablet, isDayOff && styles.missionSurfaceDayOff]}>
+              <View accessible accessibilityRole="header" accessibilityLabel={dayLabel} style={styles.missionHeader}>
+                <View style={styles.missionHeading}>
+                  <Text style={styles.missionEyebrow}>{t("dailyMission")}</Text>
+                  <Text style={styles.missionDate}>{formatted.weekday}, {formatted.date}</Text>
                 </View>
-                <View style={styles.dayHeaderBody}>
-                  <Text style={styles.weekday}>{formatted.weekday}</Text>
-                  <Text style={styles.dayDate}>{formatted.date}</Text>
-                </View>
-                {day.isToday ? <View style={styles.todayPill}><Text style={styles.todayPillText}>{t("tabToday")}</Text></View> : null}
+                {selectedDay.isToday ? <View style={styles.todayPill}><Text style={styles.todayPillText}>{t("tabToday")}</Text></View> : null}
               </View>
 
               {isDayOff ? (
                 <View accessible accessibilityRole="summary" accessibilityLabel={dayLabel} style={styles.dayOffLine}>
                   <View style={styles.holidayDot} />
-                  <Text style={styles.dayOffText}>{day.nonWorkingReason ?? t("dayOff")}</Text>
+                  <Text style={styles.dayOffText}>{selectedDay.nonWorkingReason ?? t("dayOff")}</Text>
                 </View>
               ) : null}
 
-              {day.tasks.total > 0 || day.visits.total > 0 ? (
-                <View accessible accessibilityRole="summary" accessibilityLabel={missionLabel} style={styles.dayMission}>
-                  <Text style={styles.dayMissionTitle}>{t("dailyMission")}</Text>
-                  <View style={styles.dayMissionStats}>
-                    {day.tasks.total > 0 ? (
-                      <View style={styles.dayMissionStat}>
-                        <TabIcon name="tasks" color={colors.primary} size={15} />
-                        <Text style={styles.dayMissionText}>{day.tasks.completed}/{day.tasks.total} {t("dayTasks")}</Text>
-                      </View>
-                    ) : null}
-                    {day.visits.total > 0 ? (
-                      <View style={styles.dayMissionStat}>
-                        <TabIcon name="visit" color={colors.successDark} size={15} />
-                        <Text style={styles.dayMissionText}>{day.visits.completed}/{day.visits.total} {t("dayVisits")}</Text>
-                      </View>
-                    ) : null}
-                  </View>
+              {selectedDay.tasks.total > 0 || selectedDay.visits.total > 0 ? (
+                <View accessible accessibilityRole="summary" accessibilityLabel={missionLabel} style={styles.missionMetrics}>
+                  {selectedDay.tasks.total > 0 ? (
+                    <View style={styles.missionMetric}>
+                      <TabIcon name="tasks" color={colors.primary} size={17} />
+                      <Text style={styles.missionMetricText}>{selectedDay.tasks.completed}/{selectedDay.tasks.total} {t("dayTasks")}</Text>
+                    </View>
+                  ) : null}
+                  {selectedDay.visits.total > 0 ? (
+                    <View style={styles.missionMetric}>
+                      <TabIcon name="visit" color={colors.successDark} size={17} />
+                      <Text style={styles.missionMetricText}>{selectedDay.visits.completed}/{selectedDay.visits.total} {t("dayVisits")}</Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 
-              {day.routes.length === 0 ? (
+              {selectedDay.routes.length === 0 ? (
                 <View style={styles.emptyDay}>
-                  <Text accessibilityLabel={`${dayLabel}. ${t("noPlansForDay")}`} style={styles.noPlans}>{t("noPlansForDay")}</Text>
-                  {day.routePlanningAllowed ? (
+                  <Text accessibilityLabel={`${dayLabel}. ${t("noPlansForSelectedDay")}`} style={styles.noPlans}>{t("noPlansForSelectedDay")}</Text>
+                  {selectedDay.routePlanningAllowed ? (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={t("createRoute")}
                       accessibilityHint={dayLabel}
                       accessibilityState={{ disabled: false, busy: false }}
-                      onPress={() => router.push(("/(app)/routes/new?date=" + encodeURIComponent(day.date)) as never)}
+                      onPress={() => router.push(("/(app)/routes/new?date=" + encodeURIComponent(selectedDay.date)) as never)}
                       style={({ pressed }) => [styles.createRouteAction, pressed && styles.pressed]}
                     >
                       <Text style={styles.createRouteActionText}>{t("createRoute")}</Text>
@@ -271,7 +295,7 @@ export default function WeekTab() {
                 </View>
               ) : (
                 <View style={styles.routeList}>
-                  {day.routes.map((route) => {
+                  {selectedDay.routes.map((route) => {
                     const meta = routeStatusMeta(route.effectiveStatus)
                     const tone = tones[meta.tone]
                     const percent = route.totalPoints ? Math.round((route.visitedPoints / route.totalPoints) * 100) : 0
@@ -299,18 +323,25 @@ export default function WeekTab() {
                         >
                           <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: tone.dot }]} />
                         </View>
-                        {route.points.slice(0, 3).map((point, pointIndex) => (
-                          <View key={point.id} style={styles.pointRow}>
-                            <View style={[styles.pointIndex, point.effectiveStatus === "VISITED" && styles.pointVisited, point.effectiveStatus === "MISSED" && styles.pointMissed]}>
-                              <Text style={styles.pointIndexText}>{pointIndex + 1}</Text>
-                            </View>
-                            <View style={styles.pointBody}>
-                              <Text style={styles.pointName} numberOfLines={1}>{point.customer.name}</Text>
-                              <Text style={styles.pointMeta} numberOfLines={1}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
-                            </View>
+                        {route.points.length > 0 ? (
+                          <View style={styles.routeRoadmap}>
+                            {route.points.slice(0, 4).map((point, pointIndex) => (
+                              <View key={point.id} style={styles.roadmapRow}>
+                                <View style={styles.roadmapMarkerColumn}>
+                                  <View style={[styles.pointIndex, point.effectiveStatus === "VISITED" && styles.pointVisited, point.effectiveStatus === "MISSED" && styles.pointMissed]}>
+                                    <Text style={styles.pointIndexText}>{pointIndex + 1}</Text>
+                                  </View>
+                                  {pointIndex < Math.min(route.points.length, 4) - 1 ? <View style={styles.roadmapLine} /> : null}
+                                </View>
+                                <View style={styles.pointBody}>
+                                  <Text style={styles.pointName} numberOfLines={1}>{point.customer.name}</Text>
+                                  <Text style={styles.pointMeta} numberOfLines={1}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
+                                </View>
+                              </View>
+                            ))}
                           </View>
-                        ))}
-                        {route.points.length > 3 ? <Text style={styles.morePoints}>+{route.points.length - 3} {t("routePointsLabel")}</Text> : null}
+                        ) : null}
+                        {route.points.length > 4 ? <Text style={styles.morePoints}>+{route.points.length - 4} {t("routePointsLabel")}</Text> : null}
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`${route.canEdit ? t("editRoute") : t("openRoute")}: ${routeLabel}`}
@@ -329,8 +360,7 @@ export default function WeekTab() {
               )}
             </View>
           )
-        })}
-        </View>
+        })() : null}
 
         {week && visibleDays.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -369,6 +399,18 @@ const styles = StyleSheet.create({
   rangeChoiceSelected: { backgroundColor: colors.primary },
   rangeChoiceText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
   rangeChoiceTextSelected: { color: colors.headerText },
+  calendarPanel: { marginHorizontal: 14, marginTop: 10, padding: 8, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  calendarPanelTablet: { alignSelf: "center", width: "94%", maxWidth: 780, marginHorizontal: 0 },
+  calendarStrip: { flexDirection: "row", gap: 4 },
+  calendarDay: { flex: 1, minWidth: 44, minHeight: 72, borderRadius: radii.inner, alignItems: "center", justifyContent: "center", gap: 2 },
+  calendarDaySelected: { backgroundColor: colors.primary },
+  calendarDayOff: { opacity: 0.66 },
+  calendarWeekday: { color: colors.muted, fontSize: 10, fontWeight: "900" },
+  calendarWeekdaySelected: { color: colors.headerText },
+  calendarDate: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  calendarDateSelected: { color: colors.headerText },
+  calendarDayStatus: { height: 8, alignItems: "center", justifyContent: "center" },
+  calendarDayDot: { width: 6, height: 6, borderRadius: radii.pill },
   legendCard: { marginHorizontal: 14, marginTop: 12, backgroundColor: colors.card, borderRadius: radii.card, padding: 13, borderWidth: 1, borderColor: colors.border },
   legendTitle: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
   legendRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 9 },
@@ -383,6 +425,16 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "800", textAlign: "center" },
   primaryButton: { minHeight: 44, marginTop: 14, backgroundColor: colors.primary, borderRadius: radii.pill, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
+  missionSurface: { marginHorizontal: 14, marginTop: 14, padding: 16, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border },
+  missionSurfaceTablet: { alignSelf: "center", width: "94%", maxWidth: 780, marginHorizontal: 0 },
+  missionSurfaceDayOff: { backgroundColor: colors.holidayBg, borderColor: colors.holidayBorder },
+  missionHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  missionHeading: { flex: 1, minWidth: 0 },
+  missionEyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
+  missionDate: { color: colors.text, fontSize: 18, lineHeight: 24, fontWeight: "900", marginTop: 3, textTransform: "capitalize" },
+  missionMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  missionMetric: { flexDirection: "row", alignItems: "center", gap: 6 },
+  missionMetricText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   dayCard: { marginHorizontal: 14, marginTop: 13, backgroundColor: colors.card, borderRadius: radii.card, padding: 14, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   todayCard: { borderColor: colors.primary, borderWidth: 1.5 },
   dayOffCard: { backgroundColor: colors.holidayBg, borderColor: colors.holidayBorder },
@@ -412,8 +464,8 @@ const styles = StyleSheet.create({
   createRouteActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   routeUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 2, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   routeUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
-  routeList: { marginTop: 12, gap: 11 },
-  routeCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radii.inner, padding: 12 },
+  routeList: { marginTop: 18, gap: 18 },
+  routeCard: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14 },
   routeTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   routeBody: { flex: 1 },
   routeName: { color: colors.text, fontSize: 14, fontWeight: "900" },
@@ -423,6 +475,10 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 9, fontWeight: "900" },
   progressTrack: { height: 5, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 10, marginBottom: 7 },
   progressFill: { height: "100%", borderRadius: radii.pill },
+  routeRoadmap: { marginTop: 12, gap: 2 },
+  roadmapRow: { flexDirection: "row", gap: 10, minHeight: 44 },
+  roadmapMarkerColumn: { width: 26, alignItems: "center" },
+  roadmapLine: { width: 1, flex: 1, minHeight: 8, marginVertical: 4, backgroundColor: colors.borderStrong },
   pointRow: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 7, borderTopWidth: 1, borderTopColor: colors.border },
   pointIndex: { width: 25, height: 25, borderRadius: 9, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   pointVisited: { backgroundColor: colors.successBg },
