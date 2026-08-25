@@ -6,6 +6,7 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import type {
   FieldManagerApprovalsData,
+  FieldManagerAttendanceData,
   FieldManagerLocationsData,
   FieldManagerPlanningData,
   FieldManagerTeamData,
@@ -34,6 +35,12 @@ function isForbidden(reason: unknown): boolean {
   return reason instanceof HttpError && reason.status === 403
 }
 
+function compactWorkedTime(totalSeconds: number): string {
+  const minutes = Math.max(0, Math.floor(totalSeconds / 60))
+  const hours = Math.floor(minutes / 60)
+  return String(hours).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0")
+}
+
 function ManagerCard({
   title,
   hint,
@@ -44,6 +51,7 @@ function ManagerCard({
   error,
   loading,
   href,
+  wide = false,
 }: {
   title: string
   hint: string
@@ -54,6 +62,7 @@ function ManagerCard({
   error: unknown | null
   loading: boolean
   href: string
+  wide?: boolean
 }) {
   const iconColor = tone === "warning" ? colors.warning : tone === "success" ? colors.successDark : tone === "info" ? colors.info : colors.primary
   return (
@@ -61,7 +70,7 @@ function ManagerCard({
       accessibilityRole="button"
       accessibilityLabel={title}
       onPress={() => router.push(href as never)}
-      style={({ pressed }) => [styles.actionCard, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.actionCard, wide && styles.actionCardWide, pressed && styles.pressed]}
     >
       <View style={[styles.cardIcon, tone === "warning" ? styles.cardIconWarning : tone === "success" ? styles.cardIconSuccess : tone === "info" ? styles.cardIconInfo : styles.cardIconPrimary]}>
         <TabIcon name={icon} color={iconColor} size={23} />
@@ -91,6 +100,7 @@ export default function ManagerHomeScreen() {
   const [locations, setLocations] = useState<SectionState<FieldManagerLocationsData>>({ data: null, error: null })
   const [planning, setPlanning] = useState<SectionState<FieldManagerPlanningData>>({ data: null, error: null })
   const [approvals, setApprovals] = useState<SectionState<FieldManagerApprovalsData>>({ data: null, error: null })
+  const [attendance, setAttendance] = useState<SectionState<FieldManagerAttendanceData>>({ data: null, error: null })
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -100,8 +110,9 @@ export default function ManagerHomeScreen() {
       fieldApi.managerLocations({ page: 1, limit: 25 }),
       fieldApi.managerPlanning(selectedDate, undefined, { page: 1, limit: 25 }),
       fieldApi.managerApprovals(),
+      fieldApi.managerAttendance(selectedDate, selectedDate, { page: 1, limit: 25 }),
     ])
-    const [teamResult, locationsResult, planningResult, approvalsResult] = results
+    const [teamResult, locationsResult, planningResult, approvalsResult, attendanceResult] = results
     if (teamResult.status === "fulfilled") setTeam(ready(teamResult.value))
     else setTeam(failed(teamResult.reason))
     if (locationsResult.status === "fulfilled") setLocations(ready(locationsResult.value))
@@ -110,6 +121,8 @@ export default function ManagerHomeScreen() {
     else setPlanning(failed(planningResult.reason))
     if (approvalsResult.status === "fulfilled") setApprovals(ready(approvalsResult.value))
     else setApprovals(failed(approvalsResult.reason))
+    if (attendanceResult.status === "fulfilled") setAttendance(ready(attendanceResult.value))
+    else setAttendance(failed(attendanceResult.reason))
     setLoading(false)
   }, [selectedDate])
 
@@ -117,7 +130,7 @@ export default function ManagerHomeScreen() {
     void load()
   }, [load])
 
-  const deniedEverywhere = [team.error, locations.error, planning.error, approvals.error]
+  const deniedEverywhere = [team.error, locations.error, planning.error, approvals.error, attendance.error]
     .every((reason) => reason != null && isForbidden(reason))
   const teamAgents = team.data?.agents ?? []
   const teamTotal = team.data?.page.total ?? teamAgents.length
@@ -148,8 +161,9 @@ export default function ManagerHomeScreen() {
   const loadedApprovals = approvals.data
     ? approvals.data.counts.hrm + approvals.data.counts.routeChanges + approvals.data.counts.customers + approvals.data.counts.contactChanges
     : 0
+  const attendanceSummary = attendance.data?.pageSummary
   const calendar = formatCalendarDay(selectedDate, locale)
-  const scope = team.data?.scope ?? locations.data?.scope ?? planning.data?.scope ?? approvals.data?.scope ?? null
+  const scope = team.data?.scope ?? locations.data?.scope ?? planning.data?.scope ?? approvals.data?.scope ?? attendance.data?.scope ?? null
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -248,6 +262,24 @@ export default function ManagerHomeScreen() {
                 error={approvals.error}
                 href="/(app)/manager/approvals"
               />
+              <ManagerCard
+                wide
+                title={t("managerAttendanceCardTitle")}
+                hint={t("managerAttendanceCardHint")}
+                icon="today"
+                value={String(attendanceSummary?.recordedDays ?? 0)}
+                detail={attendanceSummary
+                  ? t("managerAttendancePageSummary", {
+                    agents: attendanceSummary.agentsLoaded,
+                    days: attendanceSummary.recordedDays,
+                    time: compactWorkedTime(attendanceSummary.workedSeconds),
+                  })
+                  : t("managerAttendanceCardHint")}
+                tone="info"
+                loading={loading}
+                error={attendance.error}
+                href="/(app)/manager/attendance"
+              />
             </View>
 
             <View style={styles.noteCard}>
@@ -291,6 +323,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 14, marginTop: 14 },
   gridTablet: { gap: 14 },
   actionCard: { flexBasis: "48%", flexGrow: 1, minHeight: 184, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  actionCardWide: { flexBasis: "100%", minHeight: 146 },
   cardIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   cardIconPrimary: { backgroundColor: colors.primarySoft },
   cardIconSuccess: { backgroundColor: colors.successBg },

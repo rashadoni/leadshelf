@@ -73,6 +73,7 @@ import {
   parseFieldOrganizations,
   parseFieldRouteTargets,
   parseFieldManagerApprovals,
+  parseFieldManagerAttendance,
   parseFieldManagerLocations,
   parseFieldManagerPlanning,
   parseFieldManagerRouteDetail,
@@ -100,6 +101,7 @@ import {
   type FieldLocationHistoryData,
   type FieldManagerApprovalsData,
   type FieldManagerApprovalDecisionInput,
+  type FieldManagerAttendanceData,
   type FieldManagerLocationsData,
   type FieldManagerPlanningData,
   type FieldManagerRouteDetailData,
@@ -411,6 +413,16 @@ export const fieldApi = {
     request<unknown>(managerListPath("/api/v1/mtm/mobile/manager/team", options)).then(parseFieldManagerTeam),
   managerLocations: (options?: FieldManagerListOptions) =>
     request<unknown>(managerListPath("/api/v1/mtm/mobile/manager/locations", options)).then(parseFieldManagerLocations),
+  managerAttendance: (from: string, to?: string, options?: FieldManagerListOptions) => {
+    const query = new URLSearchParams({ from })
+    if (to) query.set("to", to)
+    if (options?.page != null) query.set("page", String(options.page))
+    if (options?.limit != null) query.set("limit", String(options.limit))
+    const search = options?.search?.trim()
+    if (search) query.set("search", search)
+    return request<unknown>(`/api/v1/mtm/mobile/manager/attendance?${query.toString()}`)
+      .then(parseFieldManagerAttendance)
+  },
   managerPlanning: (from: string, to?: string, options?: FieldManagerListOptions) => {
     const query = new URLSearchParams()
     if (to) {
@@ -655,6 +667,7 @@ export const fieldApi = {
   locations(date?: string): Promise<FieldLocationHistoryData>
   managerTeam(options?: FieldManagerListOptions): Promise<FieldManagerTeamData>
   managerLocations(options?: FieldManagerListOptions): Promise<FieldManagerLocationsData>
+  managerAttendance(from: string, to?: string, options?: FieldManagerListOptions): Promise<FieldManagerAttendanceData>
   managerPlanning(from: string, to?: string, options?: FieldManagerListOptions): Promise<FieldManagerPlanningData>
   managerRouteDetail(routeId: string): Promise<FieldManagerRouteDetailData>
   managerApprovals(): Promise<FieldManagerApprovalsData>

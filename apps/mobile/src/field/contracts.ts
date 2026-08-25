@@ -753,6 +753,56 @@ export interface FieldManagerPlanningData {
   page: FieldManagerListPage
 }
 
+/**
+ * Read-only attendance evidence for a manager. A missing date is deliberately
+ * not represented here: the API reports only workdays that were recorded.
+ */
+export interface FieldManagerAttendanceDay {
+  id: string
+  date: string
+  status: FieldWorkdayStatus
+  startedAt: string
+  pausedAt: string | null
+  completedAt: string | null
+  totalPausedSeconds: number
+  workedSeconds: number
+}
+
+export interface FieldManagerAttendanceAgent {
+  id: string
+  name: string
+  role: string
+  teamId: string | null
+  attendance: {
+    recordedDays: number
+    activeDays: number
+    completedDays: number
+    workedSeconds: number
+    days: FieldManagerAttendanceDay[]
+  }
+}
+
+/** Facts for the server page most recently fetched; never a client-side total. */
+export interface FieldManagerAttendancePageSummary {
+  agentsLoaded: number
+  recordedDays: number
+  activeDays: number
+  completedDays: number
+  workedSeconds: number
+}
+
+export interface FieldManagerAttendanceData {
+  scope: FieldManagerScope
+  timezone: string
+  from: string
+  to: string
+  generatedAt: string
+  page: FieldManagerListPage
+  coverage: "RECORDED_WORKDAYS_ONLY"
+  pageSummary: FieldManagerAttendancePageSummary
+  agents: FieldManagerAttendanceAgent[]
+}
+
 export interface FieldManagerRouteDetailPoint {
   id: string
   orderIndex: number
@@ -2311,6 +2361,154 @@ export function parseFieldManagerPlanning(value: unknown): FieldManagerPlanningD
     routes: routes as FieldManagerPlanningRoute[],
     truncated: data.truncated,
     page,
+  }
+}
+
+function managerAttendanceDay(value: unknown): FieldManagerAttendanceDay | null {
+  const day = record(value)
+  if (
+    !day ||
+    !string(day.id) ||
+    !dateKey(day.date) ||
+    !string(day.status) ||
+    !workdayStatuses.has(day.status as FieldWorkdayStatus) ||
+    !timestamp(day.startedAt) ||
+    !nullableTimestamp(day.pausedAt) ||
+    !nullableTimestamp(day.completedAt) ||
+    !nonNegativeInteger(day.totalPausedSeconds) ||
+    !nonNegativeInteger(day.workedSeconds)
+  ) {
+    return null
+  }
+  return {
+    id: day.id,
+    date: day.date,
+    status: day.status as FieldWorkdayStatus,
+    startedAt: day.startedAt,
+    pausedAt: day.pausedAt == null ? null : day.pausedAt,
+    completedAt: day.completedAt == null ? null : day.completedAt,
+    totalPausedSeconds: day.totalPausedSeconds,
+    workedSeconds: day.workedSeconds,
+  }
+}
+
+function managerAttendanceAgent(value: unknown): FieldManagerAttendanceAgent | null {
+  const agent = record(value)
+  const attendance = record(agent?.attendance)
+  if (
+    !agent ||
+    !string(agent.id) ||
+    !string(agent.name) ||
+    !string(agent.role) ||
+    !(agent.teamId == null || string(agent.teamId)) ||
+    !attendance ||
+    !nonNegativeInteger(attendance.recordedDays) ||
+    !nonNegativeInteger(attendance.activeDays) ||
+    !nonNegativeInteger(attendance.completedDays) ||
+    !nonNegativeInteger(attendance.workedSeconds) ||
+    !Array.isArray(attendance.days)
+  ) {
+    return null
+  }
+  const days = attendance.days.map(managerAttendanceDay)
+  if (days.some((day) => day == null)) return null
+  const parsedDays = days as FieldManagerAttendanceDay[]
+  const activeDays = parsedDays.filter((day) => day.status === "STARTED" || day.status === "PAUSED").length
+  const completedDays = parsedDays.filter((day) => day.status === "COMPLETED").length
+  const workedSeconds = parsedDays.reduce((total, day) => total + day.workedSeconds, 0)
+  if (
+    attendance.recordedDays !== parsedDays.length ||
+    attendance.activeDays !== activeDays ||
+    attendance.completedDays !== completedDays ||
+    attendance.workedSeconds !== workedSeconds
+  ) {
+    return null
+  }
+  return {
+    id: agent.id,
+    name: agent.name,
+    role: agent.role,
+    teamId: agent.teamId == null ? null : agent.teamId,
+    attendance: {
+      recordedDays: attendance.recordedDays,
+      activeDays: attendance.activeDays,
+      completedDays: attendance.completedDays,
+      workedSeconds: attendance.workedSeconds,
+      days: parsedDays,
+    },
+  }
+}
+
+function managerAttendancePageSummary(
+  value: unknown,
+  agents: FieldManagerAttendanceAgent[],
+): FieldManagerAttendancePageSummary | null {
+  const summary = record(value)
+  if (
+    !summary ||
+    !nonNegativeInteger(summary.agentsLoaded) ||
+    !nonNegativeInteger(summary.recordedDays) ||
+    !nonNegativeInteger(summary.activeDays) ||
+    !nonNegativeInteger(summary.completedDays) ||
+    !nonNegativeInteger(summary.workedSeconds)
+  ) {
+    return null
+  }
+  const expected = agents.reduce<FieldManagerAttendancePageSummary>((total, agent) => ({
+    agentsLoaded: total.agentsLoaded + 1,
+    recordedDays: total.recordedDays + agent.attendance.recordedDays,
+    activeDays: total.activeDays + agent.attendance.activeDays,
+    completedDays: total.completedDays + agent.attendance.completedDays,
+    workedSeconds: total.workedSeconds + agent.attendance.workedSeconds,
+  }), { agentsLoaded: 0, recordedDays: 0, activeDays: 0, completedDays: 0, workedSeconds: 0 })
+  return (
+    summary.agentsLoaded === expected.agentsLoaded &&
+    summary.recordedDays === expected.recordedDays &&
+    summary.activeDays === expected.activeDays &&
+    summary.completedDays === expected.completedDays &&
+    summary.workedSeconds === expected.workedSeconds
+  ) ? expected : null
+}
+
+export function parseFieldManagerAttendance(value: unknown): FieldManagerAttendanceData {
+  const data = validEnvelope(value)
+  if (
+    !data ||
+    !managerScope(data.scope) ||
+    !string(data.timezone) ||
+    !dateKey(data.from) ||
+    !dateKey(data.to) ||
+    data.to < data.from ||
+    !timestamp(data.generatedAt) ||
+    data.coverage !== "RECORDED_WORKDAYS_ONLY" ||
+    data.page == null ||
+    !Array.isArray(data.agents)
+  ) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+  const agents = data.agents.map(managerAttendanceAgent)
+  if (agents.some((agent) => agent == null)) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+  const parsedAgents = agents as FieldManagerAttendanceAgent[]
+  if (parsedAgents.some((agent) => agent.attendance.days.some((day) => day.date < data.from || day.date > data.to))) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+  const page = managerListPage(data.page, parsedAgents.length)
+  const pageSummary = managerAttendancePageSummary(data.pageSummary, parsedAgents)
+  if (!page || page.total < parsedAgents.length || !pageSummary) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+  return {
+    scope: data.scope,
+    timezone: data.timezone,
+    from: data.from,
+    to: data.to,
+    generatedAt: data.generatedAt,
+    page,
+    coverage: "RECORDED_WORKDAYS_ONLY",
+    pageSummary,
+    agents: parsedAgents,
   }
 }
 

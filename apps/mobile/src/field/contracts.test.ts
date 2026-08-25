@@ -20,6 +20,7 @@ import {
   parseFieldPersonalKpi,
   parseFieldLocationHistory,
   parseFieldManagerApprovals,
+  parseFieldManagerAttendance,
   parseFieldManagerLocations,
   parseFieldManagerPlanning,
   parseFieldManagerRouteDetail,
@@ -864,6 +865,76 @@ describe("LeadDrive field contracts", () => {
     })
     expect(approvals.counts).toEqual({ hrm: 1, routeChanges: 0, customers: 0, contactChanges: 1 })
     expect(approvals.contactChanges[0]?.payload).toEqual({ phone: "+994501234567" })
+  })
+
+  it("accepts only internally consistent recorded-workday attendance facts", () => {
+    const fixture = {
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        timezone: "Asia/Baku",
+        from: "2026-08-01",
+        to: "2026-08-02",
+        generatedAt: "2026-08-02T17:00:00.000Z",
+        page: { number: 1, limit: 25, total: 1, hasMore: false },
+        coverage: "RECORDED_WORKDAYS_ONLY",
+        pageSummary: {
+          agentsLoaded: 1,
+          recordedDays: 2,
+          activeDays: 1,
+          completedDays: 1,
+          workedSeconds: 20700,
+        },
+        agents: [{
+          id: "agent-1",
+          name: "Recorded agent",
+          role: "AGENT",
+          teamId: "team-1",
+          attendance: {
+            recordedDays: 2,
+            activeDays: 1,
+            completedDays: 1,
+            workedSeconds: 20700,
+            days: [
+              {
+                id: "workday-completed",
+                date: "2026-08-01",
+                status: "COMPLETED",
+                startedAt: "2026-08-01T05:00:00.000Z",
+                pausedAt: null,
+                completedAt: "2026-08-01T10:30:00.000Z",
+                totalPausedSeconds: 0,
+                workedSeconds: 19800,
+              },
+              {
+                id: "workday-active",
+                date: "2026-08-02",
+                status: "STARTED",
+                startedAt: "2026-08-02T16:45:00.000Z",
+                pausedAt: null,
+                completedAt: null,
+                totalPausedSeconds: 0,
+                workedSeconds: 900,
+              },
+            ],
+          },
+        }],
+      },
+    }
+    const attendance = parseFieldManagerAttendance(fixture)
+    expect(attendance).toMatchObject({
+      coverage: "RECORDED_WORKDAYS_ONLY",
+      pageSummary: { recordedDays: 2, workedSeconds: 20700 },
+      agents: [{ attendance: { activeDays: 1, completedDays: 1 } }],
+    })
+
+    expect(() => parseFieldManagerAttendance({
+      ...fixture,
+      data: {
+        ...fixture.data,
+        pageSummary: { ...fixture.data.pageSummary, recordedDays: 3 },
+      },
+    })).toThrow(FieldContractError)
   })
 
   it("rejects invalid workday transitions and location coordinates at the boundary", () => {
