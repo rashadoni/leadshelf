@@ -9,6 +9,7 @@ import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 function phoneUrl(phone: string | null | undefined): string | null {
   const digits = phone?.replace(/\D/g, "") ?? ""
@@ -56,7 +57,9 @@ export default function OrganizationDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+            <TabIcon name="chevronLeft" color={colors.text} size={23} />
+          </Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("organizationsTitle").toUpperCase()}</Text>
             <Text style={styles.title} numberOfLines={2}>{organization?.name ?? "—"}</Text>
@@ -99,13 +102,20 @@ export default function OrganizationDetailScreen() {
               <Text style={styles.sectionCount}>{organization.contactWorkplaces?.length ?? 0}</Text>
             </View>
             {organization.contactWorkplaces?.length ? organization.contactWorkplaces.map((workplace) => (
-              <Pressable key={workplace.id} onPress={() => router.push(`/(app)/contacts/${workplace.contact.id}` as never)} style={({ pressed }) => [styles.personCard, pressed && styles.pressed]}>
+              <Pressable
+                key={workplace.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${t("contactsTitle")}: ${workplace.contact.displayName}${workplace.isPrimary ? ` · ${t("primaryWorkplace")}` : ""}`}
+                onPress={() => router.push(`/(app)/contacts/${workplace.contact.id}` as never)}
+                style={({ pressed }) => [styles.personCard, pressed && styles.pressed]}
+              >
                 <View style={styles.personAvatar}><Text style={styles.personInitial}>{workplace.contact.displayName.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.personBody}>
                   <Text style={styles.personName}>{workplace.contact.displayName}</Text>
                   <Text style={styles.personMeta}>{workplace.contact.specialtyName ?? contactTypeLabel(workplace.contact.type)}</Text>
                 </View>
                 {workplace.isPrimary ? <View style={styles.primaryPill}><Text style={styles.primaryPillText}>{t("primaryWorkplace")}</Text></View> : null}
+                <View accessible={false} style={styles.personChevron}><TabIcon name="chevronRight" color={colors.faint} size={20} /></View>
               </Pressable>
             )) : <View style={styles.card}><Text style={styles.emptyText}>{t("contactsEmpty")}</Text></View>}
 
@@ -131,8 +141,8 @@ export default function OrganizationDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 30 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 }, headerBody: { flex: 1 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  headerBody: { flex: 1 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg },
@@ -154,7 +164,7 @@ const styles = StyleSheet.create({
   sectionCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 10, fontWeight: "900", lineHeight: 22, textAlign: "center" },
   personCard: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.border },
   personAvatar: { width: 38, height: 38, borderRadius: 13, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" },
-  personInitial: { color: colors.holiday, fontSize: 15, fontWeight: "900" }, personBody: { flex: 1 },
+  personInitial: { color: colors.holiday, fontSize: 15, fontWeight: "900" }, personBody: { flex: 1, minWidth: 0 }, personChevron: { width: 24, alignItems: "flex-end" },
   personName: { color: colors.text, fontSize: 13, fontWeight: "900" }, personMeta: { color: colors.muted, fontSize: 10, marginTop: 2 },
   primaryPill: { maxWidth: 82, paddingHorizontal: 7, paddingVertical: 5, borderRadius: radii.pill, backgroundColor: colors.successBg },
   primaryPillText: { color: colors.successDark, fontSize: 8, fontWeight: "900", textAlign: "center" },
