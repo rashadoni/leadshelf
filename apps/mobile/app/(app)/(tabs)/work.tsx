@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
   connection: { maxWidth: 114, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
   connectionOn: { backgroundColor: colors.successBg },
   connectionPaused: { backgroundColor: colors.warningBg },
+  connectionOff: { backgroundColor: colors.warningBg },
   connectionIdle: { backgroundColor: colors.draftBg },
   connectionText: { flexShrink: 1, fontSize: 9, fontWeight: "800" },
   connectionTextOn: { color: colors.successDark },
