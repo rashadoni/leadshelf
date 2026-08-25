@@ -39,6 +39,8 @@ type FieldDayNavigatorProps = {
   todayDate?: string
   /** A focused date chooser such as Route Builder: do not render a second week rail. */
   compactDay?: boolean
+  /** A caller-owned calendar policy, for example no task deadline in the past. */
+  isCalendarDateDisabled?: (date: string) => boolean
 }
 
 function dateFromKey(value: string): Date | null {
@@ -100,6 +102,7 @@ export function FieldDayNavigator({
   calendarPicker = false,
   todayDate,
   compactDay = false,
+  isCalendarDateDisabled,
 }: FieldDayNavigatorProps) {
   const locale = useLocale()
   const layout = useResponsiveLayout()
@@ -314,7 +317,7 @@ export function FieldDayNavigator({
                     const inMonth = date.slice(0, 7) === calendarMonth.slice(0, 7)
                     const selected = date === selectedDate
                     const isToday = date === todayDate
-                    const disabled = busy || item?.disabled === true
+                    const disabled = busy || item?.disabled === true || isCalendarDateDisabled?.(date) === true
                     return (
                       <Pressable
                         key={date}

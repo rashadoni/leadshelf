@@ -10,14 +10,17 @@ import { FIELD_AGENT_TASKS_CACHE_KEY, type FieldTaskCustomerPreview } from "../.
 import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { fieldTaskDateOptions, fieldTaskDueDateTime, resolveFieldTaskToday } from "../../../src/field/task-time"
+import { shiftDateKey } from "../../../src/field/route-time"
 import { t, useLocale } from "../../../src/i18n"
+import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 
 export default function NewAgentTaskScreen() {
-  useLocale()
+  const locale = useLocale()
   const { copyFrom } = useLocalSearchParams<{ copyFrom?: string }>()
   const field = useField()
   const { sync } = useSync()
@@ -48,7 +51,22 @@ export default function NewAgentTaskScreen() {
 
   const defaultSelectedDate = fieldTaskDateOptions(tenantToday, 2)[1]?.key ?? tenantToday
   const effectiveSelectedDate = selectedDate === undefined ? defaultSelectedDate : selectedDate
-  const dates = useMemo(() => fieldTaskDateOptions(tenantToday), [tenantToday])
+  const selectedTaskDate = effectiveSelectedDate ? formatCalendarDay(effectiveSelectedDate, locale) : null
+  const taskDateLabel = selectedTaskDate
+    ? `${selectedTaskDate.weekday}, ${selectedTaskDate.date}`
+    : t("agentTaskDueNone")
+  const taskCalendarDays = useMemo(() => {
+    const anchor = effectiveSelectedDate ?? tenantToday
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = shiftDateKey(anchor, index - 3)
+      return {
+        date,
+        isToday: date === tenantToday,
+        disabled: date < tenantToday,
+        accessibilityLabel: `${formatCalendarDay(date, locale).weekday}, ${formatCalendarDay(date, locale).date}`,
+      }
+    })
+  }, [effectiveSelectedDate, locale, tenantToday])
   const hasInitialInput = Boolean(
     title || description || priority !== "MEDIUM" || effectiveSelectedDate !== defaultSelectedDate ||
     time !== "09:00" || customerId || recurrence,
@@ -147,6 +165,18 @@ export default function NewAgentTaskScreen() {
     setCustomerSearch("")
   }
 
+  function selectTaskDate(date: string) {
+    if (date < tenantToday) return
+    setSelectedDate(date)
+  }
+
+  function moveTaskDate(days: -1 | 1) {
+    const current = effectiveSelectedDate ?? tenantToday
+    const next = shiftDateKey(current, days)
+    if (next < tenantToday) return
+    selectTaskDate(next)
+  }
+
   async function create() {
     const normalizedTitle = title.trim()
     const dueDate = fieldTaskDueDateTime(effectiveSelectedDate, time, tenantTimeZone)
@@ -204,9 +234,9 @@ export default function NewAgentTaskScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 94 }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
@@ -226,10 +256,35 @@ export default function NewAgentTaskScreen() {
         </View>
 
         <SectionTitle>{t("agentTaskDueLabel")}</SectionTitle>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskDueNone")} accessibilityState={{ selected: effectiveSelectedDate === null }} onPress={() => { setSelectedDate(null); setRecurrence(null) }} style={[styles.noDate, effectiveSelectedDate === null && styles.daySelected]}><Text style={[styles.noDateText, effectiveSelectedDate === null && styles.dayTextSelected]}>{t("agentTaskDueNone")}</Text></Pressable>
-          {dates.map((date) => <Pressable key={date.key} accessibilityRole="button" accessibilityLabel={`${t("agentTaskDueLabel")}: ${date.day}.${date.month}`} accessibilityState={{ selected: effectiveSelectedDate === date.key }} onPress={() => setSelectedDate(date.key)} style={[styles.day, effectiveSelectedDate === date.key && styles.daySelected]}><Text style={[styles.dayNumber, effectiveSelectedDate === date.key && styles.dayTextSelected]}>{date.day}</Text><Text style={[styles.dayMonth, effectiveSelectedDate === date.key && styles.dayTextSelected]}>{date.month}</Text></Pressable>)}
-        </ScrollView>
+        <FieldDayNavigator
+          days={taskCalendarDays}
+          selectedDate={effectiveSelectedDate}
+          onSelectDate={selectTaskDate}
+          onPrevious={() => moveTaskDate(-1)}
+          onNext={() => moveTaskDate(1)}
+          previousLabel={t("weekPreviousDay")}
+          nextLabel={t("weekNextDay")}
+          onCurrent={() => selectTaskDate(tenantToday)}
+          currentActionLabel={t("tabToday")}
+          currentLabel={taskDateLabel}
+          currentAccessibilityLabel={taskDateLabel}
+          calendarPicker
+          todayDate={tenantToday}
+          compactDay
+          isCalendarDateDisabled={(date) => date < tenantToday}
+        />
+        <View style={styles.dueSecondaryRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("agentTaskDueNone")}
+            accessibilityState={{ selected: effectiveSelectedDate === null }}
+            onPress={() => { setSelectedDate(null); setRecurrence(null) }}
+            style={({ pressed }) => [styles.noDate, effectiveSelectedDate === null && styles.noDateSelected, pressed && styles.pressed]}
+          >
+            <TabIcon name="close" color={effectiveSelectedDate === null ? colors.primary : colors.muted} size={16} />
+            <Text style={[styles.noDateText, effectiveSelectedDate === null && styles.noDateTextSelected]}>{t("agentTaskDueNone")}</Text>
+          </Pressable>
+        </View>
         {effectiveSelectedDate ? <View style={styles.timeCard}><Text style={styles.timeLabel}>{t("agentTaskTimeLabel")}</Text><TextInput accessibilityLabel={t("agentTaskTimeLabel")} value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} placeholder="09:00" placeholderTextColor={colors.faint} style={styles.timeInput} /><View style={styles.timePresets}>{["09:00", "12:00", "15:00", "18:00"].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${t("agentTaskTimeLabel")}: ${value}`} accessibilityState={{ selected: time === value }} onPress={() => setTime(value)} style={[styles.timePreset, time === value && styles.timePresetSelected]}><Text style={[styles.timePresetText, time === value && styles.timePresetTextSelected]}>{value}</Text></Pressable>)}</View></View> : null}
 
         <SectionTitle>{t("agentTaskCustomerLabel")}</SectionTitle>
@@ -280,8 +335,10 @@ export default function NewAgentTaskScreen() {
         {copySource ? <View style={styles.copyNotice}><Text style={styles.copyNoticeText}>{t("agentTaskPersonalHint")}</Text></View> : null}
         {createDisabled ? <View style={styles.error}><Text style={styles.errorText}>{t("agentTaskManagerHint")}</Text></View> : null}
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} accessibilityState={{ disabled: saving || createDisabled, busy: saving }} disabled={saving || createDisabled} onPress={() => void create()} style={[styles.submit, (saving || createDisabled) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : t("agentTaskCreate")}</Text></Pressable>
       </ScrollView>
+      <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} accessibilityState={{ disabled: saving || createDisabled, busy: saving }} disabled={saving || createDisabled} onPress={() => void create()} style={[styles.submit, (saving || createDisabled) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : t("agentTaskCreate")}</Text></Pressable>
+      </View>
     </SafeAreaView>
   )
 }
@@ -300,7 +357,7 @@ function Input({ label, required, multiline, ...props }: { label: string; requir
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 34 }, header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 }, intro: { marginHorizontal: 16, marginTop: 12, color: colors.muted, fontSize: 11, lineHeight: 17 },
   formCard: { marginHorizontal: 14, marginTop: 15, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 13, ...cardShadow }, inputLabel: { color: colors.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45, marginBottom: 6 }, input: { minHeight: 47, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 12, color: colors.text, fontSize: 13 }, textarea: { minHeight: 92, paddingTop: 11, lineHeight: 18 }, sectionTitle: { marginHorizontal: 16, marginTop: 20, marginBottom: 9, color: colors.text, fontSize: 14, fontWeight: "900" }, wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 }, chip: { maxWidth: 210, minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, chipTextSelected: { color: colors.headerText },
-  days: { paddingHorizontal: 14, gap: 8 }, noDate: { minWidth: 118, height: 64, borderRadius: 16, paddingHorizontal: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, noDateText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, day: { width: 58, height: 64, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, daySelected: { backgroundColor: colors.primary, borderColor: colors.primary }, dayNumber: { color: colors.text, fontSize: 17, fontWeight: "900" }, dayMonth: { color: colors.muted, fontSize: 9, fontWeight: "800" }, dayTextSelected: { color: colors.headerText }, timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 }, timeLabel: { color: colors.muted, fontSize: 10, fontWeight: "900" }, timeInput: { width: 76, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, timePresets: { width: "100%", flexDirection: "row", gap: 6 }, timePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, timePresetSelected: { backgroundColor: colors.primarySoft }, timePresetText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, timePresetTextSelected: { color: colors.primary },
+  dueSecondaryRow: { marginHorizontal: 14, marginTop: 8, alignItems: "flex-start" }, noDate: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }, noDateSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, noDateText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, noDateTextSelected: { color: colors.primary }, timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 }, timeLabel: { color: colors.muted, fontSize: 10, fontWeight: "900" }, timeInput: { width: 76, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, timePresets: { width: "100%", flexDirection: "row", gap: 6 }, timePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, timePresetSelected: { backgroundColor: colors.primarySoft }, timePresetText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, timePresetTextSelected: { color: colors.primary },
   customerPicker: { marginHorizontal: 14, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, gap: 8, ...cardShadow }, customerSearchBox: { minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, customerSearchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 13 }, customerHint: { color: colors.muted, fontSize: 9, lineHeight: 13, fontWeight: "700" }, noCustomerChoice: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, noCustomerChoiceSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft }, noCustomerChoiceText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, noCustomerChoiceTextSelected: { color: colors.primary }, selectedCustomer: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 }, selectedCustomerMark: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, selectedCustomerMarkText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, selectedCustomerBody: { flex: 1, minWidth: 0 }, selectedCustomerEyebrow: { color: colors.primary, fontSize: 8, lineHeight: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 }, selectedCustomerName: { color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "900", marginTop: 1 }, clearCustomer: { width: 44, minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" }, customerChoice: { minHeight: 55, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 }, customerChoiceSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, customerMark: { width: 33, height: 33, borderRadius: 11, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, customerMarkSelected: { backgroundColor: colors.primary }, customerMarkText: { color: colors.info, fontSize: 13, fontWeight: "900" }, customerMarkTextSelected: { color: colors.headerText }, customerChoiceBody: { flex: 1, minWidth: 0 }, customerChoiceName: { color: colors.text, fontSize: 11, fontWeight: "900" }, customerChoiceNameSelected: { color: colors.primary }, customerChoiceMeta: { color: colors.muted, fontSize: 9, marginTop: 2, fontWeight: "700" }, customerChoiceMetaSelected: { color: colors.primary }, customerState: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center", paddingVertical: 5, fontWeight: "800" }, customerError: { color: colors.missed, fontSize: 10, lineHeight: 15, paddingVertical: 4, fontWeight: "800" },
-  copyNotice: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg }, copyNoticeText: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" }, error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" }, submit: { marginHorizontal: 14, marginTop: 18, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, submitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, disabled: { opacity: 0.4 },
+  copyNotice: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg }, copyNoticeText: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" }, error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" }, stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 }, submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, submitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, disabled: { opacity: 0.4 },
 })
