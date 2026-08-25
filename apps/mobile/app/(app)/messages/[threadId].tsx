@@ -43,13 +43,13 @@ export default function MessageThreadScreen() {
   const scroll = useRef<ScrollView | null>(null)
   const copy = locale === "az" ? {
     messages: "MESAJLAR", loading: "Dialoq yüklənir…", offline: "Dialoq yenilənmədi — telefondakı nüsxə göstərilir.",
-    readonly: "Bu elan yalnız oxumaq üçündür.", placeholder: "Mesaj yazın…", attach: "Fayl", send: "Göndər",
+    readonly: "Bu elan yalnız oxumaq üçündür.", message: "Mesaj", placeholder: "Mesaj yazın…", attach: "Fayl", send: "Göndər",
     ack: "Oxudum, təsdiq edirəm", acked: "Təsdiqləndi", queued: "Növbədə", file: "Fayl",
     sent: "Göndərildi", read: "Oxunub",
     download: "Yüklə", open: "Aç", downloadError: "Faylı açmaq alınmadı", empty: "Bu dialoqda hələ mesaj yoxdur.",
   } : {
     messages: "СООБЩЕНИЯ", loading: "Загружаем диалог…", offline: "Диалог не обновился — показана копия с телефона.",
-    readonly: "Это объявление доступно только для чтения.", placeholder: "Напишите сообщение…", attach: "Файл", send: "Отправить",
+    readonly: "Это объявление доступно только для чтения.", message: "Сообщение", placeholder: "Напишите сообщение…", attach: "Файл", send: "Отправить",
     ack: "Прочитал(а), подтверждаю", acked: "Подтверждено", queued: "В очереди", file: "Файл",
     sent: "Отправлено", read: "Прочитано",
     download: "Скачать", open: "Открыть", downloadError: "Не удалось открыть файл", empty: "В этом диалоге пока нет сообщений.",
@@ -208,7 +208,7 @@ export default function MessageThreadScreen() {
             {attachment ? <View style={styles.selectedFile}><TabIcon name="document" color={colors.info} size={16} /><Text style={styles.selectedFileText} numberOfLines={1}>{attachment.fileName}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setAttachment(null)} style={styles.selectedFileRemove}><TabIcon name="close" color={colors.info} size={18} /></Pressable></View> : null}
             <View style={styles.composerRow}>
               <Pressable accessibilityRole="button" accessibilityLabel={copy.attach} onPress={() => void chooseFile()} style={styles.attachButton}><TabIcon name="document" color={colors.primary} size={18} /><Text style={styles.attachButtonLabel}>{copy.attach}</Text></Pressable>
-              <TextInput value={body} onChangeText={setBody} multiline maxLength={4000} placeholder={copy.placeholder} placeholderTextColor={colors.faint} style={styles.input} />
+              <TextInput accessibilityLabel={copy.message} accessibilityHint={copy.placeholder} value={body} onChangeText={setBody} multiline maxLength={4000} placeholder={copy.placeholder} placeholderTextColor={colors.faint} style={styles.input} />
               <Pressable accessibilityRole="button" accessibilityLabel={copy.send} disabled={busy || (!body.trim() && !attachment)} onPress={() => void send()} style={[styles.send, (busy || (!body.trim() && !attachment)) && styles.disabled]}><TabIcon name="route" color={colors.headerText} size={20} /></Pressable>
             </View>
           </View>

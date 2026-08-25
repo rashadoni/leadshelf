@@ -101,7 +101,7 @@ export default function NewMessageScreen() {
 
           <Text style={styles.sectionTitle}>{copy.message}</Text>
           <View style={styles.composer}>
-            <TextInput value={body} onChangeText={setBody} multiline maxLength={4000} placeholder={copy.placeholder} placeholderTextColor={colors.faint} textAlignVertical="top" style={styles.input} />
+            <TextInput accessibilityLabel={copy.message} accessibilityHint={copy.placeholder} value={body} onChangeText={setBody} multiline maxLength={4000} placeholder={copy.placeholder} placeholderTextColor={colors.faint} textAlignVertical="top" style={styles.input} />
             {attachment ? (
               <View style={styles.fileCard}>
                 <View style={styles.fileIcon}><Text style={styles.fileIconText}>DOC</Text></View>
