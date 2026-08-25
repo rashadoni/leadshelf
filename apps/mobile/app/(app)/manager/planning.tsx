@@ -74,9 +74,10 @@ export default function ManagerPlanningScreen() {
   const locale = useLocale()
   const field = useField()
   const { date: requestedDate } = useLocalSearchParams<{ date?: string }>()
+  const today = field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
   const initialDate = typeof requestedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate.slice(0, 10))
     ? requestedDate.slice(0, 10)
-    : field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
+    : today
   const [date, setDate] = useState(initialDate)
   const [rangeDays, setRangeDays] = useState(1)
   const [search, setSearch] = useState("")
@@ -143,6 +144,7 @@ export default function ManagerPlanningScreen() {
   const endDate = shiftDateKey(date, rangeDays - 1)
   const endCalendar = formatCalendarDay(endDate, locale)
   const dateLabel = rangeDays === 1 ? calendar.date : calendar.date + " — " + endCalendar.date
+  const isTodayContext = date === today
   const rangeDateKeys = useMemo(
     () => Array.from({ length: rangeDays }, (_, index) => shiftDateKey(date, index)),
     [date, rangeDays],
@@ -241,6 +243,18 @@ export default function ManagerPlanningScreen() {
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={`${t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")}: ${formatCalendarDay(shiftDateKey(date, rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectDate(shiftDateKey(date, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
         </View>
+        {!isTodayContext ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t("tabToday")}: ${formatCalendarDay(today, locale).date}`}
+            accessibilityState={{ busy: loading }}
+            onPress={() => selectDate(today)}
+            style={({ pressed }) => [styles.todayAction, pressed && styles.pressed]}
+          >
+            <TabIcon name="today" color={colors.primary} size={17} />
+            <Text style={styles.todayActionText}>{t("tabToday")}</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.rangePicker}>
           {RANGE_OPTIONS.map((days) => (
             <Pressable key={days} accessibilityRole="button" accessibilityLabel={t("managerPlanningRange", { count: days })} accessibilityState={{ busy: loading, selected: rangeDays === days }} onPress={() => selectRange(days)} style={[styles.rangeChoice, rangeDays === days && styles.rangeChoiceSelected]}>
@@ -446,6 +460,8 @@ const styles = StyleSheet.create({
   dateCenter: { alignItems: "center", flex: 1 },
   dateWeekday: { color: colors.headerSubtext, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
   dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
+  todayAction: { minHeight: 44, marginHorizontal: 14, marginTop: 9, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  todayActionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
   rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   rangeChoiceSelected: { borderWidth: 2, backgroundColor: colors.primary, borderColor: colors.primary },

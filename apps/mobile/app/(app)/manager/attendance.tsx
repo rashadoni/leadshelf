@@ -75,14 +75,17 @@ function AttendanceAgentCard({
           <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
           <Text style={styles.agentRole}>{agentRoleLabel(agent.role)}</Text>
         </View>
-        <View style={styles.recordBadge}><Text style={styles.recordBadgeValue}>{attendance.recordedDays}</Text><Text style={styles.recordBadgeText}>{t("managerAttendanceRecordedOnly")}</Text></View>
+        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceRecordedOnly")}: ${attendance.recordedDays}`} style={styles.recordBadge}>
+          <Text style={styles.recordBadgeValue}>{attendance.recordedDays}</Text>
+          <Text numberOfLines={2} style={styles.recordBadgeText}>{t("managerAttendanceRecordedShort")}</Text>
+        </View>
       </View>
 
       <View style={styles.agentStats}>
-        <View style={styles.agentStat}><Text style={styles.agentStatValue}>{attendance.recordedDays}</Text><Text style={styles.agentStatLabel}>{t("managerAttendanceRecordedOnly")}</Text></View>
-        <View style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.info }]}>{attendance.activeDays}</Text><Text style={styles.agentStatLabel}>{t("managerWorkingNow")}</Text></View>
-        <View style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.successDark }]}>{attendance.completedDays}</Text><Text style={styles.agentStatLabel}>{t("managerCompleted")}</Text></View>
-        <View style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.primary }]}>{compactWorkedTime(attendance.workedSeconds)}</Text><Text style={styles.agentStatLabel}>{t("managerAttendanceWorked")}</Text></View>
+        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceRecordedOnly")}: ${attendance.recordedDays}`} style={styles.agentStat}><Text style={styles.agentStatValue}>{attendance.recordedDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceRecordedShort")}</Text></View>
+        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerWorkingNow")}: ${attendance.activeDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.info }]}>{attendance.activeDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceActiveShort")}</Text></View>
+        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerCompleted")}: ${attendance.completedDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.successDark }]}>{attendance.completedDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceCompletedShort")}</Text></View>
+        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceWorked")}: ${compactWorkedTime(attendance.workedSeconds)}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.primary }]}>{compactWorkedTime(attendance.workedSeconds)}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceWorkedShort")}</Text></View>
       </View>
 
       {attendance.recordedDays === 0 ? (
@@ -130,7 +133,8 @@ function AttendanceAgentCard({
 export default function ManagerAttendanceScreen() {
   const locale = useLocale()
   const field = useField()
-  const initialEndDate = field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
+  const today = field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
+  const initialEndDate = today
   const [endDate, setEndDate] = useState(initialEndDate)
   const [rangeDays, setRangeDays] = useState<number>(1)
   const [search, setSearch] = useState("")
@@ -198,6 +202,7 @@ export default function ManagerAttendanceScreen() {
   const startCalendar = formatCalendarDay(from, locale)
   const endCalendar = formatCalendarDay(to, locale)
   const dateLabel = rangeDays === 1 ? endCalendar.date : startCalendar.date + " — " + endCalendar.date
+  const isTodayContext = endDate === today
 
   function beginContextChange() {
     sequence.current += 1
@@ -244,6 +249,18 @@ export default function ManagerAttendanceScreen() {
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={`${t("managerAttendanceNextPeriod")}: ${formatCalendarDay(shiftDateKey(endDate, rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectEndDate(shiftDateKey(endDate, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
         </View>
+        {!isTodayContext ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t("tabToday")}: ${formatCalendarDay(today, locale).date}`}
+            accessibilityState={{ busy: loading }}
+            onPress={() => selectEndDate(today)}
+            style={({ pressed }) => [styles.todayAction, pressed && styles.pressed]}
+          >
+            <TabIcon name="today" color={colors.primary} size={17} />
+            <Text style={styles.todayActionText}>{t("tabToday")}</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.rangePicker}>
           {RANGE_OPTIONS.map((days) => (
             <Pressable key={days} accessibilityRole="button" accessibilityLabel={t("managerPlanningRange", { count: days })} accessibilityState={{ busy: loading, selected: rangeDays === days }} onPress={() => selectRange(days)} style={[styles.rangeChoice, rangeDays === days && styles.rangeChoiceSelected]}>
@@ -358,6 +375,8 @@ const styles = StyleSheet.create({
   dateCenter: { alignItems: "center", flex: 1 },
   dateWeekday: { color: colors.headerSubtext, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
   dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
+  todayAction: { minHeight: 44, marginHorizontal: 14, marginTop: 9, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  todayActionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
   rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   rangeChoiceSelected: { borderWidth: 2, backgroundColor: colors.primary, borderColor: colors.primary },
@@ -388,11 +407,11 @@ const styles = StyleSheet.create({
   agentRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 2 },
   recordBadge: { maxWidth: 82, alignItems: "flex-end" },
   recordBadgeValue: { color: colors.primary, fontSize: 20, lineHeight: 21, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  recordBadgeText: { color: colors.faint, fontSize: 7, lineHeight: 9, textAlign: "right", fontWeight: "800" },
+  recordBadgeText: { color: colors.faint, fontSize: 8, lineHeight: 10, textAlign: "right", fontWeight: "800" },
   agentStats: { marginTop: 12, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row" },
   agentStat: { flex: 1, alignItems: "center", paddingHorizontal: 2 },
   agentStatValue: { color: colors.text, fontSize: 15, lineHeight: 18, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  agentStatLabel: { color: colors.muted, fontSize: 7, lineHeight: 10, marginTop: 2, textAlign: "center", fontWeight: "800" },
+  agentStatLabel: { color: colors.muted, fontSize: 9, lineHeight: 12, marginTop: 2, textAlign: "center", fontWeight: "800" },
   noRecords: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 12, fontWeight: "800" },
   daysToggle: { minHeight: 44, marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   daysToggleText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
