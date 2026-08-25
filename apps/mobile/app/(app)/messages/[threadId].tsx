@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Alert, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
+import { useFocusEffect, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import {
@@ -19,6 +19,7 @@ import { formatTime } from "../../../src/i18n/date-format"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function messageThreadTypeLabel(type: string): string {
   if (type === "DIRECT") return t("messageThreadType_DIRECT")
@@ -37,6 +38,7 @@ export default function MessageThreadScreen() {
   const [attachment, setAttachment] = useState<FieldDocumentDraft | null>(null)
   const [localFiles, setLocalFiles] = useState<Record<string, string>>({})
   const [refreshing, setRefreshing] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
   const [busy, setBusy] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const markedMessage = useRef<string | null>(null)
@@ -48,22 +50,27 @@ export default function MessageThreadScreen() {
     ack: "Oxudum, təsdiq edirəm", acked: "Təsdiqləndi", queued: "Növbədə", file: "Fayl",
     sent: "Göndərildi", read: "Oxunub",
     download: "Yüklə", open: "Aç", downloadError: "Faylı açmaq alınmadı", empty: "Bu dialoqda hələ mesaj yoxdur.",
+    unavailable: "Dialoq telefonda tapılmadı.", retry: "Yenidən cəhd et",
   } : {
     messages: "СООБЩЕНИЯ", loading: "Загружаем диалог…", offline: "Диалог не обновился — показана копия с телефона.",
     readonly: "Это объявление доступно только для чтения.", message: "Сообщение", placeholder: "Напишите сообщение…", attach: "Файл", send: "Отправить",
     ack: "Прочитал(а), подтверждаю", acked: "Подтверждено", queued: "В очереди", file: "Файл",
     sent: "Отправлено", read: "Прочитано",
     download: "Скачать", open: "Открыть", downloadError: "Не удалось открыть файл", empty: "В этом диалоге пока нет сообщений.",
+    unavailable: "Диалог не найден на телефоне.", retry: "Повторить",
   }
 
   const load = useCallback(async (showWarning = false) => {
+    setUnavailable(false)
     try {
       const next = cacheFieldMessageThread(await fieldApi.messageThread(threadId))
       setData(next)
       setWarning(null)
     } catch {
-      setData(readFieldMessageThread(threadId))
-      if (showWarning) setWarning(copy.offline)
+      const cached = readFieldMessageThread(threadId)
+      setData(cached)
+      setUnavailable(cached == null)
+      if (showWarning || cached == null) setWarning(copy.offline)
     }
   }, [copy.offline, threadId])
 
@@ -71,6 +78,7 @@ export default function MessageThreadScreen() {
     // Returning to a thread should show the latest exchange, but a user who
     // deliberately scrolled up must be able to keep reading older messages.
     stickToLatest.current = true
+    setUnavailable(false)
     setData(readFieldMessageThread(threadId))
     void load(false)
   }, [load, threadId]))
@@ -148,14 +156,28 @@ export default function MessageThreadScreen() {
   }
 
   if (!data) {
-    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.loading}><Text style={styles.loadingMark}>•••</Text><Text style={styles.loadingText}>{copy.loading}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.loadingBack}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable></View></SafeAreaView>
+    return (
+      <SafeAreaView style={styles.root} edges={["top"]}>
+        <View style={styles.loading}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/inbox")} style={styles.loadingBack}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
+          {unavailable ? (
+            <>
+              <View accessible={false} style={styles.unavailableIcon}><TabIcon name="inbox" color={colors.warning} size={24} /></View>
+              <Text style={styles.loadingText}>{copy.unavailable}</Text>
+              <Text style={styles.loadingHint}>{copy.offline}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.retry} onPress={() => void load(true)} style={styles.retryButton}><TabIcon name="refresh" color={colors.headerText} size={16} /><Text style={styles.retryText}>{copy.retry}</Text></Pressable>
+            </>
+          ) : <><Text style={styles.loadingMark}>•••</Text><Text style={styles.loadingText}>{copy.loading}</Text></>}
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={8}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/inbox")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.messages}</Text><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.participants}>{messageThreadTypeLabel(data.thread.type)}</Text></View>
         </View>
         {warning ? <View style={styles.warning}><Text style={styles.warningText}>{warning}</Text></View> : null}
@@ -250,5 +272,5 @@ const styles = StyleSheet.create({
   attachButton: { width: 48, minHeight: 48, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, attachButtonLabel: { color: colors.primary, fontSize: 7, fontWeight: "900" },
   input: { flex: 1, minHeight: 48, maxHeight: 112, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 12, backgroundColor: colors.bg, color: colors.text, fontSize: 12, lineHeight: 17 }, send: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, disabled: { opacity: 0.35 },
   readonly: { minHeight: 58, paddingHorizontal: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, alignItems: "center", justifyContent: "center" }, readonlyText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, loadingMark: { color: colors.primary, fontSize: 24, fontWeight: "900" }, loadingText: { color: colors.muted, fontSize: 12, marginTop: 9 }, loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, loadingMark: { color: colors.primary, fontSize: 24, fontWeight: "900" }, loadingText: { color: colors.muted, fontSize: 12, marginTop: 9, textAlign: "center" }, loadingHint: { maxWidth: 270, color: colors.faint, fontSize: 10, lineHeight: 15, marginTop: 6, textAlign: "center" }, loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, unavailableIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, retryButton: { minHeight: 44, marginTop: 16, borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }, retryText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
 })
