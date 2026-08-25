@@ -278,7 +278,7 @@ function ApprovalRequest({
               <Text style={styles.fieldLabel}>{t("managerDecisionDate")}</Text>
               <TextInput
                 accessibilityLabel={t("managerDecisionDate")}
-                accessibilityHint="YYYY-MM-DD"
+                accessibilityHint={t("dateInputHint")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="numbers-and-punctuation"
