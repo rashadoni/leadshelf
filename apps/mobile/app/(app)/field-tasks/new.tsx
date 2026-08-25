@@ -9,33 +9,11 @@ import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY, type FieldTaskCustomerPreview } from "../../../src/field/task-cache"
 import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { objectTypeLabel } from "../../../src/field/labels"
+import { fieldTaskDateOptions, fieldTaskDueDateTime, resolveFieldTaskToday } from "../../../src/field/task-time"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
-
-function dateKey(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
-function addDays(days: number): Date {
-  const date = new Date()
-  date.setHours(12, 0, 0, 0)
-  date.setDate(date.getDate() + days)
-  return date
-}
-
-function dueIso(day: string | null, time: string): string | null {
-  if (!day) return null
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null
-  const [year, month, date] = day.split("-").map(Number)
-  const [hour, minute] = time.split(":").map(Number)
-  const value = new Date(year, month - 1, date, hour, minute, 0, 0)
-  return Number.isNaN(value.getTime()) ? null : value.toISOString()
-}
 
 export default function NewAgentTaskScreen() {
   useLocale()
@@ -43,11 +21,18 @@ export default function NewAgentTaskScreen() {
   const field = useField()
   const { sync } = useSync()
   const insets = useSafeAreaInsets()
+  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
+  const tenantToday = resolveFieldTaskToday(
+    field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date,
+    tenantTimeZone,
+  )
   const copySource = field.agentTasks?.tasks.find((task) => task.id === copyFrom) ?? null
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState<FieldAgentTaskPriority>("MEDIUM")
-  const [selectedDate, setSelectedDate] = useState<string | null>(dateKey(addDays(1)))
+  // Keep the default derived from the tenant calendar until the user makes a
+  // selection; Field context can hydrate after this screen first renders.
+  const [selectedDate, setSelectedDate] = useState<string | null | undefined>(undefined)
   const [time, setTime] = useState("09:00")
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [customerSearch, setCustomerSearch] = useState("")
@@ -59,10 +44,9 @@ export default function NewAgentTaskScreen() {
   const [error, setError] = useState<string | null>(null)
   const customerSearchSequence = useRef(0)
 
-  const dates = useMemo(() => Array.from({ length: 8 }, (_, index) => {
-    const date = addDays(index)
-    return { key: dateKey(date), day: String(date.getDate()).padStart(2, "0"), month: String(date.getMonth() + 1).padStart(2, "0") }
-  }), [])
+  const defaultSelectedDate = fieldTaskDateOptions(tenantToday, 2)[1]?.key ?? tenantToday
+  const effectiveSelectedDate = selectedDate === undefined ? defaultSelectedDate : selectedDate
+  const dates = useMemo(() => fieldTaskDateOptions(tenantToday), [tenantToday])
 
   const plannedCustomers = useMemo(() => {
     const map = new Map<string, FieldTaskCustomerPreview>()
@@ -152,8 +136,8 @@ export default function NewAgentTaskScreen() {
 
   async function create() {
     const normalizedTitle = title.trim()
-    const dueDate = dueIso(selectedDate, time)
-    if (!normalizedTitle || (selectedDate && !dueDate) || (recurrence && !selectedDate)) {
+    const dueDate = fieldTaskDueDateTime(effectiveSelectedDate, time, tenantTimeZone)
+    if (!normalizedTitle || (effectiveSelectedDate && !dueDate) || (recurrence && !effectiveSelectedDate)) {
       setError(t("agentTaskCreateRequired"))
       return
     }
@@ -209,10 +193,10 @@ export default function NewAgentTaskScreen() {
 
         <SectionTitle>{t("agentTaskDueLabel")}</SectionTitle>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskDueNone")} accessibilityState={{ selected: selectedDate === null }} onPress={() => { setSelectedDate(null); setRecurrence(null) }} style={[styles.noDate, selectedDate === null && styles.daySelected]}><Text style={[styles.noDateText, selectedDate === null && styles.dayTextSelected]}>{t("agentTaskDueNone")}</Text></Pressable>
-          {dates.map((date) => <Pressable key={date.key} accessibilityRole="button" accessibilityLabel={`${t("agentTaskDueLabel")}: ${date.day}.${date.month}`} accessibilityState={{ selected: selectedDate === date.key }} onPress={() => setSelectedDate(date.key)} style={[styles.day, selectedDate === date.key && styles.daySelected]}><Text style={[styles.dayNumber, selectedDate === date.key && styles.dayTextSelected]}>{date.day}</Text><Text style={[styles.dayMonth, selectedDate === date.key && styles.dayTextSelected]}>{date.month}</Text></Pressable>)}
+          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskDueNone")} accessibilityState={{ selected: effectiveSelectedDate === null }} onPress={() => { setSelectedDate(null); setRecurrence(null) }} style={[styles.noDate, effectiveSelectedDate === null && styles.daySelected]}><Text style={[styles.noDateText, effectiveSelectedDate === null && styles.dayTextSelected]}>{t("agentTaskDueNone")}</Text></Pressable>
+          {dates.map((date) => <Pressable key={date.key} accessibilityRole="button" accessibilityLabel={`${t("agentTaskDueLabel")}: ${date.day}.${date.month}`} accessibilityState={{ selected: effectiveSelectedDate === date.key }} onPress={() => setSelectedDate(date.key)} style={[styles.day, effectiveSelectedDate === date.key && styles.daySelected]}><Text style={[styles.dayNumber, effectiveSelectedDate === date.key && styles.dayTextSelected]}>{date.day}</Text><Text style={[styles.dayMonth, effectiveSelectedDate === date.key && styles.dayTextSelected]}>{date.month}</Text></Pressable>)}
         </ScrollView>
-        {selectedDate ? <View style={styles.timeCard}><Text style={styles.timeLabel}>{t("agentTaskTimeLabel")}</Text><TextInput accessibilityLabel={t("agentTaskTimeLabel")} value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} placeholder="09:00" placeholderTextColor={colors.faint} style={styles.timeInput} /><View style={styles.timePresets}>{["09:00", "12:00", "15:00", "18:00"].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${t("agentTaskTimeLabel")}: ${value}`} accessibilityState={{ selected: time === value }} onPress={() => setTime(value)} style={[styles.timePreset, time === value && styles.timePresetSelected]}><Text style={[styles.timePresetText, time === value && styles.timePresetTextSelected]}>{value}</Text></Pressable>)}</View></View> : null}
+        {effectiveSelectedDate ? <View style={styles.timeCard}><Text style={styles.timeLabel}>{t("agentTaskTimeLabel")}</Text><TextInput accessibilityLabel={t("agentTaskTimeLabel")} value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} placeholder="09:00" placeholderTextColor={colors.faint} style={styles.timeInput} /><View style={styles.timePresets}>{["09:00", "12:00", "15:00", "18:00"].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${t("agentTaskTimeLabel")}: ${value}`} accessibilityState={{ selected: time === value }} onPress={() => setTime(value)} style={[styles.timePreset, time === value && styles.timePresetSelected]}><Text style={[styles.timePresetText, time === value && styles.timePresetTextSelected]}>{value}</Text></Pressable>)}</View></View> : null}
 
         <SectionTitle>{t("agentTaskCustomerLabel")}</SectionTitle>
         <View style={styles.customerPicker}>
@@ -257,7 +241,7 @@ export default function NewAgentTaskScreen() {
           {customerQuery.length >= 2 && !customerLoading && !customerSearchError && visibleCustomers.length === 0 ? <Text style={styles.customerState}>{t("agentTaskCustomerNoMatches")}</Text> : null}
         </View>
 
-        {field.agentTasks?.capabilities.recurringTasks !== false && selectedDate ? <><SectionTitle>{t("agentTaskRecurrenceLabel")}</SectionTitle><View style={styles.wrapChips}><ChoiceChip selected={recurrence === null} label={t("agentTaskRecurrenceNone")} onPress={() => setRecurrence(null)} /><ChoiceChip selected={recurrence === "DAILY"} label={t("agentTaskRecurrenceDaily")} onPress={() => setRecurrence("DAILY")} /><ChoiceChip selected={recurrence === "WEEKLY"} label={t("agentTaskRecurrenceWeekly")} onPress={() => setRecurrence("WEEKLY")} /><ChoiceChip selected={recurrence === "MONTHLY"} label={t("agentTaskRecurrenceMonthly")} onPress={() => setRecurrence("MONTHLY")} /></View></> : null}
+        {field.agentTasks?.capabilities.recurringTasks !== false && effectiveSelectedDate ? <><SectionTitle>{t("agentTaskRecurrenceLabel")}</SectionTitle><View style={styles.wrapChips}><ChoiceChip selected={recurrence === null} label={t("agentTaskRecurrenceNone")} onPress={() => setRecurrence(null)} /><ChoiceChip selected={recurrence === "DAILY"} label={t("agentTaskRecurrenceDaily")} onPress={() => setRecurrence("DAILY")} /><ChoiceChip selected={recurrence === "WEEKLY"} label={t("agentTaskRecurrenceWeekly")} onPress={() => setRecurrence("WEEKLY")} /><ChoiceChip selected={recurrence === "MONTHLY"} label={t("agentTaskRecurrenceMonthly")} onPress={() => setRecurrence("MONTHLY")} /></View></> : null}
 
         {copySource ? <View style={styles.copyNotice}><Text style={styles.copyNoticeText}>{t("agentTaskPersonalHint")}</Text></View> : null}
         {createDisabled ? <View style={styles.error}><Text style={styles.errorText}>{t("agentTaskManagerHint")}</Text></View> : null}

@@ -7,6 +7,7 @@ import type { FieldAgentTask, FieldAgentTaskPriority, FieldAgentTasksData, Field
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
 import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
+import { isFieldTaskDueOnDate, resolveFieldTaskToday } from "../../../src/field/task-time"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -48,11 +49,8 @@ function priorityColor(priority: FieldAgentTaskPriority): string {
   return colors.faint
 }
 
-function dueToday(task: FieldAgentTask): boolean {
-  if (!task.dueDate) return false
-  const due = new Date(task.dueDate)
-  const now = new Date()
-  return due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate()
+function dueToday(task: FieldAgentTask, tenantToday: string, tenantTimeZone: string): boolean {
+  return isFieldTaskDueOnDate(task.dueDate, tenantToday, tenantTimeZone)
 }
 
 export default function AgentTasksScreen() {
@@ -63,10 +61,15 @@ export default function AgentTasksScreen() {
   const [search, setSearch] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
+  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
+  const tenantToday = resolveFieldTaskToday(
+    field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date,
+    tenantTimeZone,
+  )
   const tasks = field.agentTasks?.tasks ?? []
   const open = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length
   const overdue = tasks.filter((task) => task.status === "OVERDUE").length
-  const today = tasks.filter((task) => dueToday(task) && task.status !== "COMPLETED" && task.status !== "CANCELLED").length
+  const today = tasks.filter((task) => dueToday(task, tenantToday, tenantTimeZone) && task.status !== "COMPLETED" && task.status !== "CANCELLED").length
 
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
@@ -181,7 +184,7 @@ export default function AgentTasksScreen() {
                 <View style={[styles.status, { backgroundColor: tone.bg }]}><Text style={[styles.statusText, { color: tone.color }]}>{statusLabel(task.status)}</Text></View>
               </View>
               <View style={styles.metaRow}>
-                <TabIcon name="week" color={colors.faint} size={16} /><Text style={[styles.meta, task.status === "OVERDUE" && styles.overdue]}>{task.dueDate ? formatShortDateTime(task.dueDate, locale) : t("agentTaskDueNone")}</Text>
+                <TabIcon name="week" color={colors.faint} size={16} /><Text style={[styles.meta, task.status === "OVERDUE" && styles.overdue]}>{task.dueDate ? formatShortDateTime(task.dueDate, locale, tenantTimeZone) : t("agentTaskDueNone")}</Text>
               </View>
               <View style={styles.metaRow}><TabIcon name="organizations" color={colors.faint} size={16} /><Text style={styles.meta} numberOfLines={1}>{task.customer?.name ?? t("agentTaskNoCustomer")}</Text></View>
               {task.syncState ? <SyncNotice state={task.syncState} /> : null}

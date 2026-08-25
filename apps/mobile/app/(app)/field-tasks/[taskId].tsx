@@ -8,7 +8,6 @@ import {
   readFieldCache,
 } from "../../../src/db/local-store"
 import type {
-  FieldAgentTask,
   FieldAgentTaskEvent,
   FieldAgentTaskEventType,
   FieldAgentTaskPriority,
@@ -18,6 +17,7 @@ import type {
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
 import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
+import { resolveFieldTaskToday, shiftFieldTaskDueDate } from "../../../src/field/task-time"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -60,14 +60,6 @@ function eventLabel(type: FieldAgentTaskEventType): string {
   return t("agentTaskEvent_EDITED")
 }
 
-function shiftDueDate(task: FieldAgentTask, days: number): string {
-  const previous = task.dueDate ? new Date(task.dueDate) : null
-  const target = new Date()
-  target.setDate(target.getDate() + days)
-  target.setHours(previous?.getHours() ?? 9, previous?.getMinutes() ?? 0, 0, 0)
-  return target.toISOString()
-}
-
 function evidenceSummary(event: FieldAgentTaskEvent): string | null {
   if (!event.evidence || typeof event.evidence !== "object" || Array.isArray(event.evidence)) return null
   const note = (event.evidence as Record<string, unknown>).note
@@ -79,6 +71,11 @@ export default function AgentTaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>()
   const field = useField()
   const { sync } = useSync()
+  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
+  const tenantToday = resolveFieldTaskToday(
+    field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date,
+    tenantTimeZone,
+  )
   const task = field.agentTasks?.tasks.find((item) => item.id === taskId) ?? null
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -202,7 +199,7 @@ export default function AgentTaskDetailScreen() {
         </View>
 
         <View style={styles.infoCard}>
-          <InfoRow icon="week" label={t("agentTaskDueLabel")} value={task.dueDate ? formatShortDateTime(task.dueDate, locale) : t("agentTaskDueNone")} danger={task.status === "OVERDUE"} />
+          <InfoRow icon="week" label={t("agentTaskDueLabel")} value={task.dueDate ? formatShortDateTime(task.dueDate, locale, tenantTimeZone) : t("agentTaskDueNone")} danger={task.status === "OVERDUE"} />
           <InfoRow icon="organizations" label={t("agentTaskCustomerLabel")} value={task.customer?.name ?? t("agentTaskNoCustomer")} />
           {task.recurrenceRule ? <InfoRow icon="refresh" label={t("agentTaskRecurrenceLabel")} value={task.recurrenceRule === "DAILY" ? t("agentTaskRecurrenceDaily") : task.recurrenceRule === "WEEKLY" ? t("agentTaskRecurrenceWeekly") : t("agentTaskRecurrenceMonthly")} /> : null}
         </View>
@@ -213,8 +210,8 @@ export default function AgentTaskDetailScreen() {
         {!terminal ? <View style={styles.actionCard}>
           {!task.acceptedAt && task.persistedStatus === "PENDING" ? <PrimaryAction label={t("agentTaskAccept")} busy={busy} onPress={() => void updateTask({ acceptedAt: new Date().toISOString() })} /> : task.persistedStatus === "PENDING" || task.status === "OVERDUE" ? <PrimaryAction label={t("agentTaskStart")} busy={busy} onPress={() => void updateTask({ status: "IN_PROGRESS" })} /> : <PrimaryAction label={t("agentTaskComplete")} busy={busy} success onPress={complete} />}
           <View style={styles.quickRow}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskTomorrow")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftDueDate(task, 1) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskTomorrow")}</Text></Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskNextWeek")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftDueDate(task, 7) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskNextWeek")}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskTomorrow")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftFieldTaskDueDate(task.dueDate, 1, tenantToday, tenantTimeZone) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskTomorrow")}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskNextWeek")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftFieldTaskDueDate(task.dueDate, 7, tenantToday, tenantTimeZone) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskNextWeek")}</Text></Pressable>
             {task.canEditContent ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskEdit")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => setEditing(true)} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskEdit")}</Text></Pressable> : null}
           </View>
         </View> : null}
@@ -237,7 +234,7 @@ export default function AgentTaskDetailScreen() {
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
 
         <View style={styles.timelineHeader}><Text style={styles.sectionTitle}>{t("agentTaskTimeline")}</Text><View style={styles.eventCount}><Text style={styles.eventCountText}>{task.events.length}</Text></View></View>
-        <View style={styles.timelineCard}>{task.events.length === 0 ? <Text style={styles.emptyTimeline}>{t("agentTaskTimelineEmpty")}</Text> : task.events.map((event, index) => <View key={event.id} style={styles.event}><View style={styles.eventRail}><View style={[styles.eventDot, event.syncState && styles.eventDotPending]} />{index < task.events.length - 1 ? <View style={styles.eventLine} /> : null}</View><View style={styles.eventBody}><Text style={styles.eventTitle}>{eventLabel(event.type)}</Text><Text style={styles.eventTime}>{formatShortDateTime(event.occurredAt, locale)}{event.syncState ? ` · ${t("agentTaskOfflineQueued")}` : ""}</Text>{event.comment ? <Text style={styles.eventText}>{event.comment}</Text> : null}{evidenceSummary(event) ? <Text style={styles.eventEvidence}>{evidenceSummary(event)}</Text> : null}</View></View>)}</View>
+        <View style={styles.timelineCard}>{task.events.length === 0 ? <Text style={styles.emptyTimeline}>{t("agentTaskTimelineEmpty")}</Text> : task.events.map((event, index) => <View key={event.id} style={styles.event}><View style={styles.eventRail}><View style={[styles.eventDot, event.syncState && styles.eventDotPending]} />{index < task.events.length - 1 ? <View style={styles.eventLine} /> : null}</View><View style={styles.eventBody}><Text style={styles.eventTitle}>{eventLabel(event.type)}</Text><Text style={styles.eventTime}>{formatShortDateTime(event.occurredAt, locale, tenantTimeZone)}{event.syncState ? ` · ${t("agentTaskOfflineQueued")}` : ""}</Text>{event.comment ? <Text style={styles.eventText}>{event.comment}</Text> : null}{evidenceSummary(event) ? <Text style={styles.eventEvidence}>{evidenceSummary(event)}</Text> : null}</View></View>)}</View>
 
         <View style={styles.bottomActions}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCopy")} accessibilityState={{ disabled: false }} onPress={() => router.push(`/(app)/field-tasks/new?copyFrom=${task.id}` as never)} style={styles.bottomSecondary}>
