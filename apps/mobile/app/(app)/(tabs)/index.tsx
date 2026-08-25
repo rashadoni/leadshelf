@@ -143,14 +143,14 @@ export default function TodayTab() {
               <Text style={styles.noticeTitle}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
               {field.lastUpdatedAt ? <Text style={styles.noticeMeta}>{formatTime(field.lastUpdatedAt)}</Text> : null}
             </View>
-            <Pressable onPress={() => void field.refresh()} style={styles.noticeAction}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.noticeAction}>
               <Text style={styles.noticeActionText}>{t("refresh")}</Text>
             </Pressable>
           </View>
         ) : null}
 
         {IS_LEADDRIVE_FIELD ? (
-          <Pressable onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t(workdayStatusKeys[workdayStatus])} onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
             <View style={[styles.workdayIcon, workdayActive && styles.workdayIconActive]}>
               <TabIcon name="today" color={colors.primary} size={22} />
             </View>
@@ -158,7 +158,11 @@ export default function TodayTab() {
               <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
               <Text style={styles.workdayHint}>{t(attendancePresentation.hintKey)}</Text>
             </View>
-            <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : workdayStatus === "PAUSED" ? t("workdayResume") : "→"}</Text>
+            {workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED" ? (
+              <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : t("workdayResume")}</Text>
+            ) : (
+              <View style={styles.workdayChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
+            )}
           </Pressable>
         ) : null}
 
@@ -197,7 +201,13 @@ export default function TodayTab() {
                 const meta = routeStatusMeta(route.effectiveStatus)
                 const tone = toneStyles[meta.tone]
                 return (
-                  <View key={route.id} style={styles.routeRow}>
+                  <Pressable
+                    key={route.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={route.name ?? t("tabRoute")}
+                    onPress={() => router.push(`/(app)/routes/${route.id}` as never)}
+                    style={({ pressed }) => [styles.routeRow, pressed && styles.pressed]}
+                  >
                     <View style={styles.routeBody}>
                       <Text style={styles.routeName}>{route.name ?? t("tabRoute")}</Text>
                       <Text style={styles.routeMeta}>{route.totalPoints} {t("routePointsLabel")} · {route.visitedPoints} {t("routeVisitedLabel")}</Text>
@@ -205,7 +215,8 @@ export default function TodayTab() {
                     <View style={[styles.statusPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
                       <Text style={[styles.statusText, { color: tone.text }]}>{t(meta.labelKey)}</Text>
                     </View>
-                  </View>
+                    <TabIcon name="chevronRight" color={colors.faint} size={19} />
+                  </Pressable>
                 )
               })}
             </View>
@@ -260,7 +271,7 @@ const styles = StyleSheet.create({
   noticeBody: { flex: 1 },
   noticeTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
   noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
-  noticeAction: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.card },
+  noticeAction: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 76, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
   workdayIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.draftBg, alignItems: "center", justifyContent: "center" },
@@ -269,6 +280,7 @@ const styles = StyleSheet.create({
   workdayTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   workdayHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
   workdayAction: { maxWidth: 92, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
+  workdayChevron: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   overview: { marginHorizontal: 20, marginTop: 18, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border },
   overviewHeader: { minHeight: 44, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: colors.border },
   sectionEyebrow: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
@@ -287,7 +299,7 @@ const styles = StyleSheet.create({
   progressTrack: { height: 6, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 15 },
   progressFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
   routeList: { marginTop: 14, gap: 9 },
-  routeRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 11 },
+  routeRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 11 },
   routeBody: { flex: 1 },
   routeName: { color: colors.text, fontSize: 14, fontWeight: "800" },
   routeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
