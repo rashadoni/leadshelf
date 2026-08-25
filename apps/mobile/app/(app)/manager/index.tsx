@@ -96,8 +96,8 @@ export default function ManagerHomeScreen() {
   const load = useCallback(async () => {
     setLoading(true)
     const results = await Promise.allSettled([
-      fieldApi.managerTeam(),
-      fieldApi.managerLocations(),
+      fieldApi.managerTeam({ page: 1, limit: 25 }),
+      fieldApi.managerLocations({ page: 1, limit: 25 }),
       fieldApi.managerPlanning(selectedDate),
       fieldApi.managerApprovals(),
     ])
@@ -120,6 +120,7 @@ export default function ManagerHomeScreen() {
   const deniedEverywhere = [team.error, locations.error, planning.error, approvals.error]
     .every((reason) => reason != null && isForbidden(reason))
   const teamAgents = team.data?.agents ?? []
+  const teamTotal = team.data?.page.total ?? teamAgents.length
   const supportsTodayContract = team.data?.today != null
   const activeWorkdays = teamAgents.filter((agent) => (
     supportsTodayContract
@@ -135,6 +136,7 @@ export default function ManagerHomeScreen() {
     ? teamAgents.filter((agent) => agent.todayWorkday?.status === "COMPLETED").length
     : 0
   const locationAgents = locations.data?.locations ?? []
+  const locationTotal = locations.data?.page.total ?? locationAgents.length
   const liveLocations = locationAgents.filter((agent) => agent.freshness === "ONLINE").length
   const lastKnownLocations = locationAgents.filter((agent) => agent.freshness === "DELAYED" || agent.freshness === "STALE").length
   const noLocations = locationAgents.filter((agent) => agent.freshness === "NO_LOCATION").length
@@ -194,8 +196,9 @@ export default function ManagerHomeScreen() {
                 title={t("managerTeamCardTitle")}
                 hint={t("managerTeamCardHint")}
                 icon="profile"
-                value={String(teamAgents.length)}
+                value={String(teamAgents.length) + "/" + String(teamTotal)}
                 detail={
+                  t("managerLoadedOfTotal", { loaded: teamAgents.length, total: teamTotal }) + " · " +
                   String(activeWorkdays) + " " + t("managerWorkingNow") +
                   " · " + String(pausedWorkdays) + " " + t("managerPaused") +
                   (supportsTodayContract ? " · " + String(completedWorkdays) + " " + t("managerCompleted") : "")
@@ -209,8 +212,13 @@ export default function ManagerHomeScreen() {
                 title={t("managerLocationsCardTitle")}
                 hint={t("managerLocationsCardHint")}
                 icon="location"
-                value={String(liveLocations)}
-                detail={String(lastKnownLocations) + " " + t("managerLastKnown") + " · " + String(noLocations) + " " + t("managerNoLocation")}
+                value={String(locationAgents.length) + "/" + String(locationTotal)}
+                detail={
+                  t("managerLoadedOfTotal", { loaded: locationAgents.length, total: locationTotal }) + " · " +
+                  String(liveLocations) + " " + t("managerLive") +
+                  " · " + String(lastKnownLocations) + " " + t("managerLastKnown") +
+                  " · " + String(noLocations) + " " + t("managerNoLocation")
+                }
                 tone={liveLocations > 0 ? "success" : "info"}
                 loading={loading}
                 error={locations.error}

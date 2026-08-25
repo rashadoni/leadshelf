@@ -345,6 +345,22 @@ export async function mobileLogout(): Promise<void> {
   }).catch(() => {})
 }
 
+export type FieldManagerListOptions = {
+  page?: number
+  limit?: number
+  search?: string
+}
+
+function managerListPath(path: string, options?: FieldManagerListOptions): string {
+  const query = new URLSearchParams()
+  if (options?.page != null) query.set("page", String(options.page))
+  if (options?.limit != null) query.set("limit", String(options.limit))
+  const search = options?.search?.trim()
+  if (search) query.set("search", search)
+  const suffix = query.toString()
+  return suffix ? `${path}?${suffix}` : path
+}
+
 export const fieldApi = {
   heartbeat: async () => {
     const body = await request<{ success?: boolean }>("/api/v1/mtm/mobile/ping", json({}))
@@ -389,10 +405,10 @@ export const fieldApi = {
   locations: (date?: string) =>
     request<unknown>(locationsPath(date))
       .then(parseFieldLocationHistory),
-  managerTeam: () =>
-    request<unknown>("/api/v1/mtm/mobile/manager/team").then(parseFieldManagerTeam),
-  managerLocations: () =>
-    request<unknown>("/api/v1/mtm/mobile/manager/locations?limit=200").then(parseFieldManagerLocations),
+  managerTeam: (options?: FieldManagerListOptions) =>
+    request<unknown>(managerListPath("/api/v1/mtm/mobile/manager/team", options)).then(parseFieldManagerTeam),
+  managerLocations: (options?: FieldManagerListOptions) =>
+    request<unknown>(managerListPath("/api/v1/mtm/mobile/manager/locations", options)).then(parseFieldManagerLocations),
   managerPlanning: (from: string, to?: string) =>
     request<unknown>(
       to
@@ -624,8 +640,8 @@ export const fieldApi = {
   hrm(start?: string, end?: string): Promise<FieldHrmData>
   workday(date?: string): Promise<FieldWorkdayData>
   locations(date?: string): Promise<FieldLocationHistoryData>
-  managerTeam(): Promise<FieldManagerTeamData>
-  managerLocations(): Promise<FieldManagerLocationsData>
+  managerTeam(options?: FieldManagerListOptions): Promise<FieldManagerTeamData>
+  managerLocations(options?: FieldManagerListOptions): Promise<FieldManagerLocationsData>
   managerPlanning(from: string, to?: string): Promise<FieldManagerPlanningData>
   managerApprovals(): Promise<FieldManagerApprovalsData>
   managerApprovalDecision(input: FieldManagerApprovalDecisionInput): Promise<void>

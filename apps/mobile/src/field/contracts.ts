@@ -659,6 +659,17 @@ export interface FieldManagerTeamAgent {
   todayWorkday: FieldManagerTodayWorkday | null
 }
 
+/**
+ * Additive metadata for manager lists. Older servers did not send it, so the
+ * parsers below intentionally derive a one-page fallback when it is absent.
+ */
+export interface FieldManagerListPage {
+  number: number
+  limit: number
+  total: number
+  hasMore: boolean
+}
+
 export interface FieldManagerTeamData {
   scope: FieldManagerScope
   /**
@@ -667,6 +678,7 @@ export interface FieldManagerTeamData {
    */
   today: FieldManagerToday | null
   agents: FieldManagerTeamAgent[]
+  page: FieldManagerListPage
 }
 
 export interface FieldManagerLocationPoint {
@@ -700,6 +712,7 @@ export interface FieldManagerLocationsData {
   scope: FieldManagerScope
   generatedAt: string
   locations: FieldManagerLocationAgent[]
+  page: FieldManagerListPage
 }
 
 export interface FieldManagerPlanningAgent {
@@ -1286,6 +1299,35 @@ function number(value: unknown): value is number {
 
 function positiveInteger(value: unknown): value is number {
   return number(value) && Number.isInteger(value) && value > 0
+}
+
+function managerListPage(value: unknown, legacyTotal: number): FieldManagerListPage | null {
+  if (value == null) {
+    return {
+      number: 1,
+      limit: Math.max(legacyTotal, 1),
+      total: legacyTotal,
+      hasMore: false,
+    }
+  }
+  const page = record(value)
+  if (
+    !page ||
+    !positiveInteger(page.number) ||
+    !positiveInteger(page.limit) ||
+    !number(page.total) ||
+    !Number.isInteger(page.total) ||
+    page.total < 0 ||
+    !boolean(page.hasMore)
+  ) {
+    return null
+  }
+  return {
+    number: page.number,
+    limit: page.limit,
+    total: page.total,
+    hasMore: page.hasMore,
+  }
 }
 
 function boolean(value: unknown): value is boolean {
@@ -2051,7 +2093,12 @@ export function parseFieldManagerTeam(value: unknown): FieldManagerTeamData {
   if (agents.some((agent) => agent == null)) {
     throw new FieldContractError("mobile manager team")
   }
-  return { scope: data.scope, today, agents: agents as FieldManagerTeamAgent[] }
+  const parsedAgents = agents as FieldManagerTeamAgent[]
+  const page = managerListPage(data.page, parsedAgents.length)
+  if (!page) {
+    throw new FieldContractError("mobile manager team")
+  }
+  return { scope: data.scope, today, agents: parsedAgents, page }
 }
 
 function managerLocationAgent(value: unknown): FieldManagerLocationAgent | null {
@@ -2111,10 +2158,16 @@ export function parseFieldManagerLocations(value: unknown): FieldManagerLocation
   if (locations.some((location) => location == null)) {
     throw new FieldContractError("mobile manager locations")
   }
+  const parsedLocations = locations as FieldManagerLocationAgent[]
+  const page = managerListPage(data.page, parsedLocations.length)
+  if (!page) {
+    throw new FieldContractError("mobile manager locations")
+  }
   return {
     scope: data.scope,
     generatedAt: contract.generatedAt,
-    locations: locations as FieldManagerLocationAgent[],
+    locations: parsedLocations,
+    page,
   }
 }
 

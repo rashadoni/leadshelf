@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -17,6 +17,8 @@ const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
   STALE: "managerFreshness_STALE",
   NO_LOCATION: "managerFreshness_NO_LOCATION",
 }
+
+const MANAGER_PAGE_LIMIT = 25
 
 function freshnessColor(freshness: FieldManagerGpsFreshness): { background: string; foreground: string } {
   if (freshness === "ONLINE") return { background: colors.successBg, foreground: colors.successDark }
@@ -38,34 +40,55 @@ function openLiveMap(agent: FieldManagerLocationAgent) {
 export default function ManagerLocationsScreen() {
   const locale = useLocale()
   const [data, setData] = useState<FieldManagerLocationsData | null>(null)
+  const [search, setSearch] = useState("")
+  const [loadedSearch, setLoadedSearch] = useState("")
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const sequence = useRef(0)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (query: string, page = 1, append = false) => {
+    const request = ++sequence.current
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     setError(null)
     try {
-      setData(await fieldApi.managerLocations())
+      const next = await fieldApi.managerLocations({ page, limit: MANAGER_PAGE_LIMIT, search: query || undefined })
+      if (request !== sequence.current) return
+      setLoadedSearch(query)
+      setData((current) => {
+        if (!append || !current) return next
+        const existing = new Set(current.locations.map((agent) => agent.id))
+        return {
+          ...next,
+          locations: [...current.locations, ...next.locations.filter((agent) => !existing.has(agent.id))],
+        }
+      })
     } catch (reason) {
-      setError(reason)
+      if (request === sequence.current) setError(reason)
     } finally {
-      setLoading(false)
+      if (request === sequence.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    const id = setTimeout(() => void load(search.trim()), 300)
+    return () => clearTimeout(id)
+  }, [load, search])
 
   const denied = error instanceof HttpError && error.status === 403
   const liveCount = useMemo(
     () => data?.locations.filter((agent) => agent.freshness === "ONLINE").length ?? 0,
     [data],
   )
+  const hasPendingSearch = loadedSearch !== search.trim()
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
+      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}>
@@ -73,7 +96,7 @@ export default function ManagerLocationsScreen() {
             <Text style={styles.title}>{t("managerLocationsTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerLocationsHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -82,59 +105,92 @@ export default function ManagerLocationsScreen() {
             <View style={styles.stateIcon}><TabIcon name="location" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
         {data ? (
           <>
+            <View style={styles.searchBox}>
+              <Text style={styles.searchIcon}>⌕</Text>
+              <TextInput
+                accessibilityLabel={t("managerSearch")}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={120}
+                onChangeText={(value) => {
+                  sequence.current += 1
+                  setSearch(value)
+                }}
+                placeholder={t("managerSearchHint")}
+                placeholderTextColor={colors.faint}
+                returnKeyType="search"
+                style={styles.searchInput}
+                value={search}
+              />
+            </View>
             <View style={styles.summary}>
               <View style={styles.summaryIcon}><TabIcon name="location" color={colors.successDark} size={22} /></View>
               <View style={styles.summaryBody}>
                 <Text style={styles.summaryValue}>{liveCount}</Text>
-                <Text style={styles.summaryLabel}>{t("managerLive")}</Text>
+                <Text style={styles.summaryLabel}>{t("managerPageLocationSummary")}</Text>
               </View>
               <Text style={styles.summaryTime}>{t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale)}</Text>
             </View>
-            {liveCount === 0 ? <View style={styles.notice}><Text style={styles.noticeText}>{t("managerNoLiveLocations")}</Text></View> : null}
-            <View style={styles.list}>
-              {data.locations.map((agent) => {
-                const tone = freshnessColor(agent.freshness)
-                const point = agent.liveLocation ?? agent.lastKnownLocation
-                return (
-                  <View key={agent.id} style={styles.card}>
-                    <View style={styles.cardTop}>
-                      <View style={[styles.avatar, { backgroundColor: tone.background }]}><Text style={[styles.avatarText, { color: tone.foreground }]}>{agent.name.charAt(0).toUpperCase()}</Text></View>
-                      <View style={styles.cardBody}>
-                        <Text style={styles.name}>{agent.name}</Text>
-                        <Text style={styles.role}>{agentRoleLabel(agent.role)}</Text>
-                      </View>
-                      <View style={[styles.freshness, { backgroundColor: tone.background }]}><Text style={[styles.freshnessText, { color: tone.foreground }]}>{t(freshnessKeys[agent.freshness])}</Text></View>
-                    </View>
-                    {point ? (
-                      <View style={styles.locationLine}>
-                        <TabIcon name="location" color={tone.foreground} size={17} />
-                        <View style={styles.locationBody}>
-                          <Text style={[styles.locationTime, { color: tone.foreground }]}>{formatShortDateTime(point.recordedAt, locale)}</Text>
-                          {agent.freshness !== "ONLINE" ? <Text style={styles.locationHint}>{t("managerLastKnownNotLive")}</Text> : null}
+            <Text style={styles.pageInfo}>{t("managerLoadedOfTotal", { loaded: data.locations.length, total: data.page.total })}</Text>
+            {liveCount === 0 && data.locations.length > 0 ? <View style={styles.notice}><Text style={styles.noticeText}>{t("managerNoLiveLocations")}</Text></View> : null}
+            {data.locations.length === 0 ? (
+              <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="location" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{search.trim() ? t("managerNoSearchResults") : t("managerNoTeam")}</Text></View>
+            ) : (
+              <View style={styles.list}>
+                {data.locations.map((agent) => {
+                  const tone = freshnessColor(agent.freshness)
+                  const point = agent.liveLocation ?? agent.lastKnownLocation
+                  return (
+                    <View key={agent.id} style={styles.card}>
+                      <View style={styles.cardTop}>
+                        <View style={[styles.avatar, { backgroundColor: tone.background }]}><Text style={[styles.avatarText, { color: tone.foreground }]}>{agent.name.charAt(0).toUpperCase()}</Text></View>
+                        <View style={styles.cardBody}>
+                          <Text style={styles.name}>{agent.name}</Text>
+                          <Text style={styles.role}>{agentRoleLabel(agent.role)}</Text>
                         </View>
-                        {agent.freshness === "ONLINE" && agent.liveLocation ? (
-                          <Pressable accessibilityRole="button" accessibilityLabel={t("managerOpenLiveMap")} onPress={() => openLiveMap(agent)} style={styles.mapButton}>
-                            <TabIcon name="route" color={colors.primary} size={18} />
-                          </Pressable>
-                        ) : null}
+                        <View style={[styles.freshness, { backgroundColor: tone.background }]}><Text style={[styles.freshnessText, { color: tone.foreground }]}>{t(freshnessKeys[agent.freshness])}</Text></View>
                       </View>
-                    ) : (
-                      <View style={styles.noLocation}><Text style={styles.noLocationText}>{t("managerFreshness_NO_LOCATION")}</Text></View>
-                    )}
-                    <View style={styles.cardFooter}>
-                      <Text style={styles.presence}>{agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")}</Text>
-                      <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale) : "—"}</Text>
+                      {point ? (
+                        <View style={styles.locationLine}>
+                          <TabIcon name="location" color={tone.foreground} size={17} />
+                          <View style={styles.locationBody}>
+                            <Text style={[styles.locationTime, { color: tone.foreground }]}>{formatShortDateTime(point.recordedAt, locale)}</Text>
+                            {agent.freshness !== "ONLINE" ? <Text style={styles.locationHint}>{t("managerLastKnownNotLive")}</Text> : null}
+                          </View>
+                          {agent.freshness === "ONLINE" && agent.liveLocation ? (
+                            <Pressable accessibilityRole="button" accessibilityLabel={t("managerOpenLiveMap")} onPress={() => openLiveMap(agent)} style={styles.mapButton}>
+                              <TabIcon name="route" color={colors.primary} size={18} />
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      ) : (
+                        <View style={styles.noLocation}><Text style={styles.noLocationText}>{t("managerFreshness_NO_LOCATION")}</Text></View>
+                      )}
+                      <View style={styles.cardFooter}>
+                        <Text style={styles.presence}>{agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")}</Text>
+                        <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale) : "—"}</Text>
+                      </View>
                     </View>
-                  </View>
-                )
-              })}
-            </View>
+                  )
+                })}
+              </View>
+            )}
+            {data.page.hasMore && !hasPendingSearch ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={loading || loadingMore}
+                onPress={() => void load(search.trim(), data.page.number + 1, true)}
+                style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
+              >
+                <Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -154,12 +210,16 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   refreshText: { color: colors.primary, fontSize: 23, fontWeight: "900" },
+  searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 16, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
+  searchIcon: { color: colors.faint, fontSize: 21 },
+  searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
   summary: { marginHorizontal: 14, marginTop: 16, padding: 14, borderRadius: radii.card, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, flexDirection: "row", alignItems: "center", gap: 10 },
   summaryIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   summaryBody: { flex: 1 },
   summaryValue: { color: colors.successDark, fontSize: 24, lineHeight: 26, fontWeight: "900" },
   summaryLabel: { color: colors.successDark, fontSize: 10, fontWeight: "900", marginTop: 1 },
   summaryTime: { maxWidth: 114, color: colors.successDark, fontSize: 8, lineHeight: 12, textAlign: "right", fontWeight: "700" },
+  pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, padding: 11 },
   noticeText: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "800" },
   list: { paddingTop: 1 },
@@ -189,4 +249,7 @@ const styles = StyleSheet.create({
   stateText: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 7 },
   retry: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   retryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  loadMore: { minHeight: 44, marginHorizontal: 14, marginTop: 12, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  disabled: { opacity: 0.45 },
 })

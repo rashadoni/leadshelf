@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react"
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -18,6 +18,8 @@ type WorkdayMeta = {
   startedAt: string | null
   workedSeconds: number | null
 }
+
+const MANAGER_PAGE_LIMIT = 25
 
 function compactWorkedTime(totalSeconds: number): string {
   const minutes = Math.max(0, Math.floor(totalSeconds / 60))
@@ -102,24 +104,44 @@ function workdayMeta(agent: FieldManagerTeamAgent, supportsTodayContract: boolea
 export default function ManagerTeamScreen() {
   const locale = useLocale()
   const [data, setData] = useState<FieldManagerTeamData | null>(null)
+  const [search, setSearch] = useState("")
+  const [loadedSearch, setLoadedSearch] = useState("")
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const sequence = useRef(0)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (query: string, page = 1, append = false) => {
+    const request = ++sequence.current
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     setError(null)
     try {
-      setData(await fieldApi.managerTeam())
+      const next = await fieldApi.managerTeam({ page, limit: MANAGER_PAGE_LIMIT, search: query || undefined })
+      if (request !== sequence.current) return
+      setLoadedSearch(query)
+      setData((current) => {
+        if (!append || !current) return next
+        const existing = new Set(current.agents.map((agent) => agent.id))
+        return {
+          ...next,
+          agents: [...current.agents, ...next.agents.filter((agent) => !existing.has(agent.id))],
+        }
+      })
     } catch (reason) {
-      setError(reason)
+      if (request === sequence.current) setError(reason)
     } finally {
-      setLoading(false)
+      if (request === sequence.current) {
+        setLoading(false)
+        setLoadingMore(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    const id = setTimeout(() => void load(search.trim()), 300)
+    return () => clearTimeout(id)
+  }, [load, search])
 
   const denied = error instanceof HttpError && error.status === 403
   const supportsTodayContract = data?.today !== null && data?.today !== undefined
@@ -127,10 +149,11 @@ export default function ManagerTeamScreen() {
   const activeToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "STARTED").length
   const pausedToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "PAUSED").length
   const completedToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "COMPLETED").length
+  const hasPendingSearch = loadedSearch !== search.trim()
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
+      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <View style={styles.headerBody}>
@@ -138,7 +161,7 @@ export default function ManagerTeamScreen() {
             <Text style={styles.title}>{t("managerTeamTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerTeamHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><Text style={styles.refreshText}>↻</Text></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -147,7 +170,7 @@ export default function ManagerTeamScreen() {
             <View style={styles.stateIcon}><TabIcon name="profile" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -158,13 +181,32 @@ export default function ManagerTeamScreen() {
               <Text style={styles.scopeText}>{data.scope === "ORGANIZATION" ? t("managerScopeOrganization") : t("managerScopeTeam")}</Text>
               {error ? <Text style={styles.staleText}>{t("managerUnavailable")}</Text> : null}
             </View>
+            <View style={styles.searchBox}>
+              <Text style={styles.searchIcon}>⌕</Text>
+              <TextInput
+                accessibilityLabel={t("managerSearch")}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={120}
+                onChangeText={(value) => {
+                  sequence.current += 1
+                  setSearch(value)
+                }}
+                placeholder={t("managerSearchHint")}
+                placeholderTextColor={colors.faint}
+                returnKeyType="search"
+                style={styles.searchInput}
+                value={search}
+              />
+            </View>
+            <Text style={styles.pageInfo}>{t("managerLoadedOfTotal", { loaded: data.agents.length, total: data.page.total })}</Text>
             {supportsTodayContract && data.today ? (
               <View style={styles.todaySummary}>
                 <View style={styles.todaySummaryTop}>
                   <View style={styles.todaySummaryIcon}><TabIcon name="today" color={colors.primary} size={21} /></View>
                   <View style={styles.todaySummaryBody}>
                     <Text style={styles.todaySummaryTitle}>{t("managerTodayWorkdays")}</Text>
-                    <Text style={styles.todaySummaryHint}>{t("managerTodaySnapshot", { time: formatShortDateTime(data.today.generatedAt, locale) })}</Text>
+                    <Text style={styles.todaySummaryHint}>{t("managerPageActivitySummary") + " · " + t("managerTodaySnapshot", { time: formatShortDateTime(data.today.generatedAt, locale) })}</Text>
                   </View>
                 </View>
                 <View style={styles.todayStats}>
@@ -175,7 +217,7 @@ export default function ManagerTeamScreen() {
               </View>
             ) : null}
             {data.agents.length === 0 ? (
-              <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="profile" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{t("managerNoTeam")}</Text></View>
+              <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="profile" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{search.trim() ? t("managerNoSearchResults") : t("managerNoTeam")}</Text></View>
             ) : (
               <View style={styles.list}>
                 {data.agents.map((agent) => {
@@ -208,6 +250,16 @@ export default function ManagerTeamScreen() {
                 })}
               </View>
             )}
+            {data.page.hasMore && !hasPendingSearch ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={loading || loadingMore}
+                onPress={() => void load(search.trim(), data.page.number + 1, true)}
+                style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
+              >
+                <Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -230,6 +282,10 @@ const styles = StyleSheet.create({
   scope: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.inner, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
   scopeText: { flex: 1, color: colors.primary, fontSize: 10, fontWeight: "900" },
   staleText: { color: colors.warning, fontSize: 9, fontWeight: "800" },
+  searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
+  searchIcon: { color: colors.faint, fontSize: 21 },
+  searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
+  pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },
   todaySummary: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, ...cardShadow },
   todaySummaryTop: { flexDirection: "row", alignItems: "center", gap: 9 },
   todaySummaryIcon: { width: 39, height: 39, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
@@ -266,4 +322,7 @@ const styles = StyleSheet.create({
   stateText: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 7 },
   retry: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   retryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  loadMore: { minHeight: 44, marginHorizontal: 14, marginTop: 12, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  disabled: { opacity: 0.45 },
 })
