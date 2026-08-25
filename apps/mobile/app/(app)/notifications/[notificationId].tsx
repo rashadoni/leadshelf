@@ -1,11 +1,11 @@
 import { useEffect } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
-import { useLocalSearchParams } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { useField } from "../../../src/field/field-context"
 import { fieldNotificationCopy } from "../../../src/field/notification-copy"
-import { notificationTarget } from "../../../src/field/notification-target"
+import { notificationDestination, notificationTarget } from "../../../src/field/notification-target"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
@@ -67,6 +67,7 @@ export default function NotificationDetailScreen() {
 
   const copy = fieldNotificationCopy(item)
   const hasSemanticTarget = notificationTarget(item) != null
+  const targetDestination = notificationDestination(item)
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -96,6 +97,19 @@ export default function NotificationDetailScreen() {
           </View>
         </View>
 
+        {targetDestination ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("notificationDetailOpenTarget")}
+            accessibilityHint={t("notificationDetailHint")}
+            onPress={() => router.push(targetDestination as never)}
+            style={({ pressed }) => [styles.targetButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.targetButtonText}>{t("notificationDetailOpenTarget")}</Text>
+            <TabIcon name="chevronRight" color={colors.headerText} size={20} />
+          </Pressable>
+        ) : null}
+
         {!hasSemanticTarget ? (
           <View style={styles.noTargetCard}>
             <View style={styles.noTargetIcon}><TabIcon name="info" color={colors.info} size={19} /></View>
@@ -123,6 +137,9 @@ const styles = StyleSheet.create({
   facts: { marginTop: 18, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 7 },
   factRow: { minHeight: 22, justifyContent: "center" },
   factLabel: { color: colors.faint, fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  targetButton: { minHeight: 52, marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  targetButtonText: { flex: 1, color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  pressed: { opacity: 0.74 },
   noTargetCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 11, padding: 12, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   noTargetIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   noTargetText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "800", paddingTop: 2 },
