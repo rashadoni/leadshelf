@@ -4,7 +4,7 @@ import { TabIcon } from "../components/TabIcon"
 import { t, useLocale } from "../i18n"
 import { formatCalendarDay, formatCalendarMonthShort, formatCalendarWeekdayShort } from "../i18n/date-format"
 import { useResponsiveLayout } from "../layout/responsive"
-import { colors, radii } from "../theme"
+import { cardShadow, colors, radii } from "../theme"
 
 export type FieldDayNavigatorItem = {
   date: string
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: radii.pill },
   visibleHint: { color: colors.muted, fontSize: 11, lineHeight: 15, textAlign: "center", paddingHorizontal: 8 },
   calendarOverlay: { flex: 1, justifyContent: "center", paddingHorizontal: 14, backgroundColor: "rgba(16,38,61,0.42)" },
-  calendarBackdrop: { ...StyleSheet.absoluteFillObject },
+  calendarBackdrop: { ...StyleSheet.absoluteFill },
   calendarDialog: { width: "100%", maxWidth: 500, maxHeight: "90%", alignSelf: "center", borderRadius: 24, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   calendarHeader: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
   calendarArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
