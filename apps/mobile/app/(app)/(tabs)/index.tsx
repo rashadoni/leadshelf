@@ -153,11 +153,12 @@ export default function TodayTab() {
   const workdayActionIsPrimary = routeActionRepeatsWorkday
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
-  const daySignals: Array<{ value: number; label: string; icon: TabIconName }> = [
+  const allDaySignals: Array<{ value: number; label: string; icon: TabIconName }> = [
     { value: summary?.visits ?? localVisits, label: t("statVisitsToday"), icon: "visit" },
     { value: openTasks, label: t("statOpenTasks"), icon: "tasks" },
     { value: shelf.status.pendingOps + shelf.status.pendingPhotos, label: t("statPendingSync"), icon: "refresh" },
-  ].filter((signal) => signal.value > 0)
+  ]
+  const daySignals = allDaySignals.filter((signal) => signal.value > 0)
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>

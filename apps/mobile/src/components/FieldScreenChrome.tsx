@@ -1,4 +1,4 @@
-import { StatusBar } from "expo-status-bar"
+import { StatusBar } from "react-native"
 import { colors } from "../theme"
 
 /**
@@ -12,7 +12,7 @@ export function FieldScreenChrome({ tone = "light" }: { tone?: "light" | "dark" 
   const dark = tone === "dark"
   return (
     <StatusBar
-      style={dark ? "light" : "dark"}
+      barStyle={dark ? "light-content" : "dark-content"}
       backgroundColor={dark ? colors.navy : colors.bg}
       translucent={false}
     />
