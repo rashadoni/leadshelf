@@ -29,6 +29,7 @@ export default function WeekTab() {
   const week = field.week
   const busy = field.phase === "loading" || field.phase === "refreshing"
   const layout = useResponsiveLayout()
+  const isCurrentWeek = Boolean(week && week.weekStart === startOfIsoWeek(week.today))
 
   const move = (days: number) => {
     if (!week) return
@@ -43,24 +44,42 @@ export default function WeekTab() {
       >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>{t("tabWeek").toUpperCase()}</Text>
-          <Text style={styles.title}>{t("weekSchedule")}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{t("weekSchedule")}</Text>
           {week ? <Text style={styles.range}>{formatCalendarRange(week.weekStart, week.weekEndExclusive, locale)}</Text> : null}
         </View>
 
         <View style={styles.navigator}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("previousWeek")} onPress={() => move(-7)} style={styles.navButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("previousWeek")}
+            accessibilityHint={t("weekSchedule")}
+            accessibilityState={{ disabled: !week, busy }}
+            disabled={!week}
+            onPress={() => move(-7)}
+            style={({ pressed }) => [styles.navButton, !week && styles.disabled, pressed && week && styles.pressed]}
+          >
             <TabIcon name="chevronLeft" color={colors.primary} size={23} />
           </Pressable>
           <Pressable
             disabled={!week}
             accessibilityRole="button"
             accessibilityLabel={t("currentWeek")}
+            accessibilityHint={t("weekSchedule")}
+            accessibilityState={{ disabled: !week, busy, selected: isCurrentWeek }}
             onPress={() => week && void field.loadWeek(startOfIsoWeek(week.today))}
-            style={styles.currentButton}
+            style={({ pressed }) => [styles.currentButton, !week && styles.disabled, pressed && week && styles.pressed]}
           >
             <Text style={styles.currentText}>{t("currentWeek")}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("nextWeek")} onPress={() => move(7)} style={styles.navButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("nextWeek")}
+            accessibilityHint={t("weekSchedule")}
+            accessibilityState={{ disabled: !week, busy }}
+            disabled={!week}
+            onPress={() => move(7)}
+            style={({ pressed }) => [styles.navButton, !week && styles.disabled, pressed && week && styles.pressed]}
+          >
             <TabIcon name="chevronRight" color={colors.primary} size={23} />
           </Pressable>
         </View>
@@ -82,15 +101,33 @@ export default function WeekTab() {
 
         {field.phase === "stale" || field.phase === "error" ? (
           <View style={styles.offlineNotice}>
-            <Text style={styles.offlineText}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.retryAction}><Text style={styles.retry}>{t("refresh")}</Text></Pressable>
+            <Text accessibilityLiveRegion="polite" style={styles.offlineText}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("refresh")}
+              accessibilityHint={t("weekSchedule")}
+              accessibilityState={{ disabled: false, busy }}
+              onPress={() => void field.refresh()}
+              style={({ pressed }) => [styles.retryAction, pressed && styles.pressed]}
+            >
+              <Text style={styles.retry}>{t("refresh")}</Text>
+            </Pressable>
           </View>
         ) : null}
 
         {!week && !busy ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>{t("fieldDataError")}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("refresh")}</Text></Pressable>
+            <Text accessibilityLiveRegion="polite" style={styles.emptyTitle}>{t("fieldDataError")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("refresh")}
+              accessibilityHint={t("weekSchedule")}
+              accessibilityState={{ disabled: false, busy: false }}
+              onPress={() => void field.refresh()}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.primaryText}>{t("refresh")}</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -98,9 +135,15 @@ export default function WeekTab() {
         {week?.days.map((day) => {
           const formatted = formatCalendarDay(day.date, locale)
           const isDayOff = !day.isWorkingDay
+          const dayLabel = [formatted.weekday, formatted.date, day.isToday ? t("tabToday") : null, isDayOff ? day.nonWorkingReason ?? t("dayOff") : null].filter(Boolean).join(", ")
+          const missionLabel = [
+            t("dailyMission"),
+            day.tasks.total > 0 ? `${day.tasks.completed}/${day.tasks.total} ${t("dayTasks")}` : null,
+            day.visits.total > 0 ? `${day.visits.completed}/${day.visits.total} ${t("dayVisits")}` : null,
+          ].filter(Boolean).join(", ")
           return (
             <View key={day.date} style={[styles.dayCard, layout.isTablet && styles.dayCardTablet, day.isToday && styles.todayCard, isDayOff && styles.dayOffCard]}>
-              <View style={styles.dayHeader}>
+              <View accessible accessibilityRole="header" accessibilityLabel={dayLabel} style={styles.dayHeader}>
                 <View style={[styles.dateBadge, day.isToday && styles.todayBadge, isDayOff && styles.dayOffBadge]}>
                   <Text style={[styles.dateBadgeText, day.isToday && styles.todayBadgeText, isDayOff && styles.dayOffBadgeText]}>{formatted.day}</Text>
                 </View>
@@ -112,14 +155,14 @@ export default function WeekTab() {
               </View>
 
               {isDayOff ? (
-                <View style={styles.dayOffLine}>
+                <View accessible accessibilityRole="summary" accessibilityLabel={dayLabel} style={styles.dayOffLine}>
                   <View style={styles.holidayDot} />
                   <Text style={styles.dayOffText}>{day.nonWorkingReason ?? t("dayOff")}</Text>
                 </View>
               ) : null}
 
               {day.tasks.total > 0 || day.visits.total > 0 ? (
-                <View style={styles.dayMission}>
+                <View accessible accessibilityRole="summary" accessibilityLabel={missionLabel} style={styles.dayMission}>
                   <Text style={styles.dayMissionTitle}>{t("dailyMission")}</Text>
                   <View style={styles.dayMissionStats}>
                     {day.tasks.total > 0 ? (
@@ -140,10 +183,13 @@ export default function WeekTab() {
 
               {day.routes.length === 0 ? (
                 <View style={styles.emptyDay}>
-                  <Text style={styles.noPlans}>{t("noPlansForDay")}</Text>
+                  <Text accessibilityLabel={`${dayLabel}. ${t("noPlansForDay")}`} style={styles.noPlans}>{t("noPlansForDay")}</Text>
                   {day.routePlanningAllowed ? (
                     <Pressable
+                      accessibilityRole="button"
                       accessibilityLabel={t("createRoute")}
+                      accessibilityHint={dayLabel}
+                      accessibilityState={{ disabled: false, busy: false }}
                       onPress={() => router.push(("/(app)/routes/new?date=" + encodeURIComponent(day.date)) as never)}
                       style={({ pressed }) => [styles.createRouteAction, pressed && styles.pressed]}
                     >
@@ -151,7 +197,7 @@ export default function WeekTab() {
                       <TabIcon name="chevronRight" color={colors.headerText} size={19} />
                     </Pressable>
                   ) : !isDayOff ? (
-                    <View style={styles.routeUnavailable}>
+                    <View accessible accessibilityRole="summary" accessibilityLabel={`${dayLabel}. ${t("routePlanningDateUnavailable")}`} style={styles.routeUnavailable}>
                       <TabIcon name="info" color={colors.info} size={16} />
                       <Text style={styles.routeUnavailableText}>{t("routePlanningDateUnavailable")}</Text>
                     </View>
@@ -163,19 +209,30 @@ export default function WeekTab() {
                     const meta = routeStatusMeta(route.effectiveStatus)
                     const tone = tones[meta.tone]
                     const percent = route.totalPoints ? Math.round((route.visitedPoints / route.totalPoints) * 100) : 0
+                    const progressPercent = Math.min(100, percent)
+                    const routeLabel = route.name ?? t("tabRoute")
+                    const routeProgressLabel = `${route.visitedPoints}/${route.totalPoints} ${t("routePointsLabel")}`
                     return (
                       <View key={route.id} style={styles.routeCard}>
                         <View style={styles.routeTop}>
                           <View style={styles.routeBody}>
-                            <Text style={styles.routeName}>{route.name ?? t("tabRoute")}</Text>
+                            <Text style={styles.routeName}>{routeLabel}</Text>
                             <Text style={styles.routeMeta}>{route.totalPoints} {t("routePointsLabel")} · {route.visitedPoints} {t("routeVisitedLabel")}</Text>
                           </View>
-                          <View style={[styles.statusPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+                          <View accessible accessibilityRole="summary" accessibilityLabel={t(meta.labelKey)} style={[styles.statusPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
                             <View style={[styles.statusDot, { backgroundColor: tone.dot }]} />
                             <Text style={[styles.statusText, { color: tone.text }]}>{t(meta.labelKey)}</Text>
                           </View>
                         </View>
-                        <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.min(100, percent)}%`, backgroundColor: tone.dot }]} /></View>
+                        <View
+                          accessible
+                          accessibilityRole="progressbar"
+                          accessibilityLabel={`${routeLabel}. ${routeProgressLabel}`}
+                          accessibilityValue={{ min: 0, max: 100, now: progressPercent, text: `${progressPercent}%` }}
+                          style={styles.progressTrack}
+                        >
+                          <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: tone.dot }]} />
+                        </View>
                         {route.points.slice(0, 3).map((point, pointIndex) => (
                           <View key={point.id} style={styles.pointRow}>
                             <View style={[styles.pointIndex, point.effectiveStatus === "VISITED" && styles.pointVisited, point.effectiveStatus === "MISSED" && styles.pointMissed]}>
@@ -190,7 +247,9 @@ export default function WeekTab() {
                         {route.points.length > 3 ? <Text style={styles.morePoints}>+{route.points.length - 3} {t("routePointsLabel")}</Text> : null}
                         <Pressable
                           accessibilityRole="button"
-                          accessibilityLabel={route.canEdit ? t("editRoute") : t("openRoute")}
+                          accessibilityLabel={`${route.canEdit ? t("editRoute") : t("openRoute")}: ${routeLabel}`}
+                          accessibilityHint={`${t(meta.labelKey)}. ${routeProgressLabel}`}
+                          accessibilityState={{ disabled: false, busy: route.syncState === "PENDING" }}
                           onPress={() => router.push(`/(app)/routes/${route.id}` as never)}
                           style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
                         >
@@ -220,7 +279,6 @@ const styles = StyleSheet.create({
   range: { color: colors.muted, fontSize: 13, marginTop: 4 },
   navigator: { marginHorizontal: 14, marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.card, borderRadius: radii.card, padding: 7, ...cardShadow },
   navButton: { width: 48, height: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  navArrow: { color: colors.primary, fontSize: 30, lineHeight: 32, fontWeight: "500" },
   currentButton: { minHeight: 44, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   currentText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   legendCard: { marginHorizontal: 14, marginTop: 12, backgroundColor: colors.card, borderRadius: radii.card, padding: 13, borderWidth: 1, borderColor: colors.border },
@@ -264,7 +322,6 @@ const styles = StyleSheet.create({
   noPlans: { color: colors.muted, fontSize: 13, paddingVertical: 11, textAlign: "center" },
   createRouteAction: { minHeight: 44, marginTop: 2, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   createRouteActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
-  createRouteActionArrow: { color: colors.headerText, fontSize: 18, fontWeight: "700" },
   routeUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 2, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   routeUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
   routeList: { marginTop: 12, gap: 11 },
@@ -289,8 +346,8 @@ const styles = StyleSheet.create({
   morePoints: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 5 },
   routeAction: { marginTop: 10, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 13 },
   routeActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
-  routeActionArrow: { color: colors.primary, fontSize: 18 },
   pressed: { opacity: 0.72 },
+  disabled: { opacity: 0.46 },
   dayGrid: { width: "100%" },
   dayGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 14, paddingHorizontal: 14, alignItems: "flex-start" },
   dayCardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
