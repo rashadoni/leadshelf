@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { isRouteDraftDirty } from "./route-draft-state"
+import {
+  isExistingRouteDraftDirty,
+  isRouteDraftDirty,
+  snapshotExistingRouteDraft,
+} from "./route-draft-state"
 
 describe("route draft leave guard", () => {
   const base = {
@@ -19,5 +23,37 @@ describe("route draft leave guard", () => {
     expect(isRouteDraftDirty({ ...base, targetCount: 1 })).toBe(true)
     expect(isRouteDraftDirty({ ...base, name: "Monday route" })).toBe(true)
     expect(isRouteDraftDirty({ ...base, notes: "  Call before arrival  " })).toBe(true)
+  })
+})
+
+describe("existing route leave guard", () => {
+  const initial = snapshotExistingRouteDraft({
+    name: "Monday route",
+    notes: "Call before arrival",
+    points: [{ id: "first" }, { id: "second" }],
+    timeInputs: { first: "09:00", second: "09:30" },
+  })
+
+  it("allows an unchanged route to close", () => {
+    expect(isExistingRouteDraftDirty(initial, {
+      name: " Monday route ",
+      notes: "Call before arrival",
+      points: [{ id: "first" }, { id: "second" }],
+      timeInputs: { first: "09:00", second: "09:30" },
+    })).toBe(false)
+  })
+
+  it("protects text, time, order, added and removed stops", () => {
+    const base = {
+      name: "Monday route",
+      notes: "Call before arrival",
+      points: [{ id: "first" }, { id: "second" }],
+      timeInputs: { first: "09:00", second: "09:30" },
+    }
+    expect(isExistingRouteDraftDirty(initial, { ...base, name: "New name" })).toBe(true)
+    expect(isExistingRouteDraftDirty(initial, { ...base, timeInputs: { first: "09:15", second: "09:30" } })).toBe(true)
+    expect(isExistingRouteDraftDirty(initial, { ...base, points: [{ id: "second" }, { id: "first" }] })).toBe(true)
+    expect(isExistingRouteDraftDirty(initial, { ...base, points: [{ id: "first" }] })).toBe(true)
+    expect(isExistingRouteDraftDirty(initial, { ...base, points: [{ id: "first" }, { id: "second" }, { id: "third" }] })).toBe(true)
   })
 })

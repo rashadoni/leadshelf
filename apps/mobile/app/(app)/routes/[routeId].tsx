@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Alert,
   Linking,
@@ -46,6 +46,11 @@ import { parseFieldRouteMutationConflict, routeConflictPointIndexes } from "../.
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
+import {
+  isExistingRouteDraftDirty,
+  snapshotExistingRouteDraft,
+  type ExistingRouteDraftSnapshot,
+} from "../../../src/field/route-draft-state"
 import {
   setOptimisticFieldVisitSyncState,
   startOptimisticFieldVisit,
@@ -116,6 +121,8 @@ export default function FieldRouteDetailScreen() {
   const [addRequestTarget, setAddRequestTarget] = useState<RouteTarget | null>(null)
   const [addReason, setAddReason] = useState("")
   const [checkingInPointId, setCheckingInPointId] = useState<string | null>(null)
+  const [initialEditSnapshot, setInitialEditSnapshot] = useState<ExistingRouteDraftSnapshot | null>(null)
+  const hydratedRouteKey = useRef<string | null>(null)
   const durableRouteConflict = useMemo(
     () => routeData?.syncState ? fieldRouteConflictRecovery(routeData.id) : null,
     [routeData?.id, routeData?.syncState],
@@ -137,16 +144,37 @@ export default function FieldRouteDetailScreen() {
     [localTimeConflicts, routeConflict],
   )
 
+  const routeHydrationKey = routeData
+    ? `${routeData.id}:${routeData.version}:${field.week?.timezone ?? "UTC"}`
+    : null
+
   useEffect(() => {
-    if (!routeData) return
-    setName(routeData.name ?? "")
-    setNotes(routeData.notes ?? "")
-    setPoints(routeData.points)
-    setTimeInputs(Object.fromEntries(routeData.points.map((point) => [
+    if (!routeData || !routeHydrationKey || hydratedRouteKey.current === routeHydrationKey) return
+    if (hydratedRouteKey.current && isExistingRouteDraftDirty(initialEditSnapshot, {
+      name,
+      notes,
+      points,
+      timeInputs,
+    })) return
+    const nextName = routeData.name ?? ""
+    const nextNotes = routeData.notes ?? ""
+    const nextPoints = routeData.points
+    const nextTimeInputs = Object.fromEntries(routeData.points.map((point) => [
       point.id,
       formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC"),
-    ])))
-  }, [field.week?.timezone, routeData])
+    ]))
+    setName(nextName)
+    setNotes(nextNotes)
+    setPoints(nextPoints)
+    setTimeInputs(nextTimeInputs)
+    setInitialEditSnapshot(snapshotExistingRouteDraft({
+      name: nextName,
+      notes: nextNotes,
+      points: nextPoints,
+      timeInputs: nextTimeInputs,
+    }))
+    hydratedRouteKey.current = routeHydrationKey
+  }, [field.week?.timezone, initialEditSnapshot, name, notes, points, routeData, routeHydrationKey, timeInputs])
 
   useEffect(() => {
     if (!routeId?.startsWith("local-route-") || !syncStatus.lastSyncAt || !field.week) return
@@ -204,6 +232,28 @@ export default function FieldRouteDetailScreen() {
   const canNavigatePrimaryPoint = primaryRoutePoint
     ? routeNavigationUrls(primaryRoutePoint, navigationPlatform).length > 0
     : false
+  const hasUnsavedRouteEdit = routeData.canEdit && isExistingRouteDraftDirty(initialEditSnapshot, {
+    name,
+    notes,
+    points,
+    timeInputs,
+  })
+
+  function goBack() {
+    if (saving) return
+    if (pickerOpen) {
+      setPickerOpen(false)
+      return
+    }
+    if (!hasUnsavedRouteEdit) {
+      router.back()
+      return
+    }
+    Alert.alert(t("routeDiscardEditTitle"), t("routeDiscardEditBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("routeDiscardEditConfirm"), style: "destructive", onPress: () => router.back() },
+    ])
+  }
 
   async function startVisit(point: FieldRoutePoint) {
     if (activeVisit) {
@@ -325,6 +375,7 @@ export default function FieldRouteDetailScreen() {
           plannedTime: mappedPoints[index]?.plannedTime ?? null,
         })),
       }))
+      setInitialEditSnapshot(snapshotExistingRouteDraft({ name, notes, points, timeInputs }))
       await sync()
       const result = fieldRouteOutboxResult(queued.clientOpId)
       if (result?.status === "applied") {
@@ -546,7 +597,7 @@ export default function FieldRouteDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} hitSlop={10} style={styles.backButton}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={goBack} hitSlop={10} style={[styles.backButton, saving && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("routeDetails").toUpperCase()}</Text>
             <Text style={styles.title}>{routeData.name ?? t("tabRoute")}</Text>
