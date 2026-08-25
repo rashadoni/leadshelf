@@ -11,13 +11,12 @@ import {
 import { router, useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import {
-  CommercialButton,
-  CommercialEmpty,
   CommercialHeader,
   CommercialPill,
   commercialCardStyle,
 } from "../../src/commercial/ui"
 import { SyncBar } from "../../src/components/SyncBar"
+import { TabIcon } from "../../src/components/TabIcon"
 import {
   discardFieldRouteVersionConflict,
   detachFieldCommitmentEvidence,
@@ -121,12 +120,70 @@ function rowPhoto(row: FieldSyncRecoveryRow): string | null {
   return row.kind === "field.visit.photo" ? string(row.payload.fileUri) : null
 }
 
+type RecoveryAction = "retry" | "discardRoute" | "returnDraft" | "withoutPhoto" | "withoutAttachment"
+
+function RecoveryEmpty() {
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={`${t("syncCenterEmpty")}. ${t("syncCenterEmptyHint")}`}
+      style={[commercialCardStyle, styles.empty]}
+    >
+      <View accessible={false} style={styles.emptyMark}><TabIcon name="check" color={colors.success} size={26} /></View>
+      <Text style={styles.emptyTitle}>{t("syncCenterEmpty")}</Text>
+      <Text style={styles.emptyHint}>{t("syncCenterEmptyHint")}</Text>
+    </View>
+  )
+}
+
+function RecoveryButton({
+  label,
+  hint,
+  busy,
+  disabled,
+  onPress,
+  tone = "primary",
+}: {
+  label: string
+  hint: string
+  busy: boolean
+  disabled: boolean
+  onPress: () => void
+  tone?: "primary" | "secondary"
+}) {
+  const secondary = tone === "secondary"
+  const foreground = secondary ? colors.primary : colors.headerText
+  const visibleLabel = busy ? `${label}…` : label
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={visibleLabel}
+      accessibilityHint={hint}
+      accessibilityState={{ busy, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.recoveryButton,
+        { backgroundColor: secondary ? colors.primarySoft : colors.primary },
+        disabled && styles.recoveryButtonDisabled,
+        pressed && !disabled && styles.recoveryButtonPressed,
+      ]}
+    >
+      {busy ? <TabIcon name="refresh" color={foreground} size={17} /> : null}
+      <Text numberOfLines={2} style={[styles.recoveryButtonText, { color: foreground }]}>{visibleLabel}</Text>
+    </Pressable>
+  )
+}
+
 export default function SyncCenterScreen() {
   const locale = useLocale()
   const { status, sync } = useSync()
   const field = useField()
   const [rows, setRows] = useState<FieldSyncRecoveryRow[]>(listFieldSyncRecoveryQueue)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [busyAction, setBusyAction] = useState<RecoveryAction | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const reload = useCallback(() => setRows(listFieldSyncRecoveryQueue()), [])
 
@@ -146,6 +203,7 @@ export default function SyncCenterScreen() {
   async function retry(row: FieldSyncRecoveryRow) {
     if (busyId || syncBusy) return
     setBusyId(row.clientOpId)
+    setBusyAction("retry")
     try {
       const next = retryFieldSyncOperation(row.clientOpId)
       if (!next) return
@@ -155,12 +213,14 @@ export default function SyncCenterScreen() {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
+      setBusyAction(null)
     }
   }
 
   async function discardOutdatedRouteChange(row: FieldSyncRecoveryRow) {
     if (busyId || syncBusy) return
     setBusyId(row.clientOpId)
+    setBusyAction("discardRoute")
     try {
       const discarded = discardFieldRouteVersionConflict(row.clientOpId)
       if (!discarded) return
@@ -170,12 +230,14 @@ export default function SyncCenterScreen() {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
+      setBusyAction(null)
     }
   }
 
   async function returnRouteToDraft(row: FieldSyncRecoveryRow) {
     if (busyId || syncBusy) return
     setBusyId(row.clientOpId)
+    setBusyAction("returnDraft")
     try {
       const recovered = returnFieldRoutePublishToDraft(row.clientOpId)
       if (!recovered) return
@@ -188,6 +250,7 @@ export default function SyncCenterScreen() {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
+      setBusyAction(null)
     }
   }
 
@@ -199,6 +262,7 @@ export default function SyncCenterScreen() {
   async function continueWithoutPhoto(row: FieldSyncRecoveryRow) {
     if (busyId || syncBusy) return
     setBusyId(row.clientOpId)
+    setBusyAction("withoutPhoto")
     try {
       const result = detachFieldCommitmentEvidence(row.clientOpId)
       if (!result) return
@@ -209,12 +273,14 @@ export default function SyncCenterScreen() {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
+      setBusyAction(null)
     }
   }
 
   async function continueWithoutAttachment(row: FieldSyncRecoveryRow) {
     if (busyId || syncBusy) return
     setBusyId(row.clientOpId)
+    setBusyAction("withoutAttachment")
     try {
       const result = detachFieldMessageAttachment(row.clientOpId)
       if (!result) return
@@ -225,6 +291,7 @@ export default function SyncCenterScreen() {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
       setBusyId(null)
+      setBusyAction(null)
     }
   }
 
@@ -282,43 +349,55 @@ export default function SyncCenterScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.primary} />}
       >
         {rows.length > 0 ? (
-          <View style={styles.summary}>
-            <View style={styles.summaryMark}><Text style={styles.summaryMarkText}>!</Text></View>
+          <View
+            accessible
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`${t("syncCenterSummary", { count: rows.length })}. ${t("syncCenterSummaryHint")}`}
+            style={styles.summary}
+          >
+            <View accessible={false} style={styles.summaryMark}><TabIcon name="alert" color={colors.dangerPressed} size={24} /></View>
             <View style={styles.summaryBody}>
               <Text style={styles.summaryTitle}>{t("syncCenterSummary", { count: rows.length })}</Text>
               <Text style={styles.summaryHint}>{t("syncCenterSummaryHint")}</Text>
             </View>
           </View>
         ) : (
-          <CommercialEmpty glyph="✓" title={t("syncCenterEmpty")} hint={t("syncCenterEmptyHint")} />
+          <RecoveryEmpty />
         )}
 
         {rows.length > 0 ? <View style={styles.list}>{rows.map((row) => {
           const photoUri = rowPhoto(row)
           const error = rowError(row, field.week?.timezone ?? "UTC")
+          const context = rowContext(row)
+          const statusLabel = row.status === "conflict" ? t("syncCenterConflict") : t("syncCenterRejected")
+          const actionHint = `${kindLabel(row.kind, locale)} · ${statusLabel}`
+          const rowBusy = busyId === row.clientOpId
+          const actionBusy = (action: RecoveryAction) => rowBusy && busyAction === action
+          const actionsDisabled = busyId !== null || syncBusy
           return (
             <View key={row.clientOpId} style={styles.card}>
               <View style={styles.cardTop}>
-                {photoUri ? <EncryptedMediaImage uri={photoUri} style={styles.preview} /> : <View style={styles.kindMark}><Text style={styles.kindMarkText}>↻</Text></View>}
+                {photoUri ? <View accessible accessibilityRole="image" accessibilityLabel={t("syncCenterEvidenceReady")}><EncryptedMediaImage uri={photoUri} style={styles.preview} /></View> : <View accessible={false} style={styles.kindMark}><TabIcon name="refresh" color={colors.warning} size={25} /></View>}
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle}>{kindLabel(row.kind, locale)}</Text>
-                  {rowContext(row) ? <Text style={styles.cardContext} numberOfLines={2}>{rowContext(row)}</Text> : null}
-                  <View style={styles.metaRow}>
-                    <CommercialPill label={row.status === "conflict" ? t("syncCenterConflict") : t("syncCenterRejected")} tone="danger" />
+                  {context ? <Text style={styles.cardContext} numberOfLines={2}>{context}</Text> : null}
+                  <View accessible accessibilityRole="text" accessibilityLabel={`${statusLabel}. ${formatShortDateTime(row.clientCreatedAt, locale)}`} style={styles.metaRow}>
+                    <CommercialPill label={statusLabel} tone="danger" />
                     <Text style={styles.date}>{formatShortDateTime(row.clientCreatedAt, locale)}</Text>
                   </View>
                 </View>
               </View>
-              {row.evidence ? <View style={styles.evidence}><Text style={styles.evidenceText}>⌾ {t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")}</Text></View> : null}
-              {error ? <View style={styles.error}><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
-              <Text style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
+              {row.evidence ? <View accessible accessibilityRole="text" accessibilityLabel={t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")} style={styles.evidence}><TabIcon name="camera" color={colors.holiday} size={15} /><Text style={styles.evidenceText}>{t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")}</Text></View> : null}
+              {error ? <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" accessibilityLabel={error} style={styles.error}><TabIcon name="alert" color={colors.dangerPressed} size={17} /><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
+              <Text accessibilityRole="text" accessibilityLabel={t("syncCenterAttempts", { count: row.attempts })} style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
               <View style={styles.actions}>
-                {row.canRetry ? <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View> : null}
-                {row.canDiscard && string(row.payload.routeId) ? <View style={styles.action}><CommercialButton label={t("syncCenterOpenRoute")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => openRouteRecovery(row)} /></View> : null}
-                {row.canDiscard ? <View style={styles.action}><CommercialButton label={t("syncCenterDiscardRoute")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
-                {row.canReturnToDraft ? <View style={styles.action}><CommercialButton label={t("routeReturnToDraft")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
-                {row.canContinueWithoutEvidence ? <View style={styles.action}><CommercialButton label={t("syncCenterWithoutPhoto")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
-                {row.canDetachAttachment ? <View style={styles.action}><CommercialButton label={locale === "az" ? "Faylsız" : "Без файла"} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
+                {row.canRetry ? <View style={styles.action}><RecoveryButton label={t("syncCenterRetry")} hint={actionHint} busy={actionBusy("retry")} disabled={actionsDisabled} onPress={() => void retry(row)} /></View> : null}
+                {row.canDiscard && string(row.payload.routeId) ? <View style={styles.action}><RecoveryButton label={t("syncCenterOpenRoute")} hint={actionHint} busy={false} tone="secondary" disabled={actionsDisabled} onPress={() => openRouteRecovery(row)} /></View> : null}
+                {row.canDiscard ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
+                {row.canReturnToDraft ? <View style={styles.action}><RecoveryButton label={t("routeReturnToDraft")} hint={actionHint} busy={actionBusy("returnDraft")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
+                {row.canContinueWithoutEvidence ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
+                {row.canDetachAttachment ? <View style={styles.action}><RecoveryButton label={locale === "az" ? "Faylsız" : "Без файла"} hint={actionHint} busy={actionBusy("withoutAttachment")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
               </View>
             </View>
           )
@@ -339,9 +418,12 @@ export default function SyncCenterScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { paddingBottom: 34 },
+  empty: { marginHorizontal: 14, paddingHorizontal: 24, paddingVertical: 30, alignItems: "center" },
+  emptyMark: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" },
+  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 12, textAlign: "center" },
+  emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4, textAlign: "center" },
   summary: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 14, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, flexDirection: "row", alignItems: "center", gap: 11 },
   summaryMark: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  summaryMarkText: { color: colors.dangerPressed, fontSize: 20, fontWeight: "900" },
   summaryBody: { flex: 1, minWidth: 0 },
   summaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   summaryHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
@@ -350,19 +432,22 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: "row", gap: 11 },
   preview: { width: 72, height: 72, borderRadius: 14, backgroundColor: colors.skeleton },
   kindMark: { width: 58, height: 58, borderRadius: 17, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
-  kindMarkText: { color: colors.warning, fontSize: 23, fontWeight: "900" },
   cardBody: { flex: 1, minWidth: 0 },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   cardContext: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" },
   date: { color: colors.faint, fontSize: 9, fontWeight: "700" },
-  evidence: { alignSelf: "flex-start", borderRadius: radii.pill, backgroundColor: colors.holidayBg, paddingHorizontal: 9, paddingVertical: 6, marginTop: 10 },
+  evidence: { alignSelf: "flex-start", borderRadius: radii.pill, backgroundColor: colors.holidayBg, paddingHorizontal: 9, paddingVertical: 6, marginTop: 10, flexDirection: "row", alignItems: "center", gap: 5 },
   evidenceText: { color: colors.holiday, fontSize: 8, fontWeight: "900" },
-  error: { marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg },
-  errorText: { color: colors.dangerPressed, fontSize: 10, lineHeight: 15 },
+  error: { marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg, flexDirection: "row", alignItems: "flex-start", gap: 7 },
+  errorText: { flex: 1, color: colors.dangerPressed, fontSize: 10, lineHeight: 15 },
   attempts: { color: colors.faint, fontSize: 8, fontWeight: "800", marginTop: 8 },
-  actions: { flexDirection: "row", gap: 8, marginTop: 12 },
-  action: { flex: 1 },
+  actions: { gap: 8, marginTop: 12 },
+  action: { width: "100%" },
+  recoveryButton: { minHeight: 46, borderRadius: 15, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  recoveryButtonText: { fontSize: 13, fontWeight: "900", textAlign: "center" },
+  recoveryButtonDisabled: { opacity: 0.42 },
+  recoveryButtonPressed: { opacity: 0.75, transform: [{ scale: 0.99 }] },
   commercialLink: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 14, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border },
   commercialMark: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   commercialMarkText: { color: colors.primary, fontSize: 20, fontWeight: "900" },
