@@ -257,7 +257,7 @@ export default function InboxTab() {
                       </View>
                       <View style={styles.messageBody}>
                         <Text style={styles.messageTitle}>{presented.title}</Text>
-                        {presented.body ? <Text style={styles.preview}>{presented.body}</Text> : null}
+                        {presented.body ? <Text style={styles.preview} numberOfLines={2}>{presented.body}</Text> : null}
                         <Text style={styles.notificationDate}>{formatShortDateTime(item.createdAt, locale)}</Text>
                       </View>
                       {!item.isRead ? <View style={styles.unreadDot} /> : null}
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   newButton: { minWidth: 84, minHeight: 48, borderRadius: 16, paddingHorizontal: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   newButtonIcon: { height: 19, alignItems: "center", justifyContent: "center" },
   newButtonText: { color: colors.headerText, fontSize: 9, fontWeight: "900", marginTop: 2 },
-  segment: { marginHorizontal: 14, padding: 4, borderRadius: 16, backgroundColor: "#E9E9EE", flexDirection: "row", gap: 4 },
+  segment: { marginHorizontal: 14, padding: 4, borderRadius: 16, backgroundColor: colors.surfaceMuted, flexDirection: "row", gap: 4 },
   segmentButton: { flex: 1, minHeight: 44, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   segmentActive: { backgroundColor: colors.card, ...cardShadow },
   segmentText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
@@ -309,14 +309,14 @@ const styles = StyleSheet.create({
   list: { paddingTop: 3 },
   messageCard: { minHeight: 88, marginHorizontal: 14, marginTop: 10, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   notificationCard: { minHeight: 82, marginHorizontal: 14, marginTop: 10, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, flexDirection: "row", alignItems: "flex-start", gap: 11, borderWidth: 1, borderColor: colors.border, ...cardShadow },
-  messageUnread: { borderColor: colors.infoBorder, backgroundColor: "#FCFDFF" },
+  messageUnread: { borderColor: colors.infoBorder, backgroundColor: colors.infoBg },
   avatar: { width: 48, height: 48, borderRadius: 17, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   broadcastAvatar: { backgroundColor: colors.warningBg },
   avatarText: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   messageBody: { flex: 1, minWidth: 0 },
   messageTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   messageTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" },
-  time: { color: colors.faint, fontSize: 9, fontWeight: "700" },
+  time: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   preview: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   attachmentPreview: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
   attachmentPreviewText: { marginTop: 0 },
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   chevron: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   typeIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  notificationDate: { color: colors.faint, fontSize: 9, fontWeight: "600", marginTop: 7 },
+  notificationDate: { color: colors.muted, fontSize: 10, fontWeight: "600", marginTop: 7 },
   emptyCard: { margin: 14, minHeight: 310, padding: 28, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   emptyIcon: { width: 68, height: 68, borderRadius: 23, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
