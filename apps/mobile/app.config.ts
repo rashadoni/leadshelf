@@ -35,6 +35,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           return [name, {
             ...options,
             cameraPermission: fieldPermissions.camera,
+            // Field currently captures visit photos only. Keep legacy video
+            // support isolated and do not request microphone access in Field.
+            recordAudioAndroid: false,
           }] as [string, Record<string, unknown>]
         }
         if (name === "expo-location") {
@@ -58,6 +61,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       ...(expo.android ?? {}),
       package: androidPackage,
+      ...(fieldVariant
+        ? {
+            // expo-camera and the legacy base manifest can add RECORD_AUDIO.
+            // Blocking it is required for the final Android manifest; simply
+            // omitting it from `permissions` would not be sufficient.
+            blockedPermissions: [
+              ...(expo.android?.blockedPermissions ?? []),
+              "android.permission.RECORD_AUDIO",
+            ],
+          }
+        : {}),
     },
     extra: {
       ...expo.extra,
