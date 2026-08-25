@@ -435,6 +435,12 @@ export default function NewRouteScreen() {
               </View>
             </View>
             <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
+            {selectedWeekIsLoading ? (
+              <View accessibilityRole="status" accessibilityLiveRegion="polite" style={styles.dateChecking}>
+                <TabIcon name="refresh" color={colors.info} size={18} />
+                <Text style={styles.dateCheckingText}>{t("routePlanningDateChecking")}</Text>
+              </View>
+            ) : null}
             {selectedDateUnavailable ? (
               <View accessibilityRole="alert" style={styles.dateUnavailable}>
                 <TabIcon name="info" color={colors.info} size={18} />
@@ -479,7 +485,7 @@ export default function NewRouteScreen() {
                   currentActionLabel={t("tabToday")}
                   currentLabel={selectedDateLabel ?? t("routeDate")}
                   currentAccessibilityLabel={selectedDateLabel ?? t("routeDate")}
-                  busy={saving}
+                  busy={saving || selectedWeekIsLoading}
                   dayHint={t("routeWizardDateHint")}
                   calendarPicker
                   todayDate={field.week?.today}
@@ -649,6 +655,8 @@ const styles = StyleSheet.create({
   agentName: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
   agentHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   selectedDate: { color: colors.primary, fontSize: 12, fontWeight: "800", marginHorizontal: 16, marginBottom: 10 },
+  dateChecking: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginBottom: 10, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
+  dateCheckingText: { flex: 1, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "800" },
   dateUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginHorizontal: 14, marginBottom: 10, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   dateUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
   managerSelectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginHorizontal: 16, marginBottom: 10 },
