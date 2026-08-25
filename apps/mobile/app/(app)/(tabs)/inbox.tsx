@@ -6,7 +6,7 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldMessages, readFieldMessages } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { fieldNotificationCopy } from "../../../src/field/notification-copy"
-import { notificationDestination } from "../../../src/field/notification-target"
+import { notificationOpenDestination } from "../../../src/field/notification-target"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
@@ -98,10 +98,10 @@ export default function InboxTab() {
   }
 
   function openNotification(item: typeof items[number]) {
-    const destination = notificationDestination(item)
+    const destination = notificationOpenDestination(item)
     // Do not make navigation wait for a network PATCH. The durable outbox owns
     // the scoped read update and SyncProvider retries it after a real outage.
-    if (destination) router.push(destination as never)
+    router.push(destination as never)
     void field.markNotificationRead(item.id)
       .then(() => sync())
       .catch(() => setWarning(copy.notificationReadError))

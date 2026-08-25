@@ -69,3 +69,13 @@ export function notificationDestination(notification: FieldNotification): string
   }
   return null
 }
+
+/**
+ * A notification is always worth opening. Known semantic targets keep their
+ * direct workspace navigation; notifications without a verified target open
+ * a read-only detail instead of silently doing nothing after being marked read.
+ */
+export function notificationOpenDestination(notification: FieldNotification): string {
+  return notificationDestination(notification)
+    ?? "/(app)/notifications/" + encodeURIComponent(notification.id)
+}
