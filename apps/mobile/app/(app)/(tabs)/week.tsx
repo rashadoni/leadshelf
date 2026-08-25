@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -36,6 +36,7 @@ export default function WeekTab() {
   const isCurrentWeek = Boolean(week && week.weekStart === startOfIsoWeek(week.today))
   const [viewRange, setViewRange] = useState<FieldWeekViewRange>(7)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const selectedWeekStart = useRef<string | null>(null)
   const activeDate = selectedDate ?? week?.days.find((day) => day.isToday)?.date ?? week?.today ?? null
   const visibleDays = useMemo(
     () => visibleFieldWeekDays(week?.days ?? [], activeDate, viewRange),
@@ -44,12 +45,14 @@ export default function WeekTab() {
 
   useEffect(() => {
     if (!week) return
+    if (selectedWeekStart.current === week.weekStart) return
+    selectedWeekStart.current = week.weekStart
     setSelectedDate((current) => (
       current && week.days.some((day) => day.date === current)
         ? current
         : week.days.find((day) => day.isToday)?.date ?? week.today
     ))
-  }, [week?.weekStart])
+  }, [week])
 
   const move = (days: -1 | 1) => {
     if (!week) return
