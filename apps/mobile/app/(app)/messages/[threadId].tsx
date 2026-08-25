@@ -41,6 +41,7 @@ export default function MessageThreadScreen() {
   const [warning, setWarning] = useState<string | null>(null)
   const markedMessage = useRef<string | null>(null)
   const scroll = useRef<ScrollView | null>(null)
+  const stickToLatest = useRef(true)
   const copy = locale === "az" ? {
     messages: "MESAJLAR", loading: "Dialoq yüklənir…", offline: "Dialoq yenilənmədi — telefondakı nüsxə göstərilir.",
     readonly: "Bu elan yalnız oxumaq üçündür.", message: "Mesaj", placeholder: "Mesaj yazın…", attach: "Fayl", send: "Göndər",
@@ -67,6 +68,9 @@ export default function MessageThreadScreen() {
   }, [copy.offline, threadId])
 
   useFocusEffect(useCallback(() => {
+    // Returning to a thread should show the latest exchange, but a user who
+    // deliberately scrolled up must be able to keep reading older messages.
+    stickToLatest.current = true
     setData(readFieldMessageThread(threadId))
     void load(false)
   }, [load, threadId]))
@@ -112,6 +116,7 @@ export default function MessageThreadScreen() {
       setBody("")
       setAttachment(null)
       setData(readFieldMessageThread(threadId))
+      stickToLatest.current = true
       requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: true }))
       await sync().catch(() => {})
       await load(false)
@@ -159,7 +164,16 @@ export default function MessageThreadScreen() {
           style={styles.flex}
           contentContainerStyle={styles.messages}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
-          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}
+          scrollEventThrottle={16}
+          onScroll={({ nativeEvent }) => {
+            // Keep following the conversation only while the reader is
+            // already near its end. A refresh must not pull them away from
+            // an older message they intentionally opened.
+            stickToLatest.current = nativeEvent.layoutMeasurement.height + nativeEvent.contentOffset.y >= nativeEvent.contentSize.height - 44
+          }}
+          onContentSizeChange={() => {
+            if (stickToLatest.current) scroll.current?.scrollToEnd({ animated: false })
+          }}
         >
           {data.thread.messages.length === 0 ? <Text style={styles.empty}>{copy.empty}</Text> : null}
           {data.thread.messages.map((message) => {
