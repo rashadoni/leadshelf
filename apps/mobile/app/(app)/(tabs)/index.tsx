@@ -145,6 +145,11 @@ export default function TodayTab() {
     : workdayStatus === "PAUSED"
       ? t("workdayResume")
       : t("workdayTitle")
+  // The workday surface owns the start/resume decision and policy disclosure.
+  // Do not repeat that same action in the route card below: it turns one next
+  // step into two visually competing primary buttons.
+  const workdayActionIsPrimary = workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED"
+  const routeActionRepeatsWorkday = primaryAction.kind === "START_WORKDAY" || primaryAction.kind === "RESUME_WORKDAY"
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
   const metrics = [
@@ -204,16 +209,22 @@ export default function TodayTab() {
         ) : null}
 
         {IS_LEADDRIVE_FIELD ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t(workdayStatusKeys[workdayStatus])}. ${workdayActionLabel}`} accessibilityHint={t(attendancePresentation.hintKey)} onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
-            <View accessible={false} style={[styles.workdayIcon, workdayActive && styles.workdayIconActive]}>
-              <TabIcon name="today" color={colors.primary} size={22} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t(workdayStatusKeys[workdayStatus])}. ${workdayActionLabel}`}
+            accessibilityHint={t(attendancePresentation.hintKey)}
+            onPress={() => router.push("/(app)/workday" as never)}
+            style={({ pressed }) => [styles.workdayCard, workdayActionIsPrimary && styles.workdayCardPrimary, pressed && styles.pressed]}
+          >
+            <View accessible={false} style={[styles.workdayIcon, workdayActionIsPrimary && styles.workdayIconPrimary, workdayActive && styles.workdayIconActive]}>
+              <TabIcon name="today" color={workdayActionIsPrimary ? colors.headerText : colors.primary} size={22} />
             </View>
             <View style={styles.workdayBody}>
-              <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
-              <Text style={styles.workdayHint}>{t(attendancePresentation.hintKey)}</Text>
+              <Text style={[styles.workdayTitle, workdayActionIsPrimary && styles.workdayTitlePrimary]}>{t(workdayStatusKeys[workdayStatus])}</Text>
+              <Text style={[styles.workdayHint, workdayActionIsPrimary && styles.workdayHintPrimary]}>{t(attendancePresentation.hintKey)}</Text>
             </View>
             {workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED" ? (
-              <Text style={styles.workdayAction}>{workdayActionLabel}</Text>
+              <Text style={[styles.workdayAction, workdayActionIsPrimary && styles.workdayActionPrimary]}>{workdayActionLabel}</Text>
             ) : (
               <View style={styles.workdayChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
             )}
@@ -282,10 +293,12 @@ export default function TodayTab() {
           ) : (
             <Text accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.emptyText}>{t("noRouteToday")}</Text>
           )}
-          <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryAction.href as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
-            <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
-            <TabIcon name="chevronRight" color={colors.headerText} size={20} />
-          </Pressable>
+          {!routeActionRepeatsWorkday ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryAction.href as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
+              <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
+              <TabIcon name="chevronRight" color={colors.headerText} size={20} />
+            </Pressable>
+          ) : null}
         </View>
           </View>
           <View style={layout.isTablet ? styles.tabletSecondary : undefined}>
@@ -334,13 +347,18 @@ const styles = StyleSheet.create({
   noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
   noticeAction: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
-  workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 76, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 68, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  workdayCardPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
   workdayIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.draftBg, alignItems: "center", justifyContent: "center" },
+  workdayIconPrimary: { backgroundColor: "rgba(255,255,255,0.16)" },
   workdayIconActive: { backgroundColor: colors.successBg },
   workdayBody: { flex: 1, minWidth: 0 },
   workdayTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  workdayTitlePrimary: { color: colors.headerText },
   workdayHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  workdayHintPrimary: { color: "rgba(255,255,255,0.76)" },
   workdayAction: { maxWidth: 92, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
+  workdayActionPrimary: { color: colors.headerText },
   workdayChevron: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   overview: { marginHorizontal: 20, marginTop: 18, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border },
   overviewHeader: { minHeight: 44, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -367,7 +385,7 @@ const styles = StyleSheet.create({
   statusPill: { borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 5 },
   statusText: { fontSize: 10, fontWeight: "800" },
   emptyText: { color: colors.muted, fontSize: 13, marginTop: 14 },
-  primaryAction: { marginTop: 16, minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.navy, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  primaryAction: { marginTop: 16, minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   primaryActionBody: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 },
   primaryActionText: { color: colors.headerText, fontSize: 14, fontWeight: "800" },
   primaryArrow: { color: colors.accent, fontSize: 20 },

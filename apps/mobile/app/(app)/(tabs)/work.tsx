@@ -42,7 +42,7 @@ export default function WorkTab() {
   const completedWorkday = workdayStatus === "COMPLETED"
   const workdayStatusLabel = t(workdayStatusKeys[workdayStatus])
   const workdayStatusIcon: TabIconName = activeWorkday ? "play" : pausedWorkday ? "pause" : completedWorkday ? "check" : "today"
-  const workdayStatusColor = activeWorkday || completedWorkday ? colors.successDark : pausedWorkday ? colors.warning : colors.text
+  const workdayStatusColor = activeWorkday || completedWorkday ? colors.successDark : pausedWorkday ? colors.warning : colors.muted
   const shelfExecutionEnabled = Boolean(field.profile?.capabilities.shelfExecution.enabled)
   const shelfStatusLabel = t(shelfExecutionEnabled ? "shelfConnected" : "shelfUnavailable")
   const canOpenManager = IS_LEADDRIVE_FIELD && hasFieldManagerRole(field.profile?.agent.role)
@@ -68,6 +68,11 @@ export default function WorkTab() {
         { label: t("moduleCommitments"), hint: t("moduleCommitmentsHint"), icon: "visit", href: "/(app)/commitments" },
       ]
     : []
+  // Keep the first screen focused on the three actions that move a field
+  // employee through the day. Customer, manager, and record tools stay one
+  // intentional tap away instead of competing with the daily flow.
+  const primaryModules = modules.slice(0, 3)
+  const secondaryModules = [...modules.slice(3), ...moreModules]
   const moduleAccessibilityHint = (module: Module) => module.badge === undefined ? module.hint : `${module.hint} ${t("tasksOpenLabel")}: ${module.badge}`
 
   return (
@@ -88,7 +93,7 @@ export default function WorkTab() {
             <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? t("organizationUnavailable")}</Text>
           </View>
           {IS_LEADDRIVE_FIELD ? (
-            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionOff]}>
+            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionIdle]}>
               <TabIcon name={workdayStatusIcon} color={workdayStatusColor} size={14} />
               <Text style={[styles.connectionText, activeWorkday || completedWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
                 {workdayStatusLabel}
@@ -106,7 +111,7 @@ export default function WorkTab() {
 
         <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
         <View style={[styles.moduleList, layout.isTablet && styles.moduleGridTablet]}>
-          {modules.map((module, index) => (
+          {primaryModules.map((module, index) => (
             <Pressable
               key={module.href}
               accessibilityRole="button"
@@ -126,7 +131,7 @@ export default function WorkTab() {
           ))}
         </View>
 
-        {moreModules.length ? (
+        {secondaryModules.length ? (
           <View style={[styles.moreCard, layout.isTablet && styles.moreCardTablet]}>
             <Pressable
               accessibilityRole="button"
@@ -139,14 +144,13 @@ export default function WorkTab() {
               <View style={styles.glyph}><TabIcon name="work" color={colors.primary} size={21} /></View>
               <View style={styles.moduleBody}>
                 <Text style={styles.moduleLabel}>{t("workMoreForWork")}</Text>
-                <Text style={styles.moduleHint} numberOfLines={1}>{t("workMoreForWorkHint")}</Text>
               </View>
-              <View style={styles.morePill}><Text style={styles.morePillText}>{t(moreOpen ? "workMoreHide" : "workMoreShow")}</Text></View>
+              <Text style={styles.moreAction}>{t(moreOpen ? "workMoreHide" : "workMoreShow")}</Text>
               <View style={[styles.moreChevron, moreOpen && styles.moreChevronOpen]}><TabIcon name="chevronDown" color={colors.faint} size={19} /></View>
             </Pressable>
             {moreOpen ? (
               <View style={styles.moreItems}>
-                {moreModules.map((module, index) => (
+                {secondaryModules.map((module, index) => (
                   <Pressable
                     key={module.href}
                     accessibilityRole="button"
@@ -175,30 +179,30 @@ export default function WorkTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 28 },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 13 },
+  header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },
   eyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.3 },
-  title: { color: colors.text, fontSize: 29, fontWeight: "900", letterSpacing: -0.8, marginTop: 5 },
+  title: { color: colors.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.6, marginTop: 5 },
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 5, maxWidth: 330 },
-  identityCard: { marginHorizontal: 20, marginTop: 5, backgroundColor: colors.navy, borderRadius: radii.card, padding: 15, flexDirection: "row", alignItems: "center", gap: 12 },
-  identityMark: { width: 44, height: 44, borderRadius: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  identityInitial: { color: colors.headerText, fontSize: 18, fontWeight: "900" },
+  identityCard: { marginHorizontal: 20, marginTop: 5, minHeight: 64, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12 },
+  identityMark: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  identityInitial: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   identityBody: { flex: 1, minWidth: 0 },
-  identityLabel: { color: colors.headerSubtext, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
-  identityName: { color: colors.headerText, fontSize: 15, fontWeight: "900", marginTop: 3 },
+  identityLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
+  identityName: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 3 },
   connection: { maxWidth: 114, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
   connectionOn: { backgroundColor: colors.successBg },
   connectionPaused: { backgroundColor: colors.warningBg },
-  connectionOff: { backgroundColor: colors.warningBg },
+  connectionIdle: { backgroundColor: colors.draftBg },
   connectionText: { flexShrink: 1, fontSize: 9, fontWeight: "800" },
   connectionTextOn: { color: colors.successDark },
   connectionTextOff: { color: colors.warning },
   connectionTextIdle: { color: colors.text },
-  sectionTitle: { marginHorizontal: 20, marginTop: 25, marginBottom: 10, color: colors.text, fontSize: 16, fontWeight: "900" },
+  sectionTitle: { marginHorizontal: 20, marginTop: 22, marginBottom: 8, color: colors.text, fontSize: 16, fontWeight: "900" },
   moduleList: { marginHorizontal: 20, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
-  moduleRow: { minHeight: 72, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, position: "relative" },
+  moduleRow: { minHeight: 64, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, position: "relative" },
   moduleBorder: { borderTopWidth: 1, borderTopColor: colors.border },
-  glyph: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  badge: { position: "absolute", left: 43, top: 10, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: colors.danger, paddingHorizontal: 5, alignItems: "center", justifyContent: "center", zIndex: 2 },
+  glyph: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  badge: { position: "absolute", left: 40, top: 8, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: colors.danger, paddingHorizontal: 5, alignItems: "center", justifyContent: "center", zIndex: 2 },
   badgeText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
   moduleBody: { flex: 1, minWidth: 0 },
   moduleLabel: { color: colors.text, fontSize: 14, fontWeight: "900" },
@@ -206,14 +210,13 @@ const styles = StyleSheet.create({
   open: { color: colors.faint, fontSize: 25, fontWeight: "400" },
   pressed: { opacity: 0.7 },
   moduleGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 12, borderWidth: 0, backgroundColor: "transparent", overflow: "visible" },
-  moduleRowTablet: { flexBasis: "48%", flexGrow: 1, minHeight: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radii.card, backgroundColor: colors.card },
+  moduleRowTablet: { flexBasis: "48%", flexGrow: 1, minHeight: 76, borderWidth: 1, borderColor: colors.border, borderRadius: radii.card, backgroundColor: colors.card },
   moreCard: { marginHorizontal: 20, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   moreCardTablet: { marginTop: 18 },
-  moreToggle: { minHeight: 72, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
-  morePill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.primarySoft },
-  morePillText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
+  moreToggle: { minHeight: 60, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  moreAction: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   moreChevron: { width: 19, height: 19, marginLeft: -5, alignItems: "center", justifyContent: "center" },
   moreChevronOpen: { transform: [{ rotate: "180deg" }] },
   moreItems: { borderTopWidth: 1, borderTopColor: colors.border },
-  moreItem: { minHeight: 66, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  moreItem: { minHeight: 60, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
 })
