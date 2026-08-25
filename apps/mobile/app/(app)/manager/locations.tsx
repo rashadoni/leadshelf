@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
-import type { FieldManagerGpsFreshness, FieldManagerLocationAgent, FieldManagerLocationsData } from "../../../src/field/contracts"
+import type { FieldManagerGpsFreshness, FieldManagerLocationsData } from "../../../src/field/contracts"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { agentRoleLabel } from "../../../src/field/labels"
+import { managerLiveMapUrl } from "../../../src/field/manager-location-map"
 
 const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
   ONLINE: "managerFreshness_ONLINE",
@@ -27,14 +28,16 @@ function freshnessColor(freshness: FieldManagerGpsFreshness): { background: stri
   return { background: colors.infoBg, foreground: colors.info }
 }
 
-function openLiveMap(agent: FieldManagerLocationAgent) {
-  const location = agent.liveLocation
-  if (!location) return
-  const query = String(location.latitude) + "," + String(location.longitude)
-  const url = Platform.OS === "ios"
-    ? "https://maps.apple.com/?q=" + encodeURIComponent(query)
-    : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query)
-  void Linking.openURL(url).catch(() => {})
+async function openLiveMap(url: string, onUnavailable: () => void) {
+  try {
+    if (!await Linking.canOpenURL(url)) {
+      onUnavailable()
+      return
+    }
+    await Linking.openURL(url)
+  } catch {
+    onUnavailable()
+  }
 }
 
 export default function ManagerLocationsScreen() {
@@ -146,6 +149,7 @@ export default function ManagerLocationsScreen() {
                 {data.locations.map((agent) => {
                   const tone = freshnessColor(agent.freshness)
                   const point = agent.liveLocation ?? agent.lastKnownLocation
+                  const liveMapUrl = managerLiveMapUrl(agent, Platform.OS)
                   return (
                     <View key={agent.id} style={styles.card}>
                       <View style={styles.cardTop}>
@@ -163,8 +167,8 @@ export default function ManagerLocationsScreen() {
                             <Text style={[styles.locationTime, { color: tone.foreground }]}>{formatShortDateTime(point.recordedAt, locale)}</Text>
                             {agent.freshness !== "ONLINE" ? <Text style={styles.locationHint}>{t("managerLastKnownNotLive")}</Text> : null}
                           </View>
-                          {agent.freshness === "ONLINE" && agent.liveLocation ? (
-                            <Pressable accessibilityRole="button" accessibilityLabel={t("managerOpenLiveMap")} onPress={() => openLiveMap(agent)} style={styles.mapButton}>
+                          {liveMapUrl ? (
+                            <Pressable accessibilityRole="button" accessibilityLabel={t("managerOpenLiveMap")} onPress={() => void openLiveMap(liveMapUrl, () => Alert.alert(t("managerLiveMapUnavailable")))} style={styles.mapButton}>
                               <TabIcon name="route" color={colors.primary} size={18} />
                             </Pressable>
                           ) : null}
@@ -233,7 +237,7 @@ const styles = StyleSheet.create({
   locationBody: { flex: 1, minWidth: 0 },
   locationTime: { fontSize: 10, fontWeight: "900" },
   locationHint: { color: colors.muted, fontSize: 8, lineHeight: 12, marginTop: 2 },
-  mapButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  mapButton: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   noLocation: { marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.infoBg, padding: 10 },
   noLocationText: { color: colors.info, fontSize: 10, fontWeight: "800" },
   cardFooter: { marginTop: 11, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", justifyContent: "space-between", gap: 10 },
