@@ -1469,7 +1469,7 @@ const agentTaskEventTypes = new Set<FieldAgentTaskEventType>([
   "EDITED",
 ])
 
-function nullableTimestamp(value: unknown): boolean {
+function nullableTimestamp(value: unknown): value is string | null | undefined {
   return value == null || timestamp(value)
 }
 
@@ -2486,12 +2486,14 @@ export function parseFieldManagerAttendance(value: unknown): FieldManagerAttenda
   ) {
     throw new FieldContractError("mobile manager attendance")
   }
+  const from = data.from
+  const to = data.to
   const agents = data.agents.map(managerAttendanceAgent)
   if (agents.some((agent) => agent == null)) {
     throw new FieldContractError("mobile manager attendance")
   }
   const parsedAgents = agents as FieldManagerAttendanceAgent[]
-  if (parsedAgents.some((agent) => agent.attendance.days.some((day) => day.date < data.from || day.date > data.to))) {
+  if (parsedAgents.some((agent) => agent.attendance.days.some((day) => day.date < from || day.date > to))) {
     throw new FieldContractError("mobile manager attendance")
   }
   const page = managerListPage(data.page, parsedAgents.length)
@@ -2502,8 +2504,8 @@ export function parseFieldManagerAttendance(value: unknown): FieldManagerAttenda
   return {
     scope: data.scope,
     timezone: data.timezone,
-    from: data.from,
-    to: data.to,
+    from,
+    to,
     generatedAt: data.generatedAt,
     page,
     coverage: "RECORDED_WORKDAYS_ONLY",
@@ -2528,12 +2530,16 @@ function managerRouteDetailPoint(value: unknown): FieldManagerRouteDetailPoint |
     !(customer.address == null || string(customer.address)) ||
     !(customer.city == null || string(customer.city)) ||
     !(customer.latitude == null || number(customer.latitude)) ||
-    !(customer.longitude == null || number(customer.longitude)) ||
-    (contact != null && (
+    !(customer.longitude == null || number(customer.longitude))
+  ) {
+    return null
+  }
+  if (
+    contact != null && (
       !string(contact.id) ||
       !string(contact.displayName) ||
       !(contact.specialtyName == null || string(contact.specialtyName))
-    ))
+    )
   ) {
     return null
   }
