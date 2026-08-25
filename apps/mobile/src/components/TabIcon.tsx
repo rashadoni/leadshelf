@@ -22,6 +22,7 @@ export type TabIconName =
   | "qr"
   | "camera"
   | "document"
+  | "copy"
   | "alert"
   | "info"
   | "search"
@@ -180,6 +181,14 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <Svg {...common} fill="none">
           <Path d="M6.2 3.5h7.1l4.5 4.5v11A1.5 1.5 0 0 1 16.3 20.5H6.2A1.5 1.5 0 0 1 4.7 19V5A1.5 1.5 0 0 1 6.2 3.5Z" stroke={color} strokeWidth={1.75} strokeLinejoin="round" />
           <Path d="M13.2 3.9v4.3h4.2M8 12h6.5M8 15.5h5" stroke={color} strokeWidth={1.65} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "copy":
+      return (
+        <Svg {...common} fill="none">
+          <Rect x={8} y={4} width={11.5} height={14.5} rx={2} stroke={color} strokeWidth={1.75} />
+          <Path d="M15.5 18.5v1A1.5 1.5 0 0 1 14 21H6.5A1.5 1.5 0 0 1 5 19.5V8A1.5 1.5 0 0 1 6.5 6.5H8" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M11 8.5h5.5M11 12h5.5" stroke={color} strokeWidth={1.55} strokeLinecap="round" />
         </Svg>
       )
     case "alert":
