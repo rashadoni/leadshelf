@@ -151,7 +151,7 @@ export default function FieldRouteDetailScreen() {
       <SafeAreaView style={styles.root}>
         <View style={styles.missing}>
           <Text style={styles.missingTitle}>{t("fieldDataError")}</Text>
-          <Pressable onPress={() => router.back()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("back")}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("back")}</Text></Pressable>
         </View>
       </SafeAreaView>
     )
@@ -548,9 +548,9 @@ export default function FieldRouteDetailScreen() {
             <>
               <Text style={styles.hint}>{t("routeDraftHint")}</Text>
               <Text style={styles.label}>{t("routeName")}</Text>
-              <TextInput style={styles.input} value={name} onChangeText={setName} />
+              <TextInput accessibilityLabel={t("routeName")} style={styles.input} value={name} onChangeText={setName} />
               <Text style={styles.label}>{t("routeNotes")}</Text>
-              <TextInput style={[styles.input, styles.notes]} value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
+              <TextInput accessibilityLabel={t("routeNotes")} style={[styles.input, styles.notes]} value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
             </>
           ) : (
             <Text style={styles.readOnly}>{t("routeReadOnly")}</Text>
@@ -580,12 +580,24 @@ export default function FieldRouteDetailScreen() {
             <View style={styles.missionTrack}><View style={[styles.missionFill, { width: routeFlow.progressPercent + "%" }]} /></View>
             <View style={styles.missionActions}>
               {!activeVisit && primaryRoutePoint && canNavigatePrimaryPoint ? (
-                <Pressable onPress={() => void openNavigation(primaryRoutePoint)} style={styles.navigationButton}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t("routeOpenNavigation")}: ${primaryRoutePoint.contact?.displayName ?? primaryRoutePoint.customer.name}`}
+                  onPress={() => void openNavigation(primaryRoutePoint)}
+                  style={styles.navigationButton}
+                >
+                  <TabIcon name="route" color={colors.primary} size={16} />
                   <Text style={styles.navigationButtonText}>{t("routeOpenNavigation")}</Text>
                 </Pressable>
               ) : null}
               {activeVisit || canStartVisits ? (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${activeVisit ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}: ${activeVisit?.contact?.displayName ?? activeVisit?.customer.name ?? primaryRoutePoint?.contact?.displayName ?? primaryRoutePoint?.customer.name ?? ""}`}
+                  accessibilityState={{
+                    busy: !activeVisit && checkingInPointId === primaryRoutePoint?.id,
+                    disabled: saving || (!activeVisit && checkingInPointId !== null),
+                  }}
                   disabled={saving || (!activeVisit && checkingInPointId !== null)}
                   onPress={() => {
                     if (activeVisit) {
@@ -596,6 +608,7 @@ export default function FieldRouteDetailScreen() {
                   }}
                   style={[styles.missionActionButton, (saving || (!activeVisit && checkingInPointId !== null)) && styles.disabled]}
                 >
+                  <TabIcon name={activeVisit ? "visit" : "play"} color={colors.headerText} size={16} />
                   <Text style={styles.missionActionText}>
                     {activeVisit ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}
                   </Text>
@@ -613,10 +626,13 @@ export default function FieldRouteDetailScreen() {
           <Text style={styles.pointsCount}>{routePoints.length}</Text>
         </View>
         {routeData.canEdit && points.length > 0 ? (
-          <Pressable onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("autoSchedule")} onPress={autoSchedule} style={styles.autoSchedule}>
+            <TabIcon name="week" color={colors.info} size={16} />
+            <Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text>
+          </Pressable>
         ) : null}
         {routeData.canEdit || canRequestStopAddition ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} accessibilityState={{ expanded: pickerOpen }} onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
             <View style={styles.addButtonIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View>
             <View style={styles.addButtonBody}>
               <Text style={styles.addButtonTitle}>{t("addStop")}</Text>
@@ -688,6 +704,7 @@ export default function FieldRouteDetailScreen() {
                       <View style={styles.timeRow}>
                         <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
                         <TextInput
+                          accessibilityLabel={`${t("plannedTime")}: ${point.contact?.displayName ?? point.customer.name}`}
                           value={timeInputs[point.id] ?? ""}
                           onChangeText={(value) => {
                             setTimeInputs((current) => ({ ...current, [point.id]: value }))
@@ -710,15 +727,15 @@ export default function FieldRouteDetailScreen() {
                 </View>
                 {routeData.canEdit ? (
                   <View style={styles.pointActions}>
-                    <Pressable accessibilityRole="button" accessibilityLabel={t("moveUp")} disabled={index <= 0} onPress={() => setPoints((current) => reorder(current, index, index - 1))} style={[styles.smallButton, index <= 0 && styles.disabled]}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveUp")}: ${point.contact?.displayName ?? point.customer.name}`} accessibilityState={{ disabled: index <= 0 }} disabled={index <= 0} onPress={() => setPoints((current) => reorder(current, index, index - 1))} style={[styles.smallButton, index <= 0 && styles.disabled]}>
                       <TabIcon name="chevronUp" color={colors.primary} size={16} />
                       <Text style={styles.smallButtonText}>{t("moveUp")}</Text>
                     </Pressable>
-                    <Pressable accessibilityRole="button" accessibilityLabel={t("moveDown")} disabled={index === points.length - 1} onPress={() => setPoints((current) => reorder(current, index, index + 1))} style={[styles.smallButton, index === points.length - 1 && styles.disabled]}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveDown")}: ${point.contact?.displayName ?? point.customer.name}`} accessibilityState={{ disabled: index === points.length - 1 }} disabled={index === points.length - 1} onPress={() => setPoints((current) => reorder(current, index, index + 1))} style={[styles.smallButton, index === points.length - 1 && styles.disabled]}>
                       <TabIcon name="chevronDown" color={colors.primary} size={16} />
                       <Text style={styles.smallButtonText}>{t("moveDown")}</Text>
                     </Pressable>
-                    <Pressable accessibilityRole="button" accessibilityLabel={t("removeStop")} onPress={() => removeDraftPoint(index)} style={[styles.smallButton, styles.removeButton]}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("removeStop")}: ${point.contact?.displayName ?? point.customer.name}`} onPress={() => removeDraftPoint(index)} style={[styles.smallButton, styles.removeButton]}>
                       <TabIcon name="close" color={colors.missed} size={16} />
                       <Text style={styles.removeText}>{t("removeStop")}</Text>
                     </Pressable>
@@ -727,20 +744,26 @@ export default function FieldRouteDetailScreen() {
                   <View style={styles.executionActions}>
                     {isPrimaryPoint ? null : canStartVisits && !activeVisit ? (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${checkingInPointId === point.id ? t("locationLoading") : t("routeStartOutOfOrder")}: ${point.contact?.displayName ?? point.customer.name}`}
+                        accessibilityState={{ busy: checkingInPointId === point.id, disabled: checkingInPointId !== null }}
                         disabled={checkingInPointId !== null}
                         onPress={() => void startVisit(point)}
                         style={[styles.secondaryVisitButton, checkingInPointId !== null && styles.disabled]}
                       >
+                        <TabIcon name="visit" color={colors.primary} size={16} />
                         <Text style={styles.secondaryVisitText}>{checkingInPointId === point.id ? t("locationLoading") : t("routeStartOutOfOrder")}</Text>
                       </Pressable>
                     ) : null}
                     {canNavigatePoint ? (
-                      <Pressable onPress={() => void openNavigation(point)} style={styles.pointNavigationButton}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("routeOpenNavigation")}: ${point.contact?.displayName ?? point.customer.name}`} onPress={() => void openNavigation(point)} style={styles.pointNavigationButton}>
+                        <TabIcon name="route" color={colors.text} size={16} />
                         <Text style={styles.pointNavigationText}>{t("routeOpenNavigation")}</Text>
                       </Pressable>
                     ) : null}
                     {canRequestStopRemoval ? (
-                      <Pressable onPress={() => setRequestPoint(point)} style={styles.requestButton}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("requestRouteChange")}: ${point.contact?.displayName ?? point.customer.name}`} onPress={() => setRequestPoint(point)} style={styles.requestButton}>
+                        <TabIcon name="alert" color={colors.warning} size={16} />
                         <Text style={styles.requestText}>{t("requestRouteChange")}</Text>
                       </Pressable>
                     ) : null}
@@ -755,11 +778,11 @@ export default function FieldRouteDetailScreen() {
           <View style={[styles.card, styles.requestCard]}>
             <Text style={styles.sectionTitle}>{t("removeStop")}: {requestPoint.customer.name}</Text>
             <Text style={styles.label}>{t("removalReason")}</Text>
-            <TextInput style={[styles.input, styles.notes]} value={reason} onChangeText={setReason} multiline textAlignVertical="top" />
+            <TextInput accessibilityLabel={`${t("removalReason")}: ${requestPoint.customer.name}`} style={[styles.input, styles.notes]} value={reason} onChangeText={setReason} multiline textAlignVertical="top" />
             {reason.length > 0 && reason.trim().length < 3 ? <Text style={styles.validation}>{t("minimumReason")}</Text> : null}
             <View style={styles.requestActions}>
-              <Pressable onPress={() => { setRequestPoint(null); setReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
-              <Pressable disabled={saving || reason.trim().length < 3} onPress={() => void submitRemovalRequest()} style={[styles.primaryButton, (saving || reason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => { setRequestPoint(null); setReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("submitRequest")} accessibilityState={{ busy: saving, disabled: saving || reason.trim().length < 3 }} disabled={saving || reason.trim().length < 3} onPress={() => void submitRemovalRequest()} style={[styles.primaryButton, (saving || reason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
             </View>
           </View>
         ) : null}
@@ -770,11 +793,11 @@ export default function FieldRouteDetailScreen() {
             {addRequestTarget.contact ? <Text style={styles.requestTargetMeta}>{addRequestTarget.customer.name}</Text> : null}
             <Text style={styles.hint}>{t("addStopRequestHint")}</Text>
             <Text style={styles.label}>{t("addStopReason")}</Text>
-            <TextInput style={[styles.input, styles.notes]} value={addReason} onChangeText={setAddReason} multiline textAlignVertical="top" />
+            <TextInput accessibilityLabel={`${t("addStopReason")}: ${addRequestTarget.contact?.displayName ?? addRequestTarget.customer.name}`} style={[styles.input, styles.notes]} value={addReason} onChangeText={setAddReason} multiline textAlignVertical="top" />
             {addReason.length > 0 && addReason.trim().length < 3 ? <Text style={styles.validation}>{t("minimumReason")}</Text> : null}
             <View style={styles.requestActions}>
-              <Pressable onPress={() => { setAddRequestTarget(null); setAddReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
-              <Pressable disabled={saving || addReason.trim().length < 3} onPress={() => void submitAdditionRequest()} style={[styles.primaryButton, (saving || addReason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => { setAddRequestTarget(null); setAddReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("submitRequest")} accessibilityState={{ busy: saving, disabled: saving || addReason.trim().length < 3 }} disabled={saving || addReason.trim().length < 3} onPress={() => void submitAdditionRequest()} style={[styles.primaryButton, (saving || addReason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
             </View>
           </View>
         ) : null}
@@ -784,26 +807,32 @@ export default function FieldRouteDetailScreen() {
             {routeConflict ? <View style={styles.conflictCard}>
               <Text style={styles.conflictTitle}>{t("routeConflictTitle")}</Text>
               <Text style={styles.conflictText}>{fieldRouteConflictMessage(activeRouteConflictDetail, "syncNeedsAttention", field.week?.timezone ?? "UTC")}</Text>
-              {canReturnRouteToDraft ? <Pressable disabled={saving} onPress={confirmReturnToDraft} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("routeReturnToDraft")}</Text></Pressable> : null}
-              {routeConflict.kind === "version" ? <Pressable disabled={saving} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("syncCenterTitle")}</Text></Pressable> : null}
+              {canReturnRouteToDraft ? <Pressable accessibilityRole="button" accessibilityLabel={t("routeReturnToDraft")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={confirmReturnToDraft} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("routeReturnToDraft")}</Text></Pressable> : null}
+              {routeConflict.kind === "version" ? <Pressable accessibilityRole="button" accessibilityLabel={t("syncCenterTitle")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("syncCenterTitle")}</Text></Pressable> : null}
             </View> : null}
             {!canSaveRoute ? <Text style={styles.syncHint}>{routeConflict ? fieldRouteConflictMessage(activeRouteConflictDetail, needsRouteReload ? "routeRefreshRequired" : "routeSyncBeforeChange", field.week?.timezone ?? "UTC") : needsRouteReload ? t("routeRefreshRequired") : t("routeSyncBeforeChange")}</Text> : null}
-            {needsRouteReload ? <Pressable disabled={saving} onPress={() => void reloadRoute()} style={[styles.reloadButton, saving && styles.disabled]}><Text style={styles.reloadText}>{t("reloadRoute")}</Text></Pressable> : null}
-            <Pressable disabled={saving || !canSaveRoute} onPress={() => void save()} style={[styles.saveButton, (saving || !canSaveRoute) && styles.disabled]}><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
+            {needsRouteReload ? <Pressable accessibilityRole="button" accessibilityLabel={t("reloadRoute")} accessibilityState={{ busy: saving, disabled: saving }} disabled={saving} onPress={() => void reloadRoute()} style={[styles.reloadButton, saving && styles.disabled]}><TabIcon name="refresh" color={colors.info} size={18} /><Text style={styles.reloadText}>{t("reloadRoute")}</Text></Pressable> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel={saving ? t("saving") : t("saveChanges")} accessibilityState={{ busy: saving, disabled: saving || !canSaveRoute }} disabled={saving || !canSaveRoute} onPress={() => void save()} style={[styles.saveButton, (saving || !canSaveRoute) && styles.disabled]}><TabIcon name="check" color={colors.headerText} size={19} /><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
             {routeData.canPublish ? (
               <>
                 {!canPublishRoute ? <Text style={styles.syncHint}>{t("routeSyncBeforePublish")}</Text> : null}
-                <Pressable disabled={saving || !canPublishRoute} onPress={publish} style={[styles.publishButton, (saving || !canPublishRoute) && styles.disabled]}><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("publishRoute")} accessibilityState={{ busy: saving, disabled: saving || !canPublishRoute }} disabled={saving || !canPublishRoute} onPress={publish} style={[styles.publishButton, (saving || !canPublishRoute) && styles.disabled]}><TabIcon name="check" color={colors.successDark} size={19} /><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable>
               </>
             ) : null}
           </View>
         ) : null}
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("copyRoute")}
+          accessibilityHint={t("copyRouteHint")}
           onPress={() => router.push({ pathname: "/(app)/routes/new", params: { copyFrom: routeData.id } } as never)}
           style={styles.copyButton}
         >
-          <Text style={styles.copyTitle}>{t("copyRoute")}</Text>
-          <Text style={styles.copyHint}>{t("copyRouteHint")}</Text>
+          <TabIcon name="copy" color={colors.primary} size={20} />
+          <View style={styles.copyBody}>
+            <Text style={styles.copyTitle}>{t("copyRoute")}</Text>
+            <Text style={styles.copyHint}>{t("copyRouteHint")}</Text>
+          </View>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -841,9 +870,9 @@ const styles = StyleSheet.create({
   missionTrack: { height: 6, borderRadius: radii.pill, backgroundColor: colors.card, overflow: "hidden", marginTop: 14 },
   missionFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
   missionActions: { flexDirection: "row", gap: 8, marginTop: 12 },
-  navigationButton: { flex: 1, minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 9 },
+  navigationButton: { flex: 1, minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 9 },
   navigationButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900", textAlign: "center" },
-  missionActionButton: { flex: 1.25, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 9 },
+  missionActionButton: { flex: 1.25, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 9 },
   missionActionText: { color: colors.headerText, fontSize: 11, fontWeight: "900", textAlign: "center" },
   pointsHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 8 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
@@ -884,7 +913,7 @@ const styles = StyleSheet.create({
   pointTime: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 4 },
   timeRow: { marginTop: 9, flexDirection: "row", alignItems: "center", gap: 8 },
   timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
-  timeInput: { width: 72, height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
+  timeInput: { width: 72, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
   timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
   timeInputConflict: { borderColor: colors.warning, backgroundColor: colors.warningBg },
   pointActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
@@ -893,39 +922,40 @@ const styles = StyleSheet.create({
   removeButton: { backgroundColor: colors.missedBg },
   removeText: { color: colors.missed, fontSize: 10, fontWeight: "900" },
   executionActions: { gap: 8, marginTop: 10 },
-  secondaryVisitButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  secondaryVisitButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 12 },
   secondaryVisitText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
-  pointNavigationButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  pointNavigationButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 12 },
   pointNavigationText: { color: colors.text, fontSize: 10, fontWeight: "800" },
-  requestButton: { marginTop: 10, minHeight: 44, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
+  requestButton: { marginTop: 10, minHeight: 44, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   requestText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   requestCard: { borderWidth: 1, borderColor: colors.warning },
   requestTargetMeta: { color: colors.muted, fontSize: 11, marginTop: 4 },
   validation: { color: colors.missed, fontSize: 10, marginTop: 5 },
   requestActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 12 },
-  secondaryButton: { minHeight: 43, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  secondaryButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   secondaryText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  primaryButton: { minHeight: 43, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  primaryButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   footerActions: { marginHorizontal: 14, marginTop: 18, gap: 9 },
   addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
   addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
-  autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 38, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 44, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
-  saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
   saveText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   syncHint: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800", textAlign: "center" },
   conflictCard: { borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warning },
   conflictTitle: { color: colors.warning, fontSize: 12, fontWeight: "900" },
   conflictText: { color: colors.text, fontSize: 10, lineHeight: 15, marginTop: 4 },
-  conflictAction: { minHeight: 42, marginTop: 10, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.warning, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  conflictAction: { minHeight: 44, marginTop: 10, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.warning, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
   conflictActionText: { color: colors.warning, fontSize: 11, fontWeight: "900", textAlign: "center" },
-  reloadButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  reloadButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
   reloadText: { color: colors.info, fontSize: 13, fontWeight: "900" },
-  publishButton: { minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, alignItems: "center", justifyContent: "center" },
+  publishButton: { minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
   publishText: { color: colors.successDark, fontSize: 14, fontWeight: "900" },
-  copyButton: { marginHorizontal: 14, marginTop: 10, minHeight: 62, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  copyButton: { marginHorizontal: 14, marginTop: 10, minHeight: 62, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
+  copyBody: { flex: 1, minWidth: 0 },
   copyTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   copyHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   disabled: { opacity: 0.38 },
