@@ -496,11 +496,27 @@ export default function FieldVisitWorkspaceScreen() {
     }
   }
 
+  async function openVisitPhone() {
+    if (!visitPhone) return
+    const phoneUrl = `tel:${visitPhone}`
+    try {
+      if (await Linking.canOpenURL(phoneUrl)) {
+        await Linking.openURL(phoneUrl)
+        return
+      }
+    } catch {
+      // The device can reject an otherwise valid phone link (for example, without a dialler).
+    }
+    Alert.alert(t("fieldVisitCallUnavailable"))
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView ref={visitScroll} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+            <TabIcon name="chevronLeft" color={colors.text} size={21} />
+          </Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("fieldVisitTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{customerName}</Text>
@@ -542,7 +558,7 @@ export default function FieldVisitWorkspaceScreen() {
                 </View>
               ) : null}
               {visitPhone ? (
-                <Pressable accessibilityRole="button" onPress={() => void Linking.openURL(`tel:${visitPhone}`)} style={styles.contextItem}>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("fieldVisitCallContact")} onPress={() => void openVisitPhone()} style={styles.contextItem}>
                   <View style={styles.contextIcon}><TabIcon name="contacts" color={colors.primary} size={17} /></View>
                   <View style={styles.contextBody}>
                     <Text style={styles.contextLabel}>{t("fieldVisitContactPhone")}</Text>
@@ -574,6 +590,8 @@ export default function FieldVisitWorkspaceScreen() {
             <Pressable
               key={requirement.actionKey}
               disabled={isCompleted}
+              accessibilityRole="button"
+              accessibilityLabel={actionLabel(requirement)}
               onPress={() => openActionEditor(requirement)}
               style={({ pressed }) => [
                 styles.actionCard,
@@ -582,12 +600,18 @@ export default function FieldVisitWorkspaceScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <View style={[styles.actionMark, progress.satisfied && styles.actionMarkDone]}><Text style={[styles.actionMarkText, progress.satisfied && styles.actionMarkTextDone]}>{progress.satisfied ? "✓" : requirement.mode === "REQUIRED" ? "!" : "+"}</Text></View>
+              <View style={[styles.actionMark, progress.satisfied && styles.actionMarkDone]}>
+                <TabIcon
+                  name={progress.satisfied ? "check" : requirement.mode === "REQUIRED" ? "alert" : "add"}
+                  color={progress.satisfied ? colors.successDark : colors.warning}
+                  size={20}
+                />
+              </View>
               <View style={styles.actionBody}>
                 <Text style={styles.actionTitle}>{actionLabel(requirement)}</Text>
                 <Text style={styles.actionMeta}>{outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION" ? t(progress.satisfied ? "fieldVisitFollowUpReady" : "fieldVisitFollowUpNeeded") : requirement.mode === "REQUIRED" ? t("fieldVisitRequired") : t("fieldVisitOptional")} · {progress.completed}/{progress.required}</Text>
               </View>
-              <Text style={styles.chevron}>›</Text>
+              <TabIcon name="chevronRight" color={colors.faint} size={20} />
             </Pressable>
           )
         })}
@@ -752,7 +776,7 @@ export default function FieldVisitWorkspaceScreen() {
                     {agentTaskStatusLabel(task.status) + (task.dueDate ? ` · ${t("due")} ${formatShortDateTime(task.dueDate, locale, tenantTimeZone)}` : "")}
                   </Text>
                 </View>
-                <Text style={styles.workArrow}>›</Text>
+                <TabIcon name="chevronRight" color={colors.faint} size={20} />
               </Pressable>
             )) : (
               <View style={styles.evidenceEmpty}>
@@ -784,8 +808,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 34 },
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 },
@@ -806,7 +829,7 @@ const styles = StyleSheet.create({
   contextLabel: { color: colors.muted, fontSize: 8, fontWeight: "800", textTransform: "uppercase" },
   contextValue: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 2 },
   contextActionValue: { color: colors.primary },
-  contextNavigation: { minHeight: 42, marginTop: 10, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
+  contextNavigation: { minHeight: 44, marginTop: 10, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
   contextNavigationText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   sectionHeader: { marginHorizontal: 16, marginTop: 22, marginBottom: 5, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
@@ -818,17 +841,16 @@ const styles = StyleSheet.create({
   actionCardDisabled: { opacity: 0.76 },
   actionMark: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   actionMarkDone: { backgroundColor: colors.card },
-  actionMarkText: { color: colors.warning, fontSize: 16, fontWeight: "900" }, actionMarkTextDone: { color: colors.successDark },
-  actionBody: { flex: 1 }, actionTitle: { color: colors.text, fontSize: 13, fontWeight: "900" }, actionMeta: { color: colors.muted, fontSize: 9, marginTop: 4 }, chevron: { color: colors.faint, fontSize: 24 },
+  actionBody: { flex: 1 }, actionTitle: { color: colors.text, fontSize: 13, fontWeight: "900" }, actionMeta: { color: colors.muted, fontSize: 9, marginTop: 4 },
   editorCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, ...cardShadow },
   editorTitle: { color: colors.text, fontSize: 15, fontWeight: "900" }, editorHint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
   label: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 13, marginBottom: 6 },
   input: { minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.bg },
   textarea: { minHeight: 88, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, padding: 12, color: colors.text, backgroundColor: colors.bg },
   editorActions: { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 7, marginTop: 12 },
-  secondaryButton: { minHeight: 42, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, secondaryText: { color: colors.text, fontSize: 10, fontWeight: "800" },
-  waiveButton: { minHeight: 42, borderRadius: radii.inner, backgroundColor: colors.warningBg, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, waiveText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
-  primaryButton: { minHeight: 42, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, primaryText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  secondaryButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, secondaryText: { color: colors.text, fontSize: 10, fontWeight: "800" },
+  waiveButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.warningBg, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, waiveText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
+  primaryButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, primaryText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
   resultCard: { marginHorizontal: 14, marginTop: 20, borderRadius: radii.card, padding: 15, backgroundColor: colors.card, ...cardShadow },
   evidenceSection: { marginTop: 20 },
   evidenceGroup: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
@@ -843,17 +865,16 @@ const styles = StyleSheet.create({
   evidenceState: { color: colors.text, fontSize: 11, fontWeight: "900" },
   evidenceStateAttention: { color: colors.missed },
   evidenceMeta: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 2 },
-  retakeButton: { minHeight: 38, borderRadius: radii.inner, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder },
+  retakeButton: { minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder },
   retakeText: { color: colors.missed, fontSize: 9, fontWeight: "900" },
   evidenceEmpty: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, paddingBottom: 2 },
   evidenceEmptyTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
   evidenceEmptyHint: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
-  photoProofButton: { alignSelf: "flex-start", minHeight: 40, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 7 },
+  photoProofButton: { alignSelf: "flex-start", minHeight: 44, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 7 },
   photoProofText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
   workRow: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: colors.border },
   workMark: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.infoBg },
   workTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  workArrow: { color: colors.faint, fontSize: 22, lineHeight: 24 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 38, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
   followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
   checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", marginTop: 15, paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
