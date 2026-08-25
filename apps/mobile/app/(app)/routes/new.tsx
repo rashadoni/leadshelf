@@ -26,6 +26,7 @@ import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../..
 import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
 import { isRouteDraftDateAllowed, resolveRouteDraftDate } from "../../../src/field/route-planning-date"
 import { isRouteDraftDirty } from "../../../src/field/route-draft-state"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
   if (to < 0 || to >= items.length) return items
@@ -188,12 +189,12 @@ export default function NewRouteScreen() {
       return
     }
     if (!hasUnsavedDraft) {
-      router.back()
+      safeFieldBack("/(app)/routes")
       return
     }
     Alert.alert(t("routeDiscardDraftTitle"), t("routeDiscardDraftBody"), [
       { text: t("cancel"), style: "cancel" },
-      { text: t("routeDiscardDraftConfirm"), style: "destructive", onPress: () => router.back() },
+      { text: t("routeDiscardDraftConfirm"), style: "destructive", onPress: () => safeFieldBack("/(app)/routes") },
     ])
   }
 
