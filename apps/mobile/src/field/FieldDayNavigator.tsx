@@ -25,6 +25,8 @@ type FieldDayNavigatorProps = {
   onCurrent?: () => void
   currentLabel?: string
   currentAccessibilityLabel?: string
+  currentActionLabel?: string
+  currentActionAccessibilityLabel?: string
   busy?: boolean
   rangeOptions?: readonly number[]
   selectedRange?: number
@@ -50,6 +52,8 @@ export function FieldDayNavigator({
   onCurrent,
   currentLabel,
   currentAccessibilityLabel,
+  currentActionLabel,
+  currentActionAccessibilityLabel,
   busy = false,
   rangeOptions,
   selectedRange,
@@ -80,22 +84,9 @@ export function FieldDayNavigator({
           >
             <TabIcon name="chevronLeft" color={colors.primary} size={21} />
           </Pressable>
-          {onCurrent ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={currentAccessibilityLabel ?? currentLabel ?? t("currentWeek")}
-              accessibilityState={{ disabled: busy, busy }}
-              disabled={busy}
-              onPress={onCurrent}
-              style={({ pressed }) => [styles.currentAction, (busy || pressed) && styles.pressed]}
-            >
-              <Text numberOfLines={1} style={styles.currentText}>{currentLabel ?? t("currentWeek")}</Text>
-            </Pressable>
-          ) : (
-            <View accessible accessibilityRole="text" accessibilityLabel={currentAccessibilityLabel ?? currentLabel ?? t("currentWeek")} style={styles.currentAction}>
-              <Text numberOfLines={1} style={styles.currentText}>{currentLabel ?? t("currentWeek")}</Text>
-            </View>
-          )}
+          <View accessible accessibilityRole="text" accessibilityLabel={currentAccessibilityLabel ?? currentLabel ?? t("currentWeek")} style={styles.currentAction}>
+            <Text numberOfLines={1} style={styles.currentText}>{currentLabel ?? t("currentWeek")}</Text>
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={nextLabel ?? t("nextWeek")}
@@ -107,6 +98,20 @@ export function FieldDayNavigator({
             <TabIcon name="chevronRight" color={colors.primary} size={21} />
           </Pressable>
         </View>
+      ) : null}
+
+      {onCurrent ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={currentActionAccessibilityLabel ?? currentActionLabel ?? t("tabToday")}
+          accessibilityState={{ disabled: busy, busy }}
+          disabled={busy}
+          onPress={onCurrent}
+          style={({ pressed }) => [styles.currentShortcut, (busy || pressed) && styles.pressed]}
+        >
+          <TabIcon name="today" color={colors.primary} size={16} />
+          <Text style={styles.currentShortcutText}>{currentActionLabel ?? t("tabToday")}</Text>
+        </Pressable>
       ) : null}
 
       {rangeOptions?.length && onSelectRange && selectedRange !== undefined && getRangeLabel ? (
@@ -187,6 +192,8 @@ const styles = StyleSheet.create({
   arrowButton: { width: 44, height: 44, borderRadius: radii.pill, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   currentAction: { minWidth: 0, flex: 1, minHeight: 44, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   currentText: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  currentShortcut: { alignSelf: "center", minHeight: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  currentShortcutText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   rangeRail: { alignSelf: "center", flexDirection: "row", gap: 4, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, padding: 3, borderWidth: 1, borderColor: colors.border },
   rangeChoice: { minWidth: 44, minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   rangeChoiceSelected: { backgroundColor: colors.primary },

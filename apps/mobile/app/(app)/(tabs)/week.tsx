@@ -79,13 +79,16 @@ export default function WeekTab() {
     : null
   const navigationLabel = viewRange === 1 ? t("weekPreviousDay") : t("previousWeek")
   const nextNavigationLabel = viewRange === 1 ? t("weekNextDay") : t("nextWeek")
-  const currentNavigationLabel = viewRange === 1 ? t("tabToday") : t("currentWeek")
-  const headerRange = viewRange === 1 && activeDate
+  const currentNavigationLabel = viewRange === 1 && activeDate
+    ? formatCalendarDay(activeDate, locale).date
+    : week ? formatCalendarRange(week.weekStart, week.weekEndExclusive, locale) : t("currentWeek")
+  const currentNavigationAccessibilityLabel = viewRange === 1 && activeDate
     ? (() => {
         const day = formatCalendarDay(activeDate, locale)
         return `${day.weekday}, ${day.date}`
       })()
-    : week ? formatCalendarRange(week.weekStart, week.weekEndExclusive, locale) : null
+    : currentNavigationLabel
+  const canReturnToToday = Boolean(week && (!isCurrentWeek || activeDate !== week.today || viewRange !== 1))
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -97,7 +100,6 @@ export default function WeekTab() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>{t("tabWeek").toUpperCase()}</Text>
           <Text accessibilityRole="header" style={styles.title}>{t("weekSchedule")}</Text>
-          {headerRange ? <Text style={styles.range}>{headerRange}</Text> : null}
         </View>
 
         {week ? (
@@ -122,24 +124,29 @@ export default function WeekTab() {
               }
             })}
             selectedDate={activeDate}
-            onSelectDate={setSelectedDate}
+            onSelectDate={(date) => {
+              setSelectedDate(date)
+              setViewRange(1)
+            }}
             onPrevious={() => move(-1)}
             onNext={() => move(1)}
             previousLabel={previousTarget ? `${navigationLabel}: ${formatCalendarDay(previousTarget, locale).date}` : navigationLabel}
             nextLabel={nextTarget ? `${nextNavigationLabel}: ${formatCalendarDay(nextTarget, locale).date}` : nextNavigationLabel}
-            onCurrent={() => {
+            onCurrent={canReturnToToday ? () => {
               setSelectedDate(week.today)
+              setViewRange(1)
               void field.loadWeek(startOfIsoWeek(week.today))
-            }}
+            } : undefined}
             currentLabel={currentNavigationLabel}
-            currentAccessibilityLabel={currentNavigationLabel}
+            currentAccessibilityLabel={currentNavigationAccessibilityLabel}
+            currentActionLabel={t("tabToday")}
             busy={busy}
             rangeOptions={FIELD_WEEK_VIEW_RANGES}
             selectedRange={viewRange}
             onSelectRange={(range) => setViewRange(range as FieldWeekViewRange)}
             getRangeLabel={(days) => t("weekRange", { count: days })}
             dayHint={t("dailyMission")}
-            visibleHint={t("fieldDayNavigatorHint")}
+            visibleHint={viewRange === 1 ? undefined : t("fieldDayNavigatorHint")}
           />
         ) : null}
 

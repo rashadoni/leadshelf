@@ -201,6 +201,13 @@ export default function ManagerPlanningScreen() {
     setRangeDays(nextRangeDays)
   }
 
+  function focusDay(nextDate: string) {
+    if (nextDate === date && rangeDays === 1) return
+    beginContextChange()
+    setDate(nextDate)
+    setRangeDays(1)
+  }
+
   function drillIntoDay(nextDate: string) {
     if (nextDate === date && rangeDays === 1) return
     beginContextChange()
@@ -248,20 +255,21 @@ export default function ManagerPlanningScreen() {
         <FieldDayNavigator
           days={navigatorDays}
           selectedDate={date}
-          onSelectDate={selectDate}
+          onSelectDate={focusDay}
           onPrevious={() => selectDate(shiftDateKey(date, -rangeDays))}
           onNext={() => selectDate(shiftDateKey(date, rangeDays))}
           previousLabel={`${t(rangeDays === 1 ? "managerPreviousDay" : "managerPreviousRange")}: ${formatCalendarDay(shiftDateKey(date, -rangeDays), locale).date}`}
           nextLabel={`${t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")}: ${formatCalendarDay(shiftDateKey(date, rangeDays), locale).date}`}
-          onCurrent={() => selectDate(today)}
+          onCurrent={date !== today || rangeDays !== 1 ? () => focusDay(today) : undefined}
           currentLabel={rangeDays === 1 ? `${calendar.weekday}, ${dateLabel}` : dateLabel}
           currentAccessibilityLabel={dateLabel}
+          currentActionLabel={t("tabToday")}
           busy={loading || loadingMore}
           rangeOptions={RANGE_OPTIONS}
           selectedRange={rangeDays}
           onSelectRange={selectRange}
           getRangeLabel={(days) => t("managerPlanningRange", { count: days })}
-          dayHint={t("managerPlanningHint")}
+          dayHint={t("fieldDayNavigatorHint")}
         />
 
         {loading && !planning ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
