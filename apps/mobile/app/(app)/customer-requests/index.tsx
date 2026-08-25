@@ -11,6 +11,7 @@ import { formatCalendarDate } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 const CACHE_KEY = "field.customer-requests"
 
@@ -62,7 +63,7 @@ export default function CustomerRequestsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>

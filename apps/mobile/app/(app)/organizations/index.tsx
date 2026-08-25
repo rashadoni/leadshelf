@@ -11,6 +11,7 @@ import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 const CACHE_KEY = "field.organizations"
 
@@ -64,7 +65,7 @@ export default function OrganizationsScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>

@@ -11,6 +11,7 @@ import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-f
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { approvalStatusLabel, assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function phoneDigits(phone: string | null | undefined): string | null {
   const digits = phone?.replace(/\D/g, "") ?? ""
@@ -87,7 +88,7 @@ export default function ContactDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/contacts")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={22} />
           </Pressable>
           <View style={styles.headerBody}>

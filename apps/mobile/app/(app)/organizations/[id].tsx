@@ -10,6 +10,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function phoneUrl(phone: string | null | undefined): string | null {
   const digits = phone?.replace(/\D/g, "") ?? ""
@@ -57,7 +58,7 @@ export default function OrganizationDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/organizations")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>

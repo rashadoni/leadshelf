@@ -21,6 +21,7 @@ import type {
 } from "../../src/field/contracts"
 import { fieldErrorMessage } from "../../src/field/error-message"
 import { TabIcon } from "../../src/components/TabIcon"
+import { safeFieldBack } from "../../src/navigation/safe-back"
 import { cardShadow, colors, radii } from "../../src/theme"
 import { useResponsiveLayout } from "../../src/layout/responsive"
 
@@ -143,7 +144,7 @@ export default function PersonalKpiScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(period)} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={t("personalKpiTitle")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={t("personalKpiTitle")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>
