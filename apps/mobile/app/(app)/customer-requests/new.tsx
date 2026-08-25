@@ -10,6 +10,7 @@ import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { getCurrentDeviceLocation, type DeviceLocation } from "../../../src/location/device-location"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 const CACHE_KEY = "field.customer-requests"
 const OBJECT_TYPES: CreateFieldCustomerRequest["objectType"][] = ["PHARMACY", "CLINIC", "DOCTOR", "STORE", "OTHER"]
@@ -92,13 +93,13 @@ export default function NewCustomerRequestScreen() {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
         <ScrollView contentContainerStyle={[styles.successScroll, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
-          <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View>
+          <View style={styles.successMark}><TabIcon name="check" color={colors.success} size={31} /></View>
           <Text style={styles.successTitle}>{t("requestSubmitted")}</Text>
           <Text style={styles.successName}>{created.name}</Text>
           <View style={styles.statusPill}><Text style={styles.statusText}>{t("requestStatus_SUBMITTED")}</Text></View>
           {created.duplicateCandidates.length > 0 ? (
             <View style={styles.duplicates}>
-              <Text style={styles.duplicateTitle}>⚠ {t("duplicateWarning")}</Text>
+              <View style={styles.duplicateTitleRow}><TabIcon name="alert" color={colors.warning} size={18} /><Text style={styles.duplicateTitle}>{t("duplicateWarning")}</Text></View>
               <Text style={styles.duplicateHint}>{t("duplicateHint")}</Text>
               {created.duplicateCandidates.map((candidate) => (
                 <View key={candidate.id} style={styles.candidate}>
@@ -112,7 +113,7 @@ export default function NewCustomerRequestScreen() {
               ))}
             </View>
           ) : null}
-          <Pressable onPress={() => router.replace("/(app)/customer-requests" as never)} style={styles.doneButton}><Text style={styles.doneButtonText}>{t("myCustomerRequests")}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("myCustomerRequests")} onPress={() => router.replace("/(app)/customer-requests" as never)} style={styles.doneButton}><Text style={styles.doneButtonText}>{t("myCustomerRequests")}</Text></Pressable>
         </ScrollView>
       </SafeAreaView>
     )
@@ -126,7 +127,7 @@ export default function NewCustomerRequestScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
             <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("newCustomerRequest")}</Text></View>
           </View>
           <Text style={styles.intro}>{t("newCustomerHint")}</Text>
@@ -159,8 +160,8 @@ export default function NewCustomerRequestScreen() {
             </>
           ) : null}
 
-          <Pressable disabled={locating} onPress={() => void attachLocation()} style={({ pressed }) => [styles.locationButton, pressed && styles.pressed]}>
-            <View style={[styles.locationIcon, location && styles.locationIconDone]}><Text style={[styles.locationIconText, location && styles.locationIconTextDone]}>{location ? "✓" : "⌖"}</Text></View>
+          <Pressable accessibilityRole="button" accessibilityLabel={location ? t("locationAttached") : t("useCurrentLocation")} disabled={locating} onPress={() => void attachLocation()} style={({ pressed }) => [styles.locationButton, pressed && styles.pressed]}>
+            <View style={[styles.locationIcon, location && styles.locationIconDone]}><TabIcon name={location ? "check" : "location"} color={location ? colors.successDark : colors.info} size={21} /></View>
             <View style={styles.locationBody}><Text style={styles.locationTitle}>{locating ? t("locationLoading") : location ? t("locationAttached") : t("useCurrentLocation")}</Text>{location ? <Text style={styles.locationMeta}>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}{location.accuracyM ? ` · ±${Math.round(location.accuracyM)}m` : ""}</Text> : null}</View>
           </Pressable>
 
@@ -169,7 +170,7 @@ export default function NewCustomerRequestScreen() {
             <Input label={t("agentComment")} value={agentComment} onChangeText={setAgentComment} multiline />
           </View>
           {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Pressable disabled={submitting} onPress={() => void submit()} style={({ pressed }) => [styles.submit, (pressed || submitting) && styles.pressed]}><Text style={styles.submitText}>{submitting ? "…" : t("submitCustomerRequest")}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("submitCustomerRequest")} disabled={submitting} onPress={() => void submit()} style={({ pressed }) => [styles.submit, (pressed || submitting) && styles.pressed]}><Text style={styles.submitText}>{submitting ? "…" : t("submitCustomerRequest")}</Text></Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -192,16 +193,16 @@ function potentialLabel(value: CreateFieldCustomerRequest["potential"]): string 
 }
 
 function FieldLabel({ label }: { label: string }) { return <Text style={styles.fieldLabel}>{label}</Text> }
-function ChoiceChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable> }
-function Input({ label, required, multiline, ...props }: { label: string; required?: boolean; multiline?: boolean; value: string; onChangeText: (value: string) => void; keyboardType?: "default" | "phone-pad" }) { return <View style={styles.inputGroup}><Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text><TextInput {...props} multiline={multiline} placeholderTextColor={colors.faint} style={[styles.input, multiline && styles.textarea]} textAlignVertical={multiline ? "top" : "center"} /></View> }
+function ChoiceChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable> }
+function Input({ label, required, multiline, ...props }: { label: string; required?: boolean; multiline?: boolean; value: string; onChangeText: (value: string) => void; keyboardType?: "default" | "phone-pad" }) { return <View style={styles.inputGroup}><Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text><TextInput {...props} accessibilityLabel={label} multiline={multiline} placeholderTextColor={colors.faint} style={[styles.input, multiline && styles.textarea]} textAlignVertical={multiline ? "top" : "center"} /></View> }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 }, scroll: { paddingBottom: 34 }, successScroll: { minHeight: "100%", padding: 20, alignItems: "center", justifyContent: "center" },
-  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, backText: { color: colors.text, fontSize: 30, lineHeight: 31 }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
-  fieldLabel: { color: colors.text, fontSize: 13, fontWeight: "900", marginHorizontal: 16, marginTop: 18, marginBottom: 8 }, chips: { flexDirection: "row", gap: 8, paddingHorizontal: 14 }, wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 }, chip: { minHeight: 38, borderRadius: radii.pill, paddingHorizontal: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }, chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 11, fontWeight: "800" }, chipTextSelected: { color: colors.headerText },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
+  fieldLabel: { color: colors.text, fontSize: 13, fontWeight: "900", marginHorizontal: 16, marginTop: 18, marginBottom: 8 }, chips: { flexDirection: "row", gap: 8, paddingHorizontal: 14 }, wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 }, chip: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }, chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 11, fontWeight: "800" }, chipTextSelected: { color: colors.headerText },
   formCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 12, ...cardShadow }, inputGroup: { flex: 1 }, inputLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }, input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }, textarea: { minHeight: 86, paddingTop: 12, lineHeight: 18 }, twoColumns: { flexDirection: "row", gap: 10 }, column: { flex: 1 },
-  locationButton: { marginHorizontal: 14, marginTop: 18, minHeight: 68, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border }, locationIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, locationIconDone: { backgroundColor: colors.successBg }, locationIconText: { color: colors.info, fontSize: 21, fontWeight: "900" }, locationIconTextDone: { color: colors.successDark }, locationBody: { flex: 1 }, locationTitle: { color: colors.text, fontSize: 12, fontWeight: "900" }, locationMeta: { color: colors.successDark, fontSize: 10, fontWeight: "700", marginTop: 4 },
+  locationButton: { marginHorizontal: 14, marginTop: 18, minHeight: 68, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border }, locationIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, locationIconDone: { backgroundColor: colors.successBg }, locationBody: { flex: 1 }, locationTitle: { color: colors.text, fontSize: 12, fontWeight: "900" }, locationMeta: { color: colors.successDark, fontSize: 10, fontWeight: "700", marginTop: 4 },
   error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" }, submit: { marginHorizontal: 14, marginTop: 16, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, submitText: { color: colors.headerText, fontSize: 14, fontWeight: "900" }, pressed: { opacity: 0.7 },
-  successMark: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" }, successMarkText: { color: colors.success, fontSize: 32, fontWeight: "900" }, successTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 18 }, successName: { color: colors.muted, fontSize: 14, textAlign: "center", marginTop: 6 }, statusPill: { marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.primarySoft }, statusText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
-  duplicates: { width: "100%", marginTop: 22, borderRadius: radii.card, padding: 14, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F4D37A" }, duplicateTitle: { color: colors.warning, fontSize: 14, fontWeight: "900" }, duplicateHint: { color: colors.warning, fontSize: 10, lineHeight: 15, marginTop: 4 }, candidate: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F4D37A", flexDirection: "row", alignItems: "center", gap: 10 }, candidateBody: { flex: 1 }, candidateName: { color: colors.text, fontSize: 12, fontWeight: "900" }, candidateAddress: { color: colors.muted, fontSize: 9, marginTop: 3 }, candidateReason: { color: colors.warning, fontSize: 8, fontWeight: "800", marginTop: 4 }, score: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, scoreText: { color: colors.warning, fontSize: 11, fontWeight: "900" }, doneButton: { width: "100%", minHeight: 52, marginTop: 20, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, doneButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  successMark: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" }, successTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 18 }, successName: { color: colors.muted, fontSize: 14, textAlign: "center", marginTop: 6 }, statusPill: { marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.primarySoft }, statusText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  duplicates: { width: "100%", marginTop: 22, borderRadius: radii.card, padding: 14, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F4D37A" }, duplicateTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 }, duplicateTitle: { color: colors.warning, fontSize: 14, fontWeight: "900" }, duplicateHint: { color: colors.warning, fontSize: 10, lineHeight: 15, marginTop: 4 }, candidate: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F4D37A", flexDirection: "row", alignItems: "center", gap: 10 }, candidateBody: { flex: 1 }, candidateName: { color: colors.text, fontSize: 12, fontWeight: "900" }, candidateAddress: { color: colors.muted, fontSize: 9, marginTop: 3 }, candidateReason: { color: colors.warning, fontSize: 8, fontWeight: "800", marginTop: 4 }, score: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, scoreText: { color: colors.warning, fontSize: 11, fontWeight: "900" }, doneButton: { width: "100%", minHeight: 52, marginTop: 20, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, doneButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
 })
