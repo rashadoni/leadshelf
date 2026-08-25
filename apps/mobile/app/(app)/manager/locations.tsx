@@ -99,7 +99,7 @@ export default function ManagerLocationsScreen() {
             <Text style={styles.title}>{t("managerLocationsTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerLocationsHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading || loadingMore, disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -108,7 +108,7 @@ export default function ManagerLocationsScreen() {
             <View style={styles.stateIcon}><TabIcon name="location" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -118,6 +118,7 @@ export default function ManagerLocationsScreen() {
               <TabIcon name="search" color={colors.faint} size={20} />
               <TextInput
                 accessibilityLabel={t("managerSearch")}
+                accessibilityHint={t("managerSearchHint")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={120}
@@ -132,7 +133,7 @@ export default function ManagerLocationsScreen() {
                 value={search}
               />
             </View>
-            <View style={styles.summary}>
+            <View accessible accessibilityRole="text" accessibilityLabel={String(liveCount) + " " + t("managerPageLocationSummary") + ". " + t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale)} style={styles.summary}>
               <View style={styles.summaryIcon}><TabIcon name="location" color={colors.successDark} size={22} /></View>
               <View style={styles.summaryBody}>
                 <Text style={styles.summaryValue}>{liveCount}</Text>
@@ -150,9 +151,16 @@ export default function ManagerLocationsScreen() {
                   const tone = freshnessColor(agent.freshness)
                   const point = agent.liveLocation ?? agent.lastKnownLocation
                   const liveMapUrl = managerLiveMapUrl(agent, Platform.OS)
+                  const freshness = t(freshnessKeys[agent.freshness])
+                  const pointState = point
+                    ? agent.freshness === "ONLINE" ? t("managerFreshness_ONLINE") : t("managerLastKnownNotLive")
+                    : t("managerFreshness_NO_LOCATION")
+                  const lastSeen = agent.lastSeenAt
+                    ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale)
+                    : t("managerLastSeen") + ": —"
                   return (
                     <View key={agent.id} style={styles.card}>
-                      <View style={styles.cardTop}>
+                      <View accessible accessibilityRole="text" accessibilityLabel={agent.name + ". " + agentRoleLabel(agent.role) + ". " + freshness} style={styles.cardTop}>
                         <View style={[styles.avatar, { backgroundColor: tone.background }]}><Text style={[styles.avatarText, { color: tone.foreground }]}>{agent.name.charAt(0).toUpperCase()}</Text></View>
                         <View style={styles.cardBody}>
                           <Text style={styles.name}>{agent.name}</Text>
@@ -163,20 +171,25 @@ export default function ManagerLocationsScreen() {
                       {point ? (
                         <View style={styles.locationLine}>
                           <TabIcon name="location" color={tone.foreground} size={17} />
-                          <View style={styles.locationBody}>
+                          <View
+                            accessible
+                            accessibilityLabel={pointState + ". " + t("managerUpdated") + ": " + formatShortDateTime(point.recordedAt, locale)}
+                            accessibilityRole="text"
+                            style={styles.locationBody}
+                          >
                             <Text style={[styles.locationTime, { color: tone.foreground }]}>{formatShortDateTime(point.recordedAt, locale)}</Text>
                             {agent.freshness !== "ONLINE" ? <Text style={styles.locationHint}>{t("managerLastKnownNotLive")}</Text> : null}
                           </View>
                           {liveMapUrl ? (
-                            <Pressable accessibilityRole="button" accessibilityLabel={t("managerOpenLiveMap")} onPress={() => void openLiveMap(liveMapUrl, () => Alert.alert(t("managerLiveMapUnavailable")))} style={styles.mapButton}>
+                            <Pressable accessibilityHint={t("managerFreshness_ONLINE")} accessibilityRole="button" accessibilityLabel={t("managerOpenLiveMap") + ": " + agent.name} onPress={() => void openLiveMap(liveMapUrl, () => Alert.alert(t("managerLiveMapUnavailable")))} style={styles.mapButton}>
                               <TabIcon name="route" color={colors.primary} size={18} />
                             </Pressable>
                           ) : null}
                         </View>
                       ) : (
-                        <View style={styles.noLocation}><Text style={styles.noLocationText}>{t("managerFreshness_NO_LOCATION")}</Text></View>
+                        <View accessible accessibilityRole="text" accessibilityLabel={pointState} style={styles.noLocation}><Text style={styles.noLocationText}>{t("managerFreshness_NO_LOCATION")}</Text></View>
                       )}
-                      <View style={styles.cardFooter}>
+                      <View accessible accessibilityRole="text" accessibilityLabel={(agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")) + ". " + lastSeen} style={styles.cardFooter}>
                         <Text style={styles.presence}>{agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")}</Text>
                         <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale) : "—"}</Text>
                       </View>
@@ -188,6 +201,8 @@ export default function ManagerLocationsScreen() {
             {data.page.hasMore && !hasPendingSearch ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}
+                accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
                 disabled={loading || loadingMore}
                 onPress={() => void load(search.trim(), data.page.number + 1, true)}
                 style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
