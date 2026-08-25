@@ -93,8 +93,31 @@ export default function TodayTab() {
           : primaryAction.kind === "CREATE_ROUTE"
             ? t("createRoute")
             : t("weekSchedule")
+  const primaryActionIcon: TabIconName = primaryAction.kind === "CONTINUE_VISIT"
+    ? "visit"
+    : primaryAction.kind === "START_WORKDAY" || primaryAction.kind === "RESUME_WORKDAY"
+      ? "today"
+      : primaryAction.kind === "OPEN_NEXT_ROUTE"
+        ? "route"
+        : primaryAction.kind === "CREATE_ROUTE"
+          ? "add"
+          : "week"
+  const primaryActionDestination = primaryAction.kind === "CONTINUE_VISIT"
+    ? t("routeCurrentVisit")
+    : primaryAction.kind === "START_WORKDAY" || primaryAction.kind === "RESUME_WORKDAY"
+      ? t("workdayTitle")
+      : primaryAction.kind === "OPEN_NEXT_ROUTE"
+        ? t("routeDetails")
+        : primaryAction.kind === "CREATE_ROUTE"
+          ? t("routeHubTitle")
+          : t("weekSchedule")
   const workdayActive = workdayStatus === "STARTED"
   const attendancePresentation = presentFieldAttendancePolicy(field.workday?.attendancePolicy)
+  const workdayActionLabel = workdayStatus === "NOT_STARTED"
+    ? t("workdayStart")
+    : workdayStatus === "PAUSED"
+      ? t("workdayResume")
+      : t("workdayTitle")
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
   const metrics = [
@@ -128,7 +151,7 @@ export default function TodayTab() {
           <View style={styles.brandRow}>
             <BrandMark compact />
             <Text style={styles.brandName}>{mobileVariant.appName}</Text>
-            <View style={styles.liveStatus}><View style={styles.liveDot} /><Text style={styles.liveText}>{t("syncIdle")}</Text></View>
+            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={t("syncIdle")} style={styles.liveStatus}><View accessible={false} style={styles.liveDot} /><Text style={styles.liveText}>{t("syncIdle")}</Text></View>
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
@@ -139,19 +162,20 @@ export default function TodayTab() {
 
         {field.phase === "stale" || field.phase === "error" ? (
           <View style={[styles.notice, field.phase === "error" && styles.noticeError]}>
-            <View style={styles.noticeBody}>
+            <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" accessibilityLabel={field.lastUpdatedAt ? `${field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}. ${formatTime(field.lastUpdatedAt)}` : field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")} style={styles.noticeBody}>
               <Text style={styles.noticeTitle}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
               {field.lastUpdatedAt ? <Text style={styles.noticeMeta}>{formatTime(field.lastUpdatedAt)}</Text> : null}
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.noticeAction}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityHint={field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")} onPress={() => void field.refresh()} style={styles.noticeAction}>
+              <TabIcon name="refresh" color={colors.primary} size={16} />
               <Text style={styles.noticeActionText}>{t("refresh")}</Text>
             </Pressable>
           </View>
         ) : null}
 
         {IS_LEADDRIVE_FIELD ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={t(workdayStatusKeys[workdayStatus])} onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
-            <View style={[styles.workdayIcon, workdayActive && styles.workdayIconActive]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t(workdayStatusKeys[workdayStatus])}. ${workdayActionLabel}`} accessibilityHint={t(attendancePresentation.hintKey)} onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
+            <View accessible={false} style={[styles.workdayIcon, workdayActive && styles.workdayIconActive]}>
               <TabIcon name="today" color={colors.primary} size={22} />
             </View>
             <View style={styles.workdayBody}>
@@ -159,7 +183,7 @@ export default function TodayTab() {
               <Text style={styles.workdayHint}>{t(attendancePresentation.hintKey)}</Text>
             </View>
             {workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED" ? (
-              <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : t("workdayResume")}</Text>
+              <Text style={styles.workdayAction}>{workdayActionLabel}</Text>
             ) : (
               <View style={styles.workdayChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
             )}
@@ -169,13 +193,13 @@ export default function TodayTab() {
         <View style={layout.isTablet ? styles.tabletColumns : undefined}>
           <View style={layout.isTablet ? styles.tabletPrimary : undefined}>
         <View style={[styles.overview, layout.isTablet && styles.tabletSection]}>
-          <View style={styles.overviewHeader}>
+          <View accessible accessibilityRole="text" accessibilityLabel={`${t("todayOverview")}: ${visitedPoints}/${routePoints}`} style={styles.overviewHeader}>
             <Text style={styles.sectionEyebrow}>{t("todayOverview").toUpperCase()}</Text>
             <Text style={styles.overviewMeta}>{visitedPoints}/{routePoints}</Text>
           </View>
           <View style={styles.metrics}>
           {metrics.map((metric) => (
-            <View key={metric.label} style={styles.metricCard}>
+            <View key={metric.label} accessible accessibilityRole="text" accessibilityLabel={`${metric.label}: ${metric.value}`} style={styles.metricCard}>
               <Text style={styles.metricValue}>{metric.value}</Text>
               <Text style={styles.metricLabel}>{metric.label}</Text>
             </View>
@@ -184,15 +208,17 @@ export default function TodayTab() {
         </View>
 
         <View style={[styles.card, layout.isTablet && styles.tabletSection]}>
-          <View style={styles.progressHeader}>
-            <View>
-              <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
-              <Text style={styles.cardMeta}>{visitedPoints} / {routePoints} {t("routeVisitedLabel")}</Text>
+          <View accessible accessibilityRole="progressbar" accessibilityLabel={t("routeProgress")} accessibilityValue={{ min: 0, max: 100, now: progress, text: `${visitedPoints}/${routePoints} ${t("routeVisitedLabel")} · ${progress}%` }}>
+            <View style={styles.progressHeader}>
+              <View>
+                <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
+                <Text style={styles.cardMeta}>{visitedPoints} / {routePoints} {t("routeVisitedLabel")}</Text>
+              </View>
+              <Text style={styles.progressValue}>{progress}%</Text>
             </View>
-            <Text style={styles.progressValue}>{progress}%</Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            </View>
           </View>
 
           {today?.routes.length ? (
@@ -200,20 +226,23 @@ export default function TodayTab() {
               {today.routes.map((route) => {
                 const meta = routeStatusMeta(route.effectiveStatus)
                 const tone = toneStyles[meta.tone]
+                const routeLabel = route.name ?? t("tabRoute")
+                const routeStatusLabel = t(meta.labelKey)
                 return (
                   <Pressable
                     key={route.id}
                     accessibilityRole="button"
-                    accessibilityLabel={route.name ?? t("tabRoute")}
+                    accessibilityLabel={`${routeLabel}. ${routeStatusLabel}. ${route.visitedPoints} ${t("routeVisitedLabel")} / ${route.totalPoints} ${t("routePointsLabel")}`}
+                    accessibilityHint={t("routeDetails")}
                     onPress={() => router.push(`/(app)/routes/${route.id}` as never)}
                     style={({ pressed }) => [styles.routeRow, pressed && styles.pressed]}
                   >
                     <View style={styles.routeBody}>
-                      <Text style={styles.routeName}>{route.name ?? t("tabRoute")}</Text>
+                      <Text style={styles.routeName}>{routeLabel}</Text>
                       <Text style={styles.routeMeta}>{route.totalPoints} {t("routePointsLabel")} · {route.visitedPoints} {t("routeVisitedLabel")}</Text>
                     </View>
                     <View style={[styles.statusPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
-                      <Text style={[styles.statusText, { color: tone.text }]}>{t(meta.labelKey)}</Text>
+                      <Text style={[styles.statusText, { color: tone.text }]}>{routeStatusLabel}</Text>
                     </View>
                     <TabIcon name="chevronRight" color={colors.faint} size={19} />
                   </Pressable>
@@ -221,10 +250,10 @@ export default function TodayTab() {
               })}
             </View>
           ) : (
-            <Text style={styles.emptyText}>{t("noRouteToday")}</Text>
+            <Text accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.emptyText}>{t("noRouteToday")}</Text>
           )}
-          <Pressable onPress={() => router.push(primaryAction.href as never)} style={styles.primaryAction}>
-            <Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryAction.href as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
+            <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
             <TabIcon name="chevronRight" color={colors.headerText} size={20} />
           </Pressable>
         </View>
@@ -237,10 +266,12 @@ export default function TodayTab() {
           {actions.map(([label, href, icon], index) => (
             <Pressable
               key={label}
+              accessibilityRole="button"
+              accessibilityLabel={label}
               onPress={() => router.push(href as never)}
               style={({ pressed }) => [styles.actionRow, index > 0 && styles.actionBorder, pressed && styles.pressed]}
             >
-              <View style={styles.actionIcon}><TabIcon name={icon} color={colors.primary} size={20} /></View>
+              <View accessible={false} style={styles.actionIcon}><TabIcon name={icon} color={colors.primary} size={20} /></View>
               <Text style={styles.actionText}>{label}</Text>
               <TabIcon name="chevronRight" color={colors.faint} size={20} />
             </Pressable>
@@ -271,7 +302,7 @@ const styles = StyleSheet.create({
   noticeBody: { flex: 1 },
   noticeTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
   noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
-  noticeAction: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  noticeAction: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 76, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
   workdayIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.draftBg, alignItems: "center", justifyContent: "center" },
@@ -307,6 +338,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 10, fontWeight: "800" },
   emptyText: { color: colors.muted, fontSize: 13, marginTop: 14 },
   primaryAction: { marginTop: 16, minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.navy, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  primaryActionBody: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 },
   primaryActionText: { color: colors.headerText, fontSize: 14, fontWeight: "800" },
   primaryArrow: { color: colors.accent, fontSize: 20 },
   actionList: { marginHorizontal: 20, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
