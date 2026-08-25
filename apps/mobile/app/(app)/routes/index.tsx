@@ -28,10 +28,10 @@ export default function RoutesScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={field.phase === "refreshing"} onRefresh={() => void field.refresh()} />}>
-        <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
-          <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("routeHubTitle")}</Text><Text style={styles.subtitle}>{t("routeHubHint")}</Text></View>
-          {canCreateRoute && routes.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={t("createRoute")} accessibilityHint={t("chooseStop")} onPress={() => router.push("/(app)/routes/new" as never)} style={styles.headerCreate}><TabIcon name="add" color={colors.primary} size={18} /><Text style={styles.headerCreateText}>{t("createRoute")}</Text></Pressable> : null}
+        <View style={styles.headerModern}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.backModern}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <View style={styles.headerBodyModern}><Text style={styles.eyebrowModern}>{t("tabWork").toUpperCase()}</Text><Text style={styles.titleModern}>{t("routeHubTitle")}</Text><Text style={styles.subtitleModern}>{t("routeHubHint")}</Text></View>
+          {canCreateRoute && routes.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={t("createRoute")} accessibilityHint={t("chooseStop")} onPress={() => router.push("/(app)/routes/new" as never)} style={styles.headerCreateModern}><TabIcon name="add" color={colors.primary} size={18} /><Text style={styles.headerCreateTextModern}>{t("createRoute")}</Text></Pressable> : null}
         </View>
 
         {!canCreateRoute && field.week ? (
@@ -59,6 +59,7 @@ export default function RoutesScreen() {
           const progressText = `${route.visitedPoints}/${route.totalPoints} ${t("routeVisitedLabel")}`
           const nextPoint = route.points.find((point) => point.effectiveStatus === "PENDING") ?? route.points[0]
           const nextStopName = nextPoint?.contact?.displayName ?? nextPoint?.customer.name
+          const nextStopMeta = nextPoint?.customer.address ?? nextPoint?.customer.city ?? null
           const syncText = route.syncState === "PENDING" ? t("queued") : route.syncState ? t("syncNeedsAttention") : null
           const routeLabel = [
             routeName,
@@ -69,21 +70,40 @@ export default function RoutesScreen() {
           ].filter(Boolean).join(". ")
           const progress = route.totalPoints > 0 ? Math.min(100, Math.round((route.visitedPoints / route.totalPoints) * 100)) : 0
           return (
-            <Pressable key={route.id} accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCard, pressed && styles.pressed]}>
-              <View style={styles.dateBadge}><Text style={styles.dateDay}>{calendarDay.day || day.date.slice(8)}</Text><Text style={styles.dateMonth}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text></View>
-              <View style={styles.routeBody}>
-                <Text style={styles.routeName} numberOfLines={1}>{routeName}</Text>
-                <Text style={styles.routeMeta}>{progressText}</Text>
-                <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
-                {nextStopName ? <View style={styles.nextStopRow}><TabIcon name="location" color={colors.primary} size={12} /><Text style={styles.nextStopLabel}>{t("routeNextStop")}</Text><Text style={styles.nextStop} numberOfLines={1}>{nextStopName}</Text></View> : null}
-              </View>
-              <View style={styles.routeEnd}>
-                <View style={styles.routeState}>
-                  {syncText ? <Text style={styles.syncState}>{syncText}</Text> : null}
-                  <View style={[styles.status, { backgroundColor: tone.background }]}><Text style={[styles.statusText, { color: tone.foreground }]}>{t(meta.labelKey)}</Text></View>
+            <Pressable key={route.id} accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCardModern, pressed && styles.pressed]}>
+              <View style={styles.routeTopModern}>
+                <View style={styles.dateBadgeModern}>
+                  <Text style={styles.dateDayModern}>{calendarDay.day || day.date.slice(8)}</Text>
+                  <Text style={styles.dateMonthModern}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text>
                 </View>
-                <View style={styles.openRoute}><Text style={styles.openRouteText}>{t("openRoute")}</Text><TabIcon name="chevronRight" color={colors.primary} size={16} /></View>
+                <View style={styles.routeHeadingModern}>
+                  <Text style={styles.routeNameModern} numberOfLines={1}>{routeName}</Text>
+                  <Text style={styles.routeDateModern} numberOfLines={1}>{calendarDay.weekday}, {calendarDay.date}</Text>
+                </View>
+                <View style={styles.routeStateModern}>
+                  {syncText ? <Text style={styles.syncStateModern} numberOfLines={1}>{syncText}</Text> : null}
+                  <View style={[styles.statusModern, { backgroundColor: tone.background }]}><Text style={[styles.statusTextModern, { color: tone.foreground }]}>{t(meta.labelKey)}</Text></View>
+                </View>
               </View>
+              <View style={styles.progressSectionModern}>
+                <View style={styles.progressHeaderModern}>
+                  <Text style={styles.routeMetaModern}>{progressText}</Text>
+                  <Text style={styles.progressPercentModern}>{progress}%</Text>
+                </View>
+                <View style={styles.progressTrackModern}><View style={[styles.progressFillModern, { width: `${progress}%` }]} /></View>
+              </View>
+              {nextStopName ? (
+                <View style={styles.nextStopSurfaceModern}>
+                  <View style={styles.nextStopIconModern}><TabIcon name="location" color={colors.primary} size={20} /></View>
+                  <View style={styles.nextStopBodyModern}>
+                    <Text style={styles.nextStopLabelModern}>{t("routeNextStop")}</Text>
+                    <Text style={styles.nextStopModern} numberOfLines={1}>{nextStopName}</Text>
+                    {nextStopMeta ? <Text style={styles.nextStopMetaModern} numberOfLines={1}>{nextStopMeta}</Text> : null}
+                  </View>
+                  <TabIcon name="chevronRight" color={colors.primary} size={21} />
+                </View>
+              ) : null}
+              <View style={styles.openRouteModern}><Text style={styles.openRouteTextModern}>{t("openRoute")}</Text><TabIcon name="chevronRight" color={colors.primary} size={18} /></View>
             </Pressable>
           )
         }) : canCreateRoute ? (
@@ -125,4 +145,38 @@ const styles = StyleSheet.create({
   dataNotice: { marginHorizontal: 14, marginTop: 12, minHeight: 58, borderRadius: radii.inner, padding: 9, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788" }, dataNoticeBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }, dataNoticeIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }, dataNoticeText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 14, fontWeight: "800" }, retry: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginHorizontal: 16, marginTop: 22, marginBottom: 3 }, routeCard: { marginHorizontal: 14, marginTop: 9, minHeight: 96, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 10, ...cardShadow }, dateBadge: { width: 43, height: 52, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, dateDay: { color: colors.primary, fontSize: 17, fontWeight: "900" }, dateMonth: { color: colors.primary, fontSize: 8, fontWeight: "800" }, routeBody: { flex: 1, minWidth: 0 }, routeName: { color: colors.text, fontSize: 13, fontWeight: "900" }, routeMeta: { color: colors.muted, fontSize: 9, marginTop: 3 }, progressTrack: { height: 4, borderRadius: 999, overflow: "hidden", backgroundColor: colors.primarySoft, marginTop: 6 }, progressFill: { height: "100%", borderRadius: 999, backgroundColor: colors.primary }, nextStopRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 6 }, nextStopLabel: { color: colors.muted, fontSize: 8, fontWeight: "800" }, nextStop: { flex: 1, minWidth: 0, color: colors.primary, fontSize: 9, fontWeight: "900" }, routeEnd: { width: 82, alignItems: "flex-end", justifyContent: "center", gap: 7 }, routeState: { alignItems: "flex-end", gap: 4 }, syncState: { color: colors.warning, fontSize: 7, fontWeight: "900", maxWidth: 82, textAlign: "right" }, status: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6 }, statusText: { fontSize: 8, fontWeight: "900" }, openRoute: { flexDirection: "row", alignItems: "center", gap: 1 }, openRouteText: { color: colors.primary, fontSize: 8, fontWeight: "900" }, arrow: { color: colors.faint, fontSize: 24 }, empty: { marginHorizontal: 16, marginTop: 10, minHeight: 156, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 18, borderWidth: 1, borderColor: colors.border }, emptyAction: { borderColor: colors.primarySoft }, emptyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 9 }, emptyText: { color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, emptyActionRow: { minHeight: 36, marginTop: 8, flexDirection: "row", alignItems: "center", gap: 3 }, emptyActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   commercialCard: { marginHorizontal: 14, marginTop: 9, minHeight: 74, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border }, commercialMark: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" }, commercialMarkText: { color: colors.holiday, fontSize: 20, fontWeight: "900" }, planningUnavailable: { marginHorizontal: 14, marginTop: 16, padding: 13, borderRadius: radii.inner, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788" }, planningUnavailableText: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" }, pressed: { opacity: 0.7 },
+  headerModern: { minHeight: 82, paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  backModern: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", ...cardShadow },
+  headerBodyModern: { flex: 1, minWidth: 0 },
+  eyebrowModern: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
+  titleModern: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2, letterSpacing: -0.45 },
+  subtitleModern: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  headerCreateModern: { minHeight: 44, borderRadius: 14, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5 },
+  headerCreateTextModern: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  routeCardModern: { marginHorizontal: 14, marginTop: 11, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  routeTopModern: { flexDirection: "row", alignItems: "center", gap: 10 },
+  dateBadgeModern: { width: 50, height: 56, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  dateDayModern: { color: colors.primary, fontSize: 20, fontWeight: "900" },
+  dateMonthModern: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 1 },
+  routeHeadingModern: { flex: 1, minWidth: 0 },
+  routeNameModern: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  routeDateModern: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  routeStateModern: { maxWidth: 112, alignItems: "flex-end", gap: 4 },
+  syncStateModern: { color: colors.warning, fontSize: 11, fontWeight: "800", textAlign: "right" },
+  statusModern: { borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 6 },
+  statusTextModern: { fontSize: 11, fontWeight: "900" },
+  progressSectionModern: { marginTop: 15 },
+  progressHeaderModern: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  routeMetaModern: { color: colors.muted, fontSize: 12, fontWeight: "800" },
+  progressPercentModern: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  progressTrackModern: { height: 6, borderRadius: radii.pill, overflow: "hidden", backgroundColor: colors.primarySoft, marginTop: 7 },
+  progressFillModern: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
+  nextStopSurfaceModern: { minHeight: 74, marginTop: 14, borderRadius: 16, padding: 10, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 10 },
+  nextStopIconModern: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  nextStopBodyModern: { flex: 1, minWidth: 0 },
+  nextStopLabelModern: { color: colors.primary, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45 },
+  nextStopModern: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
+  nextStopMetaModern: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  openRouteModern: { minHeight: 44, marginTop: 7, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 3 },
+  openRouteTextModern: { color: colors.primary, fontSize: 12, fontWeight: "900" },
 })
