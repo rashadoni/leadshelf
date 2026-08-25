@@ -45,6 +45,9 @@ export default function InboxTab() {
     queued: "Göndərilmə növbəsində",
     sent: "Göndərildi",
     read: "Oxunub",
+    unread: "Oxunmayıb",
+    openThread: "Dialoqu aç",
+    openNotification: "Bildirişi aç",
     refreshError: "Mesajlar yenilənmədi — telefondakı nüsxə göstərilir.",
     localThread: "Mesaj telefonda saxlanılıb. Sinxronlaşdıqdan sonra dialoq açılacaq.",
     notificationReadError: "Bildiriş telefonda saxlanılmadı. Yenidən cəhd edin.",
@@ -61,6 +64,9 @@ export default function InboxTab() {
     queued: "В очереди на отправку",
     sent: "Отправлено",
     read: "Прочитано",
+    unread: "Не прочитано",
+    openThread: "Открыть диалог",
+    openNotification: "Открыть уведомление",
     refreshError: "Сообщения не обновились — показана копия с телефона.",
     localThread: "Сообщение сохранено на телефоне. Диалог откроется после синхронизации.",
     notificationReadError: "Не удалось сохранить уведомление на телефоне. Повторите попытку.",
@@ -120,74 +126,91 @@ export default function InboxTab() {
             <Text style={styles.subtitle}>{copy.subtitle}</Text>
           </View>
           {mode === "messages" && messages.capabilities.startDirectConversation ? (
-            <Pressable onPress={() => router.push("/(app)/messages/new" as never)} style={styles.newButton}>
-              <Text style={styles.newButtonPlus}>＋</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={copy.newChat} onPress={() => router.push("/(app)/messages/new" as never)} style={styles.newButton}>
+              <View accessible={false} style={styles.newButtonIcon}><TabIcon name="add" color={colors.headerText} size={19} /></View>
               <Text style={styles.newButtonText}>{copy.newChat}</Text>
             </Pressable>
           ) : null}
         </View>
 
         <View style={styles.segment}>
-          <Pressable onPress={() => setMode("messages")} style={[styles.segmentButton, mode === "messages" && styles.segmentActive]}>
+          <Pressable accessibilityRole="tab" accessibilityLabel={copy.messages} accessibilityState={{ selected: mode === "messages" }} onPress={() => setMode("messages")} style={[styles.segmentButton, mode === "messages" && styles.segmentActive]}>
             <Text style={[styles.segmentText, mode === "messages" && styles.segmentTextActive]}>{copy.messages}</Text>
             {messages.unread > 0 ? <View style={styles.count}><Text style={styles.countText}>{messages.unread}</Text></View> : null}
           </Pressable>
-          <Pressable onPress={() => setMode("notifications")} style={[styles.segmentButton, mode === "notifications" && styles.segmentActive]}>
+          <Pressable accessibilityRole="tab" accessibilityLabel={copy.notifications} accessibilityState={{ selected: mode === "notifications" }} onPress={() => setMode("notifications")} style={[styles.segmentButton, mode === "notifications" && styles.segmentActive]}>
             <Text style={[styles.segmentText, mode === "notifications" && styles.segmentTextActive]}>{copy.notifications}</Text>
             {notificationUnread > 0 ? <View style={styles.count}><Text style={styles.countText}>{notificationUnread}</Text></View> : null}
           </Pressable>
         </View>
 
-        {warning ? <View style={styles.warning}><Text style={styles.warningText}>↻ {warning}</Text></View> : null}
+        {warning ? <View accessibilityRole="alert" style={styles.warning}><View accessible={false} style={styles.warningIcon}><TabIcon name="refresh" color={colors.warning} size={17} /></View><Text style={styles.warningText}>{warning}</Text></View> : null}
 
         {mode === "messages" ? (
           messages.threads.length === 0 ? (
-            <Empty icon="✦" title={copy.noMessages} hint={copy.noMessagesHint} />
+            <Empty icon="inbox" title={copy.noMessages} hint={copy.noMessagesHint} />
           ) : (
             <View style={[styles.list, layout.isTablet && styles.listTablet]}>
-              {messages.threads.map((thread) => (
-                <Pressable key={thread.id} onPress={() => openThread(thread.id)} style={({ pressed }) => [
-                  styles.messageCard,
-                  layout.isTablet && styles.listCardTablet,
-                  thread.unread && styles.messageUnread,
-                  pressed && styles.pressed,
-                ]}>
-                  <View style={[styles.avatar, thread.type === "BROADCAST" && styles.broadcastAvatar]}>
-                    <Text style={styles.avatarText}>{thread.type === "BROADCAST" ? "★" : thread.title.charAt(0).toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.messageBody}>
-                    <View style={styles.messageTitleRow}>
-                      <Text style={styles.messageTitle} numberOfLines={1}>{thread.title}</Text>
-                      <Text style={styles.time}>{formatShortDateTime(thread.lastMessageAt, locale)}</Text>
+              {messages.threads.map((thread) => {
+                const hasAttachment = Boolean(thread.lastMessage?.attachmentDocument)
+                const preview = thread.lastMessage?.body || (hasAttachment ? copy.attachment : "")
+                const delivery = !thread.syncState ? thread.lastMessage?.delivery : null
+                const status = [
+                  thread.unread ? copy.unread : null,
+                  thread.needsAcknowledgement ? copy.ack : null,
+                  thread.syncState ? copy.queued : null,
+                  delivery?.status === "READ" ? copy.read : delivery?.status === "SENT" ? copy.sent : null,
+                ].filter(Boolean).join(". ")
+                return (
+                  <Pressable
+                    key={thread.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={[thread.title, preview].filter(Boolean).join(". ")}
+                    accessibilityHint={thread.id.startsWith("local-direct-") ? copy.localThread : copy.openThread}
+                    accessibilityState={{ busy: thread.syncState === "PENDING" }}
+                    accessibilityValue={status ? { text: status } : undefined}
+                    onPress={() => openThread(thread.id)}
+                    style={({ pressed }) => [
+                      styles.messageCard,
+                      layout.isTablet && styles.listCardTablet,
+                      thread.unread && styles.messageUnread,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View accessible={false} style={[styles.avatar, thread.type === "BROADCAST" && styles.broadcastAvatar]}>
+                      {thread.type === "BROADCAST" ? <TabIcon name="inbox" color={colors.warning} size={20} /> : <Text style={styles.avatarText}>{thread.title.charAt(0).toUpperCase()}</Text>}
                     </View>
-                    <Text style={styles.preview} numberOfLines={2}>
-                      {thread.lastMessage?.body || (thread.lastMessage?.attachmentDocument ? `📎 ${copy.attachment}` : "—")}
-                    </Text>
-                    <View style={styles.metaRow}>
-                      {thread.needsAcknowledgement ? <Pill label={copy.ack} tone="warning" /> : null}
-                      {thread.syncState ? <Pill label={copy.queued} tone="info" /> : null}
-                      {!thread.syncState && thread.lastMessage?.delivery ? (
-                        <Pill
-                          label={thread.lastMessage.delivery.status === "READ" ? `✓✓ ${copy.read}` : `✓ ${copy.sent}`}
-                          tone="success"
-                        />
-                      ) : null}
+                    <View style={styles.messageBody}>
+                      <View style={styles.messageTitleRow}>
+                        <Text style={styles.messageTitle} numberOfLines={1}>{thread.title}</Text>
+                        <Text style={styles.time}>{formatShortDateTime(thread.lastMessageAt, locale)}</Text>
+                      </View>
+                      {thread.lastMessage?.body ? (
+                        <Text style={styles.preview} numberOfLines={2}>{thread.lastMessage.body}</Text>
+                      ) : hasAttachment ? (
+                        <View accessible={false} style={styles.attachmentPreview}><TabIcon name="document" color={colors.muted} size={14} /><Text style={[styles.preview, styles.attachmentPreviewText]}>{copy.attachment}</Text></View>
+                      ) : <Text style={styles.preview}>—</Text>}
+                      <View accessible={false} style={styles.metaRow}>
+                        {thread.needsAcknowledgement ? <Pill label={copy.ack} tone="warning" /> : null}
+                        {thread.syncState ? <Pill label={copy.queued} tone="info" /> : null}
+                        {delivery ? <Pill label={delivery.status === "READ" ? copy.read : copy.sent} tone="success" icon="check" duplicateIcon={delivery.status === "READ"} /> : null}
+                      </View>
                     </View>
-                  </View>
-                  {thread.unread ? <View style={styles.unreadDot} /> : <Text style={styles.chevron}>›</Text>}
-                </Pressable>
-              ))}
+                    {thread.unread ? <View accessible={false} style={styles.unreadDot} /> : <View accessible={false} style={styles.chevron}><TabIcon name="chevronRight" color={colors.faint} size={20} /></View>}
+                  </Pressable>
+                )
+              })}
             </View>
           )
         ) : (
           <>
             {notificationUnread > 0 ? (
-              <Pressable onPress={() => void field.markAllNotificationsRead()} style={styles.readAll}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("markAllRead")} accessibilityState={{ disabled: notificationUnread === 0 }} onPress={() => void field.markAllNotificationsRead()} style={styles.readAll}>
                 <Text style={styles.readAllText}>{t("markAllRead")}</Text>
               </Pressable>
             ) : null}
             {items.length === 0 ? (
-              <Empty icon="✓" title={t("inboxEmpty")} hint={t("inboxEmptyHint")} />
+              <Empty icon="check" title={t("inboxEmpty")} hint={t("inboxEmptyHint")} />
             ) : (
               <View style={[styles.list, layout.isTablet && styles.listTablet]}>
                 {items.map((item) => {
@@ -198,6 +221,8 @@ export default function InboxTab() {
                       key={item.id}
                       accessibilityRole="button"
                       accessibilityLabel={presented.title}
+                      accessibilityHint={copy.openNotification}
+                      accessibilityValue={{ text: item.isRead ? copy.read : copy.unread }}
                       onPress={() => void openNotification(item)}
                       style={({ pressed }) => [
                         styles.notificationCard,
@@ -206,7 +231,7 @@ export default function InboxTab() {
                         pressed && styles.pressed,
                       ]}
                     >
-                      <View style={[styles.typeIcon, { backgroundColor: tone.bg }]}>
+                      <View accessible={false} style={[styles.typeIcon, { backgroundColor: tone.bg }]}>
                         <TabIcon name={tone.icon} color={tone.color} size={20} />
                       </View>
                       <View style={styles.messageBody}>
@@ -227,12 +252,13 @@ export default function InboxTab() {
   )
 }
 
-function Pill({ label, tone }: { label: string; tone: "warning" | "info" | "success" }) {
-  return <View style={[styles.pill, tone === "warning" ? styles.pillWarning : tone === "success" ? styles.pillSuccess : styles.pillInfo]}><Text style={[styles.pillText, tone === "warning" ? styles.pillWarningText : tone === "success" ? styles.pillSuccessText : styles.pillInfoText]}>{label}</Text></View>
+function Pill({ label, tone, icon, duplicateIcon = false }: { label: string; tone: "warning" | "info" | "success"; icon?: TabIconName; duplicateIcon?: boolean }) {
+  const iconColor = tone === "warning" ? colors.warning : tone === "success" ? colors.successDark : colors.info
+  return <View style={[styles.pill, tone === "warning" ? styles.pillWarning : tone === "success" ? styles.pillSuccess : styles.pillInfo]}>{icon ? <View style={styles.pillIcons}><TabIcon name={icon} color={iconColor} size={11} />{duplicateIcon ? <TabIcon name={icon} color={iconColor} size={11} /> : null}</View> : null}<Text style={[styles.pillText, tone === "warning" ? styles.pillWarningText : tone === "success" ? styles.pillSuccessText : styles.pillInfoText]}>{label}</Text></View>
 }
 
-function Empty({ icon, title, hint }: { icon: string; title: string; hint: string }) {
-  return <View style={styles.emptyCard}><View style={styles.emptyIcon}><Text style={styles.emptyIconText}>{icon}</Text></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyHint}>{hint}</Text></View>
+function Empty({ icon, title, hint }: { icon: TabIconName; title: string; hint: string }) {
+  return <View style={styles.emptyCard}><View accessible={false} style={styles.emptyIcon}><TabIcon name={icon} color={colors.primary} size={28} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyHint}>{hint}</Text></View>
 }
 
 const styles = StyleSheet.create({
@@ -244,18 +270,19 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 28, fontWeight: "900", letterSpacing: -0.7, marginTop: 3 },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
   newButton: { minWidth: 84, minHeight: 48, borderRadius: 16, paddingHorizontal: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  newButtonPlus: { color: colors.headerText, fontSize: 18, fontWeight: "600", lineHeight: 17 },
+  newButtonIcon: { height: 19, alignItems: "center", justifyContent: "center" },
   newButtonText: { color: colors.headerText, fontSize: 9, fontWeight: "900", marginTop: 2 },
   segment: { marginHorizontal: 14, padding: 4, borderRadius: 16, backgroundColor: "#E9E9EE", flexDirection: "row", gap: 4 },
-  segmentButton: { flex: 1, minHeight: 43, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  segmentButton: { flex: 1, minHeight: 44, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   segmentActive: { backgroundColor: colors.card, ...cardShadow },
   segmentText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
   segmentTextActive: { color: colors.text },
   count: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   countText: { color: colors.headerText, fontSize: 9, fontWeight: "900" },
-  warning: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg },
-  warningText: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
-  readAll: { alignSelf: "flex-end", marginRight: 14, marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: colors.primarySoft },
+  warning: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  warningIcon: { width: 17, height: 17, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  warningText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  readAll: { alignSelf: "flex-end", minHeight: 44, marginRight: 14, marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   readAllText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   list: { paddingTop: 3 },
   messageCard: { minHeight: 88, marginHorizontal: 14, marginTop: 10, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border, ...cardShadow },
@@ -269,8 +296,11 @@ const styles = StyleSheet.create({
   messageTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" },
   time: { color: colors.faint, fontSize: 9, fontWeight: "700" },
   preview: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
+  attachmentPreview: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
+  attachmentPreviewText: { marginTop: 0 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 7 },
-  pill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4 },
+  pill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 3 },
+  pillIcons: { flexDirection: "row", alignItems: "center", gap: 1 },
   pillWarning: { backgroundColor: colors.warningBg },
   pillInfo: { backgroundColor: colors.infoBg },
   pillSuccess: { backgroundColor: colors.successBg },
@@ -279,12 +309,11 @@ const styles = StyleSheet.create({
   pillInfoText: { color: colors.info },
   pillSuccessText: { color: colors.successDark },
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
-  chevron: { color: colors.faint, fontSize: 25, fontWeight: "400" },
+  chevron: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   typeIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   notificationDate: { color: colors.faint, fontSize: 9, fontWeight: "600", marginTop: 7 },
   emptyCard: { margin: 14, minHeight: 310, padding: 28, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   emptyIcon: { width: 68, height: 68, borderRadius: 23, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 16 },
-  emptyIconText: { color: colors.primary, fontSize: 27, fontWeight: "900" },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
   emptyHint: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 7, maxWidth: 280 },
   pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
