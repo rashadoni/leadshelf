@@ -1,5 +1,6 @@
+import { useEffect } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router, useLocalSearchParams } from "expo-router"
+import { useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { useField } from "../../../src/field/field-context"
@@ -7,6 +8,7 @@ import { fieldNotificationCopy } from "../../../src/field/notification-copy"
 import { notificationTarget } from "../../../src/field/notification-target"
 import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { cardShadow, colors, radii } from "../../../src/theme"
 
 function notificationTypeLabel(type: string): string {
@@ -31,12 +33,22 @@ export default function NotificationDetailScreen() {
   const { notificationId: parameter } = useLocalSearchParams<{ notificationId?: string | string[] }>()
   const notificationId = typeof parameter === "string" ? parameter : ""
   const item = field.notifications.items.find((notification) => notification.id === notificationId) ?? null
+  const unreadNotificationId = item && !item.isRead ? item.id : null
+
+  useEffect(() => {
+    if (!unreadNotificationId) return
+    // A direct detail link still carries the exact notification id, so it can
+    // use the same scoped durable read as Inbox instead of leaving its badge.
+    void field.markNotificationRead(unreadNotificationId)
+  }, [field.markNotificationRead, unreadNotificationId])
+
+  const goBack = () => safeFieldBack("/(app)/(tabs)/inbox")
 
   if (!item) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>
@@ -60,7 +72,7 @@ export default function NotificationDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>
