@@ -18,6 +18,7 @@ import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
 import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { resolveFieldTaskToday, shiftFieldTaskDueDate } from "../../../src/field/task-time"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -105,17 +106,19 @@ export default function AgentTaskDetailScreen() {
     await field.refreshAgentTasks()
   }
 
-  async function updateTask(input: Omit<Parameters<typeof enqueueFieldTaskUpdate>[0], "taskId" | "expectedVersion">) {
-    if (!task) return
+  async function updateTask(input: Omit<Parameters<typeof enqueueFieldTaskUpdate>[0], "taskId" | "expectedVersion">): Promise<boolean> {
+    if (!task) return false
     setBusy(true)
     setError(null)
     try {
       enqueueFieldTaskUpdate({ taskId: task.id, expectedVersion: task.version, ...input })
       applyCachedTasks()
       await flush()
+      return true
     } catch (cause) {
       setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
+      return false
     } finally {
       setBusy(false)
     }
@@ -162,8 +165,32 @@ export default function AgentTaskDetailScreen() {
     ])
   }
 
+  function hasUnsavedTaskInput() {
+    if (!task) return false
+    return (editing && (
+      title !== task.title ||
+      description !== (task.description ?? "") ||
+      priority !== task.priority
+    )) ||
+      result !== (task.result ?? "") ||
+      Boolean(comment.trim()) ||
+      Boolean(evidence.trim())
+  }
+
+  function goBack() {
+    const leave = () => safeFieldBack("/(app)/field-tasks")
+    if (!hasUnsavedTaskInput()) {
+      leave()
+      return
+    }
+    Alert.alert(t("agentTaskDiscardEditTitle"), t("agentTaskDiscardEditBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("agentTaskDiscardEditConfirm"), style: "destructive", onPress: leave },
+    ])
+  }
+
   if (!task) {
-    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.missing}><Text style={styles.missingTitle}>{field.taskPhase === "loading" ? "…" : t("agentTasksEmpty")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={() => router.back()} style={styles.backButton}><Text style={styles.backButtonText}>{t("back")}</Text></Pressable></View></SafeAreaView>
+    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.missing}><Text style={styles.missingTitle}>{field.taskPhase === "loading" ? "…" : t("agentTasksEmpty")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={goBack} style={styles.backButton}><Text style={styles.backButtonText}>{t("back")}</Text></Pressable></View></SafeAreaView>
   }
 
   const tone = statusTone(task.status)
@@ -173,7 +200,7 @@ export default function AgentTaskDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={goBack} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={21} />
           </Pressable>
           <View style={styles.headerBody}>
@@ -193,7 +220,7 @@ export default function AgentTaskDetailScreen() {
             <View style={styles.priorityRow}>{(["LOW", "MEDIUM", "HIGH", "URGENT"] as FieldAgentTaskPriority[]).map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={priorityLabel(value)} accessibilityState={{ selected: priority === value, disabled: false }} onPress={() => setPriority(value)} style={[styles.priorityChip, priority === value && styles.priorityChipSelected]}><Text style={[styles.priorityChipText, priority === value && styles.priorityChipTextSelected]}>{priorityLabel(value)}</Text></Pressable>)}</View>
             <View style={styles.editActions}>
               <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCancelEdit")} accessibilityState={{ disabled: false }} onPress={() => { setEditing(false); setTitle(task.title); setDescription(task.description ?? ""); setPriority(task.priority) }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>{t("agentTaskCancelEdit")}</Text></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskSave")} accessibilityState={{ disabled: !title.trim() || busy, busy }} disabled={!title.trim() || busy} onPress={() => void updateTask({ title: title.trim(), description: description.trim() || null, priority }).then(() => setEditing(false))} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{t("agentTaskSave")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskSave")} accessibilityState={{ disabled: !title.trim() || busy, busy }} disabled={!title.trim() || busy} onPress={() => void updateTask({ title: title.trim(), description: description.trim() || null, priority }).then((saved) => { if (saved) setEditing(false) })} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{t("agentTaskSave")}</Text></Pressable>
             </View>
           </> : <><Text style={styles.taskTitle}>{task.title}</Text>{task.description ? <Text style={styles.description}>{task.description}</Text> : null}<Text style={styles.source}>{task.canEditContent ? t("agentTaskPersonal") : t("agentTaskAssigned")} · {priorityLabel(task.priority)}</Text></>}
         </View>

@@ -8,6 +8,7 @@ import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
 import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { isFieldTaskDueOnDate, resolveFieldTaskToday } from "../../../src/field/task-time"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -141,7 +142,7 @@ export default function AgentTasksScreen() {
         refreshControl={<RefreshControl refreshing={field.taskPhase === "refreshing"} onRefresh={() => void refresh()} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text>
             <Text style={styles.title}>{t("agentTasksTitle")}</Text>
