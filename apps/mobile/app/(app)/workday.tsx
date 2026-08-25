@@ -52,6 +52,7 @@ import { useSync } from "../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../src/theme"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 import { splitWorkdayActions } from "../../src/field/workday-action-layout"
+import { safeFieldBack } from "../../src/navigation/safe-back"
 
 type DisplayStatus = FieldWorkdayStatus | "NOT_STARTED"
 
@@ -491,7 +492,7 @@ export default function WorkdayScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)")} style={styles.backButton}>
           <TabIcon name="chevronLeft" color={colors.text} size={23} />
         </Pressable>
         <View style={styles.headerBody}>

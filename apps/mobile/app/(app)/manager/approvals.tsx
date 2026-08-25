@@ -11,6 +11,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 type ApprovalKind = FieldManagerApprovalDecisionInput["kind"]
 type ApprovalDecision = "APPROVED" | "REJECTED" | "NEEDS_INFO" | "RESCHEDULE"
@@ -490,7 +491,7 @@ export default function ManagerApprovalsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerApprovalsTitle")}</Text>

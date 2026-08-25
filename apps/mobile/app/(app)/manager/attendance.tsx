@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
-import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
@@ -16,6 +15,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 const RANGE_OPTIONS = [1, 7, 30] as const
 const MANAGER_PAGE_LIMIT = 25
@@ -232,7 +232,7 @@ export default function ManagerAttendanceScreen() {
         refreshControl={<RefreshControl refreshing={loading && !loadingMore} onRefresh={() => void load(endDate, rangeDays, searchQuery)} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerAttendanceTitle")}</Text>

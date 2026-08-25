@@ -12,6 +12,7 @@ import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { agentRoleLabel } from "../../../src/field/labels"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 const knownRouteStatus = new Set(["DRAFT", "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "MISSED"])
 const RANGE_OPTIONS = [1, 5, 7]
@@ -226,7 +227,7 @@ export default function ManagerPlanningScreen() {
         refreshControl={<RefreshControl refreshing={loading && !loadingMore} onRefresh={() => void load(date, rangeDays, searchQuery)} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerPlanningTitle")}</Text>

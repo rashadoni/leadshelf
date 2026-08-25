@@ -17,6 +17,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 type SectionState<T> = {
   data: T | null
@@ -179,7 +180,7 @@ export default function ManagerHomeScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>

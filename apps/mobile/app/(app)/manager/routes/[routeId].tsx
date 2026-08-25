@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router, useLocalSearchParams } from "expo-router"
+import { useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../../src/api/mobile-client"
 import { TabIcon } from "../../../../src/components/TabIcon"
@@ -10,6 +10,7 @@ import { t, useLocale } from "../../../../src/i18n"
 import { formatCalendarDay, formatTime } from "../../../../src/i18n/date-format"
 import { HttpError } from "../../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../../src/theme"
+import { safeFieldBack } from "../../../../src/navigation/safe-back"
 
 const knownRouteStatus = new Set(["DRAFT", "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "MISSED"])
 
@@ -95,7 +96,7 @@ export default function ManagerRouteDetailScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager/planning")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerRouteDetailTitle")}</Text>

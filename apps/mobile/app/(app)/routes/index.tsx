@@ -10,6 +10,7 @@ import { colors, cardShadow, radii } from "../../../src/theme"
 import { useSync } from "../../../src/sync/sync-context"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 export default function RoutesScreen() {
   const locale = useLocale()
@@ -26,7 +27,7 @@ export default function RoutesScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={field.phase === "refreshing"} onRefresh={() => void field.refresh()} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("routeHubTitle")}</Text><Text style={styles.subtitle}>{t("routeHubHint")}</Text></View>
           {canCreateRoute ? <Pressable accessibilityRole="button" accessibilityLabel={t("createRoute")} accessibilityHint={t("chooseStop")} onPress={() => router.push("/(app)/routes/new" as never)} style={styles.add}><TabIcon name="add" color={colors.headerText} size={23} /></Pressable> : null}
         </View>
