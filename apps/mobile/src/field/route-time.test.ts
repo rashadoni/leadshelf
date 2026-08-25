@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   addMinutesToRouteTime,
+  findRouteTimeConflicts,
   formatRouteTime,
   isValidRouteTime,
   routePlannedTime,
@@ -29,5 +30,12 @@ describe("field route wall-clock time", () => {
     expect(shiftDateKey("2026-07-13", 7)).toBe("2026-07-20")
     expect(shiftDateKey("2026-01-01", -7)).toBe("2025-12-25")
     expect(addMinutesToRouteTime("09:00", 45)).toBe("09:45")
+  })
+
+  it("finds duplicate valid wall-clock times without treating blank or malformed inputs as collisions", () => {
+    expect(findRouteTimeConflicts(["09:00", "", "09:00", "9:00", "11:30", "11:30"])).toEqual([
+      { time: "09:00", indexes: [0, 2] },
+      { time: "11:30", indexes: [4, 5] },
+    ])
   })
 })

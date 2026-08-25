@@ -3606,6 +3606,7 @@ export interface FieldSyncRecoveryRow {
   evidence: FieldSyncRecoveryEvidence | null
   canRetry: boolean
   canDiscard: boolean
+  canReturnToDraft: boolean
   canContinueWithoutEvidence: boolean
   canDetachAttachment: boolean
 }
@@ -3642,6 +3643,19 @@ function routeOperationRequiresRefresh(
   const detail = unknownRecord(parsedDetail(row.detail))
   const code = stringValue(detail?.code)
   return code === "ROUTE_VERSION_REQUIRED" || code === "ROUTE_VERSION_CONFLICT"
+}
+
+/**
+ * A rejected publication never changed the server draft. These known planner
+ * conflicts cannot be solved by retrying the exact same publication, so the
+ * worker may explicitly remove just that failed attempt and edit the draft.
+ */
+function routePublishCanReturnToDraft(
+  row: Pick<FieldRecoveryDbRow, "kind" | "detail">,
+): boolean {
+  if (row.kind !== "field.route.publish") return false
+  const code = stringValue(unknownRecord(parsedDetail(row.detail))?.code)
+  return code === "ROUTE_POINT_TIME_CONFLICT" || code === "ROUTE_CONFLICT"
 }
 
 /**
@@ -3695,6 +3709,7 @@ export function listFieldSyncRecoveryQueue(): FieldSyncRecoveryRow[] {
     const evidenceClientPhotoId = stringValue(payload.evidenceClientPhotoId)
     const evidenceRow = evidenceClientPhotoId ? photoById.get(evidenceClientPhotoId) : null
     const requiresRouteRefresh = routeOperationRequiresRefresh(row)
+    const canReturnToDraft = routePublishCanReturnToDraft(row)
     let evidence: FieldSyncRecoveryEvidence | null = null
     if (evidenceRow) {
       try {
@@ -3718,8 +3733,9 @@ export function listFieldSyncRecoveryQueue(): FieldSyncRecoveryRow[] {
       attempts: row.attempts ?? 0,
       detail: parsedDetail(row.detail),
       evidence,
-      canRetry: !requiresRouteRefresh,
+      canRetry: !requiresRouteRefresh && !canReturnToDraft,
       canDiscard: requiresRouteRefresh,
+      canReturnToDraft,
       canContinueWithoutEvidence: Boolean(
         evidenceClientPhotoId &&
         (row.kind === "field.commitment.create" || row.kind === "field.commitment.fulfill"),
@@ -3847,6 +3863,62 @@ export function discardFieldRouteVersionConflict(clientOpId: string): boolean {
   return true
 }
 
+function clearCachedFieldRouteSyncState(routeId: string): void {
+  const rows = db.getAllSync<{ k: string; json: string }>("SELECT k, json FROM field_cache")
+  for (const row of rows) {
+    let cached: Record<string, unknown> | null = null
+    try {
+      cached = unknownRecord(JSON.parse(row.json) as unknown)
+    } catch {
+      cached = null
+    }
+    if (!cached || !Array.isArray(cached.days)) continue
+    let changed = false
+    const days = cached.days.map((rawDay) => {
+      const day = unknownRecord(rawDay)
+      if (!day || !Array.isArray(day.routes)) return rawDay
+      let dayChanged = false
+      const routes = day.routes.map((rawRoute) => {
+        const route = unknownRecord(rawRoute)
+        if (!route || route.id !== routeId) return rawRoute
+        dayChanged = true
+        changed = true
+        const next = { ...route }
+        delete next.syncState
+        return next
+      })
+      return dayChanged ? { ...day, routes } : rawDay
+    })
+    if (!changed) continue
+    db.runSync(
+      "UPDATE field_cache SET json=?, updatedAt=? WHERE k=?",
+      [JSON.stringify({ ...cached, days }), new Date().toISOString(), row.k],
+    )
+  }
+}
+
+/** Explicitly abandons a planner-conflicted publish and leaves the CRM draft editable. */
+export function returnFieldRoutePublishToDraft(clientOpId: string): { routeId: string } | null {
+  const row = db.getFirstSync<FieldRecoveryDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts, detail
+     FROM outbox_ops WHERE clientOpId=? AND kind='field.route.publish'
+       AND status IN ('conflict','rejected')`,
+    [clientOpId],
+  )
+  if (!row || !routePublishCanReturnToDraft(row)) return null
+  let routeId: string
+  try {
+    routeId = parseFieldRoutePublishPayload(JSON.parse(row.payload) as unknown).routeId
+  } catch {
+    return null
+  }
+  db.withTransactionSync(() => {
+    db.runSync("DELETE FROM outbox_ops WHERE clientOpId=?", [clientOpId])
+    clearCachedFieldRouteSyncState(routeId)
+  })
+  return { routeId }
+}
+
 export function detachFieldMessageAttachment(clientOpId: string): {
   clientOpId: string
   fileUri: string | null
@@ -3957,6 +4029,7 @@ export function detachFieldCommitmentEvidence(clientOpId: string): {
 export function fieldRouteOutboxResult(clientOpId: string): {
   status: "pending" | "applied" | "conflict" | "rejected"
   routeId: string | null
+  detail: unknown
 } | null {
   const result = fieldOutboxResult(clientOpId)
   if (!result) return null
@@ -3964,7 +4037,34 @@ export function fieldRouteOutboxResult(clientOpId: string): {
   return {
     status: result.status,
     routeId: stringValue(detail?.routeId),
+    detail: result.detail,
   }
+}
+
+export type FieldRouteConflictRecovery = {
+  clientOpId: string
+  kind: "field.route.update" | "field.route.publish"
+  status: "conflict" | "rejected"
+  detail: unknown
+}
+
+/** Finds the latest durable route mutation that still needs worker recovery. */
+export function fieldRouteConflictRecovery(routeId: string): FieldRouteConflictRecovery | null {
+  const row = db.getFirstSync<{
+    clientOpId: string
+    kind: "field.route.update" | "field.route.publish"
+    status: "conflict" | "rejected"
+    detail: string | null
+  }>(
+    `SELECT clientOpId, kind, status, detail FROM outbox_ops
+     WHERE kind IN ('field.route.update','field.route.publish')
+       AND status IN ('conflict','rejected')
+       AND json_extract(payload, '$.routeId')=?
+     ORDER BY clientCreatedAt DESC, rowid DESC LIMIT 1`,
+    [routeId],
+  )
+  if (!row) return null
+  return { ...row, detail: parsedDetail(row.detail) }
 }
 
 export function fieldRouteServerId(localRouteId: string): string | null {

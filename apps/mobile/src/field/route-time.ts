@@ -2,8 +2,29 @@ import { tenantDateTimeParts, tenantDateTimeToIso } from "./tenant-time"
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/
 
+export type RouteTimeConflict = {
+  time: string
+  indexes: number[]
+}
+
 export function isValidRouteTime(value: string): boolean {
   return value === "" || TIME_PATTERN.test(value)
+}
+
+/** Returns only valid, explicitly entered wall-clock collisions. */
+export function findRouteTimeConflicts(times: readonly string[]): RouteTimeConflict[] {
+  const indexesByTime = new Map<string, number[]>()
+  times.forEach((rawTime, index) => {
+    const time = rawTime.trim()
+    if (!TIME_PATTERN.test(time)) return
+    const indexes = indexesByTime.get(time) ?? []
+    indexes.push(index)
+    indexesByTime.set(time, indexes)
+  })
+  return [...indexesByTime.entries()]
+    .filter(([, indexes]) => indexes.length > 1)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([time, indexes]) => ({ time, indexes }))
 }
 
 export function formatRouteTime(iso: string | null, timeZone: string): string {

@@ -23,6 +23,7 @@ import {
   detachFieldCommitmentEvidence,
   detachFieldMessageAttachment,
   listFieldSyncRecoveryQueue,
+  returnFieldRoutePublishToDraft,
   retryFieldSyncOperation,
   type FieldSyncRecoveryRow,
 } from "../../src/db/local-store"
@@ -30,13 +31,14 @@ import { discardFieldVisitPhotoFile } from "../../src/field/visit-photo-store"
 import { formatShortDateTime } from "../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../src/i18n"
 import { useSync } from "../../src/sync/sync-context"
+import { useField } from "../../src/field/field-context"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 import {
   fieldErrorMessage,
   fieldErrorMessageForCode,
-  FIELD_ROUTE_ERROR_OVERRIDES,
+  fieldRouteConflictMessage,
   FIELD_TASK_ERROR_OVERRIDES,
 } from "../../src/field/error-message"
 
@@ -99,17 +101,18 @@ function rowErrorFallback(row: FieldSyncRecoveryRow): MessageKey {
   return "fieldDataError"
 }
 
-function rowError(row: FieldSyncRecoveryRow): string | null {
+function rowError(row: FieldSyncRecoveryRow, timeZone: string): string | null {
   const detail = record(row.detail)
   if (!detail && typeof row.detail !== "string") return null
+  if (row.kind.startsWith("field.route.")) {
+    return fieldRouteConflictMessage(row.detail, rowErrorFallback(row), timeZone)
+  }
   return fieldErrorMessageForCode(
     detail?.code,
     rowErrorFallback(row),
     row.kind.startsWith("field.task.")
       ? FIELD_TASK_ERROR_OVERRIDES
-      : row.kind.startsWith("field.route.")
-        ? FIELD_ROUTE_ERROR_OVERRIDES
-        : {},
+      : {},
   )
 }
 
@@ -121,6 +124,7 @@ function rowPhoto(row: FieldSyncRecoveryRow): string | null {
 export default function SyncCenterScreen() {
   const locale = useLocale()
   const { status, sync } = useSync()
+  const field = useField()
   const [rows, setRows] = useState<FieldSyncRecoveryRow[]>(listFieldSyncRecoveryQueue)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -162,6 +166,24 @@ export default function SyncCenterScreen() {
       if (!discarded) return
       Alert.alert(t("syncCenterRouteChangeDiscarded"))
       await flush()
+    } catch (error) {
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function returnRouteToDraft(row: FieldSyncRecoveryRow) {
+    if (busyId || syncBusy) return
+    setBusyId(row.clientOpId)
+    try {
+      const recovered = returnFieldRoutePublishToDraft(row.clientOpId)
+      if (!recovered) return
+      reload()
+      Alert.alert(t("routeReturnToDraftDone"), undefined, [{
+        text: t("openRoute"),
+        onPress: () => router.push(`/(app)/routes/${recovered.routeId}` as never),
+      }])
     } catch (error) {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
     } finally {
@@ -235,6 +257,13 @@ export default function SyncCenterScreen() {
     ])
   }
 
+  function confirmReturnRouteToDraft(row: FieldSyncRecoveryRow) {
+    Alert.alert(t("routeReturnToDraftTitle"), t("routeReturnToDraftBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("routeReturnToDraftConfirm"), style: "destructive", onPress: () => void returnRouteToDraft(row) },
+    ])
+  }
+
   async function refresh() {
     setRefreshing(true)
     try {
@@ -266,7 +295,7 @@ export default function SyncCenterScreen() {
 
         {rows.length > 0 ? <View style={styles.list}>{rows.map((row) => {
           const photoUri = rowPhoto(row)
-          const error = rowError(row)
+          const error = rowError(row, field.week?.timezone ?? "UTC")
           return (
             <View key={row.clientOpId} style={styles.card}>
               <View style={styles.cardTop}>
@@ -287,6 +316,7 @@ export default function SyncCenterScreen() {
                 {row.canRetry ? <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View> : null}
                 {row.canDiscard && string(row.payload.routeId) ? <View style={styles.action}><CommercialButton label={t("syncCenterOpenRoute")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => openRouteRecovery(row)} /></View> : null}
                 {row.canDiscard ? <View style={styles.action}><CommercialButton label={t("syncCenterDiscardRoute")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
+                {row.canReturnToDraft ? <View style={styles.action}><CommercialButton label={t("routeReturnToDraft")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
                 {row.canContinueWithoutEvidence ? <View style={styles.action}><CommercialButton label={t("syncCenterWithoutPhoto")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
                 {row.canDetachAttachment ? <View style={styles.action}><CommercialButton label={locale === "az" ? "Faylsız" : "Без файла"} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
               </View>

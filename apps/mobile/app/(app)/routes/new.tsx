@@ -7,6 +7,7 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import { RouteTargetPicker, type RouteTarget } from "../../../src/field/route-target-picker"
 import {
   addMinutesToRouteTime,
+  findRouteTimeConflicts,
   formatRouteTime,
   isValidRouteTime,
   routePlannedTime,
@@ -21,7 +22,8 @@ import { formatCalendarDay, formatCalendarMonthShort } from "../../../src/i18n/d
 import { TabIcon } from "../../../src/components/TabIcon"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
-import { fieldErrorMessage } from "../../../src/field/error-message"
+import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
+import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
   if (to < 0 || to >= items.length) return items
@@ -86,8 +88,14 @@ export default function NewRouteScreen() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [routeConflict, setRouteConflict] = useState<FieldRouteMutationConflict | null>(null)
   const [step, setStep] = useState<RouteDraftStep>(1)
   const excluded = useMemo(() => new Set(targets.map((target) => target.key)), [targets])
+  const localTimeConflicts = useMemo(() => findRouteTimeConflicts(targets.map((target) => target.time)), [targets])
+  const conflictingTargetIndexes = useMemo(
+    () => new Set(localTimeConflicts.flatMap((conflict) => conflict.indexes)),
+    [localTimeConflicts],
+  )
   const selectedCalendarDate = selectedDate ? formatCalendarDay(selectedDate, locale) : null
   const selectedDateLabel = selectedCalendarDate
     ? selectedCalendarDate.weekday + ", " + selectedCalendarDate.date
@@ -136,11 +144,14 @@ export default function NewRouteScreen() {
       ...target,
       time: addMinutesToRouteTime("09:00", index * 30),
     })))
+    setRouteConflict(null)
+    setError(null)
   }
 
   function selectDate(date: string) {
     setSelectedDate(date)
     setError(null)
+    setRouteConflict(null)
   }
 
   function goBack() {
@@ -167,6 +178,7 @@ export default function NewRouteScreen() {
         return
       }
       setError(null)
+      setRouteConflict(null)
       setStep(2)
       return
     }
@@ -176,6 +188,7 @@ export default function NewRouteScreen() {
         return
       }
       setError(null)
+      setRouteConflict(null)
       setStep(3)
       return
     }
@@ -195,6 +208,7 @@ export default function NewRouteScreen() {
     const invalidTime = targets.some((target, index) => (
       !isValidRouteTime(target.time) || Boolean(target.time && !plannedTimes[index])
     ))
+    const localTimeConflict = localTimeConflicts[0]
     if (
       !agentId ||
       !selectedDate ||
@@ -204,8 +218,16 @@ export default function NewRouteScreen() {
       setError(invalidTime ? t("invalidRouteTime") : t("routeCreateRequired"))
       return
     }
+    if (localTimeConflict) {
+      setError(t("routeConflictTime", {
+        points: localTimeConflict.indexes.map((index) => index + 1).join(", "),
+        time: localTimeConflict.time,
+      }))
+      return
+    }
     setSaving(true)
     setError(null)
+    setRouteConflict(null)
     try {
       const input = {
         agentId,
@@ -254,12 +276,18 @@ export default function NewRouteScreen() {
       if (result?.status === "applied" && result.routeId) {
         await field.loadWeek(week.weekStart)
         router.replace(`/(app)/routes/${result.routeId}` as never)
+      } else if (result?.status === "conflict" || result?.status === "rejected") {
+        setRouteConflict(parseFieldRouteMutationConflict(result.detail))
+        setError(fieldRouteConflictMessage(result.detail, "fieldDataError", timezone))
       } else {
         Alert.alert(t("routeQueued"))
         router.replace("/(app)/routes" as never)
       }
     } catch (cause) {
-      setError(fieldErrorMessage(cause, managerMode ? "managerRoutePublishFailed" : "fieldDataError"))
+      setRouteConflict(parseFieldRouteMutationConflict(
+        cause && typeof cause === "object" && "detail" in cause ? (cause as { detail?: unknown }).detail : null,
+      ))
+      setError(fieldRouteMutationErrorMessage(cause, managerMode ? "managerRoutePublishFailed" : "fieldDataError", timezone))
     } finally {
       setSaving(false)
     }
@@ -424,12 +452,20 @@ export default function NewRouteScreen() {
                   <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
                   <TextInput
                     value={target.time}
-                    onChangeText={(value) => setTargets((current) => current.map((item) => item.key === target.key ? { ...item, time: value } : item))}
+                    onChangeText={(value) => {
+                      setTargets((current) => current.map((item) => item.key === target.key ? { ...item, time: value } : item))
+                      setRouteConflict(null)
+                      setError(null)
+                    }}
                     placeholder="09:30"
                     placeholderTextColor={colors.faint}
                     keyboardType="numbers-and-punctuation"
                     maxLength={5}
-                    style={[styles.timeInput, !isValidRouteTime(target.time) && styles.timeInputInvalid]}
+                    style={[
+                      styles.timeInput,
+                      !isValidRouteTime(target.time) && styles.timeInputInvalid,
+                      conflictingTargetIndexes.has(index) && styles.timeInputConflict,
+                    ]}
                   />
                 </View>
               </View>
@@ -438,6 +474,11 @@ export default function NewRouteScreen() {
         ) : null}
 
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        {routeConflict?.kind === "duplicate" && routeConflict.duplicateRouteId ? (
+          <Pressable onPress={() => router.replace(`/(app)/routes/${routeConflict.duplicateRouteId}` as never)} style={styles.openConflictRoute}>
+            <Text style={styles.openConflictRouteText}>{t("openRoute")}</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.footer}>
           {step > 1 ? <Pressable disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
           <Pressable disabled={saving} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, saving && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : step === 3 ? copySource ? t("copyRoute") : managerMode ? t("managerRoutePublish") : t("createRoute") : t("routeWizardContinue")}</Text></Pressable>
@@ -520,6 +561,7 @@ const styles = StyleSheet.create({
   timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
   timeInput: { width: 78, height: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
   timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
+  timeInputConflict: { borderColor: colors.warning, backgroundColor: colors.warningBg },
   autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 44, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
   addTarget: { marginHorizontal: 14, marginTop: 9, minHeight: 64, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
@@ -529,6 +571,8 @@ const styles = StyleSheet.create({
   addTargetHint: { color: colors.muted, fontSize: 10, marginTop: 3 },
   error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg },
   errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" },
+  openConflictRoute: { marginHorizontal: 14, marginTop: 9, minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  openConflictRouteText: { color: colors.info, fontSize: 12, fontWeight: "900" },
   footer: { marginHorizontal: 14, marginTop: 16, flexDirection: "row", gap: 8 },
   footerBack: { minWidth: 96, minHeight: 52, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   footerBackText: { color: colors.text, fontSize: 13, fontWeight: "900" },

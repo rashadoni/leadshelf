@@ -16,16 +16,18 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { FieldRoutePoint } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { RouteTargetPicker, routeTargetKey, type RouteTarget } from "../../../src/field/route-target-picker"
-import { addMinutesToRouteTime, formatRouteTime, isValidRouteTime, routePlannedTime } from "../../../src/field/route-time"
+import { addMinutesToRouteTime, findRouteTimeConflicts, formatRouteTime, isValidRouteTime, routePlannedTime } from "../../../src/field/route-time"
 import { setOptimisticRouteSyncState, updateOptimisticRoute } from "../../../src/field/route-cache"
 import {
   enqueueFieldVisitCheckIn,
   enqueueFieldRouteChangeRequest,
   enqueueFieldRoutePublish,
   enqueueFieldRouteUpdate,
+  fieldRouteConflictRecovery,
   fieldRouteOutboxResult,
   fieldRouteServerId,
   fieldOutboxResult,
+  returnFieldRoutePublishToDraft,
 } from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
@@ -33,7 +35,8 @@ import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { resolveFieldRouteFlow, type FieldRouteStepState } from "../../../src/field/route-flow"
-import { fieldErrorMessage } from "../../../src/field/error-message"
+import { fieldErrorMessage, fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
+import { parseFieldRouteMutationConflict, routeConflictPointIndexes } from "../../../src/field/route-conflict"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
@@ -91,6 +94,8 @@ export default function FieldRouteDetailScreen() {
   const [notes, setNotes] = useState("")
   const [points, setPoints] = useState<FieldRoutePoint[]>([])
   const [timeInputs, setTimeInputs] = useState<Record<string, string>>({})
+  const [routeConflictDetail, setRouteConflictDetail] = useState<unknown>(null)
+  const [routeConflictClientOpId, setRouteConflictClientOpId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [requestPoint, setRequestPoint] = useState<FieldRoutePoint | null>(null)
   const [reason, setReason] = useState("")
@@ -98,6 +103,26 @@ export default function FieldRouteDetailScreen() {
   const [addRequestTarget, setAddRequestTarget] = useState<RouteTarget | null>(null)
   const [addReason, setAddReason] = useState("")
   const [checkingInPointId, setCheckingInPointId] = useState<string | null>(null)
+  const durableRouteConflict = useMemo(
+    () => routeData?.syncState ? fieldRouteConflictRecovery(routeData.id) : null,
+    [routeData?.id, routeData?.syncState],
+  )
+  const activeRouteConflictDetail = routeConflictDetail ?? durableRouteConflict?.detail ?? null
+  const routeConflict = useMemo(
+    () => parseFieldRouteMutationConflict(activeRouteConflictDetail),
+    [activeRouteConflictDetail],
+  )
+  const localTimeConflicts = useMemo(
+    () => findRouteTimeConflicts(points.map((point) => timeInputs[point.id] ?? "")),
+    [points, timeInputs],
+  )
+  const conflictingPointIndexes = useMemo(
+    () => new Set([
+      ...localTimeConflicts.flatMap((conflict) => conflict.indexes),
+      ...routeConflictPointIndexes(routeConflict),
+    ]),
+    [localTimeConflicts, routeConflict],
+  )
 
   useEffect(() => {
     if (!routeData) return
@@ -153,7 +178,11 @@ export default function FieldRouteDetailScreen() {
     routeData.id.startsWith("local-route-") || routeData.version > 0
   )
   const canPublishRoute = routeData.canPublish && !routeData.syncState && routeData.version > 0 && !routeData.id.startsWith("local-route-")
-  const needsRouteReload = routeData.syncState === "CONFLICT"
+  const needsRouteReload = routeData.syncState === "CONFLICT" && routeConflict?.kind === "version"
+  const routeConflictClientOp = routeConflictClientOpId ?? durableRouteConflict?.clientOpId ?? null
+  const canReturnRouteToDraft = Boolean(
+    routeConflictClientOp && (routeConflict?.kind === "point_time" || routeConflict?.kind === "schedule"),
+  )
   const navigationPlatform: RouteNavigationPlatform = Platform.OS === "android"
     ? "android"
     : Platform.OS === "ios"
@@ -251,6 +280,14 @@ export default function FieldRouteDetailScreen() {
       Alert.alert(t("invalidRouteTime"))
       return
     }
+    const localTimeConflict = localTimeConflicts[0]
+    if (localTimeConflict) {
+      Alert.alert(t("routeConflictTitle"), t("routeConflictTime", {
+        points: localTimeConflict.indexes.map((index) => index + 1).join(", "),
+        time: localTimeConflict.time,
+      }))
+      return
+    }
     setSaving(true)
     try {
       const input = {
@@ -284,12 +321,19 @@ export default function FieldRouteDetailScreen() {
           router.replace(`/(app)/routes/${result.routeId}` as never)
         }
       } else if (result?.status === "conflict" || result?.status === "rejected") {
-        Alert.alert(t("syncNeedsAttention"))
+        setRouteConflictDetail(result.detail)
+        setRouteConflictClientOpId(queued.clientOpId)
+        Alert.alert(t("routeConflictTitle"), fieldRouteConflictMessage(result.detail, "syncNeedsAttention", timezone))
       } else {
         Alert.alert(t("routeQueued"))
       }
     } catch (error) {
-      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
+      const detail = error && typeof error === "object" && "detail" in error
+        ? (error as { detail?: unknown }).detail
+        : null
+      setRouteConflictDetail(detail)
+      setRouteConflictClientOpId(null)
+      Alert.alert(t("fieldDataError"), fieldRouteMutationErrorMessage(error, "syncNeedsAttention", timezone))
     } finally {
       setSaving(false)
     }
@@ -418,6 +462,14 @@ export default function FieldRouteDetailScreen() {
 
   function publish() {
     if (!canPublishRoute) return
+    const localTimeConflict = localTimeConflicts[0]
+    if (localTimeConflict) {
+      Alert.alert(t("routeConflictTitle"), t("routeConflictTime", {
+        points: localTimeConflict.indexes.map((index) => index + 1).join(", "),
+        time: localTimeConflict.time,
+      }))
+      return
+    }
     Alert.alert(t("publishConfirmTitle"), t("publishConfirmBody"), [
       { text: t("cancel"), style: "cancel" },
       {
@@ -434,16 +486,42 @@ export default function FieldRouteDetailScreen() {
               await field.loadWeek(week.weekStart)
             } else if (result?.status === "conflict" || result?.status === "rejected") {
               field.applyLocalWeek(setOptimisticRouteSyncState(week, routeData!.id, result.status === "conflict" ? "CONFLICT" : "REJECTED"))
-              Alert.alert(t("syncNeedsAttention"))
+              setRouteConflictDetail(result.detail)
+              setRouteConflictClientOpId(queued.clientOpId)
+              Alert.alert(t("routeConflictTitle"), fieldRouteConflictMessage(result.detail, "syncNeedsAttention", field.week?.timezone ?? "UTC"))
             } else {
               Alert.alert(t("publishQueued"))
             }
           } catch (error) {
-            Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
+            const detail = error && typeof error === "object" && "detail" in error
+              ? (error as { detail?: unknown }).detail
+              : null
+            setRouteConflictDetail(detail)
+            setRouteConflictClientOpId(null)
+            Alert.alert(t("fieldDataError"), fieldRouteMutationErrorMessage(error, "syncNeedsAttention", field.week?.timezone ?? "UTC"))
           } finally {
             setSaving(false)
           }
         })(),
+      },
+    ])
+  }
+
+  function confirmReturnToDraft() {
+    if (!routeConflictClientOp || !field.week) return
+    Alert.alert(t("routeReturnToDraftTitle"), t("routeReturnToDraftBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("routeReturnToDraftConfirm"),
+        style: "destructive",
+        onPress: () => {
+          const recovered = returnFieldRoutePublishToDraft(routeConflictClientOp)
+          if (!recovered) return
+          field.applyLocalWeek(setOptimisticRouteSyncState(field.week!, recovered.routeId, undefined))
+          setRouteConflictDetail(null)
+          setRouteConflictClientOpId(null)
+          Alert.alert(t("routeReturnToDraftDone"))
+        },
       },
     ])
   }
@@ -611,12 +689,20 @@ export default function FieldRouteDetailScreen() {
                         <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
                         <TextInput
                           value={timeInputs[point.id] ?? ""}
-                          onChangeText={(value) => setTimeInputs((current) => ({ ...current, [point.id]: value }))}
+                          onChangeText={(value) => {
+                            setTimeInputs((current) => ({ ...current, [point.id]: value }))
+                            setRouteConflictDetail(null)
+                            setRouteConflictClientOpId(null)
+                          }}
                           placeholder="09:30"
                           placeholderTextColor={colors.faint}
                           keyboardType="numbers-and-punctuation"
                           maxLength={5}
-                          style={[styles.timeInput, !isValidRouteTime(timeInputs[point.id] ?? "") && styles.timeInputInvalid]}
+                          style={[
+                            styles.timeInput,
+                            !isValidRouteTime(timeInputs[point.id] ?? "") && styles.timeInputInvalid,
+                            conflictingPointIndexes.has(index) && styles.timeInputConflict,
+                          ]}
                         />
                       </View>
                     ) : point.plannedTime ? <Text style={styles.pointTime}>{formatRouteTime(point.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
@@ -692,7 +778,13 @@ export default function FieldRouteDetailScreen() {
 
         {routeData.canEdit ? (
           <View style={styles.footerActions}>
-            {!canSaveRoute ? <Text style={styles.syncHint}>{needsRouteReload ? t("routeRefreshRequired") : t("routeSyncBeforeChange")}</Text> : null}
+            {routeConflict ? <View style={styles.conflictCard}>
+              <Text style={styles.conflictTitle}>{t("routeConflictTitle")}</Text>
+              <Text style={styles.conflictText}>{fieldRouteConflictMessage(activeRouteConflictDetail, "syncNeedsAttention", field.week?.timezone ?? "UTC")}</Text>
+              {canReturnRouteToDraft ? <Pressable disabled={saving} onPress={confirmReturnToDraft} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("routeReturnToDraft")}</Text></Pressable> : null}
+              {routeConflict.kind === "version" ? <Pressable disabled={saving} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.conflictAction, saving && styles.disabled]}><Text style={styles.conflictActionText}>{t("syncCenterTitle")}</Text></Pressable> : null}
+            </View> : null}
+            {!canSaveRoute ? <Text style={styles.syncHint}>{routeConflict ? fieldRouteConflictMessage(activeRouteConflictDetail, needsRouteReload ? "routeRefreshRequired" : "routeSyncBeforeChange", field.week?.timezone ?? "UTC") : needsRouteReload ? t("routeRefreshRequired") : t("routeSyncBeforeChange")}</Text> : null}
             {needsRouteReload ? <Pressable disabled={saving} onPress={() => void reloadRoute()} style={[styles.reloadButton, saving && styles.disabled]}><Text style={styles.reloadText}>{t("reloadRoute")}</Text></Pressable> : null}
             <Pressable disabled={saving || !canSaveRoute} onPress={() => void save()} style={[styles.saveButton, (saving || !canSaveRoute) && styles.disabled]}><Text style={styles.saveText}>{saving ? t("saving") : t("saveChanges")}</Text></Pressable>
             {routeData.canPublish ? (
@@ -792,6 +884,7 @@ const styles = StyleSheet.create({
   timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
   timeInput: { width: 72, height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
   timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
+  timeInputConflict: { borderColor: colors.warning, backgroundColor: colors.warningBg },
   pointActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
   smallButton: { minHeight: 38, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   smallButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
@@ -821,6 +914,11 @@ const styles = StyleSheet.create({
   saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   saveText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   syncHint: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800", textAlign: "center" },
+  conflictCard: { borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warning },
+  conflictTitle: { color: colors.warning, fontSize: 12, fontWeight: "900" },
+  conflictText: { color: colors.text, fontSize: 10, lineHeight: 15, marginTop: 4 },
+  conflictAction: { minHeight: 42, marginTop: 10, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.warning, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  conflictActionText: { color: colors.warning, fontSize: 11, fontWeight: "900", textAlign: "center" },
   reloadButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   reloadText: { color: colors.info, fontSize: 13, fontWeight: "900" },
   publishButton: { minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, alignItems: "center", justifyContent: "center" },
