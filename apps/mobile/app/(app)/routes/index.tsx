@@ -12,7 +12,8 @@ import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
-import type { FieldWeekDay } from "../../../src/field/contracts"
+import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
+import type { FieldWeekDay, FieldWeekVisit } from "../../../src/field/contracts"
 
 type RouteHubItem = FieldWeekDay["routes"][number] & { day: FieldWeekDay }
 
@@ -21,7 +22,11 @@ export default function RoutesScreen() {
   const field = useField()
   const { status: syncStatus } = useSync()
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [upcomingOpen, setUpcomingOpen] = useState(false)
   const routes = useMemo<RouteHubItem[]>(() => field.week?.days.flatMap((day) => day.routes.map((route) => ({ ...route, day }))) ?? [], [field.week])
+  const activeVisit = useMemo<FieldWeekVisit | null>(() => (
+    field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
+  ), [field.week])
   const canCreateRoute = field.week?.capabilities.createOwnDraft === true
   const nowRoutes = routes.filter((route) => route.effectiveStatus === "IN_PROGRESS")
   const groupedRouteIds = new Set(nowRoutes.map((route) => route.id))
@@ -65,7 +70,9 @@ export default function RoutesScreen() {
           accessibilityRole="button"
           accessibilityLabel={t("routeCalendarTitle")}
           accessibilityHint={t("routeCalendarHint")}
-          onPress={() => router.push("/(app)/(tabs)/week" as never)}
+          onPress={() => router.push((field.week?.today
+            ? `/(app)/(tabs)/week?date=${encodeURIComponent(field.week.today)}`
+            : "/(app)/(tabs)/week") as never)}
           style={({ pressed }) => [styles.calendarLinkModern, pressed && styles.pressed]}
         >
           <View style={styles.calendarLinkIconModern}><TabIcon name="week" color={colors.primary} size={22} /></View>
@@ -77,10 +84,10 @@ export default function RoutesScreen() {
         </Pressable>
 
         {routes.length ? <>
-          {nowRoutes.length ? <RouteGroup title={t("routeNow")} routes={nowRoutes} locale={locale} featured /> : null}
-          {todayRoutes.length ? <RouteGroup title={t("todayWord")} routes={todayRoutes} locale={locale} featured={!nowRoutes.length} /> : null}
-          {upcomingRoutes.length ? <RouteGroup title={t("routeUpcomingRoutes")} routes={upcomingRoutes} locale={locale} /> : null}
-          {historyRoutes.length ? <RouteGroup title={t("routeHistory")} routes={historyRoutes} locale={locale} collapsible expanded={historyOpen} onToggle={() => setHistoryOpen((open) => !open)} /> : null}
+          {nowRoutes.length ? <RouteGroup title={t("routeNow")} routes={nowRoutes} locale={locale} activeVisit={activeVisit} featured /> : null}
+          {todayRoutes.length ? <RouteGroup title={t("todayWord")} routes={todayRoutes} locale={locale} activeVisit={activeVisit} featured={!nowRoutes.length} /> : null}
+          {upcomingRoutes.length ? <RouteGroup title={t("routeUpcomingRoutes")} routes={upcomingRoutes} locale={locale} activeVisit={activeVisit} collapsible={upcomingRoutes.length > 2} expanded={upcomingOpen} onToggle={() => setUpcomingOpen((open) => !open)} /> : null}
+          {historyRoutes.length ? <RouteGroup title={t("routeHistory")} routes={historyRoutes} locale={locale} activeVisit={activeVisit} collapsible expanded={historyOpen} onToggle={() => setHistoryOpen((open) => !open)} /> : null}
         </> : canCreateRoute ? (
           <Pressable
             accessibilityRole="button"
@@ -110,10 +117,11 @@ export default function RoutesScreen() {
   )
 }
 
-function RouteGroup({ title, routes, locale, featured = false, collapsible = false, expanded = true, onToggle }: {
+function RouteGroup({ title, routes, locale, activeVisit, featured = false, collapsible = false, expanded = true, onToggle }: {
   title: string
   routes: readonly RouteHubItem[]
   locale: Locale
+  activeVisit: FieldWeekVisit | null
   featured?: boolean
   collapsible?: boolean
   expanded?: boolean
@@ -122,20 +130,20 @@ function RouteGroup({ title, routes, locale, featured = false, collapsible = fal
   const visible = !collapsible || expanded
   return <View style={styles.routeGroupModern}>
     {collapsible ? <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? t("routeHideRoutes") : t("routeShowRoutes")}: ${title}`} accessibilityState={{ expanded }} onPress={onToggle} style={({ pressed }) => [styles.routeGroupToggleModern, pressed && styles.pressed]}>
-      <View style={styles.routeGroupLabelModern}><Text style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>
-      <View style={styles.routeGroupToggleActionModern}><Text style={styles.routeGroupToggleTextModern}>{expanded ? t("routeHideRoutes") : t("routeShowRoutes")}</Text><TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+      <View style={styles.routeGroupLabelModern}><Text numberOfLines={1} style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>
+      <View accessible={false} style={styles.routeGroupToggleActionModern}><TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
     </Pressable> : <View style={styles.routeGroupHeadingModern}><Text style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>}
-    {visible ? routes.map((route, index) => <RouteCard key={route.id} route={route} locale={locale} featured={featured && index === 0} />) : null}
+    {visible ? routes.map((route, index) => <RouteCard key={route.id} route={route} locale={locale} activeVisit={activeVisit} featured={featured && index === 0} />) : null}
   </View>
 }
 
-function RouteCard({ route, locale, featured }: { route: RouteHubItem; locale: Locale; featured: boolean }) {
+function RouteCard({ route, locale, activeVisit, featured }: { route: RouteHubItem; locale: Locale; activeVisit: FieldWeekVisit | null; featured: boolean }) {
   const meta = routeStatusMeta(route.effectiveStatus)
   const tone = tones[meta.tone]
   const calendarDay = formatCalendarDay(route.day.date, locale)
   const routeName = route.name ?? t("tabRoute")
   const progressText = `${route.visitedPoints}/${route.totalPoints} ${t("routeVisitedLabel")}`
-  const nextPoint = route.points.find((point) => point.effectiveStatus === "PENDING") ?? route.points[0]
+  const nextPoint = resolveFieldRouteFlow(route, activeVisit).primaryPoint
   const nextStopName = nextPoint?.contact?.displayName ?? nextPoint?.customer.name
   const nextStopMeta = nextPoint?.customer.address ?? nextPoint?.customer.city ?? null
   const syncText = route.syncState === "PENDING" ? t("queued") : route.syncState ? t("syncNeedsAttention") : null
@@ -209,11 +217,10 @@ const styles = StyleSheet.create({
   routeGroupHeadingModern: { minHeight: 38, marginHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8 },
   routeGroupToggleModern: { minHeight: 52, marginHorizontal: 14, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   routeGroupLabelModern: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
-  routeGroupTitleModern: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  routeGroupTitleModern: { flexShrink: 1, color: colors.text, fontSize: 14, fontWeight: "900" },
   routeGroupCountModern: { minWidth: 24, height: 24, borderRadius: radii.pill, paddingHorizontal: 6, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   routeGroupCountTextModern: { color: colors.primary, fontSize: 11, fontWeight: "900" },
-  routeGroupToggleActionModern: { flexDirection: "row", alignItems: "center", gap: 4 },
-  routeGroupToggleTextModern: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  routeGroupToggleActionModern: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   routeCardModern: { marginHorizontal: 14, marginTop: 7, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   routeCardFeaturedModern: { borderColor: colors.primary, shadowOpacity: 0.085, elevation: 2 },
   routeTopModern: { flexDirection: "row", alignItems: "center", gap: 10 },

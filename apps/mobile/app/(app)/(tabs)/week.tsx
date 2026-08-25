@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useField } from "../../../src/field/field-context"
 import {
@@ -32,13 +32,18 @@ const tones: Record<RouteStatusTone, { bg: string; border: string; text: string;
 export default function WeekTab() {
   const locale = useLocale()
   const field = useField()
+  const { date: dateParameter } = useLocalSearchParams<{ date?: string }>()
+  const requestedDate = typeof dateParameter === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateParameter)
+    ? dateParameter
+    : null
   const week = field.week
   const busy = field.phase === "loading" || field.phase === "refreshing"
   const layout = useResponsiveLayout()
   const isCurrentWeek = Boolean(week && week.weekStart === startOfIsoWeek(week.today))
-  const [viewRange, setViewRange] = useState<FieldWeekViewRange>(7)
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [viewRange, setViewRange] = useState<FieldWeekViewRange>(requestedDate ? 1 : 7)
+  const [selectedDate, setSelectedDate] = useState<string | null>(requestedDate)
   const selectedWeekStart = useRef<string | null>(null)
+  const requestedDateHandled = useRef<string | null>(null)
   const activeDate = selectedDate ?? week?.days.find((day) => day.isToday)?.date ?? week?.today ?? null
   const visibleDays = useMemo(
     () => visibleFieldWeekDays(week?.days ?? [], activeDate, viewRange),
@@ -59,6 +64,14 @@ export default function WeekTab() {
         : week.days.find((day) => day.isToday)?.date ?? week.today
     ))
   }, [week])
+
+  useEffect(() => {
+    if (!requestedDate || requestedDateHandled.current === requestedDate) return
+    requestedDateHandled.current = requestedDate
+    setSelectedDate(requestedDate)
+    setViewRange(1)
+    if (week && startOfIsoWeek(requestedDate) !== week.weekStart) void field.loadWeek(startOfIsoWeek(requestedDate))
+  }, [field, requestedDate, week])
 
   const move = (days: -1 | 1) => {
     if (!week) return

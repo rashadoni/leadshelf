@@ -139,6 +139,8 @@ export default function FieldVisitWorkspaceScreen() {
   const [resultNote, setResultNote] = useState("")
   const [saving, setSaving] = useState(false)
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false)
+  const [contextOpen, setContextOpen] = useState(false)
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
 
   const weekVisit = findFieldVisit(field.week, visitId)
   const requirements = workspace?.visit.requirementSnapshot?.requirements
@@ -688,52 +690,67 @@ export default function FieldVisitWorkspaceScreen() {
 
         {hasVisitContext ? (
           <View style={styles.contextCard}>
-            <Text style={styles.contextTitle}>{t("fieldVisitContext")}</Text>
-            <View style={styles.contextGrid}>
-              {plannedVisitTime ? (
-                <View style={styles.contextItem}>
-                  <View style={styles.contextIcon}><TabIcon name="week" color={colors.primary} size={17} /></View>
-                  <View style={styles.contextBody}>
-                    <Text style={styles.contextLabel}>{t("plannedTime")}</Text>
-                    <Text style={styles.contextValue}>{plannedVisitTime}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${contextOpen ? t("fieldVisitHideContext") : t("fieldVisitShowContext")}: ${t("fieldVisitContext")}`}
+              accessibilityState={{ expanded: contextOpen }}
+              onPress={() => setContextOpen((open) => !open)}
+              style={({ pressed }) => [styles.contextToggle, pressed && styles.pressed]}
+            >
+              <View style={styles.contextToggleIcon}><TabIcon name="location" color={colors.primary} size={19} /></View>
+              <View style={styles.contextToggleBody}>
+                <Text style={styles.contextTitle}>{t("fieldVisitContext")}</Text>
+                <Text numberOfLines={1} style={styles.contextSummary}>{plannedVisitTime ? `${t("plannedTime")}: ${plannedVisitTime}` : visitAddress ?? visitPhone}</Text>
+              </View>
+              <View accessible={false} style={styles.contextToggleChevron}><TabIcon name={contextOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+            </Pressable>
+            {contextOpen ? <>
+              <View style={styles.contextGrid}>
+                {plannedVisitTime ? (
+                  <View style={styles.contextItem}>
+                    <View style={styles.contextIcon}><TabIcon name="week" color={colors.primary} size={17} /></View>
+                    <View style={styles.contextBody}>
+                      <Text style={styles.contextLabel}>{t("plannedTime")}</Text>
+                      <Text style={styles.contextValue}>{plannedVisitTime}</Text>
+                    </View>
                   </View>
-                </View>
-              ) : null}
-              {visitAddress ? (
-                <View style={styles.contextItem}>
-                  <View style={styles.contextIcon}><TabIcon name="location" color={colors.primary} size={17} /></View>
-                  <View style={styles.contextBody}>
-                    <Text style={styles.contextLabel}>{t("fieldVisitAddress")}</Text>
-                    <Text numberOfLines={2} style={styles.contextValue}>{visitAddress}</Text>
+                ) : null}
+                {visitAddress ? (
+                  <View style={styles.contextItem}>
+                    <View style={styles.contextIcon}><TabIcon name="location" color={colors.primary} size={17} /></View>
+                    <View style={styles.contextBody}>
+                      <Text style={styles.contextLabel}>{t("fieldVisitAddress")}</Text>
+                      <Text numberOfLines={2} style={styles.contextValue}>{visitAddress}</Text>
+                    </View>
                   </View>
-                </View>
-              ) : null}
-              {visitPhone ? (
+                ) : null}
+                {visitPhone ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("fieldVisitCallContact")}
+                    onPress={() => void openVisitPhone()}
+                    style={({ pressed }) => [styles.contextItem, pressed && styles.pressed]}
+                  >
+                    <View style={styles.contextIcon}><TabIcon name="contacts" color={colors.primary} size={17} /></View>
+                    <View style={styles.contextBody}>
+                      <Text style={styles.contextLabel}>{t("fieldVisitContactPhone")}</Text>
+                      <Text numberOfLines={1} style={[styles.contextValue, styles.contextActionValue]}>{visitPhone}</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
+              </View>
+              {visitNavigationUrls.length ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={t("fieldVisitCallContact")}
-                  onPress={() => void openVisitPhone()}
-                  style={({ pressed }) => [styles.contextItem, pressed && styles.pressed]}
+                  accessibilityLabel={t("routeOpenNavigation")}
+                  onPress={() => void openVisitNavigation()}
+                  style={({ pressed }) => [styles.contextNavigation, pressed && styles.pressed]}
                 >
-                  <View style={styles.contextIcon}><TabIcon name="contacts" color={colors.primary} size={17} /></View>
-                  <View style={styles.contextBody}>
-                    <Text style={styles.contextLabel}>{t("fieldVisitContactPhone")}</Text>
-                    <Text numberOfLines={1} style={[styles.contextValue, styles.contextActionValue]}>{visitPhone}</Text>
-                  </View>
+                  <TabIcon name="route" color={colors.primary} size={17} />
+                  <Text style={styles.contextNavigationText}>{t("routeOpenNavigation")}</Text>
                 </Pressable>
               ) : null}
-            </View>
-            {visitNavigationUrls.length ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("routeOpenNavigation")}
-                onPress={() => void openVisitNavigation()}
-                style={({ pressed }) => [styles.contextNavigation, pressed && styles.pressed]}
-              >
-                <TabIcon name="route" color={colors.primary} size={17} />
-                <Text style={styles.contextNavigationText}>{t("routeOpenNavigation")}</Text>
-              </Pressable>
-            ) : null}
+            </> : null}
           </View>
         ) : null}
 
@@ -905,14 +922,21 @@ export default function FieldVisitWorkspaceScreen() {
         ) : null}
 
         <View style={styles.evidenceSection}>
-          <View style={styles.sectionHeader}>
-            <View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${evidenceOpen ? t("fieldVisitHideEvidence") : t("fieldVisitShowEvidence")}: ${t("fieldVisitEvidenceHistory")}`}
+            accessibilityState={{ expanded: evidenceOpen }}
+            onPress={() => setEvidenceOpen((open) => !open)}
+            style={({ pressed }) => [styles.evidenceToggle, pressed && styles.pressed]}
+          >
+            <View style={styles.evidenceToggleBody}>
               <Text style={styles.sectionTitle}>{t("fieldVisitEvidenceHistory")}</Text>
               <Text style={styles.sectionHint}>{t("fieldVisitEvidenceHistoryHint")}</Text>
             </View>
-          </View>
+            <View accessible={false} style={styles.evidenceToggleChevron}><TabIcon name={evidenceOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+          </Pressable>
 
-          <View style={styles.evidenceGroup}>
+          {evidenceOpen ? <><View style={styles.evidenceGroup}>
             <View style={styles.evidenceGroupHeader}>
               <View style={styles.evidenceGroupIcon}><TabIcon name="camera" color={colors.primary} size={18} /></View>
               <Text style={styles.evidenceGroupTitle}>{t("fieldVisitPhotoEvidence")}</Text>
@@ -991,6 +1015,7 @@ export default function FieldVisitWorkspaceScreen() {
               </View>
             )}
           </View>
+          </> : null}
         </View>
 
         {!isCompleted ? (
@@ -1022,30 +1047,35 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, marginTop: 2 },
+  subtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
   livePill: { maxWidth: 92, borderRadius: radii.pill, backgroundColor: colors.warningBg, paddingHorizontal: 9, paddingVertical: 7 },
-  liveText: { color: colors.warning, fontSize: 8, fontWeight: "900", textAlign: "center" },
+  liveText: { color: colors.warning, fontSize: 10, fontWeight: "900", textAlign: "center" },
   donePill: { backgroundColor: colors.successBg }, doneText: { color: colors.successDark },
   summaryCard: { marginHorizontal: 14, marginTop: 10, minHeight: 76, borderRadius: radii.card, padding: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "space-around", ...cardShadow },
   summaryLabel: { color: colors.headerSubtext, fontSize: 8, fontWeight: "900", textTransform: "uppercase", textAlign: "center" },
   summaryValue: { color: colors.headerText, fontSize: 18, fontWeight: "900", textAlign: "center", marginTop: 4 },
   summaryDivider: { width: 1, height: 34, backgroundColor: "rgba(255,255,255,0.2)" },
-  contextCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  contextTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  contextCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  contextToggle: { minHeight: 52, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", gap: 9 },
+  contextToggleIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  contextToggleBody: { flex: 1, minWidth: 0 },
+  contextToggleChevron: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  contextTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  contextSummary: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 2 },
   contextGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   contextItem: { minHeight: 50, flexGrow: 1, flexBasis: "44%", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: radii.inner, padding: 9, backgroundColor: colors.bg },
   contextIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   contextBody: { flex: 1, minWidth: 0 },
-  contextLabel: { color: colors.muted, fontSize: 8, fontWeight: "800", textTransform: "uppercase" },
-  contextValue: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 2 },
+  contextLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  contextValue: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
   contextActionValue: { color: colors.primary },
   contextNavigation: { minHeight: 44, marginTop: 10, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
-  contextNavigationText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  contextNavigationText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   sectionHeader: { marginHorizontal: 16, marginTop: 22, marginBottom: 5, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  sectionHint: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  sectionHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   requiredCount: { minWidth: 28, height: 28, borderRadius: 14, backgroundColor: colors.missedBg, alignItems: "center", justifyContent: "center" },
   requiredCountText: { color: colors.missed, fontSize: 11, fontWeight: "900" },
   actionCard: { marginHorizontal: 14, marginTop: 8, minHeight: 70, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 11 },
@@ -1053,18 +1083,21 @@ const styles = StyleSheet.create({
   actionCardDisabled: { opacity: 0.76 },
   actionMark: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   actionMarkDone: { backgroundColor: colors.card },
-  actionBody: { flex: 1 }, actionTitle: { color: colors.text, fontSize: 13, fontWeight: "900" }, actionMeta: { color: colors.muted, fontSize: 9, marginTop: 4 },
+  actionBody: { flex: 1 }, actionTitle: { color: colors.text, fontSize: 14, fontWeight: "900" }, actionMeta: { color: colors.muted, fontSize: 11, marginTop: 4 },
   editorCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, ...cardShadow },
   editorTitle: { color: colors.text, fontSize: 15, fontWeight: "900" }, editorHint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
   label: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 13, marginBottom: 6 },
   input: { minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.bg },
   textarea: { minHeight: 88, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, padding: 12, color: colors.text, backgroundColor: colors.bg },
   editorActions: { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 7, marginTop: 12 },
-  secondaryButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, secondaryText: { color: colors.text, fontSize: 10, fontWeight: "800" },
-  waiveButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.warningBg, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, waiveText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
-  primaryButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, primaryText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  secondaryButton: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, secondaryText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  waiveButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.warningBg, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, waiveText: { color: colors.warning, fontSize: 12, fontWeight: "900" },
+  primaryButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" }, primaryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   resultCard: { marginHorizontal: 14, marginTop: 20, borderRadius: radii.card, padding: 15, backgroundColor: colors.card, ...cardShadow },
   evidenceSection: { marginTop: 20 },
+  evidenceToggle: { minHeight: 62, marginHorizontal: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "center", gap: 10 },
+  evidenceToggleBody: { flex: 1, minWidth: 0 },
+  evidenceToggleChevron: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   evidenceGroup: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   evidenceGroupHeader: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 7 },
   evidenceGroupIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
@@ -1076,19 +1109,19 @@ const styles = StyleSheet.create({
   evidenceBody: { flex: 1, minWidth: 0 },
   evidenceState: { color: colors.text, fontSize: 11, fontWeight: "900" },
   evidenceStateAttention: { color: colors.missed },
-  evidenceMeta: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 2 },
+  evidenceMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   retakeButton: { minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder },
-  retakeText: { color: colors.missed, fontSize: 9, fontWeight: "900" },
+  retakeText: { color: colors.missed, fontSize: 11, fontWeight: "900" },
   evidenceEmpty: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, paddingBottom: 2 },
-  evidenceEmptyTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  evidenceEmptyHint: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
+  evidenceEmptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  evidenceEmptyHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
   photoProofButton: { alignSelf: "flex-start", minHeight: 44, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 7 },
-  photoProofText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  photoProofText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   workRow: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: colors.border },
   workMark: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.infoBg },
-  workTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
-  followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
+  workTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 11, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
+  followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
   stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 8 }, stickyFooterHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginBottom: 7, textAlign: "center" }, checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },

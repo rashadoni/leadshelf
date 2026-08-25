@@ -576,7 +576,7 @@ export default function NewRouteScreen() {
                 <View key={target.key} style={[styles.targetCard, expanded && styles.targetCardExpanded]}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`${expanded ? t("routeHideStopSettings") : t("routeEditStopSettings")}: ${targetAccessibilityName(target)}`}
+                    accessibilityLabel={`${expanded ? t("routeHideStopSettings") : t("routeEditStopSettings")}: ${targetAccessibilityName(target)}. ${t("plannedTime")}: ${target.time || t("routeTimeNotSet")}`}
                     accessibilityState={{ expanded }}
                     onPress={() => setExpandedTargetKey((current) => current === target.key ? null : target.key)}
                     style={({ pressed }) => [styles.targetSummary, pressed && styles.pressed]}
@@ -584,12 +584,15 @@ export default function NewRouteScreen() {
                     <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
                     <View style={styles.targetBody}>
                       <Text numberOfLines={1} style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
-                      <Text numberOfLines={1} style={styles.targetMeta}>{targetMeta(target)}</Text>
+                      <View style={styles.targetMetaRow}>
+                        <Text numberOfLines={1} style={styles.targetMeta}>{targetMeta(target)}</Text>
+                        <View accessible={false} style={[styles.targetTimePill, !isValidRouteTime(target.time) && styles.targetTimePillAttention]}>
+                          <TabIcon name="week" color={!isValidRouteTime(target.time) ? colors.missed : colors.primary} size={13} />
+                          <Text style={[styles.targetTimeText, !isValidRouteTime(target.time) && styles.targetTimeTextAttention]}>{target.time || t("routeTimeNotSet")}</Text>
+                        </View>
+                      </View>
                     </View>
-                    <View style={styles.targetExpandControl}>
-                      <Text numberOfLines={1} style={styles.targetExpandText}>{expanded ? t("routeHideStopSettings") : t("routeEditStopSettings")}</Text>
-                      <TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={19} />
-                    </View>
+                    <View accessible={false} style={styles.targetExpandControl}><TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={19} /></View>
                   </Pressable>
                   {expanded ? <View style={styles.targetEditor}>
                     <View style={styles.targetActions}>
@@ -713,9 +716,13 @@ const styles = StyleSheet.create({
   indexText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   targetBody: { flex: 1, minWidth: 0 },
   targetName: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  targetMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
-  targetExpandControl: { maxWidth: 132, minHeight: 36, paddingLeft: 6, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2 },
-  targetExpandText: { flexShrink: 1, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
+  targetMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  targetMeta: { flex: 1, minWidth: 0, color: colors.muted, fontSize: 11, lineHeight: 15 },
+  targetTimePill: { minHeight: 24, borderRadius: radii.pill, paddingHorizontal: 7, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 3 },
+  targetTimePillAttention: { backgroundColor: colors.missedBg },
+  targetTimeText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  targetTimeTextAttention: { color: colors.missed },
+  targetExpandControl: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   targetEditor: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 10 },
   targetActions: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   targetAction: { minHeight: 44, borderRadius: 11, paddingHorizontal: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5 },
