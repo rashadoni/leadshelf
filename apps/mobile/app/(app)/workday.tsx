@@ -367,6 +367,22 @@ export default function WorkdayScreen() {
       await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
+        // A server rejection is factual: retain the last known workday instead of
+        // leaving the optimistic clock state and background tracker running.
+        // Pending/offline events intentionally keep their optimistic state.
+        field.applyLocalWorkday(current)
+        const restoredTracking = await reconcileWorkdayTracking(
+          current.workday?.status ?? null,
+          intervalSeconds,
+          runsContinuousTracking,
+          trackingNotification,
+        ).catch((): WorkdayTrackingState => ({
+          mode: "unavailable",
+          issue: "tracking_start_failed",
+          recovery: "retry_tracking",
+          observedAt: new Date().toISOString(),
+        }))
+        setTracking(restoredTracking)
         Alert.alert(t("workdayActionConflict"))
       } else if (result?.status !== "applied") {
         setFeedback("workdayQueueSaved")
