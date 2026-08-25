@@ -411,6 +411,7 @@ export default function WorkdayScreen() {
         recovery: "retry_tracking",
         observedAt: new Date().toISOString(),
       })
+      setFeedback("workdayTrackingPermissionNeeded")
     } finally {
       setTrackingBusy(false)
     }
@@ -735,7 +736,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
   cardHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
   trackingObserved: { color: colors.faint, fontSize: 9, lineHeight: 13, marginTop: 5 },
-  trackingRecovery: { alignSelf: "flex-start", minHeight: 40, justifyContent: "center", borderRadius: 12, backgroundColor: colors.primarySoft, paddingHorizontal: 13, marginTop: 10 },
+  trackingRecovery: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", borderRadius: 12, backgroundColor: colors.primarySoft, paddingHorizontal: 13, marginTop: 10 },
   trackingRecoveryText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 24, marginBottom: 9, paddingHorizontal: 2 },
   sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
