@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -9,6 +9,7 @@ import { useField } from "../../../src/field/field-context"
 import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { getCurrentDeviceLocation, type DeviceLocation } from "../../../src/location/device-location"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
 
@@ -39,6 +40,10 @@ export default function NewCustomerRequestScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<FieldCustomerRequest | null>(null)
+  const hasDraft = Boolean(
+    name.trim() || address.trim() || city.trim() || district.trim() || phone.trim() || contactPerson.trim() ||
+    reason.trim() || agentComment.trim() || routeId || location || objectType !== "CLINIC" || category !== "A" || potential !== "UNKNOWN",
+  )
 
   async function attachLocation() {
     setLocating(true)
@@ -89,6 +94,18 @@ export default function NewCustomerRequestScreen() {
     }
   }
 
+  function goBack() {
+    if (submitting || locating) return
+    if (!hasDraft) {
+      safeFieldBack("/(app)/customer-requests")
+      return
+    }
+    Alert.alert(t("customerRequestDiscardTitle"), t("customerRequestDiscardBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("customerRequestDiscardConfirm"), style: "destructive", onPress: () => safeFieldBack("/(app)/customer-requests") },
+    ])
+  }
+
   if (created) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
@@ -127,7 +144,7 @@ export default function NewCustomerRequestScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: submitting || locating }} disabled={submitting || locating} onPress={goBack} style={[styles.back, (submitting || locating) && styles.pressed]}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
             <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("newCustomerRequest")}</Text></View>
           </View>
           <Text style={styles.intro}>{t("newCustomerHint")}</Text>
