@@ -20,6 +20,7 @@ import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { BrandMark } from "../../../src/components/BrandMark"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { IS_LEADDRIVE_FIELD, mobileVariant } from "../../../src/config/mobile-variant"
@@ -152,47 +153,35 @@ export default function TodayTab() {
   const workdayActionIsPrimary = routeActionRepeatsWorkday
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
-  const metrics = [
-    { value: String(summary?.visits ?? localVisits), label: t("statVisitsToday") },
-    { value: String(summary?.tasksCompleted ?? 0), label: t("statDoneTasks") },
-    { value: String(openTasks), label: t("statOpenTasks") },
-    { value: String(shelf.status.pendingOps + shelf.status.pendingPhotos), label: t("statPendingSync") },
-  ]
-
-  const actions: Array<[string, string, TabIconName]> = IS_LEADDRIVE_FIELD
-    ? [
-        [t("tabRoute"), "/(app)/routes", "route"],
-        [t("agentTasksTitle"), "/(app)/field-tasks", "tasks"],
-        [t("moduleOrganizations"), "/(app)/organizations", "organizations"],
-        [t("moduleContacts"), "/(app)/contacts", "contacts"],
-      ]
-    : [
-        [t("tabRoute"), "/(app)/routes", "route"],
-        [t("tabTasks"), "/(app)/(tabs)/tasks", "tasks"],
-        [t("tabPlanograms"), "/(app)/(tabs)/planograms", "planograms"],
-        [t("tabOrders"), "/(app)/(tabs)/orders", "orders"],
-      ]
+  const daySignals: Array<{ value: number; label: string; icon: TabIconName }> = [
+    { value: summary?.visits ?? localVisits, label: t("statVisitsToday"), icon: "visit" },
+    { value: openTasks, label: t("statOpenTasks"), icon: "tasks" },
+    { value: shelf.status.pendingOps + shelf.status.pendingPhotos, label: t("statPendingSync"), icon: "refresh" },
+  ].filter((signal) => signal.value > 0)
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.headerText} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.primary} />}
       >
-        <View style={styles.hero}>
+        <View style={styles.header}>
           <View style={styles.brandRow}>
-            <BrandMark compact />
-            <Text style={styles.brandName}>{mobileVariant.appName}</Text>
+            <View style={styles.brandBlock}>
+              <BrandMark compact />
+              <View style={styles.brandCopy}>
+                <Text style={styles.brandName}>{mobileVariant.appName}</Text>
+                <Text style={styles.heroDate}>{tenantToday ? formatLongCalendarDate(tenantToday, locale) : formatLongDate(new Date(), locale)}</Text>
+              </View>
+            </View>
             <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={todaySyncStatus.label} style={styles.liveStatus}>
               <View accessible={false} style={[styles.liveDot, { backgroundColor: todaySyncStatus.color }]} />
-              <Text style={styles.liveText}>{todaySyncStatus.label}</Text>
+              <Text numberOfLines={2} style={styles.liveText}>{todaySyncStatus.label}</Text>
             </View>
           </View>
-          <View style={styles.heroCopy}>
-            <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
-            <Text style={styles.heroTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
-            <Text style={styles.heroDate}>{tenantToday ? formatLongCalendarDate(tenantToday, locale) : formatLongDate(new Date(), locale)}</Text>
-          </View>
+          <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
+          <Text style={styles.headerTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
         </View>
 
         {field.phase === "stale" || field.phase === "error" ? (
@@ -217,7 +206,7 @@ export default function TodayTab() {
             style={({ pressed }) => [styles.workdayCard, workdayActionIsPrimary && styles.workdayCardPrimary, pressed && styles.pressed]}
           >
             <View accessible={false} style={[styles.workdayIcon, workdayActionIsPrimary && styles.workdayIconPrimary, workdayActive && styles.workdayIconActive]}>
-              <TabIcon name="today" color={workdayActionIsPrimary ? colors.headerText : colors.primary} size={22} />
+              <TabIcon name={workdayStatus === "COMPLETED" ? "check" : workdayActive ? "pause" : "play"} color={workdayActionIsPrimary ? colors.headerText : colors.primary} size={22} />
             </View>
             <View style={styles.workdayBody}>
               <Text style={[styles.workdayTitle, workdayActionIsPrimary && styles.workdayTitlePrimary]}>{t(workdayStatusKeys[workdayStatus])}</Text>
@@ -231,32 +220,29 @@ export default function TodayTab() {
           </Pressable>
         ) : null}
 
-        <View style={layout.isTablet ? styles.tabletColumns : undefined}>
-          <View style={layout.isTablet ? styles.tabletPrimary : undefined}>
-        <View style={[styles.overview, layout.isTablet && styles.tabletSection]}>
-          <View accessible accessibilityRole="text" accessibilityLabel={`${t("todayOverview")}: ${visitedPoints}/${routePoints}`} style={styles.overviewHeader}>
-            <Text style={styles.sectionEyebrow}>{t("todayOverview").toUpperCase()}</Text>
-            <Text style={styles.overviewMeta}>{visitedPoints}/{routePoints}</Text>
-          </View>
-          <View style={styles.metrics}>
-          {metrics.map((metric) => (
-            <View key={metric.label} accessible accessibilityRole="text" accessibilityLabel={`${metric.label}: ${metric.value}`} style={styles.metricCard}>
-              <Text style={styles.metricValue}>{metric.value}</Text>
-              <Text style={styles.metricLabel}>{metric.label}</Text>
+        <View style={[styles.dailyWorkspace, layout.isTablet && styles.dailyWorkspaceTablet]}>
+          <View style={layout.isTablet ? styles.dailyMissionColumn : undefined}>
+            <View style={[styles.missionCard, layout.isTablet && styles.missionCardTablet]}>
+              <View style={styles.missionHeading}>
+            <View>
+              <Text style={styles.sectionEyebrow}>{t("todayOverview").toUpperCase()}</Text>
+              <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
             </View>
-          ))}
+            <Text style={styles.progressValue}>{progress}%</Text>
           </View>
-        </View>
-
-        <View style={[styles.card, layout.isTablet && styles.tabletSection]}>
+          {daySignals.length ? (
+            <View accessible accessibilityRole="summary" accessibilityLabel={daySignals.map((signal) => `${signal.label}: ${signal.value}`).join(", ")} style={styles.signalRail}>
+              {daySignals.map((signal) => (
+                <View key={signal.label} style={styles.signal}>
+                  <TabIcon name={signal.icon} color={signal.icon === "refresh" ? colors.warning : colors.primary} size={15} />
+                  <Text style={styles.signalValue}>{signal.value}</Text>
+                  <Text numberOfLines={1} style={styles.signalLabel}>{signal.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           <View accessible accessibilityRole="progressbar" accessibilityLabel={t("routeProgress")} accessibilityValue={{ min: 0, max: 100, now: progress, text: `${visitedPoints}/${routePoints} ${t("routeVisitedLabel")} · ${progress}%` }}>
-            <View style={styles.progressHeader}>
-              <View>
-                <Text style={styles.cardTitle}>{t("routeProgress")}</Text>
-                <Text style={styles.cardMeta}>{visitedPoints} / {routePoints} {t("routeVisitedLabel")}</Text>
-              </View>
-              <Text style={styles.progressValue}>{progress}%</Text>
-            </View>
+            <Text style={styles.cardMeta}>{visitedPoints} / {routePoints} {t("routeVisitedLabel")}</Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${progress}%` }]} />
             </View>
@@ -293,34 +279,25 @@ export default function TodayTab() {
           ) : (
             <Text accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.emptyText}>{t("noRouteToday")}</Text>
           )}
-          {!routeActionRepeatsWorkday ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryAction.href as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
-              <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
-              <TabIcon name="chevronRight" color={colors.headerText} size={20} />
-            </Pressable>
-          ) : null}
-        </View>
+              {!routeActionRepeatsWorkday ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryAction.href as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
+                  <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
+                  <TabIcon name="chevronRight" color={colors.headerText} size={20} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-          <View style={layout.isTablet ? styles.tabletSecondary : undefined}>
-        <View style={[styles.sectionHeader, layout.isTablet && styles.tabletSectionHeader]}>
-          <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
-        </View>
-        <View style={[styles.actionList, layout.isTablet && styles.tabletSection]}>
-          {actions.map(([label, href, icon], index) => (
-            <Pressable
-              key={label}
-              accessibilityRole="button"
-              accessibilityLabel={label}
-              onPress={() => router.push(href as never)}
-              style={({ pressed }) => [styles.actionRow, index > 0 && styles.actionBorder, pressed && styles.pressed]}
-            >
-              <View accessible={false} style={styles.actionIcon}><TabIcon name={icon} color={colors.primary} size={20} /></View>
-              <Text style={styles.actionText}>{label}</Text>
-              <TabIcon name="chevronRight" color={colors.faint} size={20} />
-            </Pressable>
-          ))}
-        </View>
-          </View>
+          <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("workTitle")}
+          accessibilityHint={t("quickActions")}
+          onPress={() => router.push("/(app)/(tabs)/work" as never)}
+            style={({ pressed }) => [styles.workToolsLink, layout.isTablet && styles.workToolsLinkTablet, pressed && styles.pressed]}
+          >
+            <View style={styles.workToolsIcon}><TabIcon name="work" color={colors.primary} size={20} /></View>
+            <Text style={styles.workToolsText}>{t("workTitle")}</Text>
+            <TabIcon name="chevronRight" color={colors.faint} size={20} />
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -328,26 +305,27 @@ export default function TodayTab() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.navy },
+  root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", backgroundColor: colors.bg, paddingBottom: 28 },
-  hero: { backgroundColor: colors.navy, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
-  brandRow: { minHeight: 40, flexDirection: "row", alignItems: "center" },
-  brandName: { color: colors.headerText, fontSize: 17, fontWeight: "900", letterSpacing: -0.4, marginLeft: 10 },
-  liveStatus: { minWidth: 0, marginLeft: "auto", flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 6 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
-  liveText: { flexShrink: 1, color: colors.headerSubtext, fontSize: 10, fontWeight: "700", textAlign: "right" },
-  heroCopy: { marginTop: 32 },
-  eyebrow: { color: colors.accent, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
-  heroTitle: { color: colors.headerText, fontSize: 29, fontWeight: "900", marginTop: 7, letterSpacing: -0.8 },
-  heroDate: { color: colors.headerSubtext, fontSize: 13, marginTop: 6 },
-  notice: { marginHorizontal: 20, marginTop: 16, padding: 12, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.warning, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 10 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  brandRow: { minHeight: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  brandBlock: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 },
+  brandCopy: { flex: 1, minWidth: 0 },
+  brandName: { color: colors.text, fontSize: 13, fontWeight: "900", letterSpacing: -0.2 },
+  liveStatus: { maxWidth: 148, paddingHorizontal: 8, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, flexDirection: "row", alignItems: "center", gap: 5 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  liveText: { flex: 1, color: colors.muted, fontSize: 9, lineHeight: 12, fontWeight: "800", textAlign: "right" },
+  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 1.1, marginTop: 16 },
+  headerTitle: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 4, letterSpacing: -0.6 },
+  heroDate: { color: colors.muted, fontSize: 10, marginTop: 2 },
+  notice: { marginHorizontal: 16, marginTop: 4, padding: 12, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.warning, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 10 },
   noticeError: { borderColor: colors.missedBorder, backgroundColor: colors.missedBg },
   noticeBody: { flex: 1 },
   noticeTitle: { color: colors.text, fontSize: 13, fontWeight: "800" },
   noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
   noticeAction: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
-  workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 68, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  workdayCard: { marginHorizontal: 16, marginTop: 4, minHeight: 68, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
   workdayCardPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
   workdayIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.draftBg, alignItems: "center", justifyContent: "center" },
   workdayIconPrimary: { backgroundColor: "rgba(255,255,255,0.16)" },
@@ -360,22 +338,21 @@ const styles = StyleSheet.create({
   workdayAction: { maxWidth: 92, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
   workdayActionPrimary: { color: colors.headerText },
   workdayChevron: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  overview: { marginHorizontal: 20, marginTop: 18, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border },
-  overviewHeader: { minHeight: 44, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: colors.border },
+  dailyWorkspace: {},
+  dailyWorkspaceTablet: { alignSelf: "center", width: "100%", maxWidth: 1180, paddingHorizontal: 24, paddingTop: 20, flexDirection: "row", alignItems: "flex-start", gap: 22 },
+  dailyMissionColumn: { flex: 1.35, minWidth: 0 },
+  missionCard: { marginHorizontal: 16, marginTop: 14, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, padding: 16 },
+  missionCardTablet: { width: "100%", marginHorizontal: 0, marginTop: 0 },
+  missionHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   sectionEyebrow: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
-  overviewMeta: { color: colors.primary, fontSize: 11, fontWeight: "900" },
-  metrics: { flexDirection: "row", paddingVertical: 15 },
-  metricCard: { width: "25%", minHeight: 54, paddingHorizontal: 8, borderRightWidth: 1, borderRightColor: colors.border },
-  metricValue: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center" },
-  metricLabel: { color: colors.muted, fontSize: 9, lineHeight: 12, marginTop: 4, textAlign: "center" },
-  sectionHeader: { marginHorizontal: 20, marginTop: 25, marginBottom: 10 },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900", letterSpacing: -0.2 },
-  card: { marginHorizontal: 20, backgroundColor: colors.card, borderRadius: radii.card, padding: 17, borderWidth: 1, borderColor: colors.border },
-  progressHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   cardMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
   progressValue: { color: colors.primary, fontSize: 21, fontWeight: "900" },
-  progressTrack: { height: 6, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 15 },
+  signalRail: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 14, marginBottom: 2 },
+  signal: { minHeight: 30, maxWidth: "100%", borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 5 },
+  signalValue: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  signalLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", maxWidth: 132 },
+  progressTrack: { height: 6, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 10 },
   progressFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
   routeList: { marginTop: 14, gap: 9 },
   routeRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 11 },
@@ -388,17 +365,9 @@ const styles = StyleSheet.create({
   primaryAction: { marginTop: 16, minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   primaryActionBody: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 },
   primaryActionText: { color: colors.headerText, fontSize: 14, fontWeight: "800" },
-  primaryArrow: { color: colors.accent, fontSize: 20 },
-  actionList: { marginHorizontal: 20, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
-  actionRow: { minHeight: 62, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12 },
-  actionBorder: { borderTopWidth: 1, borderTopColor: colors.border },
-  actionIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  actionText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800" },
-  actionArrow: { color: colors.faint, fontSize: 24, fontWeight: "400" },
+  workToolsLink: { minHeight: 54, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", gap: 10 },
+  workToolsLinkTablet: { flex: 0.8, minWidth: 280, minHeight: 72, marginHorizontal: 0, marginTop: 0, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radii.card },
+  workToolsIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  workToolsText: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.72 },
-  tabletColumns: { flexDirection: "row", alignItems: "flex-start", gap: 22, paddingHorizontal: 24, paddingTop: 20 },
-  tabletPrimary: { flex: 1.35, minWidth: 0, gap: 18 },
-  tabletSecondary: { flex: 0.8, minWidth: 280 },
-  tabletSection: { marginHorizontal: 0, marginTop: 0 },
-  tabletSectionHeader: { marginHorizontal: 0, marginTop: 0 },
 })

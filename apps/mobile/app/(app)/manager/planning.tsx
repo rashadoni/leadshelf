@@ -4,6 +4,8 @@ import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import type { FieldManagerPlanningAgent, FieldManagerPlanningData, FieldManagerPlanningRoute } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { routeStatusMeta, shiftDateKey, type RouteStatusTone } from "../../../src/field/week-status"
@@ -145,7 +147,13 @@ export default function ManagerPlanningScreen() {
   const endDate = shiftDateKey(date, rangeDays - 1)
   const endCalendar = formatCalendarDay(endDate, locale)
   const dateLabel = rangeDays === 1 ? calendar.date : calendar.date + " — " + endCalendar.date
-  const isTodayContext = date === today
+  const navigatorDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => {
+      const navigatorDate = shiftDateKey(date, index - 3)
+      return { date: navigatorDate, isToday: navigatorDate === today }
+    }),
+    [date, today],
+  )
   const rangeDateKeys = useMemo(
     () => Array.from({ length: rangeDays }, (_, index) => shiftDateKey(date, index)),
     [date, rangeDays],
@@ -221,6 +229,7 @@ export default function ManagerPlanningScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
@@ -236,36 +245,24 @@ export default function ManagerPlanningScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading || loadingMore, disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(date, rangeDays, searchQuery)} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
-        <View style={styles.dateNavigator}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t(rangeDays === 1 ? "managerPreviousDay" : "managerPreviousRange")}: ${formatCalendarDay(shiftDateKey(date, -rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectDate(shiftDateKey(date, -rangeDays))} style={styles.dateArrow}><TabIcon name="chevronLeft" color={colors.headerText} size={23} /></Pressable>
-          <View style={styles.dateCenter}>
-            <Text style={styles.dateWeekday}>{rangeDays === 1 ? calendar.weekday : t("managerPlanningRange", { count: rangeDays })}</Text>
-            <Text style={styles.dateLabel}>{dateLabel}</Text>
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")}: ${formatCalendarDay(shiftDateKey(date, rangeDays), locale).date}`} accessibilityState={{ busy: loading }} onPress={() => selectDate(shiftDateKey(date, rangeDays))} style={styles.dateArrow}><TabIcon name="chevronRight" color={colors.headerText} size={23} /></Pressable>
-        </View>
-        {!isTodayContext ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${t("tabToday")}: ${formatCalendarDay(today, locale).date}`}
-            accessibilityState={{ busy: loading }}
-            onPress={() => selectDate(today)}
-            style={({ pressed }) => [styles.todayAction, pressed && styles.pressed]}
-          >
-            <TabIcon name="today" color={colors.primary} size={17} />
-            <Text style={styles.todayActionText}>{t("tabToday")}</Text>
-          </Pressable>
-        ) : null}
-        <View style={styles.rangePicker}>
-          {RANGE_OPTIONS.map((days) => (
-            <Pressable key={days} accessibilityRole="button" accessibilityLabel={t("managerPlanningRange", { count: days })} accessibilityState={{ busy: loading, selected: rangeDays === days }} onPress={() => selectRange(days)} style={[styles.rangeChoice, rangeDays === days && styles.rangeChoiceSelected]}>
-              <View style={styles.rangeChoiceContent}>
-                <Text style={[styles.rangeChoiceText, rangeDays === days && styles.rangeChoiceTextSelected]}>{t("managerPlanningRange", { count: days })}</Text>
-                {rangeDays === days ? <TabIcon name="check" color={colors.headerText} size={14} /> : null}
-              </View>
-            </Pressable>
-          ))}
-        </View>
+        <FieldDayNavigator
+          days={navigatorDays}
+          selectedDate={date}
+          onSelectDate={selectDate}
+          onPrevious={() => selectDate(shiftDateKey(date, -rangeDays))}
+          onNext={() => selectDate(shiftDateKey(date, rangeDays))}
+          previousLabel={`${t(rangeDays === 1 ? "managerPreviousDay" : "managerPreviousRange")}: ${formatCalendarDay(shiftDateKey(date, -rangeDays), locale).date}`}
+          nextLabel={`${t(rangeDays === 1 ? "managerNextDay" : "managerNextRange")}: ${formatCalendarDay(shiftDateKey(date, rangeDays), locale).date}`}
+          onCurrent={() => selectDate(today)}
+          currentLabel={rangeDays === 1 ? `${calendar.weekday}, ${dateLabel}` : dateLabel}
+          currentAccessibilityLabel={dateLabel}
+          busy={loading || loadingMore}
+          rangeOptions={RANGE_OPTIONS}
+          selectedRange={rangeDays}
+          onSelectRange={selectRange}
+          getRangeLabel={(days) => t("managerPlanningRange", { count: days })}
+          dayHint={t("managerPlanningHint")}
+        />
 
         {loading && !planning ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
         {error && !planning ? (
@@ -456,19 +453,6 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  dateNavigator: { marginHorizontal: 14, marginTop: 16, minHeight: 74, borderRadius: radii.card, backgroundColor: colors.navy, padding: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...cardShadow },
-  dateArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
-  dateCenter: { alignItems: "center", flex: 1 },
-  dateWeekday: { color: colors.headerSubtext, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
-  dateLabel: { color: colors.headerText, fontSize: 16, fontWeight: "900", marginTop: 3 },
-  todayAction: { minHeight: 44, marginHorizontal: 14, marginTop: 9, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
-  todayActionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
-  rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
-  rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  rangeChoiceSelected: { borderWidth: 2, backgroundColor: colors.primary, borderColor: colors.primary },
-  rangeChoiceContent: { flexDirection: "row", alignItems: "center", gap: 5 },
-  rangeChoiceText: { color: colors.muted, fontSize: 10, fontWeight: "900" },
-  rangeChoiceTextSelected: { color: colors.headerText },
   scope: { minHeight: 44, marginHorizontal: 14, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 8 },
   scopeText: { flex: 1, color: colors.primary, fontSize: 10, fontWeight: "900" },
   staleText: { maxWidth: "42%", color: colors.warning, fontSize: 9, fontWeight: "800", textAlign: "right" },

@@ -59,9 +59,8 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
     case "work":
       return (
         <Svg {...common} fill="none">
-          {[4, 10.3, 16.6].flatMap((x) => [4, 10.3, 16.6].map((y) => (
-            <Rect key={`${x}-${y}`} x={x} y={y} width={3.4} height={3.4} rx={0.8} stroke={color} strokeWidth={1.5} />
-          )))}
+          <Rect x={3.5} y={7.5} width={17} height={12} rx={2.2} stroke={color} strokeWidth={1.8} />
+          <Path d="M8.5 7.5V6.4A1.9 1.9 0 0 1 10.4 4.5h3.2a1.9 1.9 0 0 1 1.9 1.9v1.1M3.8 12h16.4M10 12v1.7h4V12" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       )
     case "inbox":

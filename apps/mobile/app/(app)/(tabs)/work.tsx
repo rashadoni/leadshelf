@@ -7,6 +7,7 @@ import { useField } from "../../../src/field/field-context"
 import type { FieldWorkdayStatus } from "../../../src/field/contracts"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
@@ -77,6 +78,7 @@ export default function WorkTab() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text>

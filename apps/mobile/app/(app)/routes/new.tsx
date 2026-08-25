@@ -18,8 +18,10 @@ import { addOptimisticRoute } from "../../../src/field/route-cache"
 import { enqueueFieldRouteCreate, fieldRouteOutboxResult } from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
 import { t, useLocale } from "../../../src/i18n"
-import { formatCalendarDay, formatCalendarMonthShort } from "../../../src/i18n/date-format"
+import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
@@ -337,6 +339,7 @@ export default function NewRouteScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
         keyboardShouldPersistTaps="handled"
@@ -400,7 +403,6 @@ export default function NewRouteScreen() {
               </View>
             </View>
             <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
-            {selectedDateLabel ? <Text style={styles.selectedDate}>{selectedDateLabel}</Text> : null}
             {selectedDateUnavailable ? (
               <View accessibilityRole="alert" style={styles.dateUnavailable}>
                 <TabIcon name="info" color={colors.info} size={18} />
@@ -422,44 +424,31 @@ export default function NewRouteScreen() {
                   <Text style={styles.managerChangeSelectionText}>{t("managerChangeRouteSelection")}</Text>
                 </Pressable>
               </>
-            ) : (
-              <>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-                  {availableDays.map((day) => {
-                    const selected = selectedDate === day.date
-                    const disabled = !day.routePlanningAllowed || day.date === copySource?.date.slice(0, 10)
+              ) : (
+                <FieldDayNavigator
+                  days={availableDays.map((day) => {
                     const calendarDay = formatCalendarDay(day.date, locale)
-                    const dayLabel = [calendarDay.weekday, calendarDay.date, !day.isWorkingDay ? t("dayOff") : null].filter(Boolean).join(", ")
-                    return (
-                      <Pressable
-                        key={day.date}
-                        accessibilityRole="button"
-                        accessibilityLabel={dayLabel}
-                        accessibilityHint={disabled ? t("routePlanningDateUnavailable") : undefined}
-                        accessibilityState={{ selected, disabled }}
-                        disabled={disabled}
-                        onPress={() => selectDate(day.date)}
-                        style={[styles.day, selected && styles.daySelected, disabled && styles.dayDisabled]}
-                      >
-                        <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>{calendarDay.day || day.date.slice(8)}</Text>
-                        <Text style={[styles.dayMonth, selected && styles.dayMonthSelected]}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text>
-                        {!day.isWorkingDay ? <View style={[styles.dayOffDot, selected && styles.dayOffDotSelected]} /> : null}
-                      </Pressable>
-                    )
+                    const disabled = !day.routePlanningAllowed || day.date === copySource?.date.slice(0, 10)
+                    return {
+                      date: day.date,
+                      isToday: day.isToday,
+                      isWorkingDay: day.isWorkingDay,
+                      disabled,
+                      accessibilityLabel: [calendarDay.weekday, calendarDay.date, !day.isWorkingDay ? t("dayOff") : null].filter(Boolean).join(", "),
+                    }
                   })}
-                </ScrollView>
-                <View style={styles.weekNavigation}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("previousWeek")} accessibilityState={{ disabled: false }} onPress={() => void moveWeek(-7)} style={styles.weekButton}>
-                    <TabIcon name="chevronLeft" color={colors.primary} size={16} />
-                    <Text style={styles.weekButtonText}>{t("previousWeek")}</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("nextWeek")} accessibilityState={{ disabled: false }} onPress={() => void moveWeek(7)} style={styles.weekButton}>
-                    <Text style={styles.weekButtonText}>{t("nextWeek")}</Text>
-                    <TabIcon name="chevronRight" color={colors.primary} size={16} />
-                  </Pressable>
-                </View>
-              </>
-            )}
+                  selectedDate={selectedDate}
+                  onSelectDate={selectDate}
+                  onPrevious={() => void moveWeek(-7)}
+                  onNext={() => void moveWeek(7)}
+                  previousLabel={t("previousWeek")}
+                  nextLabel={t("nextWeek")}
+                  currentLabel={selectedDateLabel ?? t("routeDate")}
+                  currentAccessibilityLabel={selectedDateLabel ?? t("routeDate")}
+                  busy={saving}
+                  dayHint={t("routeWizardDateHint")}
+                />
+              )}
           </>
         ) : null}
 

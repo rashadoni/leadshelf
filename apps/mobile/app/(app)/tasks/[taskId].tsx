@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Alert, BackHandler, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import {
   CameraView,
@@ -608,6 +609,7 @@ export default function TaskDetailScreen() {
   if (showDone) {
     return (
       <SafeAreaView style={styles.doneRoot} edges={["top", "bottom"]}>
+        <FieldScreenChrome tone="dark" />
         <View style={styles.doneCard}>
           <Text style={styles.doneCheck}>✓</Text>
           <Text style={styles.doneTitle}>{t("doneTitle")}</Text>
@@ -625,6 +627,7 @@ export default function TaskDetailScreen() {
   if (photoCameraOpen) {
     return (
       <SafeAreaView style={styles.proofRoot} edges={["top", "bottom"]}>
+        <FieldScreenChrome tone="dark" />
         <CameraView
           ref={photoCameraRef}
           style={styles.proofCamera}

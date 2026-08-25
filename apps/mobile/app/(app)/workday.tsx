@@ -16,6 +16,7 @@ import * as Crypto from "expo-crypto"
 import Svg, { Circle, Path } from "react-native-svg"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { TabIcon } from "../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../src/components/FieldScreenChrome"
 import {
   enqueueFieldLocation,
   enqueueFieldWorkdayEvent,
@@ -507,6 +508,7 @@ export default function WorkdayScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <FieldScreenChrome />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)")} style={styles.backButton}>
           <TabIcon name="chevronLeft" color={colors.text} size={23} />

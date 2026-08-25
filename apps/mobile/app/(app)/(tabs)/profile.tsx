@@ -23,6 +23,7 @@ import {
 } from "../../../src/media/encrypted-media-store"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 import { agentRoleLabel } from "../../../src/field/labels"
 
@@ -135,6 +136,7 @@ export default function ProfileTab() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text style={styles.title}>{t("tabProfile")}</Text>

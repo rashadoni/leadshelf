@@ -9,6 +9,7 @@ import { startFieldPresenceHeartbeat } from "../../src/field/presence-heartbeat"
 import { colors } from "../../src/theme"
 import { useResponsiveLayout } from "../../src/layout/responsive"
 import { isLegacyCommercialFieldPath } from "../../src/field/legacy-field-paths"
+import { FieldScreenChrome } from "../../src/components/FieldScreenChrome"
 
 export default function AppLayout() {
   const layout = useResponsiveLayout()
@@ -36,6 +37,7 @@ export default function AppLayout() {
   return (
     <FieldProvider>
       <SyncProvider>
+        <FieldScreenChrome />
         <Stack
           screenOptions={{
             headerShown: false,

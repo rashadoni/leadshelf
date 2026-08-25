@@ -13,8 +13,10 @@ import {
   visibleFieldWeekDays,
 } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
-import { formatCalendarDay, formatCalendarRange, formatCalendarWeekdayShort } from "../../../src/i18n/date-format"
+import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 
@@ -78,7 +80,6 @@ export default function WeekTab() {
   const navigationLabel = viewRange === 1 ? t("weekPreviousDay") : t("previousWeek")
   const nextNavigationLabel = viewRange === 1 ? t("weekNextDay") : t("nextWeek")
   const currentNavigationLabel = viewRange === 1 ? t("tabToday") : t("currentWeek")
-  const isCurrentContext = viewRange === 1 ? activeDate === week?.today : isCurrentWeek
   const headerRange = viewRange === 1 && activeDate
     ? (() => {
         const day = formatCalendarDay(activeDate, locale)
@@ -88,6 +89,7 @@ export default function WeekTab() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={busy} onRefresh={() => void field.refresh()} />}
@@ -98,102 +100,47 @@ export default function WeekTab() {
           {headerRange ? <Text style={styles.range}>{headerRange}</Text> : null}
         </View>
 
-        <View style={styles.navigator}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={previousTarget ? `${navigationLabel}: ${formatCalendarDay(previousTarget, locale).date}` : navigationLabel}
-            accessibilityHint={t("weekSchedule")}
-            accessibilityState={{ disabled: !week, busy }}
-            disabled={!week}
-            onPress={() => move(-1)}
-            style={({ pressed }) => [styles.navButton, !week && styles.disabled, pressed && week && styles.pressed]}
-          >
-            <TabIcon name="chevronLeft" color={colors.primary} size={23} />
-          </Pressable>
-          <Pressable
-            disabled={!week}
-            accessibilityRole="button"
-            accessibilityLabel={currentNavigationLabel}
-            accessibilityHint={t("weekSchedule")}
-            accessibilityState={{ disabled: !week, busy, selected: isCurrentContext }}
-            onPress={() => {
-              if (!week) return
-              setSelectedDate(week.today)
-              void field.loadWeek(startOfIsoWeek(week.today))
-            }}
-            style={({ pressed }) => [styles.currentButton, !week && styles.disabled, pressed && week && styles.pressed]}
-          >
-            <Text style={styles.currentText}>{currentNavigationLabel}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={nextTarget ? `${nextNavigationLabel}: ${formatCalendarDay(nextTarget, locale).date}` : nextNavigationLabel}
-            accessibilityHint={t("weekSchedule")}
-            accessibilityState={{ disabled: !week, busy }}
-            disabled={!week}
-            onPress={() => move(1)}
-            style={({ pressed }) => [styles.navButton, !week && styles.disabled, pressed && week && styles.pressed]}
-          >
-            <TabIcon name="chevronRight" color={colors.primary} size={23} />
-          </Pressable>
-        </View>
-
-        <View style={styles.rangePicker}>
-          {FIELD_WEEK_VIEW_RANGES.map((days) => (
-            <Pressable
-              key={days}
-              accessibilityRole="button"
-              accessibilityLabel={t("weekRange", { count: days })}
-              accessibilityState={{ selected: viewRange === days, busy }}
-              onPress={() => setViewRange(days)}
-              style={({ pressed }) => [styles.rangeChoice, viewRange === days && styles.rangeChoiceSelected, pressed && styles.pressed]}
-            >
-              <Text style={[styles.rangeChoiceText, viewRange === days && styles.rangeChoiceTextSelected]}>{t("weekRange", { count: days })}</Text>
-            </Pressable>
-          ))}
-        </View>
-
         {week ? (
-          <View style={[styles.calendarPanel, layout.isTablet && styles.calendarPanelTablet]}>
-            <View style={styles.calendarStrip}>
-              {visibleDays.map((day) => {
-                const formatted = formatCalendarDay(day.date, locale)
-                const isSelected = day.date === activeDate
-                const route = day.routes[0]
-                const routeDot = route ? tones[routeStatusMeta(route.effectiveStatus).tone].dot : null
-                const dayLabel = [
+          <FieldDayNavigator
+            days={visibleDays.map((day) => {
+              const formatted = formatCalendarDay(day.date, locale)
+              const route = day.routes[0]
+              const routeDot = route ? tones[routeStatusMeta(route.effectiveStatus).tone].dot : null
+              return {
+                date: day.date,
+                isToday: day.isToday,
+                isWorkingDay: day.isWorkingDay,
+                dotColor: routeDot ?? (!day.isWorkingDay ? colors.holiday : undefined),
+                accessibilityLabel: [
                   formatted.weekday,
                   formatted.date,
                   day.isToday ? t("tabToday") : null,
                   day.routes.length > 0 ? `${day.routes.length} ${t("tabRoute")}` : null,
                   day.tasks.total > 0 ? `${day.tasks.completed}/${day.tasks.total} ${t("dayTasks")}` : null,
                   !day.isWorkingDay ? day.nonWorkingReason ?? t("dayOff") : null,
-                ].filter(Boolean).join(", ")
-                return (
-                  <Pressable
-                    key={day.date}
-                    accessibilityRole="button"
-                    accessibilityLabel={dayLabel}
-                    accessibilityHint={t("dailyMission")}
-                    accessibilityState={{ selected: isSelected, disabled: false, busy }}
-                    onPress={() => setSelectedDate(day.date)}
-                    style={({ pressed }) => [
-                      styles.calendarDay,
-                      isSelected && styles.calendarDaySelected,
-                      !day.isWorkingDay && styles.calendarDayOff,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text style={[styles.calendarWeekday, isSelected && styles.calendarWeekdaySelected]}>{formatCalendarWeekdayShort(day.date, locale)}</Text>
-                    <Text style={[styles.calendarDate, isSelected && styles.calendarDateSelected]}>{formatted.day}</Text>
-                    <View style={styles.calendarDayStatus}>
-                      <View style={[styles.calendarDayDot, { backgroundColor: routeDot ?? (day.isWorkingDay ? colors.borderStrong : colors.holiday) }]} />
-                    </View>
-                  </Pressable>
-                )
-              })}
-            </View>
-          </View>
+                ].filter(Boolean).join(", "),
+              }
+            })}
+            selectedDate={activeDate}
+            onSelectDate={setSelectedDate}
+            onPrevious={() => move(-1)}
+            onNext={() => move(1)}
+            previousLabel={previousTarget ? `${navigationLabel}: ${formatCalendarDay(previousTarget, locale).date}` : navigationLabel}
+            nextLabel={nextTarget ? `${nextNavigationLabel}: ${formatCalendarDay(nextTarget, locale).date}` : nextNavigationLabel}
+            onCurrent={() => {
+              setSelectedDate(week.today)
+              void field.loadWeek(startOfIsoWeek(week.today))
+            }}
+            currentLabel={currentNavigationLabel}
+            currentAccessibilityLabel={currentNavigationLabel}
+            busy={busy}
+            rangeOptions={FIELD_WEEK_VIEW_RANGES}
+            selectedRange={viewRange}
+            onSelectRange={(range) => setViewRange(range as FieldWeekViewRange)}
+            getRangeLabel={(days) => t("weekRange", { count: days })}
+            dayHint={t("dailyMission")}
+            visibleHint={t("fieldDayNavigatorHint")}
+          />
         ) : null}
 
         {field.phase === "stale" || field.phase === "error" ? (
