@@ -9,6 +9,7 @@ import { agentRoleLabel } from "../../../src/field/labels"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 export default function NewMessageScreen() {
   const locale = useLocale()
@@ -80,7 +81,9 @@ export default function NewMessageScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+              <TabIcon name="chevronLeft" color={colors.text} size={21} />
+            </Pressable>
             <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
           </View>
           <Text style={styles.intro}>{copy.hint}</Text>
@@ -88,10 +91,10 @@ export default function NewMessageScreen() {
           <Text style={styles.sectionTitle}>{copy.recipient}</Text>
           <View style={styles.recipients}>
             {inbox.availableRecipients.map((person) => (
-              <Pressable key={person.id} onPress={() => setRecipientId(person.id)} style={[styles.recipient, recipientId === person.id && styles.recipientSelected]}>
+              <Pressable key={person.id} accessibilityRole="button" accessibilityState={{ selected: recipientId === person.id }} accessibilityLabel={`${person.name}, ${agentRoleLabel(person.role)}`} onPress={() => setRecipientId(person.id)} style={[styles.recipient, recipientId === person.id && styles.recipientSelected]}>
                 <View style={[styles.avatar, recipientId === person.id && styles.avatarSelected]}><Text style={[styles.avatarText, recipientId === person.id && styles.avatarTextSelected]}>{person.name.charAt(0).toUpperCase()}</Text></View>
                 <View style={styles.recipientBody}><Text style={[styles.recipientName, recipientId === person.id && styles.recipientNameSelected]} numberOfLines={1}>{person.name}</Text><Text style={[styles.recipientRole, recipientId === person.id && styles.recipientRoleSelected]}>{agentRoleLabel(person.role)}</Text></View>
-                {recipientId === person.id ? <Text style={styles.check}>✓</Text> : null}
+                {recipientId === person.id ? <TabIcon name="check" color={colors.headerText} size={20} /> : null}
               </Pressable>
             ))}
           </View>
@@ -103,16 +106,16 @@ export default function NewMessageScreen() {
               <View style={styles.fileCard}>
                 <View style={styles.fileIcon}><Text style={styles.fileIconText}>DOC</Text></View>
                 <View style={styles.fileBody}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName}</Text><Text style={styles.fileMeta}>{formatFileSize(attachment.sizeBytes, locale)}</Text></View>
-                <Pressable onPress={() => setAttachment(null)} style={styles.remove}><Text style={styles.removeText}>×</Text></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setAttachment(null)} style={styles.remove}><TabIcon name="close" color={colors.muted} size={19} /></Pressable>
               </View>
             ) : (
-              <Pressable onPress={() => void chooseFile()} style={styles.attach}><Text style={styles.attachIcon}>＋</Text><Text style={styles.attachText}>{copy.attach}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.attach} onPress={() => void chooseFile()} style={styles.attach}><TabIcon name="document" color={colors.primary} size={19} /><Text style={styles.attachText}>{copy.attach}</Text></Pressable>
             )}
           </View>
 
-          <View style={styles.privacy}><Text style={styles.privacyIcon}>⌁</Text><Text style={styles.privacyText}>{copy.local}</Text></View>
+          <View style={styles.privacy}><TabIcon name="info" color={colors.successDark} size={18} /><Text style={styles.privacyText}>{copy.local}</Text></View>
           {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Pressable disabled={busy} onPress={() => void send()} style={({ pressed }) => [styles.send, (pressed || busy) && styles.pressed]}><Text style={styles.sendText}>{busy ? "…" : copy.send}</Text><Text style={styles.sendArrow}>→</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.send} disabled={busy} onPress={() => void send()} style={({ pressed }) => [styles.send, (pressed || busy) && styles.pressed]}><Text style={styles.sendText}>{busy ? "…" : copy.send}</Text>{!busy ? <TabIcon name="route" color={colors.headerText} size={20} /> : null}</Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -123,7 +126,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 }, scroll: { paddingBottom: 34 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1 },
+  headerBody: { flex: 1 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
   intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
   sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginHorizontal: 16, marginTop: 22, marginBottom: 9 },
@@ -132,14 +135,14 @@ const styles = StyleSheet.create({
   recipientSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, avatarSelected: { backgroundColor: "rgba(255,255,255,0.18)" },
   avatarText: { color: colors.primary, fontSize: 15, fontWeight: "900" }, avatarTextSelected: { color: colors.headerText },
-  recipientBody: { flex: 1 }, recipientName: { color: colors.text, fontSize: 13, fontWeight: "900" }, recipientNameSelected: { color: colors.headerText }, recipientRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 }, recipientRoleSelected: { color: colors.headerSubtext }, check: { color: colors.headerText, fontSize: 18, fontWeight: "900", marginRight: 4 },
+  recipientBody: { flex: 1 }, recipientName: { color: colors.text, fontSize: 13, fontWeight: "900" }, recipientNameSelected: { color: colors.headerText }, recipientRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 }, recipientRoleSelected: { color: colors.headerSubtext },
   composer: { marginHorizontal: 14, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, ...cardShadow },
   input: { minHeight: 130, color: colors.text, fontSize: 14, lineHeight: 21, padding: 2 },
   attach: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: "#DFDDF7", borderStyle: "dashed", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
-  attachIcon: { color: colors.primary, fontSize: 18, fontWeight: "700" }, attachText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  attachText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   fileCard: { minHeight: 58, borderRadius: 14, padding: 9, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 9 },
-  fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, fileIconText: { color: colors.info, fontSize: 8, fontWeight: "900" }, fileBody: { flex: 1 }, fileName: { color: colors.text, fontSize: 11, fontWeight: "900" }, fileMeta: { color: colors.info, fontSize: 9, fontWeight: "700", marginTop: 3 }, remove: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" }, removeText: { color: colors.muted, fontSize: 24, lineHeight: 25 },
-  privacy: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "flex-start", gap: 8 }, privacyIcon: { color: colors.successDark, fontSize: 16, fontWeight: "900" }, privacyText: { flex: 1, color: colors.successDark, fontSize: 9, lineHeight: 14, fontWeight: "700" },
+  fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, fileIconText: { color: colors.info, fontSize: 8, fontWeight: "900" }, fileBody: { flex: 1 }, fileName: { color: colors.text, fontSize: 11, fontWeight: "900" }, fileMeta: { color: colors.info, fontSize: 9, fontWeight: "700", marginTop: 3 }, remove: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  privacy: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "flex-start", gap: 8 }, privacyText: { flex: 1, color: colors.successDark, fontSize: 9, lineHeight: 14, fontWeight: "700" },
   error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" },
-  send: { minHeight: 54, marginHorizontal: 14, marginTop: 18, borderRadius: 17, backgroundColor: colors.primary, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 }, sendText: { color: colors.headerText, fontSize: 14, fontWeight: "900" }, sendArrow: { color: colors.headerText, fontSize: 20 }, pressed: { opacity: 0.7 },
+  send: { minHeight: 54, marginHorizontal: 14, marginTop: 18, borderRadius: 17, backgroundColor: colors.primary, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 }, sendText: { color: colors.headerText, fontSize: 14, fontWeight: "900" }, pressed: { opacity: 0.7 },
 })

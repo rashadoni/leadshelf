@@ -18,6 +18,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatTime } from "../../../src/i18n/date-format"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 function messageThreadTypeLabel(type: string): string {
   if (type === "DIRECT") return t("messageThreadType_DIRECT")
@@ -142,14 +143,14 @@ export default function MessageThreadScreen() {
   }
 
   if (!data) {
-    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.loading}><Text style={styles.loadingMark}>•••</Text><Text style={styles.loadingText}>{copy.loading}</Text><Pressable onPress={() => router.back()} style={styles.loadingBack}><Text style={styles.loadingBackText}>‹</Text></Pressable></View></SafeAreaView>
+    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.loading}><Text style={styles.loadingMark}>•••</Text><Text style={styles.loadingText}>{copy.loading}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.loadingBack}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable></View></SafeAreaView>
   }
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={8}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.messages}</Text><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.participants}>{messageThreadTypeLabel(data.thread.type)}</Text></View>
         </View>
         {warning ? <View style={styles.warning}><Text style={styles.warningText}>{warning}</Text></View> : null}
@@ -171,7 +172,7 @@ export default function MessageThreadScreen() {
                   {!own ? <Text style={styles.sender}>{message.senderName}</Text> : null}
                   {message.body ? <Text style={[styles.body, own && styles.bodyOwn]}>{message.body}</Text> : null}
                   {message.attachmentDocument ? (
-                    <Pressable onPress={() => void openAttachment({
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${localUri ? copy.open : copy.download}: ${message.attachmentDocument.fileName}`} onPress={() => void openAttachment({
                       id: message.attachmentDocument!.id,
                       fileName: message.attachmentDocument!.fileName,
                       mimeType: message.attachmentDocument!.mimeType,
@@ -186,13 +187,15 @@ export default function MessageThreadScreen() {
                     <Text style={[styles.messageTime, own && styles.messageTimeOwn]}>{formatTime(message.sentAt)}</Text>
                     {message.syncState ? <Text style={styles.queued}>{copy.queued}</Text> : null}
                     {!message.syncState && message.delivery ? (
-                      <Text style={styles.delivery}>
-                        {message.delivery.status === "READ" ? `✓✓ ${copy.read}` : `✓ ${copy.sent}`}
-                      </Text>
+                      <View style={styles.delivery}>
+                        <TabIcon name="check" color={colors.headerSubtext} size={10} />
+                        {message.delivery.status === "READ" ? <TabIcon name="check" color={colors.headerSubtext} size={10} /> : null}
+                        <Text style={styles.deliveryText}>{message.delivery.status === "READ" ? copy.read : copy.sent}</Text>
+                      </View>
                     ) : null}
                   </View>
                   {message.acknowledgementRequired ? (
-                    message.acknowledged ? <View style={styles.acked}><Text style={styles.ackedText}>✓ {copy.acked}</Text></View> : <Pressable onPress={() => acknowledge(message.id)} style={styles.ack}><Text style={styles.ackText}>{copy.ack}</Text></Pressable>
+                    message.acknowledged ? <View style={styles.acked}><TabIcon name="check" color={colors.successDark} size={14} /><Text style={styles.ackedText}>{copy.acked}</Text></View> : <Pressable accessibilityRole="button" accessibilityLabel={copy.ack} onPress={() => acknowledge(message.id)} style={styles.ack}><Text style={styles.ackText}>{copy.ack}</Text></Pressable>
                   ) : null}
                 </View>
               </View>
@@ -202,11 +205,11 @@ export default function MessageThreadScreen() {
 
         {data.capabilities.reply ? (
           <View style={styles.composer}>
-            {attachment ? <View style={styles.selectedFile}><Text style={styles.selectedFileText} numberOfLines={1}>📎 {attachment.fileName}</Text><Pressable onPress={() => setAttachment(null)}><Text style={styles.selectedFileRemove}>×</Text></Pressable></View> : null}
+            {attachment ? <View style={styles.selectedFile}><TabIcon name="document" color={colors.info} size={16} /><Text style={styles.selectedFileText} numberOfLines={1}>{attachment.fileName}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setAttachment(null)} style={styles.selectedFileRemove}><TabIcon name="close" color={colors.info} size={18} /></Pressable></View> : null}
             <View style={styles.composerRow}>
-              <Pressable onPress={() => void chooseFile()} style={styles.attachButton}><Text style={styles.attachButtonText}>＋</Text><Text style={styles.attachButtonLabel}>{copy.attach}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.attach} onPress={() => void chooseFile()} style={styles.attachButton}><TabIcon name="document" color={colors.primary} size={18} /><Text style={styles.attachButtonLabel}>{copy.attach}</Text></Pressable>
               <TextInput value={body} onChangeText={setBody} multiline maxLength={4000} placeholder={copy.placeholder} placeholderTextColor={colors.faint} style={styles.input} />
-              <Pressable disabled={busy || (!body.trim() && !attachment)} onPress={() => void send()} style={[styles.send, (busy || (!body.trim() && !attachment)) && styles.disabled]}><Text style={styles.sendText}>↑</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={copy.send} disabled={busy || (!body.trim() && !attachment)} onPress={() => void send()} style={[styles.send, (busy || (!body.trim() && !attachment)) && styles.disabled]}><TabIcon name="route" color={colors.headerText} size={20} /></Pressable>
             </View>
           </View>
         ) : <View style={styles.readonly}><Text style={styles.readonlyText}>{copy.readonly}</Text></View>}
@@ -218,7 +221,7 @@ export default function MessageThreadScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 },
   header: { minHeight: 70, paddingHorizontal: 13, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
-  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, participants: { color: colors.muted, fontSize: 8, fontWeight: "800", marginTop: 2 },
+  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, participants: { color: colors.muted, fontSize: 8, fontWeight: "800", marginTop: 2 },
   warning: { margin: 10, marginBottom: 0, padding: 10, borderRadius: 12, backgroundColor: colors.warningBg }, warningText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" },
   messages: { paddingHorizontal: 12, paddingVertical: 14, gap: 10 }, empty: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 80 },
   messageRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, maxWidth: "88%" }, messageRowOwn: { alignSelf: "flex-end", justifyContent: "flex-end" },
@@ -226,12 +229,12 @@ const styles = StyleSheet.create({
   bubble: { minWidth: 88, maxWidth: "100%", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, bubbleOwn: { backgroundColor: colors.primary, borderBottomRightRadius: 5 }, bubbleOther: { backgroundColor: colors.card, borderBottomLeftRadius: 5, ...cardShadow },
   sender: { color: colors.primary, fontSize: 8, fontWeight: "900", marginBottom: 4 }, body: { color: colors.text, fontSize: 13, lineHeight: 19 }, bodyOwn: { color: colors.headerText },
   attachment: { marginTop: 7, minHeight: 52, borderRadius: 13, padding: 7, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 8 }, attachmentOwn: { backgroundColor: "rgba(255,255,255,0.15)" }, attachmentIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, attachmentIconText: { color: colors.info, fontSize: 7, fontWeight: "900" }, attachmentBody: { flex: 1, minWidth: 0 }, attachmentName: { color: colors.text, fontSize: 10, fontWeight: "900" }, attachmentNameOwn: { color: colors.headerText }, attachmentMeta: { color: colors.info, fontSize: 8, fontWeight: "700", marginTop: 2 }, attachmentMetaOwn: { color: colors.headerSubtext },
-  messageMeta: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 5 }, messageTime: { color: colors.faint, fontSize: 7, fontWeight: "700" }, messageTimeOwn: { color: colors.headerSubtext }, queued: { color: "#E0E7FF", fontSize: 7, fontWeight: "900" }, delivery: { color: colors.headerSubtext, fontSize: 7, fontWeight: "900" },
-  ack: { marginTop: 8, minHeight: 37, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, ackText: { color: colors.warning, fontSize: 9, fontWeight: "900" }, acked: { marginTop: 7, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, ackedText: { color: colors.successDark, fontSize: 8, fontWeight: "900" },
+  messageMeta: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 5 }, messageTime: { color: colors.faint, fontSize: 7, fontWeight: "700" }, messageTimeOwn: { color: colors.headerSubtext }, queued: { color: "#E0E7FF", fontSize: 7, fontWeight: "900" }, delivery: { flexDirection: "row", alignItems: "center", gap: 1 }, deliveryText: { color: colors.headerSubtext, fontSize: 7, fontWeight: "900" },
+  ack: { marginTop: 8, minHeight: 44, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, ackText: { color: colors.warning, fontSize: 9, fontWeight: "900" }, acked: { marginTop: 7, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 4 }, ackedText: { color: colors.successDark, fontSize: 8, fontWeight: "900" },
   composer: { padding: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border }, composerRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  selectedFile: { minHeight: 35, marginBottom: 7, borderRadius: 11, paddingHorizontal: 10, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 7 }, selectedFileText: { flex: 1, color: colors.info, fontSize: 9, fontWeight: "800" }, selectedFileRemove: { color: colors.info, fontSize: 21 },
-  attachButton: { width: 48, minHeight: 48, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, attachButtonText: { color: colors.primary, fontSize: 18, fontWeight: "700", lineHeight: 17 }, attachButtonLabel: { color: colors.primary, fontSize: 7, fontWeight: "900" },
-  input: { flex: 1, minHeight: 48, maxHeight: 112, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 12, backgroundColor: colors.bg, color: colors.text, fontSize: 12, lineHeight: 17 }, send: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, sendText: { color: colors.headerText, fontSize: 22, fontWeight: "900" }, disabled: { opacity: 0.35 },
+  selectedFile: { minHeight: 44, marginBottom: 7, borderRadius: 11, paddingHorizontal: 10, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 7 }, selectedFileText: { flex: 1, color: colors.info, fontSize: 9, fontWeight: "800" }, selectedFileRemove: { width: 44, height: 44, marginVertical: -4, marginRight: -10, alignItems: "center", justifyContent: "center" },
+  attachButton: { width: 48, minHeight: 48, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, attachButtonLabel: { color: colors.primary, fontSize: 7, fontWeight: "900" },
+  input: { flex: 1, minHeight: 48, maxHeight: 112, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 12, backgroundColor: colors.bg, color: colors.text, fontSize: 12, lineHeight: 17 }, send: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, disabled: { opacity: 0.35 },
   readonly: { minHeight: 58, paddingHorizontal: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, alignItems: "center", justifyContent: "center" }, readonlyText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, loadingMark: { color: colors.primary, fontSize: 24, fontWeight: "900" }, loadingText: { color: colors.muted, fontSize: 12, marginTop: 9 }, loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, loadingBackText: { color: colors.text, fontSize: 31 },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, loadingMark: { color: colors.primary, fontSize: 24, fontWeight: "900" }, loadingText: { color: colors.muted, fontSize: 12, marginTop: 9 }, loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
 })
