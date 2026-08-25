@@ -14,7 +14,7 @@ import {
 import { router, useFocusEffect } from "expo-router"
 import * as Crypto from "expo-crypto"
 import Svg, { Circle, Path } from "react-native-svg"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { TabIcon } from "../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../src/components/FieldScreenChrome"
 import {
@@ -191,12 +191,14 @@ function LocationTrail({ data, timeZone }: { data: FieldLocationHistoryData; tim
 export default function WorkdayScreen() {
   const locale = useLocale()
   const field = useField()
+  const insets = useSafeAreaInsets()
   const { sync, status: syncStatus } = useSync()
   const [busyAction, setBusyAction] = useState<FieldWorkdayAction | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [tracking, setTracking] = useState<WorkdayTrackingState>(() => stoppedWorkdayTrackingState())
   const [trackingBusy, setTrackingBusy] = useState(false)
   const [feedback, setFeedback] = useState<MessageKey | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [nowMs, setNowMs] = useState(Date.now())
 
   const date = field.workday?.date ?? field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
@@ -468,6 +470,9 @@ export default function WorkdayScreen() {
     ? null
     : trackingRecoveryKeys[tracking.recovery]
   const { primary: primaryWorkdayAction, secondary: secondaryWorkdayActions } = splitWorkdayActions(workdayData.availableActions)
+  const stickyActionSpace = primaryWorkdayAction
+    ? Math.max(insets.bottom, 10) + (secondaryWorkdayActions.length > 0 ? 136 : 86)
+    : Math.max(insets.bottom, 28)
 
   function actionIcon(action: FieldWorkdayAction): "play" | "pause" | "stop" {
     return action === "START" || action === "RESUME" ? "play" : action === "PAUSE" ? "pause" : "stop"
@@ -523,7 +528,7 @@ export default function WorkdayScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: stickyActionSpace }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
           <View style={styles.statusCard}>
@@ -562,16 +567,30 @@ export default function WorkdayScreen() {
           </View>
         </View>
 
-        {primaryWorkdayAction ? (
-          <View style={styles.actionGroup}>
-            {renderWorkdayAction(primaryWorkdayAction, true)}
-            {secondaryWorkdayActions.length > 0 ? (
-              <View style={styles.secondaryActionRow}>
-                {secondaryWorkdayActions.map((action) => renderWorkdayAction(action, false))}
-              </View>
-            ) : null}
-          </View>
+        {feedback ? (
+          <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
         ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("workdayDetails")}
+          accessibilityHint={t("workdayDetailsHint")}
+          accessibilityState={{ expanded: detailsOpen }}
+          onPress={() => setDetailsOpen((open) => !open)}
+          style={({ pressed }) => [styles.detailsSummary, pressed && styles.pressed]}
+        >
+          <View style={[styles.detailsIcon, requiresQrBeforeStart && styles.detailsIconWarning]}>
+            <TabIcon name={requiresQrBeforeStart ? "qr" : usesGps ? "location" : "info"} color={requiresQrBeforeStart ? colors.warning : colors.primary} size={23} />
+          </View>
+          <View style={styles.detailsBody}>
+            <Text style={styles.detailsTitle}>{t("workdayDetails")}</Text>
+            <Text style={styles.detailsHint} numberOfLines={detailsOpen ? undefined : 2}>{t("workdayDetailsHint")}</Text>
+          </View>
+          <TabIcon name={detailsOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={21} />
+        </Pressable>
+
+        {detailsOpen ? (
+          <>
 
         <View style={styles.policyCard}>
           <View style={[styles.policyIcon, requiresQrBeforeStart && styles.policyIconWarning]}>
@@ -590,10 +609,6 @@ export default function WorkdayScreen() {
             ) : null}
           </View>
         </View>
-
-        {feedback ? (
-          <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
-        ) : null}
 
         {runsContinuousTracking ? (
           <View style={styles.trackingCard}>
@@ -688,7 +703,19 @@ export default function WorkdayScreen() {
             <TabIcon name="chevronRight" color={colors.primary} size={21} />
           </Pressable>
         ) : null}
+          </>
+        ) : null}
       </ScrollView>
+      {primaryWorkdayAction ? (
+        <View style={[styles.stickyActionTray, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          {renderWorkdayAction(primaryWorkdayAction, true)}
+          {secondaryWorkdayActions.length > 0 ? (
+            <View style={styles.secondaryActionRow}>
+              {secondaryWorkdayActions.map((action) => renderWorkdayAction(action, false))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </SafeAreaView>
   )
 }
@@ -703,7 +730,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.4, marginTop: 2 },
   refreshButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   refreshText: { color: colors.primary, fontSize: 24, fontWeight: "800" },
-  scroll: { paddingHorizontal: 14, paddingBottom: 36 },
+  scroll: { paddingHorizontal: 14 },
   statusCard: { borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, ...cardShadow },
   statusTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   statusPill: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: radii.pill, paddingHorizontal: 11, paddingVertical: 7 },
@@ -723,7 +750,6 @@ const styles = StyleSheet.create({
   statValue: { color: colors.text, fontSize: 14, fontWeight: "900", fontVariant: ["tabular-nums"] },
   statLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", marginTop: 4, textAlign: "center" },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  actionGroup: { marginTop: 12, gap: 9 },
   primaryActionButton: { minHeight: 60, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   primaryActionTone: { backgroundColor: colors.primary },
   secondaryActionRow: { flexDirection: "row", gap: 9 },
@@ -737,6 +763,13 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   feedback: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
   feedbackText: { color: colors.info, fontSize: 11, lineHeight: 17, fontWeight: "700" },
+  detailsSummary: { minHeight: 74, marginTop: 14, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, padding: 13, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, ...cardShadow },
+  detailsIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  detailsIconWarning: { backgroundColor: colors.warningBg },
+  detailsBody: { flex: 1, minWidth: 0 },
+  detailsTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  detailsHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  stickyActionTray: { position: "absolute", left: 0, right: 0, bottom: 0, gap: 8, paddingHorizontal: 14, paddingTop: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, ...cardShadow },
   policyCard: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 15, marginTop: 14, ...cardShadow },
   policyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   policyIconWarning: { backgroundColor: colors.warningBg },
