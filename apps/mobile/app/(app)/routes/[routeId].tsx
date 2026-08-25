@@ -239,11 +239,64 @@ export default function FieldRouteDetailScreen() {
     points,
     timeInputs,
   })
+  const hasRouteChangeRequestDraft = Boolean(
+    (requestPoint && reason.trim()) || (addRequestTarget && addReason.trim()),
+  )
+
+  function clearRouteChangeRequest() {
+    setRequestPoint(null)
+    setReason("")
+    setAddRequestTarget(null)
+    setAddReason("")
+  }
+
+  function requestCloseRouteChangeRequest(afterClose?: () => void) {
+    if (saving) return
+    const close = () => {
+      clearRouteChangeRequest()
+      afterClose?.()
+    }
+    if (!hasRouteChangeRequestDraft) {
+      close()
+      return
+    }
+    Alert.alert(t("routeDiscardChangeRequestTitle"), t("routeDiscardChangeRequestBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("routeDiscardChangeRequestConfirm"), style: "destructive", onPress: close },
+    ])
+  }
+
+  function openRemovalRequest(point: FieldRoutePoint) {
+    if (saving || requestPoint?.id === point.id) return
+    if (requestPoint || addRequestTarget) {
+      requestCloseRouteChangeRequest(() => setRequestPoint(point))
+      return
+    }
+    setRequestPoint(point)
+    setReason("")
+  }
+
+  function toggleTargetPicker() {
+    if (saving) return
+    if (pickerOpen) {
+      setPickerOpen(false)
+      return
+    }
+    if (requestPoint || addRequestTarget) {
+      requestCloseRouteChangeRequest(() => setPickerOpen(true))
+      return
+    }
+    setPickerOpen(true)
+  }
 
   function goBack() {
     if (saving) return
     if (pickerOpen) {
       setPickerOpen(false)
+      return
+    }
+    if (requestPoint || addRequestTarget) {
+      requestCloseRouteChangeRequest()
       return
     }
     if (!hasUnsavedRouteEdit) {
@@ -697,7 +750,7 @@ export default function FieldRouteDetailScreen() {
           </Pressable>
         ) : null}
         {routeData.canEdit || canRequestStopAddition ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} accessibilityState={{ expanded: pickerOpen }} onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} accessibilityState={{ expanded: pickerOpen, disabled: saving }} disabled={saving} onPress={toggleTargetPicker} style={[styles.addButton, saving && styles.disabled]}>
             <View style={styles.addButtonIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View>
             <View style={styles.addButtonBody}>
               <Text style={styles.addButtonTitle}>{t("addStop")}</Text>
@@ -827,7 +880,7 @@ export default function FieldRouteDetailScreen() {
                       </Pressable>
                     ) : null}
                     {canRequestStopRemoval ? (
-                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("requestRouteChange")}: ${point.contact?.displayName ?? point.customer.name}`} onPress={() => setRequestPoint(point)} style={styles.requestButton}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("requestRouteChange")}: ${point.contact?.displayName ?? point.customer.name}`} accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => openRemovalRequest(point)} style={[styles.requestButton, saving && styles.disabled]}>
                         <TabIcon name="alert" color={colors.warning} size={16} />
                         <Text style={styles.requestText}>{t("requestRouteChange")}</Text>
                       </Pressable>
@@ -846,7 +899,7 @@ export default function FieldRouteDetailScreen() {
             <TextInput accessibilityLabel={`${t("removalReason")}: ${requestPoint.customer.name}`} style={[styles.input, styles.notes]} value={reason} onChangeText={setReason} multiline textAlignVertical="top" />
             {reason.length > 0 && reason.trim().length < 3 ? <Text style={styles.validation}>{t("minimumReason")}</Text> : null}
             <View style={styles.requestActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => { setRequestPoint(null); setReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => requestCloseRouteChangeRequest()} style={[styles.secondaryButton, saving && styles.disabled]}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={t("submitRequest")} accessibilityState={{ busy: saving, disabled: saving || reason.trim().length < 3 }} disabled={saving || reason.trim().length < 3} onPress={() => void submitRemovalRequest()} style={[styles.primaryButton, (saving || reason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
             </View>
           </View>
@@ -861,7 +914,7 @@ export default function FieldRouteDetailScreen() {
             <TextInput accessibilityLabel={`${t("addStopReason")}: ${addRequestTarget.contact?.displayName ?? addRequestTarget.customer.name}`} style={[styles.input, styles.notes]} value={addReason} onChangeText={setAddReason} multiline textAlignVertical="top" />
             {addReason.length > 0 && addReason.trim().length < 3 ? <Text style={styles.validation}>{t("minimumReason")}</Text> : null}
             <View style={styles.requestActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => { setAddRequestTarget(null); setAddReason("") }} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => requestCloseRouteChangeRequest()} style={[styles.secondaryButton, saving && styles.disabled]}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={t("submitRequest")} accessibilityState={{ busy: saving, disabled: saving || addReason.trim().length < 3 }} disabled={saving || addReason.trim().length < 3} onPress={() => void submitAdditionRequest()} style={[styles.primaryButton, (saving || addReason.trim().length < 3) && styles.disabled]}><Text style={styles.primaryText}>{t("submitRequest")}</Text></Pressable>
             </View>
           </View>

@@ -51,6 +51,7 @@ export default function MessageThreadScreen() {
     sent: "Göndərildi", read: "Oxunub",
     download: "Yüklə", open: "Aç", downloadError: "Faylı açmaq alınmadı", empty: "Bu dialoqda hələ mesaj yoxdur.",
     unavailable: "Dialoq telefonda tapılmadı.", retry: "Yenidən cəhd et",
+    discardTitle: "Cavabı ləğv edək?", discardBody: "Yazdığınız mətn və seçilmiş fayl silinəcək.", discardConfirm: "Ləğv et",
   } : {
     messages: "СООБЩЕНИЯ", loading: "Загружаем диалог…", offline: "Диалог не обновился — показана копия с телефона.",
     readonly: "Это объявление доступно только для чтения.", message: "Сообщение", placeholder: "Напишите сообщение…", attach: "Файл", send: "Отправить",
@@ -58,6 +59,7 @@ export default function MessageThreadScreen() {
     sent: "Отправлено", read: "Прочитано",
     download: "Скачать", open: "Открыть", downloadError: "Не удалось открыть файл", empty: "В этом диалоге пока нет сообщений.",
     unavailable: "Диалог не найден на телефоне.", retry: "Повторить",
+    discardTitle: "Отменить ответ?", discardBody: "Набранный текст и выбранный файл будут удалены.", discardConfirm: "Отменить",
   }
 
   const load = useCallback(async (showWarning = false) => {
@@ -135,6 +137,18 @@ export default function MessageThreadScreen() {
     }
   }
 
+  function goBack() {
+    if (busy) return
+    if (!body.trim() && !attachment) {
+      safeFieldBack("/(app)/(tabs)/inbox")
+      return
+    }
+    Alert.alert(copy.discardTitle, copy.discardBody, [
+      { text: t("cancel"), style: "cancel" },
+      { text: copy.discardConfirm, style: "destructive", onPress: () => safeFieldBack("/(app)/(tabs)/inbox") },
+    ])
+  }
+
   async function acknowledge(messageId: string) {
     enqueueFieldMessageReceipt({ threadId, messageId, type: "ACKNOWLEDGED" })
     setData(readFieldMessageThread(threadId))
@@ -177,7 +191,7 @@ export default function MessageThreadScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={8}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/inbox")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: busy }} disabled={busy} onPress={goBack} style={[styles.back, busy && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.messages}</Text><Text style={styles.title} numberOfLines={1}>{title}</Text><Text style={styles.participants}>{messageThreadTypeLabel(data.thread.type)}</Text></View>
         </View>
         {warning ? <View style={styles.warning}><Text style={styles.warningText}>{warning}</Text></View> : null}

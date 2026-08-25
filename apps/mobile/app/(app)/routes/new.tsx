@@ -128,6 +128,9 @@ export default function NewRouteScreen() {
     notes,
     targetCount: targets.length,
   })
+  const routeHubFallback = managerMode && requestedDateKey
+    ? `/(app)/manager/planning?date=${encodeURIComponent(requestedDateKey)}`
+    : "/(app)/routes"
 
   useEffect(() => {
     if (managerMode && requestedDateKey) {
@@ -189,12 +192,12 @@ export default function NewRouteScreen() {
       return
     }
     if (!hasUnsavedDraft) {
-      safeFieldBack("/(app)/routes")
+      safeFieldBack(routeHubFallback)
       return
     }
     Alert.alert(t("routeDiscardDraftTitle"), t("routeDiscardDraftBody"), [
       { text: t("cancel"), style: "cancel" },
-      { text: t("routeDiscardDraftConfirm"), style: "destructive", onPress: () => safeFieldBack("/(app)/routes") },
+      { text: t("routeDiscardDraftConfirm"), style: "destructive", onPress: () => safeFieldBack(routeHubFallback) },
     ])
   }
 

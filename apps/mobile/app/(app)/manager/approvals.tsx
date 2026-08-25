@@ -370,6 +370,7 @@ export default function ManagerApprovalsScreen() {
   const [acknowledgeRouteConflicts, setAcknowledgeRouteConflicts] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const hasReviewDraft = Boolean(selectedDecision || note.trim() || acknowledgeRouteConflicts)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -396,12 +397,37 @@ export default function ManagerApprovalsScreen() {
     setActionError(null)
   }
 
-  const closeReview = () => {
+  const clearReview = () => {
     setReviewing(null)
     setSelectedDecision(null)
     setNote("")
     setAcknowledgeRouteConflicts(false)
     setActionError(null)
+  }
+
+  const closeReview = (afterClose?: () => void) => {
+    if (savingId) return
+    const close = () => {
+      clearReview()
+      afterClose?.()
+    }
+    if (!hasReviewDraft) {
+      close()
+      return
+    }
+    Alert.alert(t("managerDecisionDiscardTitle"), t("managerDecisionDiscardBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("managerDecisionDiscardConfirm"), style: "destructive", onPress: close },
+    ])
+  }
+
+  const goBack = () => {
+    if (savingId) return
+    if (reviewing) {
+      closeReview()
+      return
+    }
+    safeFieldBack("/(app)/manager")
   }
 
   const chooseDecision = (decision: ApprovalDecision) => {
@@ -430,7 +456,7 @@ export default function ManagerApprovalsScreen() {
         rescheduleDate,
         acknowledgeRouteConflicts,
       ))
-      closeReview()
+      clearReview()
       Alert.alert(t("managerDecisionSaved"))
       await load()
     } catch (reason) {
@@ -491,7 +517,7 @@ export default function ManagerApprovalsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: Boolean(savingId) }} disabled={Boolean(savingId)} onPress={goBack} style={[styles.back, savingId && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("managerHomeTitle").toUpperCase()}</Text>
             <Text style={styles.title}>{t("managerApprovalsTitle")}</Text>
