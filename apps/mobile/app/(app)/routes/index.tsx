@@ -61,6 +61,21 @@ export default function RoutesScreen() {
           </View>
         ) : null}
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("routeCalendarTitle")}
+          accessibilityHint={t("routeCalendarHint")}
+          onPress={() => router.push("/(app)/(tabs)/week" as never)}
+          style={({ pressed }) => [styles.calendarLinkModern, pressed && styles.pressed]}
+        >
+          <View style={styles.calendarLinkIconModern}><TabIcon name="week" color={colors.primary} size={22} /></View>
+          <View style={styles.calendarLinkBodyModern}>
+            <Text style={styles.calendarLinkTitleModern}>{t("routeCalendarTitle")}</Text>
+            <Text style={styles.calendarLinkHintModern}>{t("routeCalendarHint")}</Text>
+          </View>
+          <TabIcon name="chevronRight" color={colors.primary} size={21} />
+        </Pressable>
+
         {routes.length ? <>
           {nowRoutes.length ? <RouteGroup title={t("routeNow")} routes={nowRoutes} locale={locale} featured /> : null}
           {todayRoutes.length ? <RouteGroup title={t("todayWord")} routes={todayRoutes} locale={locale} featured={!nowRoutes.length} /> : null}
@@ -185,6 +200,11 @@ const styles = StyleSheet.create({
   subtitleModern: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   headerCreateModern: { minHeight: 44, borderRadius: 14, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5 },
   headerCreateTextModern: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  calendarLinkModern: { minHeight: 66, marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 10, ...cardShadow },
+  calendarLinkIconModern: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  calendarLinkBodyModern: { flex: 1, minWidth: 0 },
+  calendarLinkTitleModern: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  calendarLinkHintModern: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   routeGroupModern: { marginTop: 18 },
   routeGroupHeadingModern: { minHeight: 38, marginHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8 },
   routeGroupToggleModern: { minHeight: 52, marginHorizontal: 14, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },

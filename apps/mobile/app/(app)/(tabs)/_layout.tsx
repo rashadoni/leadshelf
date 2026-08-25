@@ -65,7 +65,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="week"
         options={{
-          title: t("tabWeek"),
+          title: t("tabCalendar"),
           tabBarIcon: ({ color }) => <TabIcon name="week" color={color} />,
         }}
       />
