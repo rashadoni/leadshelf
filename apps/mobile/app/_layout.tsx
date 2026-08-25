@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from "react-native"
 import { initDb } from "../src/db/local-store"
 import { getOrCreateDeviceId } from "../src/auth/device-id"
 import { tokenStore } from "../src/auth/token-store"
-import { setLocale, type Locale } from "../src/i18n"
+import { setLocale, t, type Locale } from "../src/i18n"
 import { initErrorReporting } from "../src/observability"
 
 export default function RootLayout() {
@@ -36,13 +36,9 @@ export default function RootLayout() {
   if (storageFailure) {
     return (
       <View style={styles.failure} accessibilityRole="alert">
-        <Text style={styles.title}>Защищённое хранилище недоступно</Text>
+        <Text style={styles.title}>{t("secureStorageUnavailableTitle")}</Text>
         <Text style={styles.body}>
-          Не очищайте данные приложения, если осталась несинхронизированная работа. Обратитесь в поддержку и сообщите код LS-MST-INIT.
-        </Text>
-        <Text style={styles.title}>Qorunan yaddaş əlçatan deyil</Text>
-        <Text style={styles.body}>
-          Sinxronlaşdırılmamış iş ola bilərsə, tətbiq məlumatlarını silməyin. Dəstəyə LS-MST-INIT kodunu bildirin.
+          {t("secureStorageUnavailableBody")}
         </Text>
         <Text selectable style={styles.diagnostic}>LS-MST-INIT/{storageFailure.stage}</Text>
       </View>

@@ -45,6 +45,7 @@ import type {
 } from "../sync/ports"
 import type { MobilePhotoUploadResponse, MobileShelfComparisonResult } from "@leadshelf/api-contracts/mobile/v1"
 import { OPEN_TASK_STATUSES } from "../tasks/status"
+import { t } from "../i18n"
 import {
   attachCommercialMediaToOperation,
   detachCommercialMediaFromOperation,
@@ -3198,7 +3199,7 @@ export type FieldDocumentDraft = Omit<
 function agentIdentity(): { id: string | null; name: string } {
   const profile = readFieldCache<Record<string, unknown>>("field.profile")?.value
   const agent = unknownRecord(profile?.agent)
-  return { id: stringValue(agent?.id), name: stringValue(agent?.name) ?? "Вы" }
+  return { id: stringValue(agent?.id), name: stringValue(agent?.name) ?? t("fieldSelfFallback") }
 }
 
 function createDocumentUploadPayload(
@@ -3358,7 +3359,7 @@ export function enqueueFieldMessage(
       id: threadId,
       type: "DIRECT" as const,
       subject: existing?.subject ?? null,
-      title: existing?.title ?? recipient?.name ?? "Новый диалог",
+      title: existing?.title ?? recipient?.name ?? t("messageNewThreadFallback"),
       lastMessageAt: sentAt,
       participants: existing?.participants ?? (recipient ? [recipient] : []),
       lastMessage: summaryMessage,

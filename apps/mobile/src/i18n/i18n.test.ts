@@ -13,4 +13,12 @@ describe("mobile i18n key parity", () => {
     expect(missingInAz, `keys missing in az: ${missingInAz.join(", ")}`).toEqual([])
     expect(az).toEqual(ru)
   })
+
+  it("keeps Azerbaijani runtime copy free of Cyrillic", () => {
+    const keysWithCyrillic = Object.entries(DICT.az)
+      .filter(([, value]) => /[А-Яа-яЁё]/.test(value))
+      .map(([key]) => key)
+
+    expect(keysWithCyrillic).toEqual([])
+  })
 })
