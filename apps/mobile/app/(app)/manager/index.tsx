@@ -65,10 +65,17 @@ function ManagerCard({
   wide?: boolean
 }) {
   const iconColor = tone === "warning" ? colors.warning : tone === "success" ? colors.successDark : tone === "info" ? colors.info : colors.primary
+  const cardAccessibilityDetail = loading && !error
+    ? t("managerLoading")
+    : error
+      ? isForbidden(error) ? t("managerAccessDeniedBody") : t("managerUnavailable")
+      : value + ". " + detail
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityHint={hint}
+      accessibilityLabel={title + ". " + cardAccessibilityDetail}
+      accessibilityState={{ busy: loading && !error }}
       onPress={() => router.push(href as never)}
       style={({ pressed }) => [styles.actionCard, wide && styles.actionCardWide, pressed && styles.pressed]}
     >
@@ -180,7 +187,7 @@ export default function ManagerHomeScreen() {
             <Text style={styles.title}>{t("managerHomeTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerHomeSubtitle")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading, disabled: loading }} disabled={loading} onPress={() => void load()} style={styles.refresh}>
             <TabIcon name="refresh" color={colors.primary} size={22} />
           </Pressable>
         </View>
@@ -192,7 +199,7 @@ export default function ManagerHomeScreen() {
               <Text style={styles.accessTitle}>{t("managerAccessDeniedTitle")}</Text>
               <Text style={styles.accessText}>{t("managerAccessDeniedBody")}</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.accessRetry}>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load()} style={styles.accessRetry}>
               <Text style={styles.accessRetryText}>{t("managerRetry")}</Text>
             </Pressable>
           </View>
@@ -204,7 +211,7 @@ export default function ManagerHomeScreen() {
                 <Text style={styles.heroEyebrow}>{scope === "ORGANIZATION" ? t("managerScopeOrganization") : t("managerScopeTeam")}</Text>
                 <Text style={styles.heroDate}>{calendar.weekday}, {calendar.date}</Text>
               </View>
-              <View style={styles.heroStatus}><View style={styles.heroDot} /><Text style={styles.heroStatusText}>{loading ? t("managerLoading") : t("managerUpdated")}</Text></View>
+              <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={loading ? t("managerLoading") : t("managerUpdated")} style={styles.heroStatus}><View style={styles.heroDot} /><Text style={styles.heroStatusText}>{loading ? t("managerLoading") : t("managerUpdated")}</Text></View>
             </View>
 
             <View style={[styles.grid, layout.isTablet && styles.gridTablet]}>
@@ -308,7 +315,7 @@ const styles = StyleSheet.create({
   accessBody: { flex: 1, minWidth: 0 },
   accessTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   accessText: { color: colors.warning, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  accessRetry: { minHeight: 40, paddingHorizontal: 11, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
+  accessRetry: { minHeight: 44, paddingHorizontal: 11, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   accessRetryText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
   hero: { marginHorizontal: 14, marginTop: 16, padding: 16, borderRadius: 22, backgroundColor: colors.navy, flexDirection: "row", alignItems: "center", gap: 12, ...cardShadow },
   heroIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
