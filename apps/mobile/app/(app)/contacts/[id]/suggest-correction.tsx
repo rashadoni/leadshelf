@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +31,7 @@ import {
 import { approvalStatusLabel, contactCorrectionFieldLabel } from "../../../../src/field/labels"
 import { t, useLocale } from "../../../../src/i18n"
 import { formatShortDateTime } from "../../../../src/i18n/date-format"
+import { safeFieldBack } from "../../../../src/navigation/safe-back"
 import { HttpError } from "../../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../../src/theme"
 import { TabIcon } from "../../../../src/components/TabIcon"
@@ -63,6 +65,7 @@ export default function SuggestContactCorrectionScreen() {
   const [submitted, setSubmitted] = useState<FieldContactChangeRequest | null>(null)
   const [error, setError] = useState<string | null>(null)
   const submission = useRef<Submission | null>(null)
+  const dirtyDraft = useRef(false)
 
   const load = useCallback(async (refresh = false) => {
     if (!id) return
@@ -72,7 +75,9 @@ export default function SuggestContactCorrectionScreen() {
     try {
       const contact = await fieldApi.contact(id)
       setData(contact)
-      setDraft(fieldContactCorrectionDraft(contact.contact))
+      // A refresh updates the reference version without silently replacing
+      // edits that the agent has already entered in this correction request.
+      if (!dirtyDraft.current) setDraft(fieldContactCorrectionDraft(contact.contact))
       try {
         const requests = await fieldApi.contactChangeRequests(id)
         setHistory(requests.requests)
@@ -96,8 +101,14 @@ export default function SuggestContactCorrectionScreen() {
     () => data && draft ? fieldContactCorrectionChanges(data.contact, draft) : [],
     [data, draft],
   )
+  const hasDraft = changes.length > 0 || reason.trim().length > 0 || reviewing
+
+  useEffect(() => {
+    dirtyDraft.current = hasDraft
+  }, [hasDraft])
 
   const update = (field: FieldContactCorrectionField, value: string) => {
+    dirtyDraft.current = true
     setDraft((current) => current ? { ...current, [field]: value } : current)
     setReviewing(false)
     setError(null)
@@ -171,8 +182,20 @@ export default function SuggestContactCorrectionScreen() {
     }
   }
 
+  const goBack = () => {
+    if (submitting) return
+    if (!hasDraft) {
+      safeFieldBack(`/(app)/contacts/${id}`)
+      return
+    }
+    Alert.alert(t("contactCorrectionDiscardTitle"), t("contactCorrectionDiscardBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("contactCorrectionDiscardConfirm"), style: "destructive", onPress: () => safeFieldBack(`/(app)/contacts/${id}`) },
+    ])
+  }
+
   if (loading && !data) {
-    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>{t("fieldLoadingMore")}</Text></View></SafeAreaView>
+    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.loading}><Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack(`/(app)/contacts/${id}`)} style={styles.loadingBack}><TabIcon name="chevronLeft" color={colors.text} size={22} /></Pressable><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>{t("fieldLoadingMore")}</Text></View></SafeAreaView>
   }
 
   if (submitted) {
@@ -207,7 +230,7 @@ export default function SuggestContactCorrectionScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
         >
           <View style={styles.header}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} hitSlop={6} onPress={() => router.back()} style={styles.back}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: submitting }} disabled={submitting} hitSlop={6} onPress={goBack} style={[styles.back, submitting && styles.disabled]}>
               <TabIcon name="chevronLeft" color={colors.text} size={22} />
             </Pressable>
             <View style={styles.headerBody}>
@@ -281,7 +304,7 @@ export default function SuggestContactCorrectionScreen() {
                   <Input label={t("contactCorrectionField_notes")} value={draft.notes} onChangeText={(value) => update("notes", value)} multiline maxLength={5000} />
                 </View>
                 <View style={styles.formCard}>
-                  <Input label={t("contactCorrectionReason")} required value={reason} onChangeText={(value) => { setReason(value); setReviewing(false); setError(null) }} multiline maxLength={1000} placeholder={t("contactCorrectionReasonHint")} />
+                  <Input label={t("contactCorrectionReason")} required value={reason} onChangeText={(value) => { dirtyDraft.current = true; setReason(value); setReviewing(false); setError(null) }} multiline maxLength={1000} placeholder={t("contactCorrectionReasonHint")} />
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -359,6 +382,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingBottom: 34 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   loadingText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
