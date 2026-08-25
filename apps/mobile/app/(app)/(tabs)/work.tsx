@@ -39,6 +39,12 @@ export default function WorkTab() {
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const activeWorkday = workdayStatus === "STARTED"
   const pausedWorkday = workdayStatus === "PAUSED"
+  const completedWorkday = workdayStatus === "COMPLETED"
+  const workdayStatusLabel = t(workdayStatusKeys[workdayStatus])
+  const workdayStatusIcon: TabIconName = activeWorkday ? "play" : pausedWorkday ? "pause" : completedWorkday ? "check" : "today"
+  const workdayStatusColor = activeWorkday || completedWorkday ? colors.successDark : pausedWorkday ? colors.warning : colors.text
+  const shelfExecutionEnabled = Boolean(field.profile?.capabilities.shelfExecution.enabled)
+  const shelfStatusLabel = t(shelfExecutionEnabled ? "shelfConnected" : "shelfUnavailable")
   const canOpenManager = IS_LEADDRIVE_FIELD && hasFieldManagerRole(field.profile?.agent.role)
   const modules: Module[] = IS_LEADDRIVE_FIELD
     ? [
@@ -62,6 +68,7 @@ export default function WorkTab() {
         { label: t("moduleCommitments"), hint: t("moduleCommitmentsHint"), icon: "visit", href: "/(app)/commitments" },
       ]
     : []
+  const moduleAccessibilityHint = (module: Module) => module.badge === undefined ? module.hint : `${module.hint} ${t("tasksOpenLabel")}: ${module.badge}`
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -81,17 +88,17 @@ export default function WorkTab() {
             <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? t("organizationUnavailable")}</Text>
           </View>
           {IS_LEADDRIVE_FIELD ? (
-            <View style={[styles.connection, activeWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionOff]}>
-              <View style={[styles.connectionDot, { backgroundColor: activeWorkday ? colors.success : pausedWorkday ? colors.warning : colors.faint }]} />
-              <Text style={[styles.connectionText, activeWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
-                {t(workdayStatusKeys[workdayStatus])}
+            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionOff]}>
+              <TabIcon name={workdayStatusIcon} color={workdayStatusColor} size={14} />
+              <Text style={[styles.connectionText, activeWorkday || completedWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
+                {workdayStatusLabel}
               </Text>
             </View>
           ) : (
-            <View style={[styles.connection, field.profile?.capabilities.shelfExecution.enabled ? styles.connectionOn : styles.connectionOff]}>
-              <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
-              <Text style={[styles.connectionText, field.profile?.capabilities.shelfExecution.enabled ? styles.connectionTextOn : styles.connectionTextOff]}>
-                {field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}
+            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`${t("tabShelves")}: ${shelfStatusLabel}`} style={[styles.connection, shelfExecutionEnabled ? styles.connectionOn : styles.connectionOff]}>
+              <TabIcon name={shelfExecutionEnabled ? "check" : "alert"} color={shelfExecutionEnabled ? colors.successDark : colors.warning} size={14} />
+              <Text style={[styles.connectionText, shelfExecutionEnabled ? styles.connectionTextOn : styles.connectionTextOff]}>
+                {shelfStatusLabel}
               </Text>
             </View>
           )}
@@ -102,6 +109,9 @@ export default function WorkTab() {
           {modules.map((module, index) => (
             <Pressable
               key={module.href}
+              accessibilityRole="button"
+              accessibilityLabel={module.label}
+              accessibilityHint={moduleAccessibilityHint(module)}
               onPress={() => router.push(module.href as never)}
               style={({ pressed }) => [styles.moduleRow, index > 0 && !layout.isTablet && styles.moduleBorder, layout.isTablet && styles.moduleRowTablet, pressed && styles.pressed]}
             >
@@ -120,6 +130,8 @@ export default function WorkTab() {
           <View style={[styles.moreCard, layout.isTablet && styles.moreCardTablet]}>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={t("workMoreForWork")}
+              accessibilityHint={t(moreOpen ? "workMoreHide" : "workMoreShow")}
               accessibilityState={{ expanded: moreOpen }}
               onPress={() => setMoreOpen((value) => !value)}
               style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
@@ -138,6 +150,8 @@ export default function WorkTab() {
                   <Pressable
                     key={module.href}
                     accessibilityRole="button"
+                    accessibilityLabel={module.label}
+                    accessibilityHint={moduleAccessibilityHint(module)}
                     onPress={() => router.push(module.href as never)}
                     style={({ pressed }) => [styles.moreItem, index > 0 && styles.moduleBorder, pressed && styles.pressed]}
                   >
@@ -171,11 +185,10 @@ const styles = StyleSheet.create({
   identityBody: { flex: 1, minWidth: 0 },
   identityLabel: { color: colors.headerSubtext, fontSize: 9, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
   identityName: { color: colors.headerText, fontSize: 15, fontWeight: "900", marginTop: 3 },
-  connection: { maxWidth: 105, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
+  connection: { maxWidth: 114, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
   connectionOn: { backgroundColor: colors.successBg },
   connectionPaused: { backgroundColor: colors.warningBg },
   connectionOff: { backgroundColor: colors.warningBg },
-  connectionDot: { width: 6, height: 6, borderRadius: 3 },
   connectionText: { flexShrink: 1, fontSize: 9, fontWeight: "800" },
   connectionTextOn: { color: colors.successDark },
   connectionTextOff: { color: colors.warning },
