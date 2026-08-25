@@ -207,7 +207,13 @@ function ApprovalRequest({
           <Text style={styles.requestTitle}>{item.title}</Text>
           <View style={styles.typePill}><Text style={styles.typePillText}>{item.typeLabel}</Text></View>
         </View>
-        <Pressable accessibilityRole="button" onPress={reviewing ? onClose : onOpen} style={styles.reviewButton}>
+        <Pressable
+          accessibilityLabel={`${item.title}: ${reviewing ? t("managerApprovalCloseReview") : t("managerApprovalReview")}`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: reviewing }}
+          onPress={reviewing ? onClose : onOpen}
+          style={styles.reviewButton}
+        >
           <Text style={styles.reviewButtonText}>{reviewing ? t("managerApprovalCloseReview") : t("managerApprovalReview")}</Text>
         </Pressable>
       </View>
@@ -216,7 +222,16 @@ function ApprovalRequest({
         <View style={styles.contactProposal}>
           <View style={styles.contactProposalTop}>
             <Text style={styles.contactProposalTitle}>{t("managerContactProposalTitle")}</Text>
-            {item.contactId ? <Pressable accessibilityRole="button" onPress={() => router.push(`/(app)/contacts/${item.contactId}` as never)} style={styles.contactProposalOpen}><Text style={styles.contactProposalOpenText}>{t("managerContactProposalOpen")}</Text></Pressable> : null}
+            {item.contactId ? (
+              <Pressable
+                accessibilityLabel={`${t("managerContactProposalOpen")}: ${item.title}`}
+                accessibilityRole="button"
+                onPress={() => router.push(`/(app)/contacts/${item.contactId}` as never)}
+                style={styles.contactProposalOpen}
+              >
+                <Text style={styles.contactProposalOpenText}>{t("managerContactProposalOpen")}</Text>
+              </Pressable>
+            ) : null}
           </View>
           {item.contactPreview.fields.map((change) => (
             <View key={change.field} style={styles.contactProposalRow}>
@@ -244,11 +259,16 @@ function ApprovalRequest({
             {options.map((decision) => (
               <Pressable
                 key={decision}
+                accessibilityLabel={decisionLabel(decision)}
                 accessibilityRole="button"
+                accessibilityState={{ selected: selectedDecision === decision }}
                 onPress={() => onSelectDecision(decision)}
                 style={[styles.decisionChoice, selectedDecision === decision && styles.decisionChoiceSelected]}
               >
-                <Text style={[styles.decisionChoiceText, selectedDecision === decision && styles.decisionChoiceTextSelected]}>{decisionLabel(decision)}</Text>
+                <View style={styles.decisionChoiceContent}>
+                  <Text style={[styles.decisionChoiceText, selectedDecision === decision && styles.decisionChoiceTextSelected]}>{decisionLabel(decision)}</Text>
+                  {selectedDecision === decision ? <TabIcon name="check" color={colors.headerText} size={14} /> : null}
+                </View>
               </Pressable>
             ))}
           </View>
@@ -258,6 +278,7 @@ function ApprovalRequest({
               <Text style={styles.fieldLabel}>{t("managerDecisionDate")}</Text>
               <TextInput
                 accessibilityLabel={t("managerDecisionDate")}
+                accessibilityHint="YYYY-MM-DD"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="numbers-and-punctuation"
@@ -273,7 +294,18 @@ function ApprovalRequest({
                 {[1, 7, 14].map((days) => {
                   const candidate = dateKey(addDays(days))
                   const candidateLabel = formatCalendarDay(candidate, locale)
-                  return <Pressable key={days} accessibilityRole="button" onPress={() => onChangeRescheduleDate(candidate)} style={[styles.datePreset, rescheduleDate === candidate && styles.datePresetSelected]}><Text style={[styles.datePresetText, rescheduleDate === candidate && styles.datePresetTextSelected]}>{candidateLabel.date || candidate}</Text></Pressable>
+                  return (
+                    <Pressable
+                      key={days}
+                      accessibilityLabel={`${t("managerDecisionDate")}: ${candidateLabel.weekday}, ${candidateLabel.date || candidate}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: rescheduleDate === candidate }}
+                      onPress={() => onChangeRescheduleDate(candidate)}
+                      style={[styles.datePreset, rescheduleDate === candidate && styles.datePresetSelected]}
+                    >
+                      <Text style={[styles.datePresetText, rescheduleDate === candidate && styles.datePresetTextSelected]}>{candidateLabel.date || candidate}</Text>
+                    </Pressable>
+                  )
                 })}
               </View>
             </View>
@@ -284,6 +316,7 @@ function ApprovalRequest({
               <Text style={styles.fieldLabel}>{t("managerDecisionNote")}{needsNote ? " *" : ""}</Text>
               <TextInput
                 accessibilityLabel={t("managerDecisionNote")}
+                accessibilityHint={needsNote ? t("managerDecisionNoteRequired") : t("managerDecisionNotePlaceholder")}
                 multiline
                 onChangeText={onChangeNote}
                 placeholder={t("managerDecisionNotePlaceholder")}
@@ -296,19 +329,26 @@ function ApprovalRequest({
           ) : null}
 
           {acknowledgeRouteConflicts ? (
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: true }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
+            <Pressable accessibilityLabel={t("managerHrmAcknowledgeConflict")} accessibilityRole="checkbox" accessibilityState={{ checked: true }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
               <View style={styles.checkbox}><TabIcon name="check" color={colors.warning} size={15} /></View>
               <Text style={styles.conflictAcknowledgeText}>{t("managerHrmAcknowledgeConflict")}</Text>
             </Pressable>
           ) : actionError === t("managerHrmRouteConflict") && item.kind === "HRM" && selectedDecision === "APPROVED" ? (
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: false }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
+            <Pressable accessibilityLabel={t("managerHrmAcknowledgeConflict")} accessibilityRole="checkbox" accessibilityState={{ checked: false }} onPress={onToggleRouteConflict} style={styles.conflictAcknowledge}>
               <View style={styles.checkbox} />
               <Text style={styles.conflictAcknowledgeText}>{t("managerHrmAcknowledgeConflict")}</Text>
             </Pressable>
           ) : null}
 
-          {actionError ? <Text style={styles.actionError}>{actionError}</Text> : null}
-          <Pressable disabled={!selectedDecision || saving} accessibilityRole="button" onPress={onSubmit} style={[styles.submit, (!selectedDecision || saving) && styles.disabled]}>
+          {actionError ? <Text accessibilityLiveRegion="polite" style={styles.actionError}>{actionError}</Text> : null}
+          <Pressable
+            accessibilityLabel={t("managerDecisionConfirm")}
+            accessibilityRole="button"
+            accessibilityState={{ busy: saving, disabled: !selectedDecision || saving }}
+            disabled={!selectedDecision || saving}
+            onPress={onSubmit}
+            style={[styles.submit, (!selectedDecision || saving) && styles.disabled]}
+          >
             <Text style={styles.submitText}>{saving ? t("managerDecisionSaving") : t("managerDecisionConfirm")}</Text>
           </Pressable>
         </View>
@@ -456,7 +496,7 @@ export default function ManagerApprovalsScreen() {
             <Text style={styles.title}>{t("managerApprovalsTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerApprovalsHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading} onPress={() => void load()} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading, disabled: loading }} disabled={loading} onPress={() => void load()} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -465,7 +505,7 @@ export default function ManagerApprovalsScreen() {
             <View style={styles.stateIcon}><TabIcon name="inbox" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -549,13 +589,13 @@ const styles = StyleSheet.create({
   requestTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   typePill: { alignSelf: "flex-start", marginTop: 5, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primarySoft },
   typePillText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
-  reviewButton: { minHeight: 38, maxWidth: 130, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  reviewButton: { minHeight: 44, maxWidth: 130, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   reviewButtonText: { color: colors.primary, fontSize: 9, lineHeight: 12, textAlign: "center", fontWeight: "900" },
   requestReason: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 8 },
   contactProposal: { marginTop: 9, borderRadius: 12, padding: 10, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, gap: 7 },
   contactProposalTop: { flexDirection: "row", alignItems: "center", gap: 8 },
   contactProposalTitle: { flex: 1, color: colors.info, fontSize: 10, fontWeight: "900" },
-  contactProposalOpen: { minHeight: 30, borderRadius: 9, paddingHorizontal: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  contactProposalOpen: { minHeight: 44, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   contactProposalOpenText: { color: colors.info, fontSize: 8, fontWeight: "900" },
   contactProposalRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   contactProposalLabel: { flex: 1, color: colors.muted, fontSize: 9, fontWeight: "800" },
@@ -568,8 +608,9 @@ const styles = StyleSheet.create({
   decisionTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   decisionHint: { color: colors.muted, fontSize: 9, lineHeight: 13 },
   decisionChoices: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  decisionChoice: { minHeight: 38, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  decisionChoiceSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
+  decisionChoice: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  decisionChoiceSelected: { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary },
+  decisionChoiceContent: { flexDirection: "row", alignItems: "center", gap: 5 },
   decisionChoiceText: { color: colors.muted, fontSize: 9, fontWeight: "900" },
   decisionChoiceTextSelected: { color: colors.headerText },
   notePanel: { gap: 5 },
@@ -579,7 +620,7 @@ const styles = StyleSheet.create({
   dateInput: { minHeight: 44, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, color: colors.text, fontSize: 12, fontWeight: "900" },
   dateHint: { color: colors.muted, fontSize: 10, fontWeight: "700" },
   datePresets: { flexDirection: "row", gap: 6 },
-  datePreset: { flex: 1, minHeight: 34, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  datePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   datePresetSelected: { backgroundColor: colors.primarySoft },
   datePresetText: { color: colors.muted, fontSize: 8, fontWeight: "800" },
   datePresetTextSelected: { color: colors.primary },
