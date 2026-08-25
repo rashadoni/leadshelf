@@ -310,7 +310,7 @@ export default function NewRouteScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable onPress={goBack} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{(managerMode ? t("managerPlanningTitle") : t("routeHubTitle")).toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("copyRoute") : managerMode ? t("managerPlanRoute") : t("createRoute")}</Text></View>
         </View>
 
@@ -332,7 +332,7 @@ export default function NewRouteScreen() {
                 style={[styles.stepItem, item.id > step && styles.stepItemDisabled]}
               >
                 <View style={[styles.stepMarker, isActive && styles.stepMarkerActive, isComplete && styles.stepMarkerComplete]}>
-                  {isComplete ? <Text style={styles.stepCheck}>✓</Text> : <TabIcon name={item.icon} color={isActive ? colors.headerText : colors.primary} size={16} />}
+                  {isComplete ? <TabIcon name="check" color={colors.headerText} size={16} /> : <TabIcon name={item.icon} color={isActive ? colors.headerText : colors.primary} size={16} />}
                 </View>
                 <Text numberOfLines={2} style={[styles.stepText, isActive && styles.stepTextActive]}>{t(item.label)}</Text>
               </Pressable>
@@ -387,8 +387,14 @@ export default function NewRouteScreen() {
                   })}
                 </ScrollView>
                 <View style={styles.weekNavigation}>
-                  <Pressable onPress={() => void moveWeek(-7)} style={styles.weekButton}><Text style={styles.weekButtonText}>‹ {t("previousWeek")}</Text></Pressable>
-                  <Pressable onPress={() => void moveWeek(7)} style={styles.weekButton}><Text style={styles.weekButtonText}>{t("nextWeek")} ›</Text></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("previousWeek")} onPress={() => void moveWeek(-7)} style={styles.weekButton}>
+                    <TabIcon name="chevronLeft" color={colors.primary} size={16} />
+                    <Text style={styles.weekButtonText}>{t("previousWeek")}</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("nextWeek")} onPress={() => void moveWeek(7)} style={styles.weekButton}>
+                    <Text style={styles.weekButtonText}>{t("nextWeek")}</Text>
+                    <TabIcon name="chevronRight" color={colors.primary} size={16} />
+                  </Pressable>
                 </View>
               </>
             )}
@@ -414,11 +420,11 @@ export default function NewRouteScreen() {
                   <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
                   <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
                 </View>
-                <Pressable onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><Text style={styles.removeText}>×</Text></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("removeStop")} onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><TabIcon name="close" color={colors.missed} size={20} /></Pressable>
               </View>
             ))}
             {!pickerOpen ? (
-              <Pressable onPress={() => setPickerOpen(true)} style={styles.addTarget}><Text style={styles.addTargetIcon}>＋</Text><View style={styles.addTargetBody}><Text style={styles.addTargetTitle}>{t("addStop")}</Text><Text style={styles.addTargetHint}>{t("chooseStop")}</Text></View></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} onPress={() => setPickerOpen(true)} style={styles.addTarget}><View style={styles.addTargetIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View><View style={styles.addTargetBody}><Text style={styles.addTargetTitle}>{t("addStop")}</Text><Text style={styles.addTargetHint}>{t("chooseStop")}</Text></View></Pressable>
             ) : selectedAgent?.id && selectedDate ? (
               <RouteTargetPicker
                 excluded={excluded}
@@ -460,9 +466,9 @@ export default function NewRouteScreen() {
                   <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
                 </View>
                 <View style={styles.targetActions}>
-                  <Pressable disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.iconButton, index === 0 && styles.disabled]}><Text style={styles.iconText}>↑</Text></Pressable>
-                  <Pressable disabled={index === targets.length - 1} onPress={() => setTargets((current) => reorder(current, index, index + 1))} style={[styles.iconButton, index === targets.length - 1 && styles.disabled]}><Text style={styles.iconText}>↓</Text></Pressable>
-                  <Pressable onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><Text style={styles.removeText}>×</Text></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("moveUp")} disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.iconButton, index === 0 && styles.disabled]}><TabIcon name="chevronUp" color={colors.primary} size={20} /></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("moveDown")} disabled={index === targets.length - 1} onPress={() => setTargets((current) => reorder(current, index, index + 1))} style={[styles.iconButton, index === targets.length - 1 && styles.disabled]}><TabIcon name="chevronDown" color={colors.primary} size={20} /></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("removeStop")} onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><TabIcon name="close" color={colors.missed} size={20} /></Pressable>
                 </View>
                 <View style={styles.timeBlock}>
                   <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
@@ -509,7 +515,6 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 34 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
@@ -519,7 +524,6 @@ const styles = StyleSheet.create({
   stepMarker: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.primary },
   stepMarkerActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   stepMarkerComplete: { backgroundColor: colors.success, borderColor: colors.success },
-  stepCheck: { color: colors.headerText, fontSize: 16, fontWeight: "900" },
   stepText: { color: colors.muted, fontSize: 9, lineHeight: 12, fontWeight: "800", textAlign: "center" },
   stepTextActive: { color: colors.text },
   wizardIntro: {},
@@ -547,7 +551,7 @@ const styles = StyleSheet.create({
   dayMonthSelected: { color: colors.headerSubtext },
   dayOff: { color: colors.holiday, fontSize: 8, marginTop: 2 },
   weekNavigation: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 8 },
-  weekButton: { flex: 1, minHeight: 44, borderRadius: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  weekButton: { flex: 1, minHeight: 44, borderRadius: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5, paddingHorizontal: 8 },
   weekButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   pointsHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 5, flexDirection: "row", alignItems: "center", gap: 7 },
   sectionTitleInline: { color: colors.text, fontSize: 15, fontWeight: "900" },
@@ -572,9 +576,7 @@ const styles = StyleSheet.create({
   targetMeta: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
   targetActions: { flexDirection: "row", gap: 5 },
   iconButton: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  iconText: { color: colors.primary, fontSize: 15, fontWeight: "900" },
   remove: { backgroundColor: colors.missedBg },
-  removeText: { color: colors.missed, fontSize: 20, lineHeight: 21 },
   timeBlock: { width: "100%", paddingLeft: 40, flexDirection: "row", alignItems: "center", gap: 8 },
   timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
   timeInput: { width: 78, height: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
@@ -583,7 +585,7 @@ const styles = StyleSheet.create({
   autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 44, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
   addTarget: { marginHorizontal: 14, marginTop: 9, minHeight: 64, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
-  addTargetIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.primary, color: colors.headerText, fontSize: 24, lineHeight: 44, textAlign: "center" },
+  addTargetIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   addTargetBody: { flex: 1 },
   addTargetTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" },
   addTargetHint: { color: colors.muted, fontSize: 10, marginTop: 3 },

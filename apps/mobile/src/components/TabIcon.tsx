@@ -27,9 +27,11 @@ export type TabIconName =
   | "search"
   | "chevronLeft"
   | "chevronRight"
+  | "chevronUp"
   | "chevronDown"
   | "add"
   | "check"
+  | "close"
   | "refresh"
   | "play"
   | "pause"
@@ -213,6 +215,12 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
           <Path d="m9.5 5.5 6 6.5-6 6.5" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       )
+    case "chevronUp":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m5.5 14.5 6.5-6 6.5 6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
     case "chevronDown":
       return (
         <Svg {...common} fill="none">
@@ -230,6 +238,12 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
       return (
         <Svg {...common} fill="none">
           <Path d="m5.5 12.3 4.1 4.1 8.9-9" stroke={color} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )
+    case "close":
+      return (
+        <Svg {...common} fill="none">
+          <Path d="m7.2 7.2 9.6 9.6M16.8 7.2l-9.6 9.6" stroke={color} strokeWidth={2} strokeLinecap="round" />
         </Svg>
       )
     case "refresh":

@@ -616,7 +616,7 @@ export default function FieldRouteDetailScreen() {
           <Pressable onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable>
         ) : null}
         {routeData.canEdit || canRequestStopAddition ? (
-          <Pressable onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} onPress={() => { setPickerOpen((current) => !current); setRequestPoint(null); setAddRequestTarget(null) }} style={styles.addButton}>
             <View style={styles.addButtonIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View>
             <View style={styles.addButtonBody}>
               <Text style={styles.addButtonTitle}>{t("addStop")}</Text>
@@ -710,13 +710,16 @@ export default function FieldRouteDetailScreen() {
                 </View>
                 {routeData.canEdit ? (
                   <View style={styles.pointActions}>
-                    <Pressable disabled={index <= 0} onPress={() => setPoints((current) => reorder(current, index, index - 1))} style={[styles.smallButton, index <= 0 && styles.disabled]}>
-                      <Text style={styles.smallButtonText}>↑ {t("moveUp")}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel={t("moveUp")} disabled={index <= 0} onPress={() => setPoints((current) => reorder(current, index, index - 1))} style={[styles.smallButton, index <= 0 && styles.disabled]}>
+                      <TabIcon name="chevronUp" color={colors.primary} size={16} />
+                      <Text style={styles.smallButtonText}>{t("moveUp")}</Text>
                     </Pressable>
-                    <Pressable disabled={index === points.length - 1} onPress={() => setPoints((current) => reorder(current, index, index + 1))} style={[styles.smallButton, index === points.length - 1 && styles.disabled]}>
-                      <Text style={styles.smallButtonText}>↓ {t("moveDown")}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel={t("moveDown")} disabled={index === points.length - 1} onPress={() => setPoints((current) => reorder(current, index, index + 1))} style={[styles.smallButton, index === points.length - 1 && styles.disabled]}>
+                      <TabIcon name="chevronDown" color={colors.primary} size={16} />
+                      <Text style={styles.smallButtonText}>{t("moveDown")}</Text>
                     </Pressable>
-                    <Pressable onPress={() => removeDraftPoint(index)} style={[styles.smallButton, styles.removeButton]}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={t("removeStop")} onPress={() => removeDraftPoint(index)} style={[styles.smallButton, styles.removeButton]}>
+                      <TabIcon name="close" color={colors.missed} size={16} />
                       <Text style={styles.removeText}>{t("removeStop")}</Text>
                     </Pressable>
                   </View>
@@ -812,7 +815,6 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 34 },
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   backButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 },
   headerBody: { flex: 1, minWidth: 0 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 },
@@ -886,7 +888,7 @@ const styles = StyleSheet.create({
   timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
   timeInputConflict: { borderColor: colors.warning, backgroundColor: colors.warningBg },
   pointActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
-  smallButton: { minHeight: 38, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  smallButton: { minHeight: 44, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5 },
   smallButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   removeButton: { backgroundColor: colors.missedBg },
   removeText: { color: colors.missed, fontSize: 10, fontWeight: "900" },
