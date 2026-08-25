@@ -46,6 +46,7 @@ import {
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
+import { TabIcon } from "../../../src/components/TabIcon"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, radii } from "../../../src/theme"
 
@@ -371,25 +372,31 @@ export default function CommitmentsScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={busy ? t("saving") : t("commitmentsNew")}
+            accessibilityHint={activeVisit ? t("commitmentsNewHint") : t("commitmentsNeedsVisit")}
+            accessibilityState={{ busy, disabled: !activeVisit || busy, expanded: createOpen }}
             disabled={!activeVisit || busy}
             onPress={() => { setFactTarget(null); setCreateOpen((current) => !current) }}
             style={[styles.addButton, (!activeVisit || busy) && styles.disabled]}
           >
-            <Text style={styles.addGlyph}>＋</Text><Text style={styles.addLabel}>{t("commitmentsNew")}</Text>
+            <TabIcon name="add" color={colors.headerText} size={19} /><Text style={styles.addLabel}>{t("commitmentsNew")}</Text>
           </Pressable>
         </View>
 
-        {warning ? <View style={styles.warning}><Text style={styles.warningText}>! {warning}</Text></View> : null}
+        {warning ? <View accessibilityRole="alert" style={styles.warning}><View style={styles.warningBody}><Text style={styles.warningText}>{warning}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: refreshing, disabled: refreshing }} disabled={refreshing} onPress={() => void refresh()} style={[styles.warningRetry, refreshing && styles.disabled]}><TabIcon name="refresh" color={colors.warning} size={17} /><Text style={styles.warningRetryText}>{refreshing ? "…" : t("refresh")}</Text></Pressable></View></View> : null}
+        {busy ? <View accessibilityRole="alert" style={styles.busyNotice}><TabIcon name="refresh" color={colors.primary} size={17} /><Text style={styles.busyNoticeText}>{t("saving")}</Text></View> : null}
 
         {createOpen && activeVisit ? (
           <View style={styles.composer}>
             <View style={styles.composerHeader}>
               <View style={styles.stepMark}><Text style={styles.stepMarkText}>1</Text></View>
               <View style={styles.composerTitleBody}><Text style={styles.composerTitle}>{t("commitmentsNewTitle")}</Text><Text style={styles.composerHint}>{t("commitmentsNewHint")}</Text></View>
-              <Pressable onPress={closePromiseForm} hitSlop={8}><Text style={styles.close}>×</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityHint={t("commitmentsNewTitle")} onPress={closePromiseForm} style={styles.closeButton}><TabIcon name="close" color={colors.faint} size={20} /></Pressable>
             </View>
             <FieldLabel label={t("commitmentsProduct")} />
             <TextInput
+              accessibilityLabel={t("commitmentsProduct")}
+              accessibilityHint={t("commitmentsCatalogHint")}
               value={productName}
               onChangeText={(value) => { setProductName(value); setSelectedProduct(null) }}
               placeholder={t("commitmentsProductPlaceholder")}
@@ -399,25 +406,25 @@ export default function CommitmentsScreen() {
             />
             <Text style={styles.inputHint}>{t("commitmentsCatalogHint")}</Text>
             {suggestions.length > 0 ? <View style={styles.suggestions}>{suggestions.map((product) => (
-              <Pressable key={product.id} onPress={() => selectProduct(product)} style={styles.suggestion}>
-                <View style={styles.suggestionBody}><Text style={styles.suggestionName}>{product.name}</Text><Text style={styles.suggestionMeta}>{product.sku}{product.brandName ? ` · ${product.brandName}` : ""}</Text></View><Text style={styles.suggestionArrow}>＋</Text>
+              <Pressable key={product.id} accessibilityRole="button" accessibilityLabel={`${t("commitmentsProduct")}: ${product.name}`} accessibilityHint={product.brandName ? `${product.sku} · ${product.brandName}` : product.sku} onPress={() => selectProduct(product)} style={styles.suggestion}>
+                <View style={styles.suggestionBody}><Text style={styles.suggestionName}>{product.name}</Text><Text style={styles.suggestionMeta}>{product.sku}{product.brandName ? ` · ${product.brandName}` : ""}</Text></View><TabIcon name="chevronRight" color={colors.primary} size={19} />
               </Pressable>
             ))}</View> : null}
             <FieldLabel label={t("commitmentsBrand")} />
-            <TextInput value={brandName} onChangeText={setBrandName} maxLength={200} style={styles.input} />
+            <TextInput accessibilityLabel={t("commitmentsBrand")} value={brandName} onChangeText={setBrandName} maxLength={200} style={styles.input} />
             <View style={styles.fieldRow}>
-              <View style={styles.fieldWide}><FieldLabel label={t("commitmentsQuantity")} /><TextInput value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" maxLength={14} style={styles.input} /></View>
-              <View style={styles.fieldNarrow}><FieldLabel label={t("commitmentsUnit")} /><TextInput value={unit} onChangeText={setUnit} maxLength={40} style={styles.input} /></View>
+              <View style={styles.fieldWide}><FieldLabel label={t("commitmentsQuantity")} /><TextInput accessibilityLabel={t("commitmentsQuantity")} value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" maxLength={14} style={styles.input} /></View>
+              <View style={styles.fieldNarrow}><FieldLabel label={t("commitmentsUnit")} /><TextInput accessibilityLabel={t("commitmentsUnit")} value={unit} onChangeText={setUnit} maxLength={40} style={styles.input} /></View>
             </View>
             <FieldLabel label={t("commitmentsDueDate")} />
-            <TextInput value={dueDate} onChangeText={setDueDate} keyboardType="numbers-and-punctuation" maxLength={10} placeholder="YYYY-MM-DD" placeholderTextColor={colors.faint} style={styles.input} />
+            <TextInput accessibilityLabel={t("commitmentsDueDate")} accessibilityHint={t("dateInputHint")} value={dueDate} onChangeText={setDueDate} keyboardType="numbers-and-punctuation" maxLength={10} placeholder={t("dateInputHint")} placeholderTextColor={colors.faint} style={styles.input} />
             <View style={styles.quickDates}>
-              <QuickDate label={t("commitmentsDue1")} onPress={() => setDueDate(futureDateKey(1))} />
-              <QuickDate label={t("commitmentsDue3")} onPress={() => setDueDate(futureDateKey(3))} />
-              <QuickDate label={t("commitmentsDue7")} onPress={() => setDueDate(futureDateKey(7))} />
+              <QuickDate selected={dueDate === futureDateKey(1)} label={t("commitmentsDue1")} onPress={() => setDueDate(futureDateKey(1))} />
+              <QuickDate selected={dueDate === futureDateKey(3)} label={t("commitmentsDue3")} onPress={() => setDueDate(futureDateKey(3))} />
+              <QuickDate selected={dueDate === futureDateKey(7)} label={t("commitmentsDue7")} onPress={() => setDueDate(futureDateKey(7))} />
             </View>
             <FieldLabel label={t("commitmentsNote")} />
-            <TextInput value={promiseNote} onChangeText={setPromiseNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
+            <TextInput accessibilityLabel={t("commitmentsNote")} accessibilityHint={t("commitmentsNotePlaceholder")} value={promiseNote} onChangeText={setPromiseNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
             <PhotoPicker photo={promisePhoto} onPress={() => void takePhoto("promise")} />
             <View style={styles.formActions}>
               <View style={styles.secondaryAction}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={closePromiseForm} /></View>
@@ -431,12 +438,12 @@ export default function CommitmentsScreen() {
             <View style={styles.composerHeader}>
               <View style={[styles.stepMark, styles.factMark]}><Text style={styles.stepMarkText}>✓</Text></View>
               <View style={styles.composerTitleBody}><Text style={styles.composerTitle}>{t("commitmentsFactTitle")}</Text><Text style={styles.composerHint}>{factTarget.productName} · {factTarget.customer.name}</Text></View>
-              <Pressable onPress={closeFact} hitSlop={8}><Text style={styles.close}>×</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityHint={t("commitmentsFactTitle")} onPress={closeFact} style={styles.closeButton}><TabIcon name="close" color={colors.faint} size={20} /></Pressable>
             </View>
             <Text style={styles.factInstruction}>{t("commitmentsFactHint")}</Text>
             <FieldLabel label={t("commitmentsActualQuantity")} />
             <View style={styles.actualRow}>
-              <TextInput value={actualQuantity} onChangeText={setActualQuantity} keyboardType="decimal-pad" maxLength={14} style={[styles.input, styles.actualInput]} />
+              <TextInput accessibilityLabel={`${t("commitmentsActualQuantity")}: ${factTarget.productName}`} value={actualQuantity} onChangeText={setActualQuantity} keyboardType="decimal-pad" maxLength={14} style={[styles.input, styles.actualInput]} />
               <Text style={styles.actualUnit}>{factTarget.unit}</Text>
             </View>
             {factOutcome ? (
@@ -447,8 +454,8 @@ export default function CommitmentsScreen() {
               </View>
             ) : null}
             <FieldLabel label={t("commitmentsNote")} />
-            <TextInput value={factNote} onChangeText={setFactNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
-            {canAttachFactPhoto ? <PhotoPicker photo={factPhoto} onPress={() => void takePhoto("fact")} /> : <View style={styles.photoUnavailable}><Text style={styles.photoUnavailableText}>{t("commitmentsFactPhotoUnavailable")}</Text></View>}
+            <TextInput accessibilityLabel={t("commitmentsNote")} accessibilityHint={t("commitmentsNotePlaceholder")} value={factNote} onChangeText={setFactNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
+            {canAttachFactPhoto ? <PhotoPicker photo={factPhoto} onPress={() => void takePhoto("fact")} /> : <View accessibilityRole="alert" style={styles.photoUnavailable}><Text style={styles.photoUnavailableText}>{t("commitmentsFactPhotoUnavailable")}</Text></View>}
             <View style={styles.formActions}>
               <View style={styles.secondaryAction}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={closeFact} /></View>
               <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSaveFact")} disabled={busy || factActual == null} onPress={() => void saveFact()} /></View>
@@ -485,26 +492,26 @@ function Summary({ value, label, color }: { value: number; label: string; color:
 }
 
 function FilterChip({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.filter, selected && styles.filterSelected]}><Text style={[styles.filterText, selected && styles.filterTextSelected]}>{label}</Text></Pressable>
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress} style={[styles.filter, selected && styles.filterSelected]}><Text style={[styles.filterText, selected && styles.filterTextSelected]}>{label}</Text></Pressable>
 }
 
 function FieldLabel({ label }: { label: string }) {
   return <Text style={styles.label}>{label}</Text>
 }
 
-function QuickDate({ label, onPress }: { label: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={styles.quickDate}><Text style={styles.quickDateText}>{label}</Text></Pressable>
+function QuickDate({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${t("commitmentsDueDate")}: ${label}`} accessibilityState={{ selected }} onPress={onPress} style={[styles.quickDate, selected && styles.quickDateSelected]}><Text style={[styles.quickDateText, selected && styles.quickDateTextSelected]}>{label}</Text></Pressable>
 }
 
 function PhotoPicker({ photo, onPress }: { photo: CommercialPhotoCapture | null; onPress: () => void }) {
   return (
     <View style={styles.photoPicker}>
-      {photo ? <Image source={{ uri: photo.uri }} style={styles.photoPreview} /> : <View style={styles.photoPlaceholder}><Text style={styles.photoGlyph}>⌾</Text></View>}
+      {photo ? <Image accessibilityLabel={t("commitmentsPhotoReady")} source={{ uri: photo.uri }} style={styles.photoPreview} /> : <View style={styles.photoPlaceholder}><TabIcon name="camera" color={colors.primary} size={23} /></View>}
       <View style={styles.photoBody}>
         <Text style={styles.photoTitle}>{photo ? t("commitmentsPhotoReady") : t("commitmentsPhoto")}</Text>
         <Text style={styles.photoHint}>{t("commitmentsPhotoHint")}</Text>
       </View>
-      <Pressable onPress={onPress} style={styles.photoButton}><Text style={styles.photoButtonText}>{photo ? t("commitmentsRetakePhoto") : t("commitmentsAddPhoto")}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={photo ? t("commitmentsRetakePhoto") : t("commitmentsAddPhoto")} accessibilityHint={t("commitmentsPhotoHint")} onPress={onPress} style={styles.photoButton}><Text style={styles.photoButtonText}>{photo ? t("commitmentsRetakePhoto") : t("commitmentsAddPhoto")}</Text></Pressable>
     </View>
   )
 }
@@ -525,22 +532,22 @@ function CommitmentCard({ commitment, locale, busy, onFact }: {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <View style={styles.productMark}><Text style={styles.productMarkText}>◇</Text></View>
+        <View style={styles.productMark}><TabIcon name="document" color={colors.primary} size={19} /></View>
         <View style={styles.cardTitleBody}>
           <Text style={styles.cardTitle}>{commitment.productName}</Text>
           <Text style={styles.cardBrand}>{commitment.brandName || commitment.productExternalId || t("commitmentsProduct")}</Text>
         </View>
         <CommercialPill label={statusLabel(commitment.status)} tone={statusTone(commitment.status)} />
       </View>
-      <View style={styles.customerRow}><Text style={styles.customerGlyph}>⌂</Text><View style={styles.customerBody}><Text style={styles.customerName}>{commitment.customer.name}</Text>{commitment.contact ? <Text style={styles.customerContact}>{commitment.contact.displayName}</Text> : null}</View></View>
+      <View style={styles.customerRow}><TabIcon name="organizations" color={colors.primary} size={16} /><View style={styles.customerBody}><Text style={styles.customerName}>{commitment.customer.name}</Text>{commitment.contact ? <Text style={styles.customerContact}>{commitment.contact.displayName}</Text> : null}</View></View>
       <View style={styles.planRow}>
         <Metric label={t("commitmentsPromise")} value={`${formatQuantity(commitment.promisedQuantity)} ${commitment.unit}`} accent={colors.primary} />
         <Metric label={t("commitmentsFact")} value={commitment.fulfillment ? `${formatQuantity(commitment.fulfillment.actualQuantity)} ${commitment.unit}` : "—"} accent={commitment.fulfillment ? colors.successDark : colors.faint} />
         <Metric label={t("commitmentsVariance")} value={commitment.fulfillment ? `${formatQuantity(commitment.fulfillment.varianceQuantity)} ${commitment.unit}` : "—"} accent={commitment.fulfillment && commitment.fulfillment.varianceQuantity < 0 ? colors.missed : colors.successDark} />
       </View>
-      <View style={styles.dueRow}><Text style={styles.dueIcon}>◷</Text><Text style={styles.dueLabel}>{t("commitmentsDue")}</Text><Text style={[styles.dueValue, commitment.status === "OVERDUE" && styles.dueOverdue]}>{formatShortDateTime(commitment.dueAt, locale)}</Text></View>
+      <View style={styles.dueRow}><TabIcon name="week" color={colors.faint} size={14} /><Text style={styles.dueLabel}>{t("commitmentsDue")}</Text><Text style={[styles.dueValue, commitment.status === "OVERDUE" && styles.dueOverdue]}>{formatShortDateTime(commitment.dueAt, locale)}</Text></View>
       {commitment.note ? <Text style={styles.note}>{commitment.note}</Text> : null}
-      {(hasEvidence || factEvidence) ? <View style={styles.evidence}><Text style={styles.evidenceText}>⌾ {t("commitmentsPhotoAttached")}</Text></View> : null}
+      {(hasEvidence || factEvidence) ? <View style={styles.evidence}><TabIcon name="camera" color={colors.holiday} size={14} /><Text style={styles.evidenceText}>{t("commitmentsPhotoAttached")}</Text></View> : null}
       {commitment.syncState ? <SyncNotice state={commitment.syncState} /> : null}
       {!commitment.fulfillment ? (
         <View style={styles.cardFooter}>
@@ -558,7 +565,7 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
 function SyncNotice({ state }: { state: "PENDING" | "CONFLICT" | "REJECTED" }) {
   const error = state !== "PENDING"
   const text = state === "PENDING" ? t("commitmentsSyncPending") : state === "CONFLICT" ? t("commitmentsSyncConflict") : t("commitmentsSyncRejected")
-  return <Pressable disabled={!error} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.syncNotice, error && styles.syncNoticeError]}><Text style={[styles.syncNoticeText, error && styles.syncNoticeTextError]}>{state === "PENDING" ? "◌" : "!"} {text}{error ? "  ›" : ""}</Text></Pressable>
+  return <Pressable accessibilityRole="button" accessibilityLabel={text} accessibilityHint={error ? t("syncCenterOpen") : undefined} accessibilityState={{ disabled: !error }} disabled={!error} onPress={() => router.push("/(app)/sync-center" as never)} style={[styles.syncNotice, error && styles.syncNoticeError]}><View style={styles.syncNoticeBody}><TabIcon name={error ? "alert" : "info"} color={error ? colors.missed : colors.primary} size={16} /><Text style={[styles.syncNoticeText, error && styles.syncNoticeTextError]}>{text}</Text>{error ? <TabIcon name="chevronRight" color={colors.missed} size={17} /> : null}</View></Pressable>
 }
 
 const styles = StyleSheet.create({
@@ -571,16 +578,20 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 2 },
   toolbar: { marginHorizontal: 14, marginTop: 13, gap: 10 },
   filters: { flexDirection: "row", gap: 8 },
-  filter: { minHeight: 38, borderRadius: radii.pill, paddingHorizontal: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  filter: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   filterSelected: { backgroundColor: colors.text, borderColor: colors.text },
   filterText: { color: colors.muted, fontSize: 10, fontWeight: "900" },
   filterTextSelected: { color: colors.headerText },
   addButton: { minHeight: 48, borderRadius: 16, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  addGlyph: { color: colors.headerText, fontSize: 20, fontWeight: "500" },
   addLabel: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   disabled: { opacity: 0.42 },
   warning: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg },
-  warningText: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  warningBody: { flexDirection: "row", alignItems: "center", gap: 10 },
+  warningText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  warningRetry: { minHeight: 44, borderRadius: 12, paddingHorizontal: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 2 },
+  warningRetryText: { color: colors.warning, fontSize: 8, fontWeight: "900" },
+  busyNotice: { marginHorizontal: 14, marginTop: 10, minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 8 },
+  busyNoticeText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   composer: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 14, borderWidth: 1, borderColor: colors.infoBorder },
   factComposer: { borderColor: colors.successBorder },
   composerHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
@@ -590,7 +601,7 @@ const styles = StyleSheet.create({
   composerTitleBody: { flex: 1, minWidth: 0 },
   composerTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   composerHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  close: { color: colors.faint, fontSize: 26, lineHeight: 28 },
+  closeButton: { width: 44, height: 44, marginTop: -5, marginRight: -5, alignItems: "center", justifyContent: "center" },
   label: { color: colors.text, fontSize: 10, fontWeight: "900", marginTop: 14, marginBottom: 6 },
   input: { minHeight: 47, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, borderRadius: 14, paddingHorizontal: 12, color: colors.text, fontSize: 13, fontWeight: "700" },
   textarea: { minHeight: 84, paddingTop: 11, lineHeight: 18 },
@@ -600,21 +611,21 @@ const styles = StyleSheet.create({
   suggestionBody: { flex: 1, minWidth: 0 },
   suggestionName: { color: colors.text, fontSize: 11, fontWeight: "900" },
   suggestionMeta: { color: colors.muted, fontSize: 9, marginTop: 3 },
-  suggestionArrow: { color: colors.primary, fontSize: 19, fontWeight: "900" },
   fieldRow: { flexDirection: "row", gap: 9 },
   fieldWide: { flex: 1.2 },
   fieldNarrow: { flex: 0.8 },
   quickDates: { flexDirection: "row", gap: 7, marginTop: 8 },
-  quickDate: { minHeight: 34, borderRadius: radii.pill, paddingHorizontal: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  quickDate: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  quickDateSelected: { backgroundColor: colors.primary },
   quickDateText: { color: colors.primary, fontSize: 9, fontWeight: "900" },
+  quickDateTextSelected: { color: colors.headerText },
   photoPicker: { minHeight: 78, borderRadius: 15, backgroundColor: colors.bg, marginTop: 14, padding: 9, flexDirection: "row", alignItems: "center", gap: 9 },
   photoPreview: { width: 58, height: 58, borderRadius: 13, backgroundColor: colors.skeleton },
   photoPlaceholder: { width: 58, height: 58, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  photoGlyph: { color: colors.primary, fontSize: 22, fontWeight: "900" },
   photoBody: { flex: 1, minWidth: 0 },
   photoTitle: { color: colors.text, fontSize: 10, fontWeight: "900" },
   photoHint: { color: colors.muted, fontSize: 8, lineHeight: 12, marginTop: 3 },
-  photoButton: { minHeight: 35, borderRadius: 11, backgroundColor: colors.primarySoft, paddingHorizontal: 9, alignItems: "center", justifyContent: "center" },
+  photoButton: { minHeight: 44, borderRadius: 11, backgroundColor: colors.primarySoft, paddingHorizontal: 9, alignItems: "center", justifyContent: "center" },
   photoButtonText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
   formActions: { flexDirection: "row", gap: 9, marginTop: 15 },
   secondaryAction: { flex: 0.75 },
@@ -632,12 +643,10 @@ const styles = StyleSheet.create({
   card: { ...commercialCardStyle },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
   productMark: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  productMarkText: { color: colors.primary, fontSize: 19, fontWeight: "900" },
   cardTitleBody: { flex: 1, minWidth: 0 },
   cardTitle: { color: colors.text, fontSize: 15, lineHeight: 19, fontWeight: "900" },
   cardBrand: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 3 },
   customerRow: { marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.bg, padding: 10, flexDirection: "row", alignItems: "center", gap: 8 },
-  customerGlyph: { color: colors.primary, fontSize: 15 },
   customerBody: { flex: 1, minWidth: 0 },
   customerName: { color: colors.text, fontSize: 11, fontWeight: "900" },
   customerContact: { color: colors.muted, fontSize: 9, marginTop: 2 },
@@ -646,16 +655,16 @@ const styles = StyleSheet.create({
   metricLabel: { color: colors.faint, fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
   metricValue: { fontSize: 11, fontWeight: "900", marginTop: 4 },
   dueRow: { flexDirection: "row", alignItems: "center", marginTop: 11, gap: 6 },
-  dueIcon: { color: colors.faint, fontSize: 12 },
   dueLabel: { color: colors.muted, fontSize: 9, fontWeight: "700" },
   dueValue: { color: colors.text, fontSize: 9, fontWeight: "900" },
   dueOverdue: { color: colors.missed },
   note: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 10 },
-  evidence: { alignSelf: "flex-start", marginTop: 10, borderRadius: radii.pill, backgroundColor: colors.holidayBg, paddingHorizontal: 9, paddingVertical: 6 },
+  evidence: { alignSelf: "flex-start", marginTop: 10, borderRadius: radii.pill, backgroundColor: colors.holidayBg, paddingHorizontal: 9, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
   evidenceText: { color: colors.holiday, fontSize: 8, fontWeight: "900" },
-  syncNotice: { marginTop: 10, borderRadius: 11, padding: 9, backgroundColor: colors.primarySoft },
+  syncNotice: { minHeight: 44, marginTop: 10, borderRadius: 11, padding: 9, backgroundColor: colors.primarySoft, justifyContent: "center" },
   syncNoticeError: { backgroundColor: colors.dangerBg },
-  syncNoticeText: { color: colors.primary, fontSize: 9, lineHeight: 13, fontWeight: "800" },
+  syncNoticeBody: { flexDirection: "row", alignItems: "center", gap: 7 },
+  syncNoticeText: { flex: 1, color: colors.primary, fontSize: 9, lineHeight: 13, fontWeight: "800" },
   syncNoticeTextError: { color: colors.missed },
   cardFooter: { marginTop: 13, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   factButtonWrap: { alignSelf: "stretch" },
