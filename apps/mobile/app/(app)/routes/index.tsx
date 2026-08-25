@@ -48,7 +48,7 @@ export default function RoutesScreen() {
               <View style={styles.dataNoticeIcon}><TabIcon name="alert" color={colors.warning} size={19} /></View>
               <Text style={styles.dataNoticeText}>{field.error ?? t("fieldDataError")}</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: field.phase === "refreshing" }} onPress={() => void field.refresh()} style={styles.retry}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.retry}>
               <TabIcon name="refresh" color={colors.warning} size={20} />
             </Pressable>
           </View>

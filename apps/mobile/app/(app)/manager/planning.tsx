@@ -346,7 +346,7 @@ export default function ManagerPlanningScreen() {
                         <Text style={styles.progressLabel}>{t("managerStopProgress", { visited: route.visitedPoints, total: route.totalPoints })}</Text>
                         <Text style={[styles.progressPercent, { color: status.foreground }]}>{Math.round(progress)}%</Text>
                       </View>
-                      <View style={styles.track}><View style={[styles.fill, { width: String(progress) + "%", backgroundColor: status.foreground }]} /></View>
+                      <View style={styles.track}><View style={[styles.fill, { width: `${progress}%` as `${number}%`, backgroundColor: status.foreground }]} /></View>
                     </Pressable>
                   )
                 })}
@@ -392,7 +392,7 @@ export default function ManagerPlanningScreen() {
                           <TabIcon name="chevronRight" color={colors.primary} size={18} />
                         </View>
                         <Text style={styles.dayCoverageMeta}>{t("managerPlanningDayCoverage", { planned, total })}</Text>
-                        <View style={styles.track}><View style={[styles.fill, { width: String(progress) + "%", backgroundColor: tone.foreground }]} /></View>
+                        <View style={styles.track}><View style={[styles.fill, { width: `${progress}%` as `${number}%`, backgroundColor: tone.foreground }]} /></View>
                       </Pressable>
                     )
                   })}

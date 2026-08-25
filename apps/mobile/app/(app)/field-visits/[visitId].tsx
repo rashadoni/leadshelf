@@ -597,7 +597,8 @@ export default function FieldVisitWorkspaceScreen() {
   )
 
   function leaveVisit() {
-    safeFieldBack(workspace.visit.routeId ? `/(app)/routes/${workspace.visit.routeId}` : "/(app)/routes")
+    const routeId = workspace?.visit.routeId
+    safeFieldBack(routeId ? `/(app)/routes/${routeId}` : "/(app)/routes")
   }
 
   function requestVisitBack() {

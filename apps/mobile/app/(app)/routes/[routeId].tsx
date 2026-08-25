@@ -696,7 +696,7 @@ export default function FieldRouteDetailScreen() {
                 {!activeVisit && primaryRoutePoint?.plannedTime ? <Text style={styles.missionMeta}>{formatRouteTime(primaryRoutePoint.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
               </View>
             </View>
-            <View style={styles.missionTrack}><View style={[styles.missionFill, { width: routeFlow.progressPercent + "%" }]} /></View>
+            <View style={styles.missionTrack}><View style={[styles.missionFill, { width: `${routeFlow.progressPercent}%` as `${number}%` }]} /></View>
             <View style={styles.missionActions}>
               {!activeVisit && primaryRoutePoint && canNavigatePrimaryPoint ? (
                 <Pressable
