@@ -75,6 +75,7 @@ import {
   parseFieldManagerApprovals,
   parseFieldManagerLocations,
   parseFieldManagerPlanning,
+  parseFieldManagerRouteDetail,
   parseFieldManagerTeam,
   parseFieldWeek,
   parseFieldWorkday,
@@ -101,6 +102,7 @@ import {
   type FieldManagerApprovalDecisionInput,
   type FieldManagerLocationsData,
   type FieldManagerPlanningData,
+  type FieldManagerRouteDetailData,
   type FieldManagerTeamData,
   type FieldOrganizationDetailData,
   type FieldOrganizationListData,
@@ -409,13 +411,24 @@ export const fieldApi = {
     request<unknown>(managerListPath("/api/v1/mtm/mobile/manager/team", options)).then(parseFieldManagerTeam),
   managerLocations: (options?: FieldManagerListOptions) =>
     request<unknown>(managerListPath("/api/v1/mtm/mobile/manager/locations", options)).then(parseFieldManagerLocations),
-  managerPlanning: (from: string, to?: string) =>
-    request<unknown>(
-      to
-        ? `/api/v1/mtm/mobile/manager/planning?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-        : "/api/v1/mtm/mobile/manager/planning?date=" + encodeURIComponent(from),
-    )
-      .then(parseFieldManagerPlanning),
+  managerPlanning: (from: string, to?: string, options?: FieldManagerListOptions) => {
+    const query = new URLSearchParams()
+    if (to) {
+      query.set("from", from)
+      query.set("to", to)
+    } else {
+      query.set("date", from)
+    }
+    if (options?.page != null) query.set("page", String(options.page))
+    if (options?.limit != null) query.set("limit", String(options.limit))
+    const search = options?.search?.trim()
+    if (search) query.set("search", search)
+    return request<unknown>(`/api/v1/mtm/mobile/manager/planning?${query.toString()}`)
+      .then(parseFieldManagerPlanning)
+  },
+  managerRouteDetail: (routeId: string) =>
+    request<unknown>(`/api/v1/mtm/mobile/manager/routes/${encodeURIComponent(routeId)}`)
+      .then(parseFieldManagerRouteDetail),
   managerApprovals: () =>
     request<unknown>("/api/v1/mtm/mobile/manager/approvals").then(parseFieldManagerApprovals),
   managerApprovalDecision: async (input: FieldManagerApprovalDecisionInput) => {
@@ -642,7 +655,8 @@ export const fieldApi = {
   locations(date?: string): Promise<FieldLocationHistoryData>
   managerTeam(options?: FieldManagerListOptions): Promise<FieldManagerTeamData>
   managerLocations(options?: FieldManagerListOptions): Promise<FieldManagerLocationsData>
-  managerPlanning(from: string, to?: string): Promise<FieldManagerPlanningData>
+  managerPlanning(from: string, to?: string, options?: FieldManagerListOptions): Promise<FieldManagerPlanningData>
+  managerRouteDetail(routeId: string): Promise<FieldManagerRouteDetailData>
   managerApprovals(): Promise<FieldManagerApprovalsData>
   managerApprovalDecision(input: FieldManagerApprovalDecisionInput): Promise<void>
   uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>

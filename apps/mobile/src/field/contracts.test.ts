@@ -22,6 +22,7 @@ import {
   parseFieldManagerApprovals,
   parseFieldManagerLocations,
   parseFieldManagerPlanning,
+  parseFieldManagerRouteDetail,
   parseFieldManagerTeam,
   parseFieldProfile,
   parseFieldRouteTargets,
@@ -753,6 +754,7 @@ describe("LeadDrive field contracts", () => {
         days: 1,
         maxRangeDays: 42,
         truncated: false,
+        page: { number: 2, limit: 25, total: 44, hasMore: true },
         agents: [{ id: "agent-1", name: "Manager view agent", role: "AGENT", status: "ACTIVE", teamId: "team-1" }],
         routes: [{
           id: "route-1",
@@ -767,7 +769,67 @@ describe("LeadDrive field contracts", () => {
           agent: { id: "agent-1", name: "Manager view agent" },
         }],
       },
-    }).routes[0]).toMatchObject({ totalPoints: 4, visitedPoints: 1 })
+    })).toMatchObject({
+      page: { number: 2, limit: 25, total: 44, hasMore: true },
+      routes: [{ totalPoints: 4, visitedPoints: 1 }],
+    })
+
+    const legacyPlanningPage = parseFieldManagerPlanning({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        date: "2026-07-15",
+        from: "2026-07-15",
+        to: "2026-07-15",
+        days: 1,
+        maxRangeDays: 42,
+        truncated: false,
+        agents: [{ id: "agent-legacy", name: "Legacy manager view agent", role: "AGENT", status: "ACTIVE", teamId: null }],
+        routes: [],
+      },
+    })
+    expect(legacyPlanningPage.page).toEqual({ number: 1, limit: 1, total: 1, hasMore: false })
+
+    expect(parseFieldManagerRouteDetail({
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        timezone: "Asia/Baku",
+        route: {
+          id: "route-manager-1",
+          agentId: "agent-1",
+          date: "2026-07-15T00:00:00.000Z",
+          name: "Tuesday route",
+          status: "PLANNED",
+          totalPoints: 1,
+          visitedPoints: 0,
+          startedAt: null,
+          completedAt: null,
+          agent: { id: "agent-1", name: "Manager view agent" },
+          points: [{
+            id: "point-manager-1",
+            orderIndex: 0,
+            status: "PENDING",
+            plannedTime: "2026-07-15T09:00:00.000Z",
+            customer: {
+              id: "customer-1",
+              name: "Central clinic",
+              address: "1 Health street",
+              city: "Baku",
+              latitude: 40.4093,
+              longitude: 49.8671,
+            },
+            contact: { id: "contact-1", displayName: "Aygun Aliyeva", specialtyName: "Cardiology" },
+          }],
+        },
+      },
+    })).toMatchObject({
+      route: {
+        id: "route-manager-1",
+        points: [{ customer: { name: "Central clinic" }, contact: { specialtyName: "Cardiology" } }],
+      },
+      timezone: "Asia/Baku",
+    })
 
     const approvals = parseFieldManagerApprovals({
       success: true,

@@ -98,7 +98,7 @@ export default function ManagerHomeScreen() {
     const results = await Promise.allSettled([
       fieldApi.managerTeam({ page: 1, limit: 25 }),
       fieldApi.managerLocations({ page: 1, limit: 25 }),
-      fieldApi.managerPlanning(selectedDate),
+      fieldApi.managerPlanning(selectedDate, undefined, { page: 1, limit: 25 }),
       fieldApi.managerApprovals(),
     ])
     const [teamResult, locationsResult, planningResult, approvalsResult] = results
@@ -142,7 +142,9 @@ export default function ManagerHomeScreen() {
   const noLocations = locationAgents.filter((agent) => agent.freshness === "NO_LOCATION").length
   const routes = planning.data?.routes ?? []
   const plannedAgentIds = useMemo(() => new Set(routes.map((route) => route.agentId)), [routes])
-  const withoutRoute = (planning.data?.agents ?? []).filter((agent) => !plannedAgentIds.has(agent.id)).length
+  const planningAgents = planning.data?.agents ?? []
+  const planningTotal = planning.data?.page.total ?? planningAgents.length
+  const withoutRoute = planningAgents.filter((agent) => !plannedAgentIds.has(agent.id)).length
   const loadedApprovals = approvals.data
     ? approvals.data.counts.hrm + approvals.data.counts.routeChanges + approvals.data.counts.customers + approvals.data.counts.contactChanges
     : 0
@@ -228,8 +230,8 @@ export default function ManagerHomeScreen() {
                 title={t("managerPlanningCardTitle")}
                 hint={t("managerPlanningCardHint")}
                 icon="week"
-                value={String(routes.length)}
-                detail={String(withoutRoute) + " " + t("managerWithoutRoute")}
+                value={String(planningAgents.length) + "/" + String(planningTotal)}
+                detail={t("managerPlanningPageSummary", { routes: routes.length, missing: withoutRoute })}
                 tone={withoutRoute > 0 ? "warning" : "primary"}
                 loading={loading}
                 error={planning.error}

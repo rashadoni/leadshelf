@@ -746,6 +746,47 @@ export interface FieldManagerPlanningData {
   agents: FieldManagerPlanningAgent[]
   routes: FieldManagerPlanningRoute[]
   truncated: boolean
+  /**
+   * Additive agent-list pagination. Older servers did not include it, so the
+   * parser keeps a safe one-page fallback just as it does for team and map.
+   */
+  page: FieldManagerListPage
+}
+
+export interface FieldManagerRouteDetailPoint {
+  id: string
+  orderIndex: number
+  status: string
+  plannedTime: string | null
+  customer: {
+    id: string
+    name: string
+    address: string | null
+    city: string | null
+    latitude: number | null
+    longitude: number | null
+  }
+  contact: {
+    id: string
+    displayName: string
+    specialtyName: string | null
+  } | null
+}
+
+/**
+ * Read-only manager detail. This is deliberately separate from the agent
+ * route workspace, whose cached data and actions are scoped to the signed-in
+ * field worker.
+ */
+export interface FieldManagerRouteDetail extends FieldManagerPlanningRoute {
+  points: FieldManagerRouteDetailPoint[]
+}
+
+export interface FieldManagerRouteDetailData {
+  scope: FieldManagerScope
+  /** Older servers did not send the additive tenant zone; use UTC rather than the phone zone. */
+  timezone: string
+  route: FieldManagerRouteDetail
 }
 
 export interface FieldManagerHrmApproval {
@@ -1299,6 +1340,10 @@ function number(value: unknown): value is number {
 
 function positiveInteger(value: unknown): value is number {
   return number(value) && Number.isInteger(value) && value > 0
+}
+
+function nonNegativeInteger(value: unknown): value is number {
+  return number(value) && Number.isInteger(value) && value >= 0
 }
 
 function managerListPage(value: unknown, legacyTotal: number): FieldManagerListPage | null {
@@ -2250,6 +2295,11 @@ export function parseFieldManagerPlanning(value: unknown): FieldManagerPlanningD
   if (agents.some((agent) => agent == null) || routes.some((route) => route == null)) {
     throw new FieldContractError("mobile manager planning")
   }
+  const parsedAgents = agents as FieldManagerPlanningAgent[]
+  const page = managerListPage(data.page, parsedAgents.length)
+  if (!page) {
+    throw new FieldContractError("mobile manager planning")
+  }
   return {
     scope: data.scope,
     date: date == null ? null : date,
@@ -2257,9 +2307,79 @@ export function parseFieldManagerPlanning(value: unknown): FieldManagerPlanningD
     to: data.to,
     days: data.days,
     maxRangeDays: data.maxRangeDays,
-    agents: agents as FieldManagerPlanningAgent[],
+    agents: parsedAgents,
     routes: routes as FieldManagerPlanningRoute[],
     truncated: data.truncated,
+    page,
+  }
+}
+
+function managerRouteDetailPoint(value: unknown): FieldManagerRouteDetailPoint | null {
+  const point = record(value)
+  const customer = record(point?.customer)
+  const contact = point?.contact == null ? null : record(point.contact)
+  if (
+    !point ||
+    !string(point.id) ||
+    !nonNegativeInteger(point.orderIndex) ||
+    !string(point.status) ||
+    !nullableTimestamp(point.plannedTime) ||
+    !customer ||
+    !string(customer.id) ||
+    !string(customer.name) ||
+    !(customer.address == null || string(customer.address)) ||
+    !(customer.city == null || string(customer.city)) ||
+    !(customer.latitude == null || number(customer.latitude)) ||
+    !(customer.longitude == null || number(customer.longitude)) ||
+    (contact != null && (
+      !string(contact.id) ||
+      !string(contact.displayName) ||
+      !(contact.specialtyName == null || string(contact.specialtyName))
+    ))
+  ) {
+    return null
+  }
+  return {
+    id: point.id,
+    orderIndex: point.orderIndex,
+    status: point.status,
+    plannedTime: point.plannedTime == null ? null : point.plannedTime,
+    customer: {
+      id: customer.id,
+      name: customer.name,
+      address: customer.address == null ? null : customer.address,
+      city: customer.city == null ? null : customer.city,
+      latitude: customer.latitude == null ? null : customer.latitude,
+      longitude: customer.longitude == null ? null : customer.longitude,
+    },
+    contact: contact == null
+      ? null
+      : {
+        id: contact.id,
+        displayName: contact.displayName,
+        specialtyName: contact.specialtyName == null ? null : contact.specialtyName,
+      },
+  }
+}
+
+export function parseFieldManagerRouteDetail(value: unknown): FieldManagerRouteDetailData {
+  const data = validEnvelope(value)
+  const route = managerPlanningRoute(data?.route)
+  const rawRoute = record(data?.route)
+  if (!data || !managerScope(data.scope) || !route || !rawRoute || !Array.isArray(rawRoute.points)) {
+    throw new FieldContractError("mobile manager route detail")
+  }
+  const points = rawRoute.points.map(managerRouteDetailPoint)
+  if (points.some((point) => point == null)) {
+    throw new FieldContractError("mobile manager route detail")
+  }
+  return {
+    scope: data.scope,
+    timezone: string(data.timezone) ? data.timezone : "UTC",
+    route: {
+      ...route,
+      points: points as FieldManagerRouteDetailPoint[],
+    },
   }
 }
 
