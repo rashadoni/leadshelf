@@ -85,6 +85,31 @@ const RESCHEDULE_FOLLOW_UP_REQUIREMENT: FieldVisitRequirement = {
   allowWaiver: false,
 }
 
+const VISIT_ACTION_DRAFT_FIELDS: Array<keyof FieldVisitActionDraft> = [
+  "waiverReason",
+  "presentationMaterial",
+  "presentationVersion",
+  "presentationTopic",
+  "stockProduct",
+  "stockState",
+  "stockQuantity",
+  "checklistResult",
+  "finalNote",
+  "discussedTopics",
+  "feedback",
+  "nextActionTitle",
+  "nextDueDate",
+  "nextDueTime",
+  "nextPriority",
+]
+
+function visitActionDraftChanged(
+  baseline: FieldVisitActionDraft,
+  current: FieldVisitActionDraft,
+): boolean {
+  return VISIT_ACTION_DRAFT_FIELDS.some((key) => baseline[key] !== current[key])
+}
+
 function actionLabel(requirement: FieldVisitRequirement): string {
   return t(`visitAction_${requirement.actionKey}` as MessageKey)
 }
@@ -101,6 +126,7 @@ export default function FieldVisitWorkspaceScreen() {
   const cameraRef = useRef<CameraView | null>(null)
   const visitScroll = useRef<ScrollView | null>(null)
   const editorOffset = useRef(0)
+  const actionDraftBaseline = useRef<FieldVisitActionDraft | null>(null)
   const cacheKey = `field.visit.workspace.${visitId}`
   const cached = readFieldCache<FieldVisitWorkspaceData>(cacheKey)?.value ?? null
   const local = localFieldVisitWorkspace(field.week, visitId, field.profile?.agent.id ?? "")
@@ -138,26 +164,71 @@ export default function FieldVisitWorkspaceScreen() {
       return true
     })
   }, [workspace])
+  const hasUnsavedActionEditor = Boolean(
+    activeRequirement &&
+    activeRequirement.actionKey !== "PHOTO" &&
+    actionDraftBaseline.current &&
+    visitActionDraftChanged(actionDraftBaseline.current, actionDraft),
+  )
 
   function persist(next: FieldVisitWorkspaceData) {
     setWorkspace(next)
     writeFieldCache(cacheKey, next)
   }
 
-  function openActionEditor(requirement: FieldVisitRequirement) {
-    setActiveRequirement(requirement)
+  function activateActionEditor(requirement: FieldVisitRequirement) {
     const existingAction = [...(workspace?.visit.actionResults ?? [])].reverse().find((result) => (
       result.actionKey === requirement.actionKey && result.syncState !== "REJECTED"
     ))
-    setActionDraft(visitActionDraftFromEvidence(
+    const nextDraft = visitActionDraftFromEvidence(
       requirement.actionKey,
       existingAction?.evidence,
       defaultFollowUpDate,
       tenantTimeZone,
-    ))
+    )
+    actionDraftBaseline.current = nextDraft
+    setActionDraft(nextDraft)
+    setActiveRequirement(requirement)
     setTimeout(() => {
       visitScroll.current?.scrollTo({ y: Math.max(0, editorOffset.current - 14), animated: true })
     }, 48)
+  }
+
+  function closeActionEditor() {
+    actionDraftBaseline.current = null
+    setActiveRequirement(null)
+    setActionDraft(emptyVisitActionDraft(defaultFollowUpDate))
+  }
+
+  function requestDiscardActionEditor(next?: () => void) {
+    if (saving) return
+    if (!activeRequirement || !hasUnsavedActionEditor) {
+      if (activeRequirement) closeActionEditor()
+      next?.()
+      return
+    }
+    Alert.alert(t("fieldVisitDiscardActionTitle"), t("fieldVisitDiscardActionBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("fieldVisitDiscardActionConfirm"),
+        style: "destructive",
+        onPress: () => {
+          closeActionEditor()
+          next?.()
+        },
+      },
+    ])
+  }
+
+  function openActionEditor(requirement: FieldVisitRequirement, afterOpen?: () => void) {
+    if (activeRequirement?.actionKey === requirement.actionKey) {
+      afterOpen?.()
+      return
+    }
+    requestDiscardActionEditor(() => {
+      activateActionEditor(requirement)
+      afterOpen?.()
+    })
   }
 
   function updateActionDraft<Key extends keyof FieldVisitActionDraft>(
@@ -167,8 +238,8 @@ export default function FieldVisitWorkspaceScreen() {
     setActionDraft((current) => ({ ...current, [key]: value } as FieldVisitActionDraft))
   }
 
-  function openRescheduleFollowUp() {
-    openActionEditor(RESCHEDULE_FOLLOW_UP_REQUIREMENT)
+  function openRescheduleFollowUp(afterOpen?: () => void) {
+    openActionEditor(RESCHEDULE_FOLLOW_UP_REQUIREMENT, afterOpen)
   }
 
   async function refreshWorkspace(base: FieldVisitWorkspaceData | null = workspace) {
@@ -235,8 +306,7 @@ export default function FieldVisitWorkspaceScreen() {
       const queued = enqueueFieldVisitAction(payload)
       const optimistic = addOptimisticVisitAction(workspace, payload)
       persist(optimistic)
-      setActiveRequirement(null)
-      setActionDraft(emptyVisitActionDraft(defaultFollowUpDate))
+      closeActionEditor()
       await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
@@ -290,7 +360,7 @@ export default function FieldVisitWorkspaceScreen() {
       })
       persist(optimistic)
       setPhotoCameraOpen(false)
-      setActiveRequirement(null)
+      closeActionEditor()
       Vibration.vibrate(40)
       await sync()
       const result = fieldOutboxResult(queued.clientOpId)
@@ -313,14 +383,14 @@ export default function FieldVisitWorkspaceScreen() {
     }
   }
 
-  function checkout() {
+  function continueCheckout() {
     if (!workspace || !field.week) return
     if (missing.length > 0) {
       Alert.alert(t("fieldVisitMissingActions", { actions: missing.map(actionLabel).join(", ") }))
       return
     }
     if (rescheduleFollowUpMissing) {
-      openRescheduleFollowUp()
+      activateActionEditor(RESCHEDULE_FOLLOW_UP_REQUIREMENT)
       Alert.alert(t("fieldVisitRescheduleFollowUpRequired"))
       return
     }
@@ -328,6 +398,15 @@ export default function FieldVisitWorkspaceScreen() {
       { text: t("cancel"), style: "cancel" },
       { text: t("fieldVisitCheckout"), onPress: () => void submitCheckout() },
     ])
+  }
+
+  function checkout() {
+    if (saving) return
+    if (activeRequirement) {
+      requestDiscardActionEditor(continueCheckout)
+      return
+    }
+    continueCheckout()
   }
 
   async function submitCheckout() {
@@ -511,6 +590,35 @@ export default function FieldVisitWorkspaceScreen() {
     : rescheduleFollowUpMissing
       ? t("fieldVisitRescheduleFollowUpRequired")
       : undefined
+  const hasUnsavedCheckoutResult = !isCompleted && (
+    outcome !== "SUCCESSFUL" ||
+    potential !== "UNKNOWN" ||
+    resultNote.trim().length > 0
+  )
+
+  function leaveVisit() {
+    safeFieldBack(workspace.visit.routeId ? `/(app)/routes/${workspace.visit.routeId}` : "/(app)/routes")
+  }
+
+  function requestVisitBack() {
+    if (saving) return
+    if (activeRequirement) {
+      requestDiscardActionEditor()
+      return
+    }
+    if (!hasUnsavedCheckoutResult) {
+      leaveVisit()
+      return
+    }
+    Alert.alert(t("fieldVisitDiscardResultTitle"), t("fieldVisitDiscardResultBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("fieldVisitDiscardResultConfirm"),
+        style: "destructive",
+        onPress: leaveVisit,
+      },
+    ])
+  }
 
   async function openVisitNavigation() {
     if (!visitNavigationUrls.length) {
@@ -551,8 +659,10 @@ export default function FieldVisitWorkspaceScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("back")}
-            onPress={() => router.back()}
-            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+            accessibilityState={{ disabled: saving, busy: saving }}
+            disabled={saving}
+            onPress={requestVisitBack}
+            style={({ pressed }) => [styles.back, saving && styles.disabled, pressed && !saving && styles.pressed]}
           >
             <TabIcon name="chevronLeft" color={colors.text} size={21} />
           </Pressable>
@@ -644,19 +754,20 @@ export default function FieldVisitWorkspaceScreen() {
           return (
             <Pressable
               key={requirement.actionKey}
-              disabled={isCompleted}
+              disabled={isCompleted || saving}
               accessibilityRole="button"
               accessibilityLabel={`${actionLabel(requirement)}. ${actionMeta}`}
               accessibilityState={{
-                disabled: isCompleted,
+                disabled: isCompleted || saving,
+                busy: saving,
                 selected: activeRequirement?.actionKey === requirement.actionKey,
               }}
               onPress={() => openActionEditor(requirement)}
               style={({ pressed }) => [
                 styles.actionCard,
                 progress.satisfied && styles.actionCardDone,
-                isCompleted && styles.actionCardDisabled,
-                pressed && styles.pressed,
+                (isCompleted || saving) && styles.actionCardDisabled,
+                pressed && !saving && styles.pressed,
               ]}
             >
               <View style={[styles.actionMark, progress.satisfied && styles.actionMarkDone]}>
@@ -784,7 +895,7 @@ export default function FieldVisitWorkspaceScreen() {
               </>
             )}
             <View style={styles.editorActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setActiveRequirement(null)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => requestDiscardActionEditor()} style={({ pressed }) => [styles.secondaryButton, saving && styles.disabled, pressed && !saving && styles.pressed]}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
               {activeRequirement.actionKey !== "PHOTO" && activeRequirement.allowWaiver ? <Pressable accessibilityRole="button" accessibilityLabel={t("fieldVisitWaiveAction")} accessibilityState={{ disabled: saving || Boolean(waiverDraftIssue), busy: saving }} disabled={saving || Boolean(waiverDraftIssue)} onPress={() => void saveAction("WAIVED")} style={({ pressed }) => [styles.waiveButton, (saving || Boolean(waiverDraftIssue)) && styles.disabled, pressed && !saving && !waiverDraftIssue && styles.pressed]}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
               {activeRequirement.actionKey !== "PHOTO" ? <Pressable accessibilityRole="button" accessibilityLabel={t("fieldVisitSaveAction")} accessibilityState={{ disabled: saving || Boolean(completedDraftIssue), busy: saving }} disabled={saving || Boolean(completedDraftIssue)} onPress={() => void saveAction("COMPLETED")} style={({ pressed }) => [styles.primaryButton, (saving || Boolean(completedDraftIssue)) && styles.disabled, pressed && !saving && !completedDraftIssue && styles.pressed]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable> : null}
             </View>
