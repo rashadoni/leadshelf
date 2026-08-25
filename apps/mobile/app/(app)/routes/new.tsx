@@ -45,6 +45,10 @@ function targetMeta(target: RouteDraftTarget): string {
   return target.customer.address ?? target.customer.city ?? objectTypeLabel(target.customer.objectType)
 }
 
+function targetAccessibilityName(target: RouteDraftTarget): string {
+  return [target.contact?.displayName ?? target.customer.name, targetMeta(target)].filter(Boolean).join(", ")
+}
+
 const ROUTE_WIZARD_STEPS = [
   { id: 1, label: "routeWizardStepDate", icon: "today" },
   { id: 2, label: "routeWizardStepStops", icon: "organizations" },
@@ -107,6 +111,14 @@ export default function NewRouteScreen() {
   const selectedAgent = managerMode
     ? { id: managerAgentId as string, name: managerAgentName as string }
     : field.profile?.agent
+  const submitDisabled = saving || (step === 1 && selectedDateUnavailable)
+  const submitLabel = step === 3
+    ? copySource
+      ? t("copyRoute")
+      : managerMode
+        ? t("managerRoutePublish")
+        : t("createRoute")
+    : t("routeWizardContinue")
 
   useEffect(() => {
     if (managerMode && requestedDateKey) {
@@ -310,26 +322,38 @@ export default function NewRouteScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("back")}
+            accessibilityState={{ disabled: false }}
+            onPress={goBack}
+            style={styles.back}
+          >
+            <TabIcon name="chevronLeft" color={colors.text} size={23} />
+          </Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{(managerMode ? t("managerPlanningTitle") : t("routeHubTitle")).toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("copyRoute") : managerMode ? t("managerPlanRoute") : t("createRoute")}</Text></View>
         </View>
 
-        {!canCreateRoute && field.week ? <View style={styles.error}><Text style={styles.errorText}>{t("routePlanningUnavailable")}</Text></View> : null}
+        {!canCreateRoute && field.week ? <View accessibilityRole="alert" style={styles.error}><Text style={styles.errorText}>{t("routePlanningUnavailable")}</Text></View> : null}
 
         <View style={styles.stepper}>
           {ROUTE_WIZARD_STEPS.map((item) => {
             const isActive = item.id === step
             const isComplete = item.id < step
+            const stepDisabled = item.id >= step
             return (
               <Pressable
                 key={item.id}
-                disabled={item.id >= step}
+                accessibilityRole="button"
+                accessibilityLabel={t(item.label)}
+                accessibilityState={{ selected: isActive, disabled: stepDisabled }}
+                disabled={stepDisabled}
                 onPress={() => {
                   setPickerOpen(false)
                   setError(null)
                   setStep(item.id)
                 }}
-                style={[styles.stepItem, item.id > step && styles.stepItemDisabled]}
+                style={[styles.stepItem, stepDisabled && !isActive && styles.stepItemDisabled]}
               >
                 <View style={[styles.stepMarker, isActive && styles.stepMarkerActive, isComplete && styles.stepMarkerComplete]}>
                   {isComplete ? <TabIcon name="check" color={colors.headerText} size={16} /> : <TabIcon name={item.icon} color={isActive ? colors.headerText : colors.primary} size={16} />}
@@ -357,7 +381,7 @@ export default function NewRouteScreen() {
             <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
             {selectedDateLabel ? <Text style={styles.selectedDate}>{selectedDateLabel}</Text> : null}
             {selectedDateUnavailable ? (
-              <View style={styles.dateUnavailable}>
+              <View accessibilityRole="alert" style={styles.dateUnavailable}>
                 <TabIcon name="info" color={colors.info} size={18} />
                 <Text style={styles.dateUnavailableText}>{t("routePlanningDateUnavailable")}</Text>
               </View>
@@ -365,7 +389,14 @@ export default function NewRouteScreen() {
             {managerMode ? (
               <>
                 <Text style={styles.managerSelectionHint}>{t("managerRouteWizardDateHint")}</Text>
-                <Pressable onPress={() => router.replace({ pathname: "/(app)/manager/planning", params: { date: selectedDate ?? "" } } as never)} style={styles.managerChangeSelection}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("managerChangeRouteSelection")}
+                  accessibilityHint={t("managerRouteWizardDateHint")}
+                  accessibilityState={{ disabled: false }}
+                  onPress={() => router.replace({ pathname: "/(app)/manager/planning", params: { date: selectedDate ?? "" } } as never)}
+                  style={styles.managerChangeSelection}
+                >
                   <TabIcon name="week" color={colors.primary} size={17} />
                   <Text style={styles.managerChangeSelectionText}>{t("managerChangeRouteSelection")}</Text>
                 </Pressable>
@@ -377,21 +408,31 @@ export default function NewRouteScreen() {
                     const selected = selectedDate === day.date
                     const disabled = !day.routePlanningAllowed || day.date === copySource?.date.slice(0, 10)
                     const calendarDay = formatCalendarDay(day.date, locale)
+                    const dayLabel = [calendarDay.weekday, calendarDay.date, !day.isWorkingDay ? t("dayOff") : null].filter(Boolean).join(", ")
                     return (
-                      <Pressable key={day.date} disabled={disabled} onPress={() => selectDate(day.date)} style={[styles.day, selected && styles.daySelected, disabled && styles.dayDisabled]}>
+                      <Pressable
+                        key={day.date}
+                        accessibilityRole="button"
+                        accessibilityLabel={dayLabel}
+                        accessibilityHint={disabled ? t("routePlanningDateUnavailable") : undefined}
+                        accessibilityState={{ selected, disabled }}
+                        disabled={disabled}
+                        onPress={() => selectDate(day.date)}
+                        style={[styles.day, selected && styles.daySelected, disabled && styles.dayDisabled]}
+                      >
                         <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>{calendarDay.day || day.date.slice(8)}</Text>
                         <Text style={[styles.dayMonth, selected && styles.dayMonthSelected]}>{formatCalendarMonthShort(day.date, locale) || day.date.slice(5, 7)}</Text>
-                        {!day.isWorkingDay ? <Text style={[styles.dayOff, selected && styles.dayMonthSelected]}>●</Text> : null}
+                        {!day.isWorkingDay ? <View style={[styles.dayOffDot, selected && styles.dayOffDotSelected]} /> : null}
                       </Pressable>
                     )
                   })}
                 </ScrollView>
                 <View style={styles.weekNavigation}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("previousWeek")} onPress={() => void moveWeek(-7)} style={styles.weekButton}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("previousWeek")} accessibilityState={{ disabled: false }} onPress={() => void moveWeek(-7)} style={styles.weekButton}>
                     <TabIcon name="chevronLeft" color={colors.primary} size={16} />
                     <Text style={styles.weekButtonText}>{t("previousWeek")}</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("nextWeek")} onPress={() => void moveWeek(7)} style={styles.weekButton}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t("nextWeek")} accessibilityState={{ disabled: false }} onPress={() => void moveWeek(7)} style={styles.weekButton}>
                     <Text style={styles.weekButtonText}>{t("nextWeek")}</Text>
                     <TabIcon name="chevronRight" color={colors.primary} size={16} />
                   </Pressable>
@@ -420,11 +461,19 @@ export default function NewRouteScreen() {
                   <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
                   <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
                 </View>
-                <Pressable accessibilityRole="button" accessibilityLabel={t("removeStop")} onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><TabIcon name="close" color={colors.missed} size={20} /></Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t("removeStop")}: ${targetAccessibilityName(target)}`}
+                  accessibilityState={{ disabled: false }}
+                  onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))}
+                  style={[styles.iconButton, styles.remove]}
+                >
+                  <TabIcon name="close" color={colors.missed} size={20} />
+                </Pressable>
               </View>
             ))}
             {!pickerOpen ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} onPress={() => setPickerOpen(true)} style={styles.addTarget}><View style={styles.addTargetIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View><View style={styles.addTargetBody}><Text style={styles.addTargetTitle}>{t("addStop")}</Text><Text style={styles.addTargetHint}>{t("chooseStop")}</Text></View></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("addStop")} accessibilityHint={t("chooseStop")} accessibilityState={{ disabled: false }} onPress={() => setPickerOpen(true)} style={styles.addTarget}><View style={styles.addTargetIcon}><TabIcon name="add" color={colors.headerText} size={22} /></View><View style={styles.addTargetBody}><Text style={styles.addTargetTitle}>{t("addStop")}</Text><Text style={styles.addTargetHint}>{t("chooseStop")}</Text></View></Pressable>
             ) : selectedAgent?.id && selectedDate ? (
               <RouteTargetPicker
                 excluded={excluded}
@@ -451,59 +500,74 @@ export default function NewRouteScreen() {
             </View>
             <View style={styles.card}>
               <Text style={styles.label}>{t("routeName")}</Text>
-              <TextInput value={name} onChangeText={setName} style={styles.input} placeholder={t("createRoute")} placeholderTextColor={colors.faint} />
+              <TextInput accessibilityLabel={t("routeName")} accessibilityState={{ disabled: false }} value={name} onChangeText={setName} style={styles.input} placeholder={t("createRoute")} placeholderTextColor={colors.faint} />
               <Text style={styles.label}>{t("routeNotes")}</Text>
-              <TextInput value={notes} onChangeText={setNotes} style={[styles.input, styles.notes]} multiline textAlignVertical="top" placeholderTextColor={colors.faint} />
+              <TextInput accessibilityLabel={t("routeNotes")} accessibilityState={{ disabled: false }} value={notes} onChangeText={setNotes} style={[styles.input, styles.notes]} multiline textAlignVertical="top" placeholderTextColor={colors.faint} />
             </View>
             {managerMode ? <View style={styles.managerPublishNotice}><TabIcon name="info" color={colors.info} size={18} /><Text style={styles.managerPublishNoticeText}>{t("managerRouteOnlineRequired")}</Text></View> : null}
             <View style={styles.pointsHeader}><Text style={styles.sectionTitleInline}>{t("routeRoadmap")}</Text><Text style={styles.count}>{targets.length}</Text></View>
-            {targets.length > 0 ? <Pressable onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable> : null}
-            {targets.map((target, index) => (
-              <View key={target.key} style={styles.targetCard}>
-                <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
-                <View style={styles.targetBody}>
-                  <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
-                  <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
+            {targets.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={t("autoSchedule")} accessibilityState={{ disabled: false }} onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable> : null}
+            {targets.map((target, index) => {
+              const targetTimeConflict = localTimeConflicts.find((conflict) => conflict.indexes.includes(index))
+              const targetTimeHint = !isValidRouteTime(target.time)
+                ? t("invalidRouteTime")
+                : targetTimeConflict
+                  ? t("routeConflictTime", {
+                    points: targetTimeConflict.indexes.map((conflictIndex) => conflictIndex + 1).join(", "),
+                    time: targetTimeConflict.time,
+                  })
+                  : t("plannedTimeHint")
+              return (
+                <View key={target.key} style={styles.targetCard}>
+                  <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
+                  <View style={styles.targetBody}>
+                    <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
+                    <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
+                  </View>
+                  <View style={styles.targetActions}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveUp")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: index === 0 }} disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.iconButton, index === 0 && styles.disabled]}><TabIcon name="chevronUp" color={colors.primary} size={20} /></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveDown")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: index === targets.length - 1 }} disabled={index === targets.length - 1} onPress={() => setTargets((current) => reorder(current, index, index + 1))} style={[styles.iconButton, index === targets.length - 1 && styles.disabled]}><TabIcon name="chevronDown" color={colors.primary} size={20} /></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("removeStop")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: false }} onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><TabIcon name="close" color={colors.missed} size={20} /></Pressable>
+                  </View>
+                  <View style={styles.timeBlock}>
+                    <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
+                    <TextInput
+                      accessibilityLabel={`${t("plannedTime")}: ${targetAccessibilityName(target)}`}
+                      accessibilityHint={targetTimeHint}
+                      accessibilityState={{ disabled: false }}
+                      accessibilityValue={{ text: target.time || t("plannedTimeHint") }}
+                      value={target.time}
+                      onChangeText={(value) => {
+                        setTargets((current) => current.map((item) => item.key === target.key ? { ...item, time: value } : item))
+                        setRouteConflict(null)
+                        setError(null)
+                      }}
+                      placeholder="09:30"
+                      placeholderTextColor={colors.faint}
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={5}
+                      style={[
+                        styles.timeInput,
+                        !isValidRouteTime(target.time) && styles.timeInputInvalid,
+                        conflictingTargetIndexes.has(index) && styles.timeInputConflict,
+                      ]}
+                    />
+                  </View>
                 </View>
-                <View style={styles.targetActions}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("moveUp")} disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.iconButton, index === 0 && styles.disabled]}><TabIcon name="chevronUp" color={colors.primary} size={20} /></Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("moveDown")} disabled={index === targets.length - 1} onPress={() => setTargets((current) => reorder(current, index, index + 1))} style={[styles.iconButton, index === targets.length - 1 && styles.disabled]}><TabIcon name="chevronDown" color={colors.primary} size={20} /></Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={t("removeStop")} onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><TabIcon name="close" color={colors.missed} size={20} /></Pressable>
-                </View>
-                <View style={styles.timeBlock}>
-                  <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
-                  <TextInput
-                    value={target.time}
-                    onChangeText={(value) => {
-                      setTargets((current) => current.map((item) => item.key === target.key ? { ...item, time: value } : item))
-                      setRouteConflict(null)
-                      setError(null)
-                    }}
-                    placeholder="09:30"
-                    placeholderTextColor={colors.faint}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={5}
-                    style={[
-                      styles.timeInput,
-                      !isValidRouteTime(target.time) && styles.timeInputInvalid,
-                      conflictingTargetIndexes.has(index) && styles.timeInputConflict,
-                    ]}
-                  />
-                </View>
-              </View>
-            ))}
+              )
+            })}
           </>
         ) : null}
 
-        {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        {error ? <View accessibilityRole="alert" style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
         {routeConflict?.kind === "duplicate" && routeConflict.duplicateRouteId ? (
-          <Pressable onPress={() => router.replace(`/(app)/routes/${routeConflict.duplicateRouteId}` as never)} style={styles.openConflictRoute}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("openRoute")} accessibilityState={{ disabled: false }} onPress={() => router.replace(`/(app)/routes/${routeConflict.duplicateRouteId}` as never)} style={styles.openConflictRoute}>
             <Text style={styles.openConflictRouteText}>{t("openRoute")}</Text>
           </Pressable>
         ) : null}
         <View style={styles.footer}>
-          {step > 1 ? <Pressable disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
-          <Pressable disabled={saving || (step === 1 && selectedDateUnavailable)} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, (saving || (step === 1 && selectedDateUnavailable)) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : step === 3 ? copySource ? t("copyRoute") : managerMode ? t("managerRoutePublish") : t("createRoute") : t("routeWizardContinue")}</Text></Pressable>
+          {step > 1 ? <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving, busy: saving }} disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel={saving ? t("saving") : submitLabel} accessibilityState={{ disabled: submitDisabled, busy: saving }} disabled={submitDisabled} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, submitDisabled && styles.disabled]}><Text style={styles.submitText}>{saving ? t("saving") : submitLabel}</Text></Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -549,7 +613,8 @@ const styles = StyleSheet.create({
   dayNumberSelected: { color: colors.headerText },
   dayMonth: { color: colors.muted, fontSize: 9, fontWeight: "800" },
   dayMonthSelected: { color: colors.headerSubtext },
-  dayOff: { color: colors.holiday, fontSize: 8, marginTop: 2 },
+  dayOffDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.holiday, marginTop: 3 },
+  dayOffDotSelected: { backgroundColor: colors.headerSubtext },
   weekNavigation: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 8 },
   weekButton: { flex: 1, minHeight: 44, borderRadius: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5, paddingHorizontal: 8 },
   weekButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
