@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -9,6 +9,23 @@ import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
+
+function phoneUrl(phone: string | null | undefined): string | null {
+  const digits = phone?.replace(/\D/g, "") ?? ""
+  return digits.length >= 7 && digits.length <= 15 ? `tel:${digits}` : null
+}
+
+async function openExternalUrl(url: string, unavailableMessage: string) {
+  try {
+    if (await Linking.canOpenURL(url)) {
+      await Linking.openURL(url)
+      return
+    }
+  } catch {
+    // A device can reject an otherwise valid phone link when no dialler is available.
+  }
+  Alert.alert(unavailableMessage)
+}
 
 export default function OrganizationDetailScreen() {
   useLocale()
@@ -28,6 +45,7 @@ export default function OrganizationDetailScreen() {
   }, [id, key])
 
   const organization = data?.organization
+  const organizationPhoneUrl = phoneUrl(organization?.phone)
   const details: Array<[string, string | null]> = organization ? [
     [t("codeLabel"), organization.code],
     [t("addressLabel"), [organization.city, organization.district, organization.address].filter(Boolean).join(" · ") || null],
@@ -64,8 +82,13 @@ export default function OrganizationDetailScreen() {
                   <Text style={styles.detailValue}>{value}</Text>
                 </View>
               ) : null)}
-              {organization.phone ? (
-                <Pressable onPress={() => void Linking.openURL(`tel:${organization.phone}`)} style={styles.callButton}>
+              {organizationPhoneUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t("phoneLabel")}: ${organization?.phone}`}
+                  onPress={() => void openExternalUrl(organizationPhoneUrl, t("externalCallUnavailable"))}
+                  style={styles.callButton}
+                >
                   <Text style={styles.callText}>☎ {organization.phone}</Text>
                 </Pressable>
               ) : null}

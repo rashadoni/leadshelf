@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -11,8 +11,36 @@ import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-f
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { approvalStatusLabel, assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 
-function messengerUrl(phone: string): string {
-  return `https://wa.me/${phone.replace(/\D/g, "")}`
+function phoneDigits(phone: string | null | undefined): string | null {
+  const digits = phone?.replace(/\D/g, "") ?? ""
+  return digits.length >= 7 && digits.length <= 15 ? digits : null
+}
+
+function phoneUrl(phone: string | null | undefined): string | null {
+  const digits = phoneDigits(phone)
+  return digits ? `tel:${digits}` : null
+}
+
+function emailUrl(email: string | null | undefined): string | null {
+  const normalized = email?.trim() ?? ""
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? `mailto:${normalized}` : null
+}
+
+function messengerUrl(phone: string | null | undefined): string | null {
+  const digits = phoneDigits(phone)
+  return digits ? `https://wa.me/${digits}` : null
+}
+
+async function openExternalUrl(url: string, unavailableMessage: string) {
+  try {
+    if (await Linking.canOpenURL(url)) {
+      await Linking.openURL(url)
+      return
+    }
+  } catch {
+    // A device can reject a valid external URL when the matching app is unavailable.
+  }
+  Alert.alert(unavailableMessage)
 }
 
 export default function ContactDetailScreen() {
@@ -43,6 +71,9 @@ export default function ContactDetailScreen() {
   }, [load]))
 
   const contact = data?.contact
+  const contactPhoneUrl = phoneUrl(contact?.phone)
+  const contactEmailUrl = emailUrl(contact?.email)
+  const contactMessengerUrl = messengerUrl(contact?.messengerPhone)
   const details: Array<[string, string | null]> = contact ? [
     [t("specialty"), contact.specialtyName],
     [t("qualificationLabel"), contact.qualificationCategory],
@@ -82,18 +113,33 @@ export default function ContactDetailScreen() {
                 </View>
               ) : null)}
               <View style={styles.actions}>
-                {contact.phone ? (
-                  <Pressable onPress={() => void Linking.openURL(`tel:${contact.phone}`)} style={[styles.action, styles.callAction]}>
+                {contactPhoneUrl ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t("phoneLabel")}: ${contact.phone}`}
+                    onPress={() => void openExternalUrl(contactPhoneUrl, t("externalCallUnavailable"))}
+                    style={[styles.action, styles.callAction]}
+                  >
                     <Text style={styles.callText}>☎ {contact.phone}</Text>
                   </Pressable>
                 ) : null}
-                {contact.email ? (
-                  <Pressable onPress={() => void Linking.openURL(`mailto:${contact.email}`)} style={[styles.action, styles.mailAction]}>
+                {contactEmailUrl ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t("email")}: ${contact.email}`}
+                    onPress={() => void openExternalUrl(contactEmailUrl, t("externalEmailUnavailable"))}
+                    style={[styles.action, styles.mailAction]}
+                  >
                     <Text style={styles.mailText}>✉ {contact.email}</Text>
                   </Pressable>
                 ) : null}
-                {contact.messengerPhone ? (
-                  <Pressable onPress={() => void Linking.openURL(messengerUrl(contact.messengerPhone!))} style={[styles.action, styles.messageAction]}>
+                {contactMessengerUrl ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t("messengerLabel")}: ${contact.messengerPhone}`}
+                    onPress={() => void openExternalUrl(contactMessengerUrl, t("externalMessengerUnavailable"))}
+                    style={[styles.action, styles.messageAction]}
+                  >
                     <Text style={styles.messageText}>◉ {t("messengerLabel")} · {contact.messengerPhone}</Text>
                   </Pressable>
                 ) : null}
@@ -183,7 +229,7 @@ const styles = StyleSheet.create({
   avatarText: { color: colors.holiday, fontSize: 20, fontWeight: "900" }, summaryBody: { flex: 1 }, summaryName: { color: colors.text, fontSize: 17, fontWeight: "900" }, summaryMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   category: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, categoryText: { color: colors.primary, fontSize: 13, fontWeight: "900" },
   detailRow: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border }, detailLabel: { color: colors.faint, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }, detailValue: { color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 3 },
-  actions: { gap: 8, marginTop: 12 }, action: { minHeight: 43, borderRadius: radii.inner, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 }, callAction: { backgroundColor: colors.successBg }, mailAction: { backgroundColor: colors.infoBg }, messageAction: { backgroundColor: colors.primarySoft },
+  actions: { gap: 8, marginTop: 12 }, action: { minHeight: 44, borderRadius: radii.inner, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 }, callAction: { backgroundColor: colors.successBg }, mailAction: { backgroundColor: colors.infoBg }, messageAction: { backgroundColor: colors.primarySoft },
   correctionAction: { backgroundColor: colors.primary }, callText: { color: colors.successDark, fontSize: 12, fontWeight: "900" }, mailText: { color: colors.info, fontSize: 12, fontWeight: "900" }, messageText: { color: colors.primary, fontSize: 12, fontWeight: "900" }, correctionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   sectionHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 2, flexDirection: "row", alignItems: "center", gap: 7 }, sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" }, sectionCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 10, fontWeight: "900", lineHeight: 22, textAlign: "center" },
   workplaceCard: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, workplaceBody: { flex: 1, minWidth: 0 }, workplaceName: { color: colors.text, fontSize: 13, fontWeight: "900" }, workplaceMeta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 }, workplaceAddress: { color: colors.muted, fontSize: 10, marginTop: 4 },
