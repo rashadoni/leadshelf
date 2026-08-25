@@ -104,6 +104,17 @@ export default function ProfileTab() {
     )
   }
 
+  function requestOrganizationSwitch() {
+    Alert.alert(
+      t("switchOrganizationTitle"),
+      t("switchOrganizationBody"),
+      [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("switchOrganizationConfirm"), onPress: logout },
+      ],
+    )
+  }
+
   const agent = field.profile?.agent
   const displayName = agent?.name ?? userName
   const initial = (displayName ?? "?").trim().charAt(0).toUpperCase() || "?"
@@ -300,6 +311,25 @@ export default function ProfileTab() {
 
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={t("switchOrganization")}
+          accessibilityHint={t("switchOrganizationHint")}
+          onPress={requestOrganizationSwitch}
+          style={({ pressed }) => [styles.organizationSwitch, layout.isTablet && styles.organizationSwitchTablet, pressed && styles.organizationSwitchPressed]}
+        >
+          <View accessible={false} style={styles.organizationSwitchIcon}>
+            <TabIcon name="organizations" color={colors.primary} size={22} />
+          </View>
+          <View style={styles.organizationSwitchBody}>
+            <Text style={styles.organizationSwitchTitle}>{t("switchOrganization")}</Text>
+            <Text style={styles.organizationSwitchHint}>{t("switchOrganizationHint")}</Text>
+          </View>
+          <View accessible={false} style={styles.entryChevron}>
+            <TabIcon name="chevronRight" color={colors.primary} size={21} />
+          </View>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={t("logout")}
           onPress={() => void logout()}
           style={({ pressed }) => [styles.logout, layout.isTablet && styles.logoutTablet, pressed && styles.logoutPressed]}
@@ -411,9 +441,28 @@ const styles = StyleSheet.create({
   syncPressed: { backgroundColor: colors.primaryPressed },
   syncDisabled: { backgroundColor: colors.disabled },
   syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
-  logout: {
+  organizationSwitch: {
+    minHeight: 78,
     marginHorizontal: 20,
     marginTop: 18,
+    paddingHorizontal: 17,
+    paddingVertical: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+    backgroundColor: colors.card,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  organizationSwitchPressed: { backgroundColor: colors.primarySoft },
+  organizationSwitchIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  organizationSwitchBody: { flex: 1, minWidth: 0 },
+  organizationSwitchTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  organizationSwitchHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  logout: {
+    marginHorizontal: 20,
+    marginTop: 10,
     minHeight: 48,
     alignItems: "center",
     paddingVertical: 14,
@@ -426,6 +475,7 @@ const styles = StyleSheet.create({
   profileGridTablet: { flexDirection: "row", alignItems: "flex-start", gap: 18, paddingHorizontal: 20 },
   profileColumn: { flex: 1, minWidth: 0 },
   cardTablet: { marginHorizontal: 0 },
+  organizationSwitchTablet: { marginHorizontal: 20 },
   logoutTablet: { marginHorizontal: 20 },
   logoutPressed: { backgroundColor: colors.dangerBg },
   logoutText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
