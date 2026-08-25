@@ -24,6 +24,7 @@ import { colors, cardShadow, radii } from "../../../src/theme"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
 import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
+import { isRouteDraftDateAllowed, resolveRouteDraftDate } from "../../../src/field/route-planning-date"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
   if (to < 0 || to >= items.length) return items
@@ -97,6 +98,9 @@ export default function NewRouteScreen() {
     [localTimeConflicts],
   )
   const selectedCalendarDate = selectedDate ? formatCalendarDay(selectedDate, locale) : null
+  const excludedDate = copySource?.date.slice(0, 10) ?? null
+  const selectedDateAllowed = managerMode || isRouteDraftDateAllowed(selectedDate, availableDays, excludedDate)
+  const selectedDateUnavailable = !managerMode && Boolean(selectedDate && field.week && !selectedDateAllowed)
   const selectedDateLabel = selectedCalendarDate
     ? selectedCalendarDate.weekday + ", " + selectedCalendarDate.date
     : null
@@ -109,13 +113,11 @@ export default function NewRouteScreen() {
       if (selectedDate !== requestedDateKey) setSelectedDate(requestedDateKey)
       return
     }
-    const selectable = availableDays.filter((day) => (
-      day.routePlanningAllowed && day.date !== copySource?.date.slice(0, 10)
-    ))
-    if (!selectedDate || !selectable.some((day) => day.date === selectedDate)) {
-      setSelectedDate(selectable.find((day) => day.isToday)?.date ?? selectable[0]?.date ?? null)
+    const nextDate = resolveRouteDraftDate(selectedDate, requestedDateKey, availableDays, excludedDate)
+    if (nextDate !== selectedDate) {
+      setSelectedDate(nextDate)
     }
-  }, [availableDays, copySource?.date, managerMode, requestedDateKey, selectedDate])
+  }, [availableDays, excludedDate, managerMode, requestedDateKey, selectedDate])
 
   useEffect(() => {
     if (!copyFrom || copySource || !field.week) return
@@ -172,6 +174,10 @@ export default function NewRouteScreen() {
       setError(t("routePlanningUnavailable"))
       return
     }
+    if (selectedDateUnavailable) {
+      setError(t("routePlanningDateUnavailable"))
+      return
+    }
     if (step === 1) {
       if (!selectedDate || !selectedAgent?.id) {
         setError(t("routeCreateRequired"))
@@ -198,6 +204,10 @@ export default function NewRouteScreen() {
   async function create() {
     if (!canCreateRoute) {
       setError(t("routePlanningUnavailable"))
+      return
+    }
+    if (selectedDateUnavailable) {
+      setError(t("routePlanningDateUnavailable"))
       return
     }
     const agentId = selectedAgent?.id
@@ -346,6 +356,12 @@ export default function NewRouteScreen() {
             </View>
             <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
             {selectedDateLabel ? <Text style={styles.selectedDate}>{selectedDateLabel}</Text> : null}
+            {selectedDateUnavailable ? (
+              <View style={styles.dateUnavailable}>
+                <TabIcon name="info" color={colors.info} size={18} />
+                <Text style={styles.dateUnavailableText}>{t("routePlanningDateUnavailable")}</Text>
+              </View>
+            ) : null}
             {managerMode ? (
               <>
                 <Text style={styles.managerSelectionHint}>{t("managerRouteWizardDateHint")}</Text>
@@ -481,7 +497,7 @@ export default function NewRouteScreen() {
         ) : null}
         <View style={styles.footer}>
           {step > 1 ? <Pressable disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
-          <Pressable disabled={saving} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, saving && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : step === 3 ? copySource ? t("copyRoute") : managerMode ? t("managerRoutePublish") : t("createRoute") : t("routeWizardContinue")}</Text></Pressable>
+          <Pressable disabled={saving || (step === 1 && selectedDateUnavailable)} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, (saving || (step === 1 && selectedDateUnavailable)) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : step === 3 ? copySource ? t("copyRoute") : managerMode ? t("managerRoutePublish") : t("createRoute") : t("routeWizardContinue")}</Text></Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -516,6 +532,8 @@ const styles = StyleSheet.create({
   agentName: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
   agentHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   selectedDate: { color: colors.primary, fontSize: 12, fontWeight: "800", marginHorizontal: 16, marginBottom: 10 },
+  dateUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginHorizontal: 14, marginBottom: 10, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
+  dateUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
   managerSelectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginHorizontal: 16, marginBottom: 10 },
   managerChangeSelection: { minHeight: 46, marginHorizontal: 14, borderRadius: 13, paddingHorizontal: 13, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   managerChangeSelectionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },

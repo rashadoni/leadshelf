@@ -148,6 +148,11 @@ export default function WeekTab() {
                       <Text style={styles.createRouteActionText}>{t("createRoute")}</Text>
                       <TabIcon name="chevronRight" color={colors.headerText} size={19} />
                     </Pressable>
+                  ) : !isDayOff ? (
+                    <View style={styles.routeUnavailable}>
+                      <TabIcon name="info" color={colors.info} size={16} />
+                      <Text style={styles.routeUnavailableText}>{t("routePlanningDateUnavailable")}</Text>
+                    </View>
                   ) : null}
                 </View>
               ) : (
@@ -255,6 +260,8 @@ const styles = StyleSheet.create({
   createRouteAction: { minHeight: 44, marginTop: 2, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   createRouteActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   createRouteActionArrow: { color: colors.headerText, fontSize: 18, fontWeight: "700" },
+  routeUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 2, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
+  routeUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
   routeList: { marginTop: 12, gap: 11 },
   routeCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radii.inner, padding: 12 },
   routeTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
