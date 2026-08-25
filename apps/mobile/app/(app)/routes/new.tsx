@@ -25,6 +25,7 @@ import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
 import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
 import { isRouteDraftDateAllowed, resolveRouteDraftDate } from "../../../src/field/route-planning-date"
+import { isRouteDraftDirty } from "../../../src/field/route-draft-state"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
   if (to < 0 || to >= items.length) return items
@@ -119,6 +120,13 @@ export default function NewRouteScreen() {
         ? t("managerRoutePublish")
         : t("createRoute")
     : t("routeWizardContinue")
+  const hasUnsavedDraft = isRouteDraftDirty({
+    initialDate,
+    selectedDate,
+    name,
+    notes,
+    targetCount: targets.length,
+  })
 
   useEffect(() => {
     if (managerMode && requestedDateKey) {
@@ -169,6 +177,7 @@ export default function NewRouteScreen() {
   }
 
   function goBack() {
+    if (saving) return
     if (pickerOpen) {
       setPickerOpen(false)
       return
@@ -178,7 +187,14 @@ export default function NewRouteScreen() {
       setError(null)
       return
     }
-    router.back()
+    if (!hasUnsavedDraft) {
+      router.back()
+      return
+    }
+    Alert.alert(t("routeDiscardDraftTitle"), t("routeDiscardDraftBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("routeDiscardDraftConfirm"), style: "destructive", onPress: () => router.back() },
+    ])
   }
 
   function goForward() {
@@ -325,9 +341,10 @@ export default function NewRouteScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("back")}
-            accessibilityState={{ disabled: false }}
+            accessibilityState={{ disabled: saving, busy: saving }}
+            disabled={saving}
             onPress={goBack}
-            style={styles.back}
+            style={[styles.back, saving && styles.disabled]}
           >
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
