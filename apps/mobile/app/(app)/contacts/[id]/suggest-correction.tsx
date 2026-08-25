@@ -32,6 +32,7 @@ import { t, useLocale } from "../../../../src/i18n"
 import { formatShortDateTime } from "../../../../src/i18n/date-format"
 import { HttpError } from "../../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../../src/theme"
+import { TabIcon } from "../../../../src/components/TabIcon"
 
 type Submission = { body: string; idempotencyKey: string }
 
@@ -178,11 +179,16 @@ export default function SuggestContactCorrectionScreen() {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
         <View style={[styles.success, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
-          <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View>
-          <Text style={styles.successTitle}>{t("contactCorrectionSubmitted")}</Text>
+          <View accessible={false} style={styles.successMark}><TabIcon name="check" color={colors.success} size={32} /></View>
+          <Text accessibilityRole="header" style={styles.successTitle}>{t("contactCorrectionSubmitted")}</Text>
           <Text style={styles.successHint}>{t("contactCorrectionPending")}</Text>
           <View style={styles.statusPill}><Text style={styles.statusText}>{approvalStatusLabel(submitted.status)}</Text></View>
-          <Pressable onPress={() => router.replace(`/(app)/contacts/${id}` as never)} style={styles.primaryButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("contactCorrectionBackToContact")}
+            onPress={() => router.replace(`/(app)/contacts/${id}` as never)}
+            style={styles.successButton}
+          >
             <Text style={styles.primaryButtonText}>{t("contactCorrectionBackToContact")}</Text>
           </Pressable>
         </View>
@@ -201,16 +207,18 @@ export default function SuggestContactCorrectionScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
         >
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("back")} hitSlop={6} onPress={() => router.back()} style={styles.back}>
+              <TabIcon name="chevronLeft" color={colors.text} size={22} />
+            </Pressable>
             <View style={styles.headerBody}>
               <Text style={styles.eyebrow}>{t("contactsTitle").toUpperCase()}</Text>
-              <Text style={styles.title}>{t("contactCorrectionTitle")}</Text>
+              <Text accessibilityRole="header" style={styles.title}>{t("contactCorrectionTitle")}</Text>
               {contact ? <Text style={styles.subtitle} numberOfLines={1}>{contact.displayName}</Text> : null}
             </View>
           </View>
 
           <View style={styles.introCard}>
-            <View style={styles.introIcon}><Text style={styles.introIconText}>✓</Text></View>
+            <View accessible={false} style={styles.introIcon}><TabIcon name="info" color={colors.info} size={19} /></View>
             <Text style={styles.introText}>{t("contactCorrectionHint")}</Text>
           </View>
 
@@ -236,8 +244,26 @@ export default function SuggestContactCorrectionScreen() {
                   </View>
                 </View>
                 <View style={styles.buttonRow}>
-                  <Pressable disabled={submitting} onPress={() => setReviewing(false)} style={[styles.secondaryButton, submitting && styles.disabled]}><Text style={styles.secondaryButtonText}>{t("contactCorrectionEdit")}</Text></Pressable>
-                  <Pressable disabled={submitting} onPress={() => void send()} style={[styles.inlinePrimaryButton, submitting && styles.disabled]}><Text style={styles.primaryButtonText}>{submitting ? t("saving") : t("contactCorrectionSend")}</Text></Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("contactCorrectionEdit")}
+                    accessibilityState={{ disabled: submitting }}
+                    disabled={submitting}
+                    onPress={() => setReviewing(false)}
+                    style={[styles.secondaryButton, submitting && styles.disabled]}
+                  >
+                    <Text style={styles.secondaryButtonText}>{t("contactCorrectionEdit")}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={submitting ? t("saving") : t("contactCorrectionSend")}
+                    accessibilityState={{ busy: submitting, disabled: submitting }}
+                    disabled={submitting}
+                    onPress={() => void send()}
+                    style={[styles.inlinePrimaryButton, submitting && styles.disabled]}
+                  >
+                    <Text style={styles.primaryButtonText}>{submitting ? t("saving") : t("contactCorrectionSend")}</Text>
+                  </Pressable>
                 </View>
               </>
             ) : (
@@ -257,7 +283,16 @@ export default function SuggestContactCorrectionScreen() {
                 <View style={styles.formCard}>
                   <Input label={t("contactCorrectionReason")} required value={reason} onChangeText={(value) => { setReason(value); setReviewing(false); setError(null) }} multiline maxLength={1000} placeholder={t("contactCorrectionReasonHint")} />
                 </View>
-                <Pressable disabled={!canRequestChanges} onPress={beginReview} style={[styles.primaryButton, !canRequestChanges && styles.disabled]}><Text style={styles.primaryButtonText}>{t("contactCorrectionReview")}</Text></Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("contactCorrectionReview")}
+                  accessibilityState={{ disabled: !canRequestChanges }}
+                  disabled={!canRequestChanges}
+                  onPress={beginReview}
+                  style={[styles.primaryButton, !canRequestChanges && styles.disabled]}
+                >
+                  <Text style={styles.primaryButtonText}>{t("contactCorrectionReview")}</Text>
+                </Pressable>
               </>
             )
           ) : null}
@@ -301,6 +336,8 @@ function Input({
     <View style={styles.inputGroup}>
       <Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text>
       <TextInput
+        accessibilityLabel={label}
+        accessibilityHint={placeholder}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -324,8 +361,7 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
@@ -354,6 +390,7 @@ const styles = StyleSheet.create({
   reasonPreviewText: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 4 },
   buttonRow: { marginHorizontal: 14, marginTop: 14, flexDirection: "row", gap: 10 },
   primaryButton: { flex: 1, minHeight: 52, marginHorizontal: 14, marginTop: 16, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
+  successButton: { width: "100%", minHeight: 52, marginTop: 22, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   inlinePrimaryButton: { flex: 1, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   primaryButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   secondaryButton: { flex: 1, minHeight: 52, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
@@ -372,7 +409,6 @@ const styles = StyleSheet.create({
   emptyHistoryText: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   success: { flex: 1, paddingHorizontal: 20, alignItems: "center", justifyContent: "center" },
   successMark: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" },
-  successMarkText: { color: colors.success, fontSize: 32, fontWeight: "900" },
   successTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 18 },
   successHint: { color: colors.muted, fontSize: 13, textAlign: "center", lineHeight: 19, marginTop: 7 },
   statusPill: { marginTop: 13, borderRadius: radii.pill, backgroundColor: colors.primarySoft, paddingHorizontal: 12, paddingVertical: 7 },
