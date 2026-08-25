@@ -51,6 +51,7 @@ import {
 import { useSync } from "../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../src/theme"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
+import { splitWorkdayActions } from "../../src/field/workday-action-layout"
 
 type DisplayStatus = FieldWorkdayStatus | "NOT_STARTED"
 
@@ -448,6 +449,44 @@ export default function WorkdayScreen() {
   const trackingRecoveryKey = tracking.recovery === "none"
     ? null
     : trackingRecoveryKeys[tracking.recovery]
+  const { primary: primaryWorkdayAction, secondary: secondaryWorkdayActions } = splitWorkdayActions(workdayData.availableActions)
+
+  function actionIcon(action: FieldWorkdayAction): "play" | "pause" | "stop" {
+    return action === "START" || action === "RESUME" ? "play" : action === "PAUSE" ? "pause" : "stop"
+  }
+
+  function renderWorkdayAction(action: FieldWorkdayAction, primary: boolean) {
+    const finishing = action === "FINISH"
+    const busy = busyAction === action
+    const actionColor = primary ? colors.headerText : finishing ? colors.danger : colors.warning
+    return (
+      <Pressable
+        key={action}
+        accessibilityRole="button"
+        accessibilityLabel={t(actionKeys[action])}
+        accessibilityState={{ busy, disabled: busyAction !== null }}
+        disabled={busyAction !== null}
+        onPress={() => pressAction(action)}
+        style={({ pressed }) => [
+          primary ? styles.primaryActionButton : styles.secondaryActionButton,
+          primary
+            ? finishing ? styles.primaryFinishButton : action === "PAUSE" ? styles.primaryPauseButton : styles.primaryStartButton
+            : finishing ? styles.secondaryFinishButton : styles.secondaryPauseButton,
+          pressed && styles.pressed,
+          busyAction !== null && styles.disabled,
+        ]}
+      >
+        {busy ? (
+          <ActivityIndicator color={actionColor} />
+        ) : (
+          <View style={styles.actionContent}>
+            <TabIcon name={actionIcon(action)} color={actionColor} size={18} />
+            <Text style={[styles.actionText, !primary && (finishing ? styles.secondaryFinishText : styles.secondaryPauseText)]}>{t(actionKeys[action])}</Text>
+          </View>
+        )}
+      </Pressable>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
@@ -536,39 +575,14 @@ export default function WorkdayScreen() {
           </View>
         </View>
 
-        {workdayData.availableActions.length > 0 ? (
-          <View style={styles.actionRow}>
-            {workdayData.availableActions.map((action) => {
-              const destructive = action === "FINISH"
-              const secondary = action === "PAUSE"
-              return (
-                <Pressable
-                  key={action}
-                  accessibilityRole="button"
-                  disabled={busyAction !== null}
-                  onPress={() => pressAction(action)}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    destructive ? styles.actionDanger : secondary ? styles.actionSecondary : styles.actionPrimary,
-                    pressed && styles.pressed,
-                    busyAction !== null && styles.disabled,
-                  ]}
-                >
-                  {busyAction === action ? (
-                    <ActivityIndicator color={destructive || !secondary ? colors.headerText : colors.warning} />
-                  ) : (
-                    <View style={styles.actionContent}>
-                      <TabIcon
-                        name={action === "START" || action === "RESUME" ? "play" : action === "PAUSE" ? "pause" : "stop"}
-                        color={colors.headerText}
-                        size={18}
-                      />
-                      <Text style={[styles.actionText, secondary && styles.actionSecondaryText]}>{t(actionKeys[action])}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              )
-            })}
+        {primaryWorkdayAction ? (
+          <View style={styles.actionGroup}>
+            {renderWorkdayAction(primaryWorkdayAction, true)}
+            {secondaryWorkdayActions.length > 0 ? (
+              <View style={styles.secondaryActionRow}>
+                {secondaryWorkdayActions.map((action) => renderWorkdayAction(action, false))}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -704,13 +718,18 @@ const styles = StyleSheet.create({
   statValue: { color: colors.text, fontSize: 14, fontWeight: "900", fontVariant: ["tabular-nums"] },
   statLabel: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 4, textAlign: "center" },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  actionRow: { flexDirection: "row", gap: 10, marginTop: 12 },
-  actionButton: { flex: 1, minHeight: 56, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
-  actionPrimary: { backgroundColor: colors.primary },
-  actionSecondary: { backgroundColor: colors.warning, borderWidth: 1, borderColor: colors.warning },
-  actionDanger: { backgroundColor: colors.danger },
+  actionGroup: { marginTop: 12, gap: 9 },
+  primaryActionButton: { minHeight: 60, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  primaryStartButton: { backgroundColor: colors.primary },
+  primaryPauseButton: { backgroundColor: colors.warning },
+  primaryFinishButton: { backgroundColor: colors.danger },
+  secondaryActionRow: { flexDirection: "row", gap: 9 },
+  secondaryActionButton: { flex: 1, minHeight: 48, borderRadius: 15, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderWidth: 1 },
+  secondaryPauseButton: { backgroundColor: colors.warningBg, borderColor: "#F6D788" },
+  secondaryFinishButton: { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
   actionText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
-  actionSecondaryText: { color: colors.headerText },
+  secondaryPauseText: { color: colors.warning },
+  secondaryFinishText: { color: colors.danger },
   actionContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   pressed: { opacity: 0.76, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.55 },
