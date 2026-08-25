@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router, useFocusEffect } from "expo-router"
+import { useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import {
@@ -18,6 +18,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 type DocumentFilter = "all" | "required" | "offline"
 type UploadScope = { kind: "general"; id: null; label: string } | { kind: "visit" | "task"; id: string; label: string }
@@ -136,7 +137,7 @@ export default function DocumentsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: picking }} disabled={picking} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={[styles.back, picking && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
           <Pressable accessibilityRole="button" accessibilityLabel={copy.add} accessibilityHint={copy.uploadTitle} accessibilityState={{ expanded: uploadOpen }} onPress={() => setUploadOpen((value) => !value)} style={styles.add}><TabIcon name="add" color={colors.headerText} size={17} /><Text style={styles.addText}>{copy.add}</Text></Pressable>
         </View>
