@@ -34,7 +34,7 @@ import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-s
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
-import { resolveFieldRouteFlow, type FieldRouteStepState } from "../../../src/field/route-flow"
+import { resolveFieldRouteFlow, type FieldRouteStep, type FieldRouteStepState } from "../../../src/field/route-flow"
 import {
   FIELD_VISIT_ERROR_OVERRIDES,
   fieldErrorMessage,
@@ -65,6 +65,11 @@ const tones: Record<RouteStatusTone, { bg: string; border: string; text: string 
   cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft },
   missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed },
 }
+
+type RouteRoadmapItem =
+  | { kind: "step"; step: FieldRouteStep }
+  | { kind: "completed-toggle"; count: number }
+  | { kind: "upcoming-toggle"; count: number }
 
 function reorder(points: FieldRoutePoint[], from: number, to: number): FieldRoutePoint[] {
   if (to < 0 || to >= points.length) return points
@@ -99,6 +104,50 @@ function fieldVisitConflictMessage(detail: unknown): string {
   return fieldErrorMessageForCode(code, "fieldVisitConflict", FIELD_VISIT_ERROR_OVERRIDES)
 }
 
+function RoadmapSectionToggle({
+  kind,
+  count,
+  expanded,
+  hasFollowingItem,
+  onPress,
+}: {
+  kind: "completed" | "upcoming"
+  count: number
+  expanded: boolean
+  hasFollowingItem: boolean
+  onPress: () => void
+}) {
+  const completed = kind === "completed"
+  const title = t(completed ? "routeCompletedStops" : "routeUpcomingStops", { count })
+  return (
+    <View style={styles.roadmapRow}>
+      <View style={styles.roadmapRail}>
+        <View style={[styles.roadmapMarker, completed ? styles.roadmapMarkerCompleted : styles.roadmapMarkerNext]}>
+          <TabIcon name={completed ? "check" : "route"} color={colors.headerText} size={16} />
+        </View>
+        {hasFollowingItem ? <View style={[styles.roadmapLine, completed && styles.roadmapLineCompleted]} /> : null}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${expanded ? t("routeHideStops") : t("routeShowStops")}: ${title}`}
+        accessibilityState={{ expanded }}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.roadmapDisclosure,
+          completed ? styles.roadmapDisclosureCompleted : styles.roadmapDisclosureUpcoming,
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={styles.roadmapDisclosureBody}>
+          <Text style={styles.roadmapDisclosureTitle}>{title}</Text>
+          <Text style={styles.roadmapDisclosureHint}>{expanded ? t("routeHideStops") : t("routeShowStops")}</Text>
+        </View>
+        <TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={completed ? colors.successDark : colors.primary} size={21} />
+      </Pressable>
+    </View>
+  )
+}
+
 export default function FieldRouteDetailScreen() {
   useLocale()
   const { routeId } = useLocalSearchParams<{ routeId: string }>()
@@ -112,6 +161,8 @@ export default function FieldRouteDetailScreen() {
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
   const [points, setPoints] = useState<FieldRoutePoint[]>([])
+  const [completedStopsOpen, setCompletedStopsOpen] = useState(false)
+  const [upcomingStopsOpen, setUpcomingStopsOpen] = useState(false)
   const [timeInputs, setTimeInputs] = useState<Record<string, string>>({})
   const [routeConflictDetail, setRouteConflictDetail] = useState<unknown>(null)
   const [routeConflictClientOpId, setRouteConflictClientOpId] = useState<string | null>(null)
@@ -210,6 +261,34 @@ export default function FieldRouteDetailScreen() {
     .find((visit) => visit.status === "CHECKED_IN") ?? null
   const routePoints = routeData.canEdit ? points : routeData.points
   const routeFlow = resolveFieldRouteFlow({ id: routeData.id, points: routePoints }, activeVisit)
+  const completedRouteSteps = routeFlow.steps.filter((step) => step.state === "completed")
+  const upcomingRouteSteps = routeFlow.steps.filter((step) => step.state === "upcoming")
+  const roadmapItems: RouteRoadmapItem[] = (() => {
+    if (routeData.canEdit) return routeFlow.steps.map<RouteRoadmapItem>((step) => ({ kind: "step", step }))
+    const items: RouteRoadmapItem[] = []
+    let completedToggleAdded = false
+    let upcomingToggleAdded = false
+    for (const step of routeFlow.steps) {
+      if (step.state === "completed") {
+        if (!completedToggleAdded) {
+          items.push({ kind: "completed-toggle", count: completedRouteSteps.length })
+          completedToggleAdded = true
+        }
+        if (completedStopsOpen) items.push({ kind: "step", step })
+        continue
+      }
+      if (step.state === "upcoming") {
+        if (!upcomingToggleAdded) {
+          items.push({ kind: "upcoming-toggle", count: upcomingRouteSteps.length })
+          upcomingToggleAdded = true
+        }
+        if (upcomingStopsOpen) items.push({ kind: "step", step })
+        continue
+      }
+      items.push({ kind: "step", step })
+    }
+    return items
+  })()
   const activeVisitForRoute = activeVisit?.routeId === routeData.id ? activeVisit : null
   const primaryRoutePoint = activeVisit
     ? activeVisitForRoute
@@ -770,7 +849,24 @@ export default function FieldRouteDetailScreen() {
           />
         ) : null}
         {routePoints.length === 0 ? <View style={styles.card}><Text style={styles.noPoints}>{t("noRoutePoints")}</Text></View> : null}
-        {routeFlow.steps.map((step) => {
+        {roadmapItems.map((item, roadmapIndex) => {
+          const hasFollowingItem = roadmapIndex < roadmapItems.length - 1
+          if (item.kind !== "step") {
+            return (
+              <RoadmapSectionToggle
+                key={item.kind}
+                kind={item.kind === "completed-toggle" ? "completed" : "upcoming"}
+                count={item.count}
+                expanded={item.kind === "completed-toggle" ? completedStopsOpen : upcomingStopsOpen}
+                hasFollowingItem={hasFollowingItem}
+                onPress={() => {
+                  if (item.kind === "completed-toggle") setCompletedStopsOpen((open) => !open)
+                  else setUpcomingStopsOpen((open) => !open)
+                }}
+              />
+            )
+          }
+          const { step } = item
           const point = step.point
           const index = points.findIndex((item) => item.id === point.id)
           const isPrimaryPoint = !activeVisit && primaryRoutePoint?.id === point.id
@@ -792,7 +888,7 @@ export default function FieldRouteDetailScreen() {
                     ]}>{step.state === "completed" ? null : step.position}</Text>
                     {step.state === "completed" ? <TabIcon name="check" color={colors.headerText} size={17} /> : null}
                   </View>
-                  {step.position < routeFlow.steps.length ? <View style={[styles.roadmapLine, step.state === "completed" && styles.roadmapLineCompleted]} /> : null}
+                  {hasFollowingItem ? <View style={[styles.roadmapLine, step.state === "completed" && styles.roadmapLineCompleted]} /> : null}
                 </View>
               ) : null}
               <View style={[
@@ -962,10 +1058,10 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   backButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 },
   status: { borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 6 },
-  statusText: { fontSize: 9, fontWeight: "900" },
+  statusText: { fontSize: 11, fontWeight: "900" },
   card: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 15, backgroundColor: colors.card, ...cardShadow },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 13 },
   readOnly: { color: colors.info, fontSize: 12, lineHeight: 18, fontWeight: "700" },
@@ -980,7 +1076,7 @@ const styles = StyleSheet.create({
   missionIconActive: { backgroundColor: colors.card },
   missionBody: { flex: 1, minWidth: 0 },
   missionEyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  missionEyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  missionEyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   missionProgress: { color: colors.text, fontSize: 11, fontWeight: "900" },
   missionName: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
   missionMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
@@ -988,12 +1084,12 @@ const styles = StyleSheet.create({
   missionFill: { height: "100%", borderRadius: radii.pill, backgroundColor: colors.primary },
   missionActions: { flexDirection: "row", gap: 8, marginTop: 12 },
   navigationButton: { flex: 1, minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 9 },
-  navigationButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900", textAlign: "center" },
+  navigationButtonText: { color: colors.primary, fontSize: 12, fontWeight: "900", textAlign: "center" },
   missionActionButton: { flex: 1.25, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 9 },
-  missionActionText: { color: colors.headerText, fontSize: 11, fontWeight: "900", textAlign: "center" },
+  missionActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900", textAlign: "center" },
   pointsHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 8 },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  roadmapSummary: { color: colors.muted, fontSize: 10, marginTop: 3 },
+  roadmapSummary: { color: colors.muted, fontSize: 12, marginTop: 3 },
   pointsCount: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.primarySoft, color: colors.primary, textAlign: "center", lineHeight: 24, fontSize: 11, fontWeight: "900" },
   noPoints: { color: colors.muted, textAlign: "center", paddingVertical: 18 },
   roadmapRow: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", alignItems: "stretch" },
@@ -1007,6 +1103,12 @@ const styles = StyleSheet.create({
   roadmapMarkerTextInverted: { color: colors.headerText },
   roadmapLine: { flex: 1, width: 2, minHeight: 18, backgroundColor: colors.border },
   roadmapLineCompleted: { backgroundColor: colors.success },
+  roadmapDisclosure: { flex: 1, minWidth: 0, minHeight: 58, borderRadius: radii.inner, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 },
+  roadmapDisclosureCompleted: { backgroundColor: colors.successBg, borderColor: colors.successBorder },
+  roadmapDisclosureUpcoming: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  roadmapDisclosureBody: { flex: 1, minWidth: 0 },
+  roadmapDisclosureTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  roadmapDisclosureHint: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: "700", marginTop: 2 },
   pointCard: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   roadmapCard: { flex: 1, minWidth: 0, marginHorizontal: 0, marginTop: 0 },
   roadmapCardActive: { borderColor: colors.success, backgroundColor: colors.successBg },
@@ -1022,27 +1124,27 @@ const styles = StyleSheet.create({
   stepStateActive: { backgroundColor: colors.success },
   stepStateNext: { backgroundColor: colors.primary },
   stepStateMissed: { backgroundColor: colors.missedBg },
-  stepStateText: { color: colors.muted, fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
+  stepStateText: { color: colors.muted, fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
   stepStateTextInverted: { color: colors.headerText },
   pointName: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  pointSubject: { color: colors.primary, fontSize: 10, fontWeight: "800", marginTop: 3 },
+  pointSubject: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 3 },
   pointMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   pointTime: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 4 },
   timeRow: { marginTop: 9, flexDirection: "row", alignItems: "center", gap: 8 },
-  timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  timeLabel: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   timeInput: { width: 72, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
   timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
   timeInputConflict: { borderColor: colors.warning, backgroundColor: colors.warningBg },
   pointActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
   smallButton: { minHeight: 44, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5 },
-  smallButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  smallButtonText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   removeButton: { backgroundColor: colors.missedBg },
-  removeText: { color: colors.missed, fontSize: 10, fontWeight: "900" },
+  removeText: { color: colors.missed, fontSize: 12, fontWeight: "900" },
   executionActions: { gap: 8, marginTop: 10 },
   secondaryVisitButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 12 },
-  secondaryVisitText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  secondaryVisitText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   pointNavigationButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 12 },
-  pointNavigationText: { color: colors.text, fontSize: 10, fontWeight: "800" },
+  pointNavigationText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   requestButton: { marginTop: 10, minHeight: 44, borderRadius: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   requestText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   requestCard: { borderWidth: 1, borderColor: colors.warning },
@@ -1056,9 +1158,9 @@ const styles = StyleSheet.create({
   stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10, gap: 9 },
   addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
   addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
+  addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
   autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 44, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
-  autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
+  autoScheduleText: { color: colors.info, fontSize: 12, fontWeight: "900" },
   saveButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
   saveText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   syncHint: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800", textAlign: "center" },
@@ -1074,7 +1176,8 @@ const styles = StyleSheet.create({
   copyButton: { marginHorizontal: 14, marginTop: 10, minHeight: 62, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
   copyBody: { flex: 1, minWidth: 0 },
   copyTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  copyHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  copyHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
+  pressed: { opacity: 0.72 },
   disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   missingTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center", marginBottom: 14 },
