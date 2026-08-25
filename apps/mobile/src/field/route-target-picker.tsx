@@ -142,6 +142,8 @@ export function RouteTargetPicker({
               <Pressable
                 key={targetType.id}
                 accessibilityRole="button"
+                accessibilityLabel={targetTypeLabel(targetType, locale)}
+                accessibilityState={{ selected: active }}
                 onPress={() => changeTargetType(targetType.id)}
                 style={[styles.typeTab, active && styles.typeTabActive]}
               >
@@ -157,6 +159,8 @@ export function RouteTargetPicker({
         <TextInput
           value={search}
           onChangeText={setSearch}
+          accessibilityLabel={t("routeTargetSearch")}
+          accessibilityHint={t("routeTargetSearchHint")}
           placeholder={t("routeTargetSearch")}
           placeholderTextColor={colors.faint}
           style={styles.searchInput}
@@ -164,7 +168,22 @@ export function RouteTargetPicker({
           autoCapitalize="none"
         />
       </View>
-      {error ? <Text style={styles.error}>{t("routeTargetLoadError")}</Text> : null}
+      {error ? (
+        <View accessibilityLiveRegion="polite" style={styles.errorCard}>
+          <Text style={styles.error}>{t("routeTargetLoadError")}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("routeTargetRetry")}
+            accessibilityState={{ busy: loading }}
+            disabled={loading}
+            onPress={() => void load(targetTypeId ?? selectedTypeId ?? undefined, search.trim())}
+            style={({ pressed }) => [styles.retryButton, (loading || pressed) && styles.retryButtonPressed]}
+          >
+            <TabIcon name="refresh" color={colors.primary} size={16} />
+            <Text style={styles.retryText}>{t("routeTargetRetry")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {loading && !catalog ? <Text style={styles.loading}>…</Text> : null}
       <ScrollView nestedScrollEnabled style={styles.results} contentContainerStyle={styles.resultsContent} keyboardShouldPersistTaps="handled">
         {catalog?.items.map((item) => {
@@ -174,6 +193,12 @@ export function RouteTargetPicker({
             <Pressable
               key={item.targetKey + ":" + item.customer.id}
               accessibilityRole="button"
+              accessibilityLabel={[
+                contact?.displayName ?? item.customer.name,
+                targetMeta(item),
+                availabilityLabel(item),
+                disabled ? t("stopAlreadyAdded") : t("addStop"),
+              ].filter(Boolean).join(". ")}
               accessibilityState={{ disabled }}
               disabled={disabled}
               onPress={() => select(item)}
@@ -204,6 +229,8 @@ export function RouteTargetPicker({
         {catalog?.page.hasMore ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}
+            accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
             disabled={loading || loadingMore}
             onPress={() => void load(selectedTypeId ?? undefined, search.trim(), catalog.page.number + 1, true)}
             style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
@@ -218,9 +245,9 @@ export function RouteTargetPicker({
 
 const styles = StyleSheet.create({
   root: { marginHorizontal: 14, marginTop: 12, maxHeight: 590, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary },
-  header: { flexDirection: "row", alignItems: "center", gap: 10 }, headerBody: { flex: 1, minWidth: 0 }, title: { color: colors.text, fontSize: 16, fontWeight: "900" }, subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 }, close: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, closeText: { color: colors.text, fontSize: 23, lineHeight: 24 },
-  typeScroll: { marginTop: 13, marginHorizontal: -2 }, typeTabs: { gap: 7, paddingHorizontal: 2 }, typeTab: { minHeight: 39, maxWidth: 150, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 11 }, typeTabActive: { backgroundColor: colors.primary }, typeTabText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, typeTabTextActive: { color: colors.headerText },
-  search: { minHeight: 46, marginTop: 10, borderRadius: 11, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 12 }, error: { color: colors.missed, fontSize: 10, fontWeight: "800", marginTop: 8 }, loading: { color: colors.primary, fontSize: 22, textAlign: "center", marginTop: 15 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10 }, headerBody: { flex: 1, minWidth: 0 }, title: { color: colors.text, fontSize: 16, fontWeight: "900" }, subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 }, close: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, closeText: { color: colors.text, fontSize: 23, lineHeight: 24 },
+  typeScroll: { marginTop: 13, marginHorizontal: -2 }, typeTabs: { gap: 7, paddingHorizontal: 2 }, typeTab: { minHeight: 44, maxWidth: 150, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 11 }, typeTabActive: { backgroundColor: colors.primary }, typeTabText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, typeTabTextActive: { color: colors.headerText },
+  search: { minHeight: 46, marginTop: 10, borderRadius: 11, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 12 }, errorCard: { marginTop: 9, padding: 10, borderRadius: 11, backgroundColor: colors.missedBg, borderWidth: 1, borderColor: colors.missedBorder }, error: { color: colors.missed, fontSize: 11, lineHeight: 15, fontWeight: "800" }, retryButton: { minHeight: 44, alignSelf: "flex-start", marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.card }, retryButtonPressed: { opacity: 0.55 }, retryText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, loading: { color: colors.primary, fontSize: 22, textAlign: "center", marginTop: 15 },
   results: { marginTop: 5 }, resultsContent: { paddingBottom: 6 }, result: { minHeight: 76, marginTop: 8, borderRadius: 13, padding: 10, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9 }, resultMark: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" }, organizationMark: { backgroundColor: colors.infoBg }, contactMark: { backgroundColor: colors.holidayBg }, resultBody: { flex: 1, minWidth: 0 }, resultName: { color: colors.text, fontSize: 12, fontWeight: "900" }, resultMeta: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 }, scopeBadge: { alignSelf: "flex-start", color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden", fontSize: 7, fontWeight: "900", marginTop: 5 }, added: { color: colors.successDark, fontSize: 8, fontWeight: "900", marginTop: 3 }, actionMark: { width: 26, alignItems: "center", justifyContent: "center" },
-  empty: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 28, gap: 7 }, emptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" }, emptyHint: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center" }, loadMore: { minHeight: 43, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, disabled: { opacity: 0.45 },
+  empty: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 28, gap: 7 }, emptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" }, emptyHint: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center" }, loadMore: { minHeight: 44, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, disabled: { opacity: 0.45 },
 })
