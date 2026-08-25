@@ -64,6 +64,33 @@ export default function TodayTab() {
   const tenantToday = today?.date ?? field.week?.today ?? field.workday?.today ?? null
   const shelfRunning = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(shelf.status.phase)
   const refreshing = field.phase === "refreshing" || shelfRunning
+  const todaySyncStatus =
+    field.phase === "error"
+      ? { label: t("fieldDataError"), color: colors.danger }
+      : field.phase === "stale"
+        ? { label: t("fieldDataStale"), color: colors.warning }
+        : shelf.status.phase === "authLost"
+          ? { label: t("sessionRevoked"), color: colors.danger }
+          : shelf.status.phase === "offline"
+            ? { label: t("syncOffline"), color: colors.warning }
+            : shelf.status.phase === "upgradeRequired"
+              ? { label: t("upgradeTitle"), color: colors.warning }
+              : shelf.status.phase === "error"
+                ? {
+                    label: shelf.status.pendingOps + shelf.status.pendingPhotos > 0
+                      ? t("syncWriteError")
+                      : t("syncReadError"),
+                    color: colors.warning,
+                  }
+                : field.phase === "loading" || field.phase === "refreshing" || shelfRunning
+                  ? { label: t("syncRunning"), color: colors.headerSubtext }
+                  : shelf.status.pendingOps + shelf.status.pendingPhotos > 0
+                    ? { label: t("syncWriteError"), color: colors.warning }
+                    : shelf.status.rejectedOps > 0
+                      ? { label: t("syncNeedsAttention"), color: colors.danger }
+                      : shelf.status.conflictOps > 0 || shelf.status.quarantinedPhotos > 0
+                        ? { label: t("syncNeedsAttention"), color: colors.warning }
+                        : { label: t("syncIdle"), color: colors.accent }
 
   async function onRefresh() {
     await Promise.all([field.refresh(), shelf.sync()])
@@ -151,7 +178,10 @@ export default function TodayTab() {
           <View style={styles.brandRow}>
             <BrandMark compact />
             <Text style={styles.brandName}>{mobileVariant.appName}</Text>
-            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={t("syncIdle")} style={styles.liveStatus}><View accessible={false} style={styles.liveDot} /><Text style={styles.liveText}>{t("syncIdle")}</Text></View>
+            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={todaySyncStatus.label} style={styles.liveStatus}>
+              <View accessible={false} style={[styles.liveDot, { backgroundColor: todaySyncStatus.color }]} />
+              <Text style={styles.liveText}>{todaySyncStatus.label}</Text>
+            </View>
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
@@ -290,9 +320,9 @@ const styles = StyleSheet.create({
   hero: { backgroundColor: colors.navy, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
   brandRow: { minHeight: 40, flexDirection: "row", alignItems: "center" },
   brandName: { color: colors.headerText, fontSize: 17, fontWeight: "900", letterSpacing: -0.4, marginLeft: 10 },
-  liveStatus: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 6 },
+  liveStatus: { minWidth: 0, marginLeft: "auto", flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
-  liveText: { color: colors.headerSubtext, fontSize: 10, fontWeight: "700" },
+  liveText: { flexShrink: 1, color: colors.headerSubtext, fontSize: 10, fontWeight: "700", textAlign: "right" },
   heroCopy: { marginTop: 32 },
   eyebrow: { color: colors.accent, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
   heroTitle: { color: colors.headerText, fontSize: 29, fontWeight: "900", marginTop: 7, letterSpacing: -0.8 },
