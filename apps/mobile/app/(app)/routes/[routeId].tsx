@@ -35,7 +35,13 @@ import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { resolveFieldRouteFlow, type FieldRouteStepState } from "../../../src/field/route-flow"
-import { fieldErrorMessage, fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
+import {
+  FIELD_VISIT_ERROR_OVERRIDES,
+  fieldErrorMessage,
+  fieldErrorMessageForCode,
+  fieldRouteConflictMessage,
+  fieldRouteMutationErrorMessage,
+} from "../../../src/field/error-message"
 import { parseFieldRouteMutationConflict, routeConflictPointIndexes } from "../../../src/field/route-conflict"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { TabIcon } from "../../../src/components/TabIcon"
@@ -78,6 +84,13 @@ function routePointSubject(point: FieldRoutePoint): string | null {
 
 function routePointMeta(point: FieldRoutePoint): string {
   return point.customer.address ?? point.customer.city ?? objectTypeLabel(point.customer.objectType)
+}
+
+function fieldVisitConflictMessage(detail: unknown): string {
+  const code = detail && typeof detail === "object" && !Array.isArray(detail)
+    ? (detail as Record<string, unknown>).code
+    : null
+  return fieldErrorMessageForCode(code, "fieldVisitConflict", FIELD_VISIT_ERROR_OVERRIDES)
 }
 
 export default function FieldRouteDetailScreen() {
@@ -232,13 +245,13 @@ export default function FieldRouteDetailScreen() {
           visitId,
           result.status === "conflict" ? "CONFLICT" : "REJECTED",
         ))
-        Alert.alert(t("fieldVisitConflict"))
+        Alert.alert(t("fieldDataError"), fieldVisitConflictMessage(result.detail))
         return
       }
       if (result?.status !== "applied") Alert.alert(t("fieldVisitQueued"))
       router.push(`/(app)/field-visits/${visitId}` as never)
     } catch (error) {
-      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "fieldVisitConflict"))
+      Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "fieldVisitConflict", FIELD_VISIT_ERROR_OVERRIDES))
     } finally {
       setCheckingInPointId(null)
     }

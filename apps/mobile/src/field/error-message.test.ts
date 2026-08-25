@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { getLocale, setLocale, t } from "../i18n"
 import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
-import { fieldErrorMessage } from "./error-message"
+import { FIELD_VISIT_ERROR_OVERRIDES, fieldErrorMessage, fieldErrorMessageForCode } from "./error-message"
 
 const initialLocale = getLocale()
 
@@ -27,5 +27,14 @@ describe("field error message", () => {
     setLocale("ru")
     expect(fieldErrorMessage(new AuthLostError(), "fieldDataError")).toBe(t("fieldSessionExpired"))
     expect(fieldErrorMessage(new UpgradeRequiredError(), "fieldDataError")).toBe(t("upgradeBody"))
+  })
+
+  it("explains the known visit geofence rejection without exposing backend text", () => {
+    setLocale("ru")
+    expect(fieldErrorMessageForCode(
+      "MTM_VISIT_OUT_OF_ZONE",
+      "fieldVisitConflict",
+      FIELD_VISIT_ERROR_OVERRIDES,
+    )).toBe(t("fieldVisitOutsideAllowedArea"))
   })
 })

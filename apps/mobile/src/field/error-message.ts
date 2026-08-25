@@ -15,6 +15,13 @@ export const FIELD_ROUTE_ERROR_OVERRIDES: FieldErrorCodeOverrides = {
   ROUTE_VERSION_REQUIRED: "routeRefreshRequired",
 }
 
+// Only map codes that are part of the existing mobile visit contract.  An
+// unknown server code must retain the neutral, actionable fallback rather
+// than exposing raw backend text or guessing at a GPS policy.
+export const FIELD_VISIT_ERROR_OVERRIDES: FieldErrorCodeOverrides = {
+  MTM_VISIT_OUT_OF_ZONE: "fieldVisitOutsideAllowedArea",
+}
+
 function detailCode(detail: unknown): string | null {
   if (!detail || typeof detail !== "object" || Array.isArray(detail)) return null
   const code = (detail as Record<string, unknown>).code
