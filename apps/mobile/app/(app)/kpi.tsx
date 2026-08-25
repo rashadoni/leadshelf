@@ -20,6 +20,7 @@ import type {
   FieldPersonalKpiData,
 } from "../../src/field/contracts"
 import { fieldErrorMessage } from "../../src/field/error-message"
+import { TabIcon } from "../../src/components/TabIcon"
 import { cardShadow, colors, radii } from "../../src/theme"
 import { useResponsiveLayout } from "../../src/layout/responsive"
 
@@ -127,6 +128,13 @@ export default function PersonalKpiScreen() {
   const uncovered = data?.coverage.overall.uncovered ?? []
   const exceptionCount = uncovered.length + (data?.tasks.overdue ?? 0) +
     (data?.gps.daysWithoutPoints.length ?? 0) + (data?.visits.missed ?? 0)
+  const freshnessLabel = phase === "stale"
+    ? t("kpiCached")
+    : refreshing
+      ? `${t("kpiCached")} · ${t("kpiLoading")}`
+      : data ? `${t("kpiUpdated")}: ${formatShortDateTime(data.generatedAt, locale)}` : ""
+  const freshnessIcon = phase === "stale" ? "alert" : refreshing ? "refresh" : "check"
+  const freshnessColor = phase === "stale" ? colors.warning : refreshing ? colors.primary : colors.successDark
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -135,15 +143,15 @@ export default function PersonalKpiScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(period)} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
-            <Text style={styles.backText}>‹</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={t("personalKpiTitle")} onPress={() => router.back()} style={styles.back}>
+            <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>LEADDRIVE FIELD</Text>
             <Text style={styles.title}>{t("personalKpiTitle")}</Text>
           </View>
-          <Pressable accessibilityRole="button" disabled={refreshing} onPress={() => void load(period)} style={styles.refreshButton}>
-            <Text style={styles.refreshText}>↻</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={refreshing ? t("kpiLoading") : t("kpiRefresh")} accessibilityHint={t("personalKpiHint")} accessibilityState={{ busy: refreshing, disabled: refreshing }} disabled={refreshing} onPress={() => void load(period)} style={[styles.refreshButton, refreshing && styles.disabled]}>
+            <TabIcon name="refresh" color={colors.primary} size={22} />
           </Pressable>
         </View>
 
@@ -152,6 +160,9 @@ export default function PersonalKpiScreen() {
             <Pressable
               accessibilityRole="button"
               key={value}
+              accessibilityLabel={value === "week" ? t("kpiPeriodWeek") : t("kpiPeriodMonth")}
+              accessibilityHint={t("personalKpiHint")}
+              accessibilityState={{ selected: period === value, busy: period === value && (phase === "loading" || refreshing) }}
               onPress={() => setPeriod(value)}
               style={[styles.periodButton, period === value && styles.periodButtonActive]}
             >
@@ -163,24 +174,22 @@ export default function PersonalKpiScreen() {
         </View>
 
         {!data && phase === "loading" ? (
-          <View style={styles.stateCard}><Text style={styles.stateGlyph}>◌</Text><Text style={styles.stateTitle}>{t("kpiLoading")}</Text></View>
+          <View accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.stateCard}><View accessible={false} style={styles.stateIcon}><TabIcon name="refresh" color={colors.primary} size={27} /></View><Text style={styles.stateTitle}>{t("kpiLoading")}</Text></View>
         ) : null}
         {!data && phase === "error" ? (
-          <View style={[styles.stateCard, styles.errorCard]}>
-            <Text style={styles.stateGlyph}>!</Text>
+          <View accessibilityRole="alert" style={[styles.stateCard, styles.errorCard]}>
+            <View accessible={false} style={styles.stateIcon}><TabIcon name="alert" color={colors.missed} size={29} /></View>
             <Text style={styles.stateTitle}>{t("kpiUnavailable")}</Text>
             {error ? <Text style={styles.stateBody}>{error}</Text> : null}
-            <Pressable onPress={() => void load(period)} style={styles.retry}><Text style={styles.retryText}>{t("kpiRefresh")}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("kpiRefresh")} accessibilityHint={t("personalKpiHint")} accessibilityState={{ busy: false, disabled: false }} onPress={() => void load(period)} style={styles.retry}><TabIcon name="refresh" color={colors.headerText} size={18} /><Text style={styles.retryText}>{t("kpiRefresh")}</Text></Pressable>
           </View>
         ) : null}
 
         {data ? (
           <>
-            <View style={[styles.freshness, phase === "stale" && styles.freshnessStale]}>
-              <View style={[styles.freshnessDot, { backgroundColor: phase === "stale" ? colors.warning : colors.success }]} />
-              <Text style={styles.freshnessText}>
-                {phase === "stale" ? t("kpiCached") : `${t("kpiUpdated")}: ${formatShortDateTime(data.generatedAt, locale)}`}
-              </Text>
+            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={freshnessLabel} style={[styles.freshness, phase === "stale" && styles.freshnessStale, refreshing && styles.freshnessRefreshing]}>
+              <TabIcon name={freshnessIcon} color={freshnessColor} size={17} />
+              <Text style={styles.freshnessText}>{freshnessLabel}</Text>
             </View>
 
             <View style={styles.hero}>
@@ -262,7 +271,7 @@ export default function PersonalKpiScreen() {
             <SectionTitle title={t("kpiAttention")} />
             <View style={[styles.card, exceptionCount === 0 && styles.allGoodCard]}>
               {exceptionCount === 0 ? (
-                <View style={styles.allGood}><Text style={styles.allGoodIcon}>✓</Text><Text style={styles.allGoodText}>{t("kpiNoExceptions")}</Text></View>
+                <View accessible accessibilityRole="text" accessibilityLabel={t("kpiNoExceptions")} style={styles.allGood}><View accessible={false} style={styles.allGoodIcon}><TabIcon name="check" color={colors.headerText} size={18} /></View><Text style={styles.allGoodText}>{t("kpiNoExceptions")}</Text></View>
               ) : (
                 <>
                   {uncovered.length > 0 ? <ExceptionRow label={t("kpiUncovered")} value={uncovered.length} action={uncovered[0]?.contactId ? "/(app)/contacts" : "/(app)/organizations"} /> : null}
@@ -289,10 +298,10 @@ function MetricCard({ label, value, detail, warning, tablet }: { label: string; 
 
 function ExceptionRow({ label, value, action, last }: { label: string; value: number; action: string; last?: boolean }) {
   return (
-    <Pressable accessibilityRole="button" onPress={() => router.push(action as never)} style={[styles.exceptionRow, last && styles.exceptionRowLast]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityHint={t("personalKpiOpen")} onPress={() => router.push(action as never)} style={[styles.exceptionRow, last && styles.exceptionRowLast]}>
       <View style={styles.exceptionCount}><Text style={styles.exceptionCountText}>{value}</Text></View>
       <Text style={styles.exceptionLabel}>{label}</Text>
-      <Text style={styles.exceptionArrow}>›</Text>
+      <TabIcon name="chevronRight" color={colors.faint} size={20} />
     </Pressable>
   )
 }
@@ -302,12 +311,11 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 36 },
   header: { paddingHorizontal: 14, paddingTop: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 },
   headerBody: { flex: 1 },
   eyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 2 },
   refreshButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  refreshText: { color: colors.primary, fontSize: 24, fontWeight: "800" },
+  disabled: { opacity: 0.55 },
   periodSwitch: { marginHorizontal: 14, marginTop: 14, padding: 4, borderRadius: 15, backgroundColor: colors.card, flexDirection: "row", borderWidth: 1, borderColor: colors.border },
   periodButton: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   periodButtonActive: { backgroundColor: colors.primary },
@@ -315,14 +323,14 @@ const styles = StyleSheet.create({
   periodTextActive: { color: colors.headerText },
   freshness: { marginHorizontal: 16, marginTop: 12, flexDirection: "row", alignItems: "center", gap: 7 },
   freshnessStale: { padding: 10, borderRadius: radii.inner, backgroundColor: colors.warningBg },
-  freshnessDot: { width: 8, height: 8, borderRadius: 4 },
+  freshnessRefreshing: { padding: 10, borderRadius: radii.inner, backgroundColor: colors.primarySoft },
   freshnessText: { flex: 1, color: colors.muted, fontSize: 12, lineHeight: 17 },
   stateCard: { marginHorizontal: 14, marginTop: 20, minHeight: 190, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },
   errorCard: { borderWidth: 1, borderColor: colors.dangerBorder },
-  stateGlyph: { color: colors.primary, fontSize: 34, fontWeight: "900" },
+  stateIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   stateTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center", marginTop: 10 },
   stateBody: { color: colors.muted, fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: 8 },
-  retry: { minHeight: 44, marginTop: 14, paddingHorizontal: 20, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  retry: { minHeight: 44, marginTop: 14, paddingHorizontal: 20, borderRadius: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   retryText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
   hero: { marginHorizontal: 14, marginTop: 12, borderRadius: 24, padding: 18, backgroundColor: colors.primary, ...cardShadow },
   heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
@@ -388,12 +396,11 @@ const styles = StyleSheet.create({
   unavailableText: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
   allGoodCard: { backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder },
   allGood: { flexDirection: "row", alignItems: "center", gap: 11, minHeight: 52 },
-  allGoodIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.success, color: colors.headerText, textAlign: "center", lineHeight: 34, fontSize: 18, fontWeight: "900" },
+  allGoodIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
   allGoodText: { flex: 1, color: colors.successDark, fontSize: 14, fontWeight: "800" },
   exceptionRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
   exceptionRowLast: { borderBottomWidth: 0 },
   exceptionCount: { minWidth: 34, height: 34, borderRadius: 12, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   exceptionCountText: { color: colors.warning, fontSize: 13, fontWeight: "900" },
   exceptionLabel: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "800" },
-  exceptionArrow: { color: colors.faint, fontSize: 26 },
 })
