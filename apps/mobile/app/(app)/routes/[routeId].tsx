@@ -201,7 +201,8 @@ export default function FieldRouteDetailScreen() {
 
   const meta = routeStatusMeta(routeData.effectiveStatus)
   const tone = tones[meta.tone]
-  const canRequestStopRemoval = ["PLANNED", "IN_PROGRESS"].includes(routeData.persistedStatus)
+  const canRequestRouteChange = field.week?.capabilities.requestRouteChange === true
+  const canRequestStopRemoval = canRequestRouteChange && ["PLANNED", "IN_PROGRESS"].includes(routeData.persistedStatus)
   const canRequestStopAddition = canRequestStopRemoval
   const excludedTargets = new Set(points.map((point) => routeTargetKey(point.customerId, point.contactId)))
   const activeVisit = field.week?.days
