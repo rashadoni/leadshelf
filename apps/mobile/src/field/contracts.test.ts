@@ -24,6 +24,7 @@ import {
   parseFieldManagerPlanning,
   parseFieldManagerTeam,
   parseFieldProfile,
+  parseFieldRouteTargets,
   parseFieldVisitWorkspace,
   parseFieldWeek,
   parseFieldWorkday,
@@ -900,6 +901,65 @@ describe("LeadDrive field contracts", () => {
         capabilities: { canManage: false, canRequestChanges: true },
       },
     }).contact.displayName).toBe("Aygun Aliyeva")
+  })
+
+  it("accepts a date-scoped route target picker without a broad CRM catalogue", () => {
+    const targets = parseFieldRouteTargets({
+      success: true,
+      data: {
+        targetAgent: { id: "agent-1", name: "Aysel" },
+        date: "2026-08-25",
+        targetTypes: [{
+          id: "clinics",
+          labels: { az: "Klinikalar", ru: "Клиники", en: "Clinics" },
+          direction: "ORGANIZATION",
+          objectType: "CLINIC",
+          organizationKind: null,
+        }],
+        targetType: {
+          id: "clinics",
+          labels: { az: "Klinikalar", ru: "Клиники", en: "Clinics" },
+          direction: "ORGANIZATION",
+          objectType: "CLINIC",
+          organizationKind: null,
+        },
+        selectionScope: {
+          mode: "EFFECTIVE_ASSIGNMENTS",
+          assignmentRequired: true,
+          agentId: "agent-1",
+          effectiveOn: "2026-08-25",
+        },
+        items: [{
+          targetKey: "customer:clinic-1",
+          subjectType: "ORGANIZATION",
+          customer: {
+            id: "clinic-1",
+            name: "Central Clinic",
+            code: "C-100",
+            objectType: "CLINIC",
+            category: "A",
+            address: "Nizami 1",
+            city: "Baku",
+            phone: null,
+            latitude: 40.4,
+            longitude: 49.8,
+          },
+          contact: null,
+          availability: {
+            source: "CUSTOMER_ASSIGNMENT",
+            validFrom: "2026-08-01",
+            validThrough: null,
+          },
+        }],
+        page: { number: 1, limit: 20, hasMore: false },
+        emptyReason: null,
+      },
+    })
+    expect(targets.items[0]).toMatchObject({
+      targetKey: "customer:clinic-1",
+      customer: { name: "Central Clinic" },
+      availability: { source: "CUSTOMER_ASSIGNMENT" },
+    })
   })
 
   it("accepts manager-reviewed contact correction requests", () => {

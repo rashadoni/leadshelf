@@ -375,7 +375,16 @@ export default function NewRouteScreen() {
             ))}
             {!pickerOpen ? (
               <Pressable onPress={() => setPickerOpen(true)} style={styles.addTarget}><Text style={styles.addTargetIcon}>＋</Text><View style={styles.addTargetBody}><Text style={styles.addTargetTitle}>{t("addStop")}</Text><Text style={styles.addTargetHint}>{t("chooseStop")}</Text></View></Pressable>
-            ) : <RouteTargetPicker excluded={excluded} onSelect={(target) => { setTargets((current) => [...current, { ...target, time: "" }]); setError(null) }} onCancel={() => setPickerOpen(false)} />}
+            ) : selectedAgent?.id && selectedDate ? (
+              <RouteTargetPicker
+                excluded={excluded}
+                agentId={selectedAgent.id}
+                agentName={selectedAgent.name}
+                date={selectedDate}
+                onSelect={(target) => { setTargets((current) => [...current, { ...target, time: "" }]); setError(null) }}
+                onCancel={() => setPickerOpen(false)}
+              />
+            ) : null}
           </>
         ) : null}
 

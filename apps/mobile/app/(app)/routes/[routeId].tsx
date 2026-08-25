@@ -546,7 +546,16 @@ export default function FieldRouteDetailScreen() {
             </View>
           </Pressable>
         ) : null}
-        {pickerOpen ? <RouteTargetPicker excluded={excludedTargets} onSelect={selectTarget} onCancel={() => setPickerOpen(false)} /> : null}
+        {pickerOpen ? (
+          <RouteTargetPicker
+            excluded={excludedTargets}
+            agentId={routeData.agentId}
+            agentName={routeData.agentId === field.profile?.agent.id ? field.profile.agent.name : null}
+            date={routeData.date}
+            onSelect={selectTarget}
+            onCancel={() => setPickerOpen(false)}
+          />
+        ) : null}
         {routePoints.length === 0 ? <View style={styles.card}><Text style={styles.noPoints}>{t("noRoutePoints")}</Text></View> : null}
         {routeFlow.steps.map((step) => {
           const point = step.point

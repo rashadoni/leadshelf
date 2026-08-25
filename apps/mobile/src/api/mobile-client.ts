@@ -71,6 +71,7 @@ import {
   parseFieldCustomerRequests,
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
+  parseFieldRouteTargets,
   parseFieldManagerApprovals,
   parseFieldManagerLocations,
   parseFieldManagerPlanning,
@@ -103,6 +104,7 @@ import {
   type FieldManagerTeamData,
   type FieldOrganizationDetailData,
   type FieldOrganizationListData,
+  type FieldRouteTargetCatalogData,
   type FieldWeekData,
   type FieldWorkdayData,
   type FieldVisitWorkspaceData,
@@ -574,6 +576,25 @@ export const fieldApi = {
   contacts: (search = "", page = 1, limit = 50) =>
     request<unknown>(`/api/v1/mtm/contacts?limit=${encodeURIComponent(String(limit))}&page=${encodeURIComponent(String(page))}${search ? `&search=${encodeURIComponent(search)}` : ""}`)
       .then(parseFieldContacts),
+  routeTargets: (input: {
+    agentId: string
+    date: string
+    targetTypeId?: string
+    search?: string
+    page?: number
+    limit?: number
+  }) => {
+    const query = new URLSearchParams({
+      agentId: input.agentId,
+      date: input.date,
+      page: String(input.page ?? 1),
+      limit: String(input.limit ?? 20),
+    })
+    if (input.targetTypeId) query.set("targetTypeId", input.targetTypeId)
+    if (input.search) query.set("search", input.search)
+    return request<unknown>(`/api/v1/mtm/mobile/routes/targets?${query.toString()}`)
+      .then(parseFieldRouteTargets)
+  },
   contact: (id: string) =>
     request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}`)
       .then(parseFieldContactDetail),
@@ -638,6 +659,14 @@ export const fieldApi = {
   organizations(search?: string, page?: number, limit?: number): Promise<FieldOrganizationListData>
   organization(id: string): Promise<FieldOrganizationDetailData>
   contacts(search?: string, page?: number, limit?: number): Promise<FieldContactListData>
+  routeTargets(input: {
+    agentId: string
+    date: string
+    targetTypeId?: string
+    search?: string
+    page?: number
+    limit?: number
+  }): Promise<FieldRouteTargetCatalogData>
   contact(id: string): Promise<FieldContactDetailData>
   contactChangeRequests(id: string): Promise<FieldContactChangeRequestsData>
   createContactChangeRequest(id: string, input: CreateFieldContactChangeRequest): Promise<FieldContactChangeRequest>

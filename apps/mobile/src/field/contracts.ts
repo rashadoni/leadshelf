@@ -79,6 +79,47 @@ export interface FieldRoutePoint {
   visitPolicy: FieldVisitPolicy | null
 }
 
+/** Tenant-configured filter for the route-stop picker. The server, not the
+ * APK, resolves its direction and assignment scope. */
+export interface FieldRouteTargetType {
+  id: string
+  labels: { az: string; ru: string; en: string }
+  direction: "DOCTOR" | "PHARMACY" | "ORGANIZATION"
+  objectType: string | null
+  organizationKind: string | null
+}
+
+export interface FieldRouteTargetAvailability {
+  source: "CUSTOMER_ASSIGNMENT" | "DIRECT_CONTACT_ASSIGNMENT" | "WORKPLACE_ASSIGNMENT"
+  validFrom: string | null
+  validThrough: string | null
+}
+
+/** One actionable customer/contact pairing, already scoped to an employee and route day. */
+export interface FieldRouteTargetCatalogItem {
+  targetKey: string
+  subjectType: "ORGANIZATION" | "CONTACT"
+  customer: FieldRoutePoint["customer"]
+  contact: FieldRoutePoint["contact"]
+  availability: FieldRouteTargetAvailability
+}
+
+export interface FieldRouteTargetCatalogData {
+  targetAgent: { id: string; name: string }
+  date: string
+  targetTypes: FieldRouteTargetType[]
+  targetType: FieldRouteTargetType
+  selectionScope: {
+    mode: "EFFECTIVE_ASSIGNMENTS"
+    assignmentRequired: true
+    agentId: string
+    effectiveOn: string
+  }
+  items: FieldRouteTargetCatalogItem[]
+  page: { number: number; limit: number; hasMore: boolean }
+  emptyReason: "NO_EFFECTIVE_ASSIGNMENTS" | null
+}
+
 export type FieldVisitActionKey =
   | "PHOTO"
   | "PRESENTATION"
@@ -1387,6 +1428,78 @@ function validRoutePoint(value: unknown): boolean {
       (!contact || (string(contact.id) && string(contact.displayName) && string(contact.type))) &&
       validVisitPolicy(point.visitPolicy),
   )
+}
+
+function validRouteTargetType(value: unknown): boolean {
+  const targetType = record(value)
+  const labels = record(targetType?.labels)
+  const direction = targetType?.direction
+  return Boolean(
+    targetType &&
+      string(targetType.id) &&
+      labels && string(labels.az) && string(labels.ru) && string(labels.en) &&
+      string(direction) && ["DOCTOR", "PHARMACY", "ORGANIZATION"].includes(direction) &&
+      (targetType.objectType == null || string(targetType.objectType)) &&
+      (targetType.organizationKind == null || string(targetType.organizationKind)),
+  )
+}
+
+function validRouteTargetCustomer(value: unknown): boolean {
+  const customer = record(value)
+  return Boolean(
+    customer &&
+      string(customer.id) && string(customer.name) && string(customer.objectType) && string(customer.category) &&
+      (customer.code == null || string(customer.code)) &&
+      (customer.address == null || string(customer.address)) &&
+      (customer.city == null || string(customer.city)) &&
+      (customer.phone == null || string(customer.phone)) &&
+      (customer.latitude == null || number(customer.latitude)) &&
+      (customer.longitude == null || number(customer.longitude)),
+  )
+}
+
+function validRouteTargetItem(value: unknown): boolean {
+  const item = record(value)
+  const contact = item?.contact == null ? null : record(item.contact)
+  const availability = record(item?.availability)
+  const source = availability?.source
+  return Boolean(
+    item &&
+      string(item.targetKey) &&
+      (item.subjectType === "ORGANIZATION" || item.subjectType === "CONTACT") &&
+      validRouteTargetCustomer(item.customer) &&
+      (item.subjectType === "CONTACT"
+        ? contact && string(contact.id) && string(contact.displayName) && string(contact.type) &&
+          (contact.specialtyName == null || string(contact.specialtyName)) &&
+          (contact.phone == null || string(contact.phone))
+        : item.contact === null) &&
+      availability &&
+      (source === "CUSTOMER_ASSIGNMENT" || source === "DIRECT_CONTACT_ASSIGNMENT" || source === "WORKPLACE_ASSIGNMENT") &&
+      (availability.validFrom == null || dateKey(availability.validFrom)) &&
+      (availability.validThrough == null || dateKey(availability.validThrough)),
+  )
+}
+
+export function parseFieldRouteTargets(value: unknown): FieldRouteTargetCatalogData {
+  const data = validEnvelope(value)
+  const targetAgent = record(data?.targetAgent)
+  const selectionScope = record(data?.selectionScope)
+  const page = record(data?.page)
+  if (
+    !data ||
+    !targetAgent || !string(targetAgent.id) || !string(targetAgent.name) ||
+    !dateKey(data.date) ||
+    !Array.isArray(data.targetTypes) || data.targetTypes.length < 1 || !data.targetTypes.every(validRouteTargetType) ||
+    !validRouteTargetType(data.targetType) ||
+    !selectionScope || selectionScope.mode !== "EFFECTIVE_ASSIGNMENTS" || selectionScope.assignmentRequired !== true ||
+    !string(selectionScope.agentId) || !dateKey(selectionScope.effectiveOn) ||
+    !Array.isArray(data.items) || !data.items.every(validRouteTargetItem) ||
+    !page || !positiveInteger(page.number) || !positiveInteger(page.limit) || !boolean(page.hasMore) ||
+    !(data.emptyReason === null || data.emptyReason === "NO_EFFECTIVE_ASSIGNMENTS")
+  ) {
+    throw new FieldContractError("route targets")
+  }
+  return data as unknown as FieldRouteTargetCatalogData
 }
 
 export function parseFieldProfile(value: unknown): FieldProfileData {
