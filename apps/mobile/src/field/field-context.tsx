@@ -13,6 +13,7 @@ import { tokenStore } from "../auth/token-store"
 import {
   cacheFieldMessages,
   cacheFieldNotifications,
+  enqueueAllFieldNotificationReads,
   enqueueFieldNotificationRead,
   FIELD_NOTIFICATIONS_CACHE_KEY,
   readFieldCache,
@@ -285,13 +286,12 @@ export function FieldProvider({ children }: { children: ReactNode }) {
 
   const markAllNotificationsRead = useCallback(async () => {
     if (notifications.unread === 0) return
-    await fieldApi.markNotificationsRead({ all: true, isRead: true })
-    const next = {
-      unread: 0,
-      items: notifications.items.map((item) => ({ ...item, isRead: true })),
+    try {
+      const queued = enqueueAllFieldNotificationReads(notifications)
+      if (queued) setNotifications(queued.notifications)
+    } catch (error) {
+      return Promise.reject(error)
     }
-    setNotifications(next)
-    writeFieldCache(FIELD_NOTIFICATIONS_CACHE_KEY, next)
   }, [notifications])
 
   const markNotificationRead = useCallback((id: string) => {

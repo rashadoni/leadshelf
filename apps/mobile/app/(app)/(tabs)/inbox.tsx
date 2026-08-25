@@ -31,6 +31,7 @@ export default function InboxTab() {
   const [mode, setMode] = useState<InboxMode>("messages")
   const [messages, setMessages] = useState(readFieldMessages)
   const [refreshing, setRefreshing] = useState(false)
+  const [markingAllRead, setMarkingAllRead] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const copy = locale === "az" ? {
     title: "Gələnlər",
@@ -51,6 +52,7 @@ export default function InboxTab() {
     refreshError: "Mesajlar yenilənmədi — telefondakı nüsxə göstərilir.",
     localThread: "Mesaj telefonda saxlanılıb. Sinxronlaşdıqdan sonra dialoq açılacaq.",
     notificationReadError: "Bildiriş telefonda saxlanılmadı. Yenidən cəhd edin.",
+    notificationReadAllError: "Bildirişlər oxunmuş kimi qeyd edilmədi. Yenidən cəhd edin.",
   } : {
     title: "Входящие",
     subtitle: "Сообщения и важные уведомления в одном месте",
@@ -70,6 +72,7 @@ export default function InboxTab() {
     refreshError: "Сообщения не обновились — показана копия с телефона.",
     localThread: "Сообщение сохранено на телефоне. Диалог откроется после синхронизации.",
     notificationReadError: "Не удалось сохранить уведомление на телефоне. Повторите попытку.",
+    notificationReadAllError: "Не удалось отметить уведомления как прочитанные. Повторите попытку.",
   }
   const { items, unread: notificationUnread } = field.notifications
   const { sync } = useSync()
@@ -111,6 +114,22 @@ export default function InboxTab() {
     void field.markNotificationRead(item.id)
       .then(() => sync())
       .catch(() => setWarning(copy.notificationReadError))
+  }
+
+  async function markAllRead() {
+    if (markingAllRead || notificationUnread === 0) return
+    setMarkingAllRead(true)
+    try {
+      await field.markAllNotificationsRead()
+      setWarning(null)
+      // The operation is already durable. Try immediately when online, but do
+      // not turn a temporary network failure into a false local failure.
+      void sync().catch(() => {})
+    } catch {
+      setWarning(copy.notificationReadAllError)
+    } finally {
+      setMarkingAllRead(false)
+    }
   }
 
   return (
@@ -205,7 +224,7 @@ export default function InboxTab() {
         ) : (
           <>
             {notificationUnread > 0 ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={t("markAllRead")} accessibilityState={{ disabled: notificationUnread === 0 }} onPress={() => void field.markAllNotificationsRead()} style={styles.readAll}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("markAllRead")} accessibilityState={{ disabled: markingAllRead, busy: markingAllRead }} disabled={markingAllRead} onPress={() => void markAllRead()} style={[styles.readAll, markingAllRead && styles.readAllDisabled]}>
                 <Text style={styles.readAllText}>{t("markAllRead")}</Text>
               </Pressable>
             ) : null}
@@ -283,6 +302,7 @@ const styles = StyleSheet.create({
   warningIcon: { width: 17, height: 17, alignItems: "center", justifyContent: "center", marginTop: 1 },
   warningText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
   readAll: { alignSelf: "flex-end", minHeight: 44, marginRight: 14, marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  readAllDisabled: { opacity: 0.6 },
   readAllText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   list: { paddingTop: 3 },
   messageCard: { minHeight: 88, marginHorizontal: 14, marginTop: 10, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border, ...cardShadow },

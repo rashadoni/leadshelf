@@ -669,38 +669,67 @@ export function cacheFieldNotifications(next: FieldNotificationsData): FieldNoti
   return projected
 }
 
+function ensureFieldNotificationReadOperation(notificationId: string, clientCreatedAt: string): string {
+  const payload = parseFieldNotificationReadPayload({ notificationId })
+  const existing = db.getFirstSync<{ clientOpId: string }>(
+    `SELECT clientOpId FROM outbox_ops
+     WHERE kind='field.notification.read'
+       AND json_extract(payload, '$.notificationId')=?
+       AND status IN ('pending','applied')
+     ORDER BY rowid DESC LIMIT 1`,
+    [payload.notificationId],
+  )
+  const clientOpId = existing?.clientOpId ?? `field-notification-read-${Crypto.randomUUID()}`
+  if (!existing) {
+    db.runSync(
+      "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
+      [clientOpId, "field.notification.read", JSON.stringify(payload), clientCreatedAt],
+    )
+  }
+  return clientOpId
+}
+
 export function enqueueFieldNotificationRead(
   notificationId: string,
   current: FieldNotificationsData,
 ): { clientOpId: string; notifications: FieldNotificationsData } | null {
   const existingItem = current.items.find((item) => item.id === notificationId)
   if (!existingItem || existingItem.isRead) return null
-  const payload = parseFieldNotificationReadPayload({ notificationId })
   const createdAt = new Date().toISOString()
   let clientOpId = ""
   let notifications = current
 
   db.withTransactionSync(() => {
-    const existing = db.getFirstSync<{ clientOpId: string }>(
-      `SELECT clientOpId FROM outbox_ops
-       WHERE kind='field.notification.read'
-         AND json_extract(payload, '$.notificationId')=?
-         AND status IN ('pending','applied')
-       ORDER BY rowid DESC LIMIT 1`,
-      [payload.notificationId],
-    )
-    clientOpId = existing?.clientOpId ?? `field-notification-read-${Crypto.randomUUID()}`
-    if (!existing) {
-      db.runSync(
-        "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
-        [clientOpId, "field.notification.read", JSON.stringify(payload), createdAt],
-      )
-    }
+    clientOpId = ensureFieldNotificationReadOperation(notificationId, createdAt)
     notifications = projectedFieldNotificationReads(current)
     writeFieldCache(FIELD_NOTIFICATIONS_CACHE_KEY, notifications)
   })
 
   return { clientOpId, notifications }
+}
+
+/**
+ * "Mark all" is a collection of the same scoped, idempotent reads used for
+ * one notification. Keeping every id in the durable outbox means an offline
+ * tap cannot lose the local unread state or silently widen a server request.
+ */
+export function enqueueAllFieldNotificationReads(
+  current: FieldNotificationsData,
+): { notifications: FieldNotificationsData } | null {
+  const unreadIds = current.items.filter((item) => !item.isRead).map((item) => item.id)
+  if (unreadIds.length === 0) return null
+
+  const createdAt = new Date().toISOString()
+  let notifications = current
+  db.withTransactionSync(() => {
+    for (const notificationId of unreadIds) {
+      ensureFieldNotificationReadOperation(notificationId, createdAt)
+    }
+    notifications = projectedFieldNotificationReads(current)
+    writeFieldCache(FIELD_NOTIFICATIONS_CACHE_KEY, notifications)
+  })
+
+  return { notifications }
 }
 
 function fieldMessageThreadCacheKey(threadId: string): string {
