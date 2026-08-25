@@ -148,8 +148,8 @@ export default function TodayTab() {
   // The workday surface owns the start/resume decision and policy disclosure.
   // Do not repeat that same action in the route card below: it turns one next
   // step into two visually competing primary buttons.
-  const workdayActionIsPrimary = workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED"
   const routeActionRepeatsWorkday = primaryAction.kind === "START_WORKDAY" || primaryAction.kind === "RESUME_WORKDAY"
+  const workdayActionIsPrimary = routeActionRepeatsWorkday
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
   const openTasks = IS_LEADDRIVE_FIELD ? fieldOpenTasks : localOpenTasks
   const metrics = [
