@@ -101,6 +101,7 @@ export default function NewRouteScreen() {
   const [targets, setTargets] = useState<RouteDraftTarget[]>([])
   const [copySource, setCopySource] = useState<FieldWeekRoute | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [expandedTargetKey, setExpandedTargetKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [routeConflict, setRouteConflict] = useState<FieldRouteMutationConflict | null>(null)
@@ -561,6 +562,7 @@ export default function NewRouteScreen() {
             <View style={styles.pointsHeader}><Text style={styles.sectionTitleInline}>{t("routeRoadmap")}</Text><Text style={styles.count}>{targets.length}</Text></View>
             {targets.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={t("autoSchedule")} accessibilityState={{ disabled: false }} onPress={autoSchedule} style={styles.autoSchedule}><Text style={styles.autoScheduleText}>{t("autoSchedule")}</Text></Pressable> : null}
             {targets.map((target, index) => {
+              const expanded = expandedTargetKey === target.key
               const targetTimeConflict = localTimeConflicts.find((conflict) => conflict.indexes.includes(index))
               const targetTimeHint = !isValidRouteTime(target.time)
                 ? t("invalidRouteTime")
@@ -571,41 +573,55 @@ export default function NewRouteScreen() {
                   })
                   : t("plannedTimeHint")
               return (
-                <View key={target.key} style={styles.targetCard}>
-                  <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
-                  <View style={styles.targetBody}>
-                    <Text style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
-                    <Text style={styles.targetMeta}>{targetMeta(target)}</Text>
-                  </View>
-                  <View style={styles.targetActions}>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveUp")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: index === 0 }} disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.iconButton, index === 0 && styles.disabled]}><TabIcon name="chevronUp" color={colors.primary} size={20} /></Pressable>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveDown")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: index === targets.length - 1 }} disabled={index === targets.length - 1} onPress={() => setTargets((current) => reorder(current, index, index + 1))} style={[styles.iconButton, index === targets.length - 1 && styles.disabled]}><TabIcon name="chevronDown" color={colors.primary} size={20} /></Pressable>
-                    <Pressable accessibilityRole="button" accessibilityLabel={`${t("removeStop")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: false }} onPress={() => setTargets((current) => current.filter((item) => item.key !== target.key))} style={[styles.iconButton, styles.remove]}><TabIcon name="close" color={colors.missed} size={20} /></Pressable>
-                  </View>
-                  <View style={styles.timeBlock}>
-                    <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
-                    <TextInput
-                      accessibilityLabel={`${t("plannedTime")}: ${targetAccessibilityName(target)}`}
-                      accessibilityHint={targetTimeHint}
-                      accessibilityState={{ disabled: false }}
-                      accessibilityValue={{ text: target.time || t("plannedTimeHint") }}
-                      value={target.time}
-                      onChangeText={(value) => {
-                        setTargets((current) => current.map((item) => item.key === target.key ? { ...item, time: value } : item))
-                        setRouteConflict(null)
-                        setError(null)
-                      }}
-                      placeholder="09:30"
-                      placeholderTextColor={colors.faint}
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={5}
-                      style={[
-                        styles.timeInput,
-                        !isValidRouteTime(target.time) && styles.timeInputInvalid,
-                        conflictingTargetIndexes.has(index) && styles.timeInputConflict,
-                      ]}
-                    />
-                  </View>
+                <View key={target.key} style={[styles.targetCard, expanded && styles.targetCardExpanded]}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${expanded ? t("routeHideStopSettings") : t("routeEditStopSettings")}: ${targetAccessibilityName(target)}`}
+                    accessibilityState={{ expanded }}
+                    onPress={() => setExpandedTargetKey((current) => current === target.key ? null : target.key)}
+                    style={({ pressed }) => [styles.targetSummary, pressed && styles.pressed]}
+                  >
+                    <View style={styles.index}><Text style={styles.indexText}>{index + 1}</Text></View>
+                    <View style={styles.targetBody}>
+                      <Text numberOfLines={1} style={styles.targetName}>{target.contact?.displayName ?? target.customer.name}</Text>
+                      <Text numberOfLines={1} style={styles.targetMeta}>{targetMeta(target)}</Text>
+                    </View>
+                    <View style={styles.targetExpandControl}>
+                      <Text numberOfLines={1} style={styles.targetExpandText}>{expanded ? t("routeHideStopSettings") : t("routeEditStopSettings")}</Text>
+                      <TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={19} />
+                    </View>
+                  </Pressable>
+                  {expanded ? <View style={styles.targetEditor}>
+                    <View style={styles.targetActions}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveUp")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: index === 0 }} disabled={index === 0} onPress={() => setTargets((current) => reorder(current, index, index - 1))} style={[styles.targetAction, index === 0 && styles.disabled]}><TabIcon name="chevronUp" color={colors.primary} size={18} /><Text style={styles.targetActionText}>{t("moveUp")}</Text></Pressable>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("moveDown")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: index === targets.length - 1 }} disabled={index === targets.length - 1} onPress={() => setTargets((current) => reorder(current, index, index + 1))} style={[styles.targetAction, index === targets.length - 1 && styles.disabled]}><TabIcon name="chevronDown" color={colors.primary} size={18} /><Text style={styles.targetActionText}>{t("moveDown")}</Text></Pressable>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("removeStop")}: ${targetAccessibilityName(target)}`} accessibilityState={{ disabled: false }} onPress={() => { setTargets((current) => current.filter((item) => item.key !== target.key)); setExpandedTargetKey(null) }} style={[styles.targetAction, styles.targetActionRemove]}><TabIcon name="close" color={colors.missed} size={18} /><Text style={styles.targetActionRemoveText}>{t("removeStop")}</Text></Pressable>
+                    </View>
+                    <View style={styles.timeBlock}>
+                      <Text style={styles.timeLabel}>{t("plannedTime")}</Text>
+                      <TextInput
+                        accessibilityLabel={`${t("plannedTime")}: ${targetAccessibilityName(target)}`}
+                        accessibilityHint={targetTimeHint}
+                        accessibilityState={{ disabled: false }}
+                        accessibilityValue={{ text: target.time || t("plannedTimeHint") }}
+                        value={target.time}
+                        onChangeText={(value) => {
+                          setTargets((current) => current.map((item) => item.key === target.key ? { ...item, time: value } : item))
+                          setRouteConflict(null)
+                          setError(null)
+                        }}
+                        placeholder="09:30"
+                        placeholderTextColor={colors.faint}
+                        keyboardType="numbers-and-punctuation"
+                        maxLength={5}
+                        style={[
+                          styles.timeInput,
+                          !isValidRouteTime(target.time) && styles.timeInputInvalid,
+                          conflictingTargetIndexes.has(index) && styles.timeInputConflict,
+                        ]}
+                      />
+                    </View>
+                  </View> : null}
                 </View>
               )
             })}
@@ -635,7 +651,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
   stepper: { marginHorizontal: 14, marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 4 },
   stepItem: { flex: 1, minHeight: 58, alignItems: "center", gap: 6, paddingHorizontal: 2 },
@@ -643,7 +659,7 @@ const styles = StyleSheet.create({
   stepMarker: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.primary },
   stepMarkerActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   stepMarkerComplete: { backgroundColor: colors.success, borderColor: colors.success },
-  stepText: { color: colors.muted, fontSize: 9, lineHeight: 12, fontWeight: "800", textAlign: "center" },
+  stepText: { color: colors.muted, fontSize: 11, lineHeight: 14, fontWeight: "800", textAlign: "center" },
   stepTextActive: { color: colors.text },
   wizardIntro: {},
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginHorizontal: 16, marginTop: 20, marginBottom: 4 },
@@ -651,14 +667,14 @@ const styles = StyleSheet.create({
   agentCard: { marginHorizontal: 14, marginTop: 13, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "flex-start", gap: 11, ...cardShadow },
   agentIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   agentBody: { flex: 1, minWidth: 0 },
-  agentLabel: { color: colors.primary, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 },
+  agentLabel: { color: colors.primary, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 },
   agentName: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
-  agentHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  agentHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
   selectedDate: { color: colors.primary, fontSize: 12, fontWeight: "800", marginHorizontal: 16, marginBottom: 10 },
   dateChecking: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 14, marginBottom: 10, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   dateCheckingText: { flex: 1, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "800" },
   dateUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginHorizontal: 14, marginBottom: 10, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
-  dateUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  dateUnavailableText: { flex: 1, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "800" },
   managerSelectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginHorizontal: 16, marginBottom: 10 },
   managerChangeSelection: { minHeight: 46, marginHorizontal: 14, borderRadius: 13, paddingHorizontal: 13, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   managerChangeSelectionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
@@ -690,27 +706,36 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 5, marginBottom: 6 },
   input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
   notes: { minHeight: 80, paddingTop: 11 },
-  targetCard: { marginHorizontal: 14, marginTop: 9, minHeight: 74, borderRadius: radii.card, padding: 11, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9, borderWidth: 1, borderColor: colors.border },
+  targetCard: { marginHorizontal: 14, marginTop: 9, minHeight: 66, borderRadius: radii.card, padding: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  targetCardExpanded: { borderColor: colors.primary, backgroundColor: colors.card },
+  targetSummary: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 9 },
   index: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   indexText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   targetBody: { flex: 1, minWidth: 0 },
-  targetName: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  targetMeta: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
-  targetActions: { flexDirection: "row", gap: 5 },
+  targetName: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  targetMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
+  targetExpandControl: { maxWidth: 132, minHeight: 36, paddingLeft: 6, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2 },
+  targetExpandText: { flexShrink: 1, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
+  targetEditor: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 10 },
+  targetActions: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  targetAction: { minHeight: 44, borderRadius: 11, paddingHorizontal: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5 },
+  targetActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  targetActionRemove: { backgroundColor: colors.missedBg },
+  targetActionRemoveText: { color: colors.missed, fontSize: 12, fontWeight: "900" },
   iconButton: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   remove: { backgroundColor: colors.missedBg },
-  timeBlock: { width: "100%", paddingLeft: 40, flexDirection: "row", alignItems: "center", gap: 8 },
-  timeLabel: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  timeBlock: { flexDirection: "row", alignItems: "center", gap: 8 },
+  timeLabel: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   timeInput: { width: 78, height: 44, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" },
   timeInputInvalid: { borderColor: colors.missed, backgroundColor: colors.missedBg },
   timeInputConflict: { borderColor: colors.warning, backgroundColor: colors.warningBg },
   autoSchedule: { alignSelf: "flex-start", marginHorizontal: 14, marginTop: 5, minHeight: 44, borderRadius: 11, paddingHorizontal: 12, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
-  autoScheduleText: { color: colors.info, fontSize: 10, fontWeight: "900" },
+  autoScheduleText: { color: colors.info, fontSize: 12, fontWeight: "900" },
   addTarget: { marginHorizontal: 14, marginTop: 9, minHeight: 64, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
   addTargetIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   addTargetBody: { flex: 1 },
   addTargetTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" },
-  addTargetHint: { color: colors.muted, fontSize: 10, marginTop: 3 },
+  addTargetHint: { color: colors.muted, fontSize: 11, marginTop: 3 },
   error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg },
   errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" },
   openConflictRoute: { marginHorizontal: 14, marginTop: 9, minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
@@ -722,5 +747,6 @@ const styles = StyleSheet.create({
   submit: { flex: 1, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   submitCompact: { flex: 1 },
   submitText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
+  pressed: { opacity: 0.72 },
   disabled: { opacity: 0.38 },
 })
