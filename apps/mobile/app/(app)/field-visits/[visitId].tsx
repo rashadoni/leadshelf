@@ -400,10 +400,25 @@ export default function FieldVisitWorkspaceScreen() {
           <Text style={styles.cameraHint}>{t("fieldVisitPhotoCaptureHint")}</Text>
         </View>
         <View style={styles.cameraActions}>
-          <Pressable disabled={saving} onPress={() => setPhotoCameraOpen(false)} style={styles.cameraCancel}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("cancel")}
+            accessibilityState={{ disabled: saving, busy: saving }}
+            disabled={saving}
+            onPress={() => setPhotoCameraOpen(false)}
+            style={({ pressed }) => [styles.cameraCancel, pressed && !saving && styles.pressed]}
+          >
             <Text style={styles.cameraCancelText}>{t("cancel")}</Text>
           </Pressable>
-          <Pressable disabled={saving} onPress={() => void captureVisitPhoto()} style={[styles.shutter, saving && styles.disabled]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("takePhoto")}
+            accessibilityHint={t("fieldVisitPhotoCaptureHint")}
+            accessibilityState={{ disabled: saving, busy: saving }}
+            disabled={saving}
+            onPress={() => void captureVisitPhoto()}
+            style={({ pressed }) => [styles.shutter, saving && styles.disabled, pressed && !saving && styles.pressed]}
+          >
             <View style={styles.shutterInner} />
           </Pressable>
           <View style={styles.cameraSpacer} />
@@ -417,7 +432,14 @@ export default function FieldVisitWorkspaceScreen() {
       <SafeAreaView style={styles.root}>
         <View style={styles.missing}>
           <Text style={styles.title}>{t("fieldDataError")}</Text>
-          <Pressable onPress={() => router.back()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("back")}</Text></Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("back")}
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.primaryText}>{t("back")}</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     )
@@ -477,6 +499,17 @@ export default function FieldVisitWorkspaceScreen() {
       draft: actionDraft,
     })
     : null
+  const checkoutDisabled = saving || missing.length > 0 || rescheduleFollowUpMissing
+  const checkoutButtonText = missing.length
+    ? t("fieldVisitMissingActions", { actions: String(missing.length) })
+    : rescheduleFollowUpMissing
+      ? t("fieldVisitAddFollowUp")
+      : t("fieldVisitCheckout")
+  const checkoutHint = missing.length
+    ? t("fieldVisitMissingActions", { actions: missing.map(actionLabel).join(", ") })
+    : rescheduleFollowUpMissing
+      ? t("fieldVisitRescheduleFollowUpRequired")
+      : undefined
 
   async function openVisitNavigation() {
     if (!visitNavigationUrls.length) {
@@ -514,7 +547,12 @@ export default function FieldVisitWorkspaceScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView ref={visitScroll} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("back")}
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          >
             <TabIcon name="chevronLeft" color={colors.text} size={21} />
           </Pressable>
           <View style={styles.headerBody}>
@@ -558,7 +596,12 @@ export default function FieldVisitWorkspaceScreen() {
                 </View>
               ) : null}
               {visitPhone ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={t("fieldVisitCallContact")} onPress={() => void openVisitPhone()} style={styles.contextItem}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("fieldVisitCallContact")}
+                  onPress={() => void openVisitPhone()}
+                  style={({ pressed }) => [styles.contextItem, pressed && styles.pressed]}
+                >
                   <View style={styles.contextIcon}><TabIcon name="contacts" color={colors.primary} size={17} /></View>
                   <View style={styles.contextBody}>
                     <Text style={styles.contextLabel}>{t("fieldVisitContactPhone")}</Text>
@@ -568,7 +611,12 @@ export default function FieldVisitWorkspaceScreen() {
               ) : null}
             </View>
             {visitNavigationUrls.length ? (
-              <Pressable accessibilityRole="button" onPress={() => void openVisitNavigation()} style={styles.contextNavigation}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("routeOpenNavigation")}
+                onPress={() => void openVisitNavigation()}
+                style={({ pressed }) => [styles.contextNavigation, pressed && styles.pressed]}
+              >
                 <TabIcon name="route" color={colors.primary} size={17} />
                 <Text style={styles.contextNavigationText}>{t("routeOpenNavigation")}</Text>
               </Pressable>
@@ -586,12 +634,22 @@ export default function FieldVisitWorkspaceScreen() {
           const progress = outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION"
             ? { completed: hasRescheduleFollowUp ? 1 : 0, required: 1, satisfied: hasRescheduleFollowUp }
             : requirementProgress
+          const actionStatus = outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION"
+            ? t(progress.satisfied ? "fieldVisitFollowUpReady" : "fieldVisitFollowUpNeeded")
+            : requirement.mode === "REQUIRED"
+              ? t("fieldVisitRequired")
+              : t("fieldVisitOptional")
+          const actionMeta = `${actionStatus} · ${progress.completed}/${progress.required}`
           return (
             <Pressable
               key={requirement.actionKey}
               disabled={isCompleted}
               accessibilityRole="button"
-              accessibilityLabel={actionLabel(requirement)}
+              accessibilityLabel={`${actionLabel(requirement)}. ${actionMeta}`}
+              accessibilityState={{
+                disabled: isCompleted,
+                selected: activeRequirement?.actionKey === requirement.actionKey,
+              }}
               onPress={() => openActionEditor(requirement)}
               style={({ pressed }) => [
                 styles.actionCard,
@@ -609,7 +667,7 @@ export default function FieldVisitWorkspaceScreen() {
               </View>
               <View style={styles.actionBody}>
                 <Text style={styles.actionTitle}>{actionLabel(requirement)}</Text>
-                <Text style={styles.actionMeta}>{outcome === "RESCHEDULE" && requirement.actionKey === "NEXT_ACTION" ? t(progress.satisfied ? "fieldVisitFollowUpReady" : "fieldVisitFollowUpNeeded") : requirement.mode === "REQUIRED" ? t("fieldVisitRequired") : t("fieldVisitOptional")} · {progress.completed}/{progress.required}</Text>
+                <Text style={styles.actionMeta}>{actionMeta}</Text>
               </View>
               <TabIcon name="chevronRight" color={colors.faint} size={20} />
             </Pressable>
@@ -622,7 +680,16 @@ export default function FieldVisitWorkspaceScreen() {
             {activeRequirement.actionKey === "PHOTO" ? (
               <>
                 <Text style={styles.editorHint}>{t("fieldVisitPhotoCaptureHint")}</Text>
-                <Pressable disabled={saving} onPress={() => void openPhotoCamera()} style={styles.photoButton}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("takePhoto")}
+                  accessibilityHint={t("fieldVisitPhotoCaptureHint")}
+                  accessibilityState={{ disabled: saving, busy: saving }}
+                  disabled={saving}
+                  onPress={() => void openPhotoCamera()}
+                  style={({ pressed }) => [styles.photoButton, pressed && !saving && styles.pressed]}
+                >
+                  <TabIcon name="camera" color={colors.headerText} size={18} />
                   <Text style={styles.photoButtonText}>{t("takePhoto")}</Text>
                 </Pressable>
               </>
@@ -631,62 +698,76 @@ export default function FieldVisitWorkspaceScreen() {
                 {activeRequirement.actionKey === "PRESENTATION" ? (
                   <>
                     <Text style={styles.label}>{t("fieldVisitPresentationMaterial")}</Text>
-                    <TextInput value={actionDraft.presentationMaterial} onChangeText={(value) => updateActionDraft("presentationMaterial", value)} style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitPresentationMaterial")} value={actionDraft.presentationMaterial} onChangeText={(value) => updateActionDraft("presentationMaterial", value)} style={styles.input} />
                     <Text style={styles.label}>{t("fieldVisitPresentationVersion")}</Text>
-                    <TextInput value={actionDraft.presentationVersion} onChangeText={(value) => updateActionDraft("presentationVersion", value)} style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitPresentationVersion")} value={actionDraft.presentationVersion} onChangeText={(value) => updateActionDraft("presentationVersion", value)} style={styles.input} />
                     <Text style={styles.label}>{t("fieldVisitPresentationTopic")}</Text>
-                    <TextInput value={actionDraft.presentationTopic} onChangeText={(value) => updateActionDraft("presentationTopic", value)} style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitPresentationTopic")} value={actionDraft.presentationTopic} onChangeText={(value) => updateActionDraft("presentationTopic", value)} style={styles.input} />
                   </>
                 ) : null}
                 {activeRequirement.actionKey === "STOCK_CHECK" ? (
                   <>
                     <Text style={styles.label}>{t("fieldVisitStockProduct")}</Text>
-                    <TextInput value={actionDraft.stockProduct} onChangeText={(value) => updateActionDraft("stockProduct", value)} style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitStockProduct")} value={actionDraft.stockProduct} onChangeText={(value) => updateActionDraft("stockProduct", value)} style={styles.input} />
                     <Text style={styles.label}>{t("fieldVisitStockState")}</Text>
                     <View style={styles.chips}>
                       {stockStates.map((state) => (
-                        <Pressable key={state} onPress={() => updateActionDraft("stockState", state)} style={[styles.chip, actionDraft.stockState === state && styles.chipSelected]}>
+                        <Pressable
+                          key={state}
+                          accessibilityRole="button"
+                          accessibilityLabel={t(`fieldVisitStockState_${state}` as MessageKey)}
+                          accessibilityState={{ selected: actionDraft.stockState === state }}
+                          onPress={() => updateActionDraft("stockState", state)}
+                          style={({ pressed }) => [styles.chip, actionDraft.stockState === state && styles.chipSelected, pressed && styles.pressed]}
+                        >
                           <Text style={[styles.chipText, actionDraft.stockState === state && styles.chipTextSelected]}>{t(`fieldVisitStockState_${state}` as MessageKey)}</Text>
                         </Pressable>
                       ))}
                     </View>
                     <Text style={styles.label}>{t("fieldVisitStockQuantity")}</Text>
-                    <TextInput value={actionDraft.stockQuantity} onChangeText={(value) => updateActionDraft("stockQuantity", value)} keyboardType="decimal-pad" style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitStockQuantity")} value={actionDraft.stockQuantity} onChangeText={(value) => updateActionDraft("stockQuantity", value)} keyboardType="decimal-pad" style={styles.input} />
                   </>
                 ) : null}
                 {activeRequirement.actionKey === "CHECKLIST" ? (
                   <>
                     <Text style={styles.label}>{t("fieldVisitChecklistResult")}</Text>
-                    <TextInput value={actionDraft.checklistResult} onChangeText={(value) => updateActionDraft("checklistResult", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                    <TextInput accessibilityLabel={t("fieldVisitChecklistResult")} value={actionDraft.checklistResult} onChangeText={(value) => updateActionDraft("checklistResult", value)} multiline textAlignVertical="top" style={styles.textarea} />
                   </>
                 ) : null}
                 {activeRequirement.actionKey === "VISIT_NOTE" ? (
                   <>
                     <Text style={styles.label}>{t("fieldVisitDiscussedTopics")}</Text>
-                    <TextInput value={actionDraft.discussedTopics} onChangeText={(value) => updateActionDraft("discussedTopics", value)} placeholder={t("fieldVisitDiscussedTopicsHint")} style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitDiscussedTopics")} accessibilityHint={t("fieldVisitDiscussedTopicsHint")} value={actionDraft.discussedTopics} onChangeText={(value) => updateActionDraft("discussedTopics", value)} placeholder={t("fieldVisitDiscussedTopicsHint")} style={styles.input} />
                     <Text style={styles.label}>{t("fieldVisitFinalNote")}</Text>
-                    <TextInput value={actionDraft.finalNote} onChangeText={(value) => updateActionDraft("finalNote", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                    <TextInput accessibilityLabel={t("fieldVisitFinalNote")} value={actionDraft.finalNote} onChangeText={(value) => updateActionDraft("finalNote", value)} multiline textAlignVertical="top" style={styles.textarea} />
                   </>
                 ) : null}
                 {activeRequirement.actionKey === "FEEDBACK" ? (
                   <>
                     <Text style={styles.label}>{t("fieldVisitFeedback")}</Text>
-                    <TextInput value={actionDraft.feedback} onChangeText={(value) => updateActionDraft("feedback", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                    <TextInput accessibilityLabel={t("fieldVisitFeedback")} value={actionDraft.feedback} onChangeText={(value) => updateActionDraft("feedback", value)} multiline textAlignVertical="top" style={styles.textarea} />
                   </>
                 ) : null}
                 {activeRequirement.actionKey === "NEXT_ACTION" ? (
                   <>
                     <Text style={styles.editorHint}>{t("fieldVisitNextActionHint")}</Text>
                     <Text style={styles.label}>{t("fieldVisitNextActionTitle")}</Text>
-                    <TextInput value={actionDraft.nextActionTitle} onChangeText={(value) => updateActionDraft("nextActionTitle", value)} style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitNextActionTitle")} accessibilityHint={t("fieldVisitNextActionHint")} value={actionDraft.nextActionTitle} onChangeText={(value) => updateActionDraft("nextActionTitle", value)} style={styles.input} />
                     <Text style={styles.label}>{t("due")}</Text>
-                    <TextInput value={actionDraft.nextDueDate} onChangeText={(value) => updateActionDraft("nextDueDate", value)} placeholder={t("dateInputHint")} style={styles.input} />
+                    <TextInput accessibilityLabel={t("due")} accessibilityHint={t("dateInputHint")} value={actionDraft.nextDueDate} onChangeText={(value) => updateActionDraft("nextDueDate", value)} placeholder={t("dateInputHint")} style={styles.input} />
                     <Text style={styles.label}>{t("fieldVisitNextActionTime")}</Text>
-                    <TextInput value={actionDraft.nextDueTime} onChangeText={(value) => updateActionDraft("nextDueTime", value)} placeholder="09:00" keyboardType="numbers-and-punctuation" style={styles.input} />
+                    <TextInput accessibilityLabel={t("fieldVisitNextActionTime")} value={actionDraft.nextDueTime} onChangeText={(value) => updateActionDraft("nextDueTime", value)} placeholder="09:00" keyboardType="numbers-and-punctuation" style={styles.input} />
                     <Text style={styles.label}>{t("fieldVisitPriority")}</Text>
                     <View style={styles.chips}>
                       {nextPriorities.map((priority) => (
-                        <Pressable key={priority} onPress={() => updateActionDraft("nextPriority", priority)} style={[styles.chip, actionDraft.nextPriority === priority && styles.chipSelected]}>
+                        <Pressable
+                          key={priority}
+                          accessibilityRole="button"
+                          accessibilityLabel={t(`agentTaskPriority_${priority}` as MessageKey)}
+                          accessibilityState={{ selected: actionDraft.nextPriority === priority }}
+                          onPress={() => updateActionDraft("nextPriority", priority)}
+                          style={({ pressed }) => [styles.chip, actionDraft.nextPriority === priority && styles.chipSelected, pressed && styles.pressed]}
+                        >
                           <Text style={[styles.chipText, actionDraft.nextPriority === priority && styles.chipTextSelected]}>{t(`agentTaskPriority_${priority}` as MessageKey)}</Text>
                         </Pressable>
                       ))}
@@ -696,15 +777,15 @@ export default function FieldVisitWorkspaceScreen() {
                 {activeRequirement.allowWaiver ? (
                   <>
                     <Text style={styles.label}>{t("fieldVisitWaiverReason")}</Text>
-                    <TextInput value={actionDraft.waiverReason} onChangeText={(value) => updateActionDraft("waiverReason", value)} multiline textAlignVertical="top" style={styles.textarea} />
+                    <TextInput accessibilityLabel={t("fieldVisitWaiverReason")} value={actionDraft.waiverReason} onChangeText={(value) => updateActionDraft("waiverReason", value)} multiline textAlignVertical="top" style={styles.textarea} />
                   </>
                 ) : null}
               </>
             )}
             <View style={styles.editorActions}>
-              <Pressable onPress={() => setActiveRequirement(null)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
-              {activeRequirement.actionKey !== "PHOTO" && activeRequirement.allowWaiver ? <Pressable disabled={saving || Boolean(waiverDraftIssue)} onPress={() => void saveAction("WAIVED")} style={[styles.waiveButton, (saving || Boolean(waiverDraftIssue)) && styles.disabled]}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
-              {activeRequirement.actionKey !== "PHOTO" ? <Pressable disabled={saving || Boolean(completedDraftIssue)} onPress={() => void saveAction("COMPLETED")} style={[styles.primaryButton, (saving || Boolean(completedDraftIssue)) && styles.disabled]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable> : null}
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setActiveRequirement(null)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>{t("cancel")}</Text></Pressable>
+              {activeRequirement.actionKey !== "PHOTO" && activeRequirement.allowWaiver ? <Pressable accessibilityRole="button" accessibilityLabel={t("fieldVisitWaiveAction")} accessibilityState={{ disabled: saving || Boolean(waiverDraftIssue), busy: saving }} disabled={saving || Boolean(waiverDraftIssue)} onPress={() => void saveAction("WAIVED")} style={({ pressed }) => [styles.waiveButton, (saving || Boolean(waiverDraftIssue)) && styles.disabled, pressed && !saving && !waiverDraftIssue && styles.pressed]}><Text style={styles.waiveText}>{t("fieldVisitWaiveAction")}</Text></Pressable> : null}
+              {activeRequirement.actionKey !== "PHOTO" ? <Pressable accessibilityRole="button" accessibilityLabel={t("fieldVisitSaveAction")} accessibilityState={{ disabled: saving || Boolean(completedDraftIssue), busy: saving }} disabled={saving || Boolean(completedDraftIssue)} onPress={() => void saveAction("COMPLETED")} style={({ pressed }) => [styles.primaryButton, (saving || Boolean(completedDraftIssue)) && styles.disabled, pressed && !saving && !completedDraftIssue && styles.pressed]}><Text style={styles.primaryText}>{t("fieldVisitSaveAction")}</Text></Pressable> : null}
             </View>
           </View>
         ) : null}
@@ -736,7 +817,13 @@ export default function FieldVisitWorkspaceScreen() {
                     <Text style={styles.evidenceMeta}>{formatShortDateTime(photo.createdAt, locale, tenantTimeZone)}</Text>
                   </View>
                   {needsRetake && !isCompleted ? (
-                    <Pressable accessibilityRole="button" onPress={() => void openPhotoCamera()} style={styles.retakeButton}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t("retakeShot")}
+                      accessibilityHint={t("fieldVisitPhotoCaptureHint")}
+                      onPress={() => void openPhotoCamera()}
+                      style={({ pressed }) => [styles.retakeButton, pressed && styles.pressed]}
+                    >
                       <Text style={styles.retakeText}>{t("retakeShot")}</Text>
                     </Pressable>
                   ) : null}
@@ -747,7 +834,13 @@ export default function FieldVisitWorkspaceScreen() {
                 <Text style={styles.evidenceEmptyTitle}>{t("fieldVisitNoPhotoEvidence")}</Text>
                 <Text style={styles.evidenceEmptyHint}>{t("fieldVisitNoPhotoEvidenceHint")}</Text>
                 {!isCompleted ? (
-                  <Pressable accessibilityRole="button" onPress={() => void openPhotoCamera()} style={styles.photoProofButton}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("takePhoto")}
+                    accessibilityHint={t("fieldVisitPhotoCaptureHint")}
+                    onPress={() => void openPhotoCamera()}
+                    style={({ pressed }) => [styles.photoProofButton, pressed && styles.pressed]}
+                  >
                     <TabIcon name="camera" color={colors.headerText} size={17} />
                     <Text style={styles.photoProofText}>{t("takePhoto")}</Text>
                   </Pressable>
@@ -765,7 +858,7 @@ export default function FieldVisitWorkspaceScreen() {
               <Pressable
                 key={task.id}
                 accessibilityRole="button"
-                accessibilityLabel={t("fieldVisitOpenTask")}
+                accessibilityLabel={`${t("fieldVisitOpenTask")}: ${task.title}`}
                 onPress={() => router.push(`/(app)/field-tasks/${task.id}` as never)}
                 style={({ pressed }) => [styles.workRow, pressed && styles.pressed]}
               >
@@ -790,13 +883,13 @@ export default function FieldVisitWorkspaceScreen() {
           <View style={styles.resultCard}>
             <Text style={styles.sectionTitle}>{t("fieldVisitCheckout")}</Text>
             <Text style={styles.label}>{t("fieldVisitOutcome")}</Text>
-            <View style={styles.chips}>{outcomes.map((item) => <Pressable key={item} onPress={() => { setOutcome(item); if (item === "RESCHEDULE" && !hasRescheduleFollowUp) openRescheduleFollowUp() }} style={[styles.chip, outcome === item && styles.chipSelected]}><Text style={[styles.chipText, outcome === item && styles.chipTextSelected]}>{t(`visitOutcome_${item}` as MessageKey)}</Text></Pressable>)}</View>
+            <View style={styles.chips}>{outcomes.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityLabel={t(`visitOutcome_${item}` as MessageKey)} accessibilityState={{ selected: outcome === item }} onPress={() => { setOutcome(item); if (item === "RESCHEDULE" && !hasRescheduleFollowUp) openRescheduleFollowUp() }} style={({ pressed }) => [styles.chip, outcome === item && styles.chipSelected, pressed && styles.pressed]}><Text style={[styles.chipText, outcome === item && styles.chipTextSelected]}>{t(`visitOutcome_${item}` as MessageKey)}</Text></Pressable>)}</View>
             {outcome === "RESCHEDULE" ? <View style={[styles.followUpNotice, hasRescheduleFollowUp && styles.followUpNoticeReady]}><Text style={[styles.followUpNoticeText, hasRescheduleFollowUp && styles.followUpNoticeTextReady]}>{t(hasRescheduleFollowUp ? "fieldVisitFollowUpReady" : "fieldVisitRescheduleFollowUpRequired")}</Text></View> : null}
             <Text style={styles.label}>{t("fieldVisitPotential")}</Text>
-            <View style={styles.chips}>{potentials.map((item) => <Pressable key={item} onPress={() => setPotential(item)} style={[styles.chip, potential === item && styles.chipSelected]}><Text style={[styles.chipText, potential === item && styles.chipTextSelected]}>{t(`visitPotential_${item}` as MessageKey)}</Text></Pressable>)}</View>
+            <View style={styles.chips}>{potentials.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityLabel={t(`visitPotential_${item}` as MessageKey)} accessibilityState={{ selected: potential === item }} onPress={() => setPotential(item)} style={({ pressed }) => [styles.chip, potential === item && styles.chipSelected, pressed && styles.pressed]}><Text style={[styles.chipText, potential === item && styles.chipTextSelected]}>{t(`visitPotential_${item}` as MessageKey)}</Text></Pressable>)}</View>
             <Text style={styles.label}>{t("fieldVisitResultNote")}</Text>
-            <TextInput value={resultNote} onChangeText={setResultNote} multiline textAlignVertical="top" style={styles.textarea} />
-            <Pressable disabled={saving || missing.length > 0 || rescheduleFollowUpMissing} onPress={checkout} style={[styles.checkoutButton, (saving || missing.length > 0 || rescheduleFollowUpMissing) && styles.disabled]}><Text style={styles.checkoutText}>{missing.length ? t("fieldVisitMissingActions", { actions: String(missing.length) }) : rescheduleFollowUpMissing ? t("fieldVisitAddFollowUp") : t("fieldVisitCheckout")}</Text></Pressable>
+            <TextInput accessibilityLabel={t("fieldVisitResultNote")} value={resultNote} onChangeText={setResultNote} multiline textAlignVertical="top" style={styles.textarea} />
+            <Pressable accessibilityRole="button" accessibilityLabel={checkoutButtonText} accessibilityHint={checkoutHint} accessibilityState={{ disabled: checkoutDisabled, busy: saving }} disabled={checkoutDisabled} onPress={checkout} style={({ pressed }) => [styles.checkoutButton, checkoutDisabled && styles.disabled, pressed && !checkoutDisabled && styles.pressed]}><Text style={styles.checkoutText}>{checkoutButtonText}</Text></Pressable>
           </View>
         ) : null}
       </ScrollView>
@@ -875,12 +968,12 @@ const styles = StyleSheet.create({
   workRow: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: colors.border },
   workMark: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.infoBg },
   workTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 38, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
   followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
   checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", marginTop: 15, paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
-  photoButton: { minHeight: 50, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  photoButton: { minHeight: 50, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   photoButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
   cameraRoot: { flex: 1, backgroundColor: "#08111E" },
   camera: { flex: 1 },
