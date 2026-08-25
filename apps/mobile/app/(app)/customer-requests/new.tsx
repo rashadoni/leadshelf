@@ -18,6 +18,11 @@ const OBJECT_TYPES: CreateFieldCustomerRequest["objectType"][] = ["PHARMACY", "C
 const POTENTIALS: CreateFieldCustomerRequest["potential"][] = ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 const CATEGORIES = ["A", "B", "C", "D"] as const
 
+function duplicateReasonLabel(reason: string): string {
+  if (reason === "SIMILAR_NAME") return t("duplicateReasonSimilarName")
+  return t("duplicateReasonUnknown")
+}
+
 export default function NewCustomerRequestScreen() {
   useLocale()
   const field = useField()
@@ -123,7 +128,7 @@ export default function NewCustomerRequestScreen() {
                   <View style={styles.candidateBody}>
                     <Text style={styles.candidateName}>{candidate.name}</Text>
                     {candidate.address ? <Text style={styles.candidateAddress}>{candidate.address}</Text> : null}
-                    <Text style={styles.candidateReason}>{candidate.reasons.join(" · ")}</Text>
+                    <Text style={styles.candidateReason}>{candidate.reasons.map(duplicateReasonLabel).join(" · ") || t("duplicateReasonUnknown")}</Text>
                   </View>
                   <View style={styles.score}><Text style={styles.scoreText}>{candidate.score}%</Text></View>
                 </View>

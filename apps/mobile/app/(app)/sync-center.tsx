@@ -31,6 +31,7 @@ import { formatShortDateTime } from "../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../src/i18n"
 import { useSync } from "../../src/sync/sync-context"
 import { useField } from "../../src/field/field-context"
+import type { FieldVisitActionKey } from "../../src/field/contracts"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
@@ -76,14 +77,34 @@ function string(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
 }
 
+const fieldVisitActionKeys = new Set<FieldVisitActionKey>([
+  "PHOTO",
+  "PRESENTATION",
+  "STOCK_CHECK",
+  "VISIT_NOTE",
+  "CHECKLIST",
+  "FEEDBACK",
+  "NEXT_ACTION",
+])
+
+function visitActionContext(value: unknown): string | null {
+  const actionKey = string(value)
+  if (!actionKey) return null
+  if (!fieldVisitActionKeys.has(actionKey as FieldVisitActionKey)) return t("syncKindVisit")
+  return t(`visitAction_${actionKey}` as MessageKey)
+}
+
 function rowContext(row: FieldSyncRecoveryRow): string | null {
+  const visitAction = row.kind.startsWith("field.visit.")
+    ? visitActionContext(row.payload.actionKey)
+    : null
   return string(row.payload.productName) ??
     string(row.payload.customerName) ??
     string(row.payload.title) ??
     string(row.payload.fileName) ??
     string(row.payload.body) ??
     string(row.payload.reason) ??
-    string(row.payload.actionKey) ??
+    visitAction ??
     string(row.payload.visitId) ??
     string(row.payload.routeId) ??
     string(row.payload.workdayId)
