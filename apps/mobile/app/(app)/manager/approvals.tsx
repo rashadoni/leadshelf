@@ -284,7 +284,7 @@ function ApprovalRequest({
                 keyboardType="numbers-and-punctuation"
                 maxLength={10}
                 onChangeText={onChangeRescheduleDate}
-                placeholder="YYYY-MM-DD"
+                placeholder={t("dateInputHint")}
                 placeholderTextColor={colors.faint}
                 style={styles.dateInput}
                 value={rescheduleDate}
