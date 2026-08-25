@@ -48,17 +48,19 @@ export default function WeekTab() {
         </View>
 
         <View style={styles.navigator}>
-          <Pressable accessibilityLabel={t("previousWeek")} onPress={() => move(-7)} style={styles.navButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("previousWeek")} onPress={() => move(-7)} style={styles.navButton}>
             <TabIcon name="chevronLeft" color={colors.primary} size={23} />
           </Pressable>
           <Pressable
             disabled={!week}
+            accessibilityRole="button"
+            accessibilityLabel={t("currentWeek")}
             onPress={() => week && void field.loadWeek(startOfIsoWeek(week.today))}
             style={styles.currentButton}
           >
             <Text style={styles.currentText}>{t("currentWeek")}</Text>
           </Pressable>
-          <Pressable accessibilityLabel={t("nextWeek")} onPress={() => move(7)} style={styles.navButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("nextWeek")} onPress={() => move(7)} style={styles.navButton}>
             <TabIcon name="chevronRight" color={colors.primary} size={23} />
           </Pressable>
         </View>
@@ -81,14 +83,14 @@ export default function WeekTab() {
         {field.phase === "stale" || field.phase === "error" ? (
           <View style={styles.offlineNotice}>
             <Text style={styles.offlineText}>{field.phase === "error" ? t("fieldDataError") : t("fieldDataStale")}</Text>
-            <Pressable onPress={() => void field.refresh()}><Text style={styles.retry}>{t("refresh")}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.retryAction}><Text style={styles.retry}>{t("refresh")}</Text></Pressable>
           </View>
         ) : null}
 
         {!week && !busy ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>{t("fieldDataError")}</Text>
-            <Pressable onPress={() => void field.refresh()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("refresh")}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refresh()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("refresh")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -187,6 +189,8 @@ export default function WeekTab() {
                         ))}
                         {route.points.length > 3 ? <Text style={styles.morePoints}>+{route.points.length - 3} {t("routePointsLabel")}</Text> : null}
                         <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={route.canEdit ? t("editRoute") : t("openRoute")}
                           onPress={() => router.push(`/(app)/routes/${route.id}` as never)}
                           style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
                         >
@@ -215,9 +219,9 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 27, fontWeight: "900", marginTop: 4, letterSpacing: -0.6 },
   range: { color: colors.muted, fontSize: 13, marginTop: 4 },
   navigator: { marginHorizontal: 14, marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.card, borderRadius: radii.card, padding: 7, ...cardShadow },
-  navButton: { width: 48, height: 42, borderRadius: radii.inner, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  navButton: { width: 48, height: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   navArrow: { color: colors.primary, fontSize: 30, lineHeight: 32, fontWeight: "500" },
-  currentButton: { minHeight: 42, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
+  currentButton: { minHeight: 44, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   currentText: { color: colors.text, fontSize: 13, fontWeight: "800" },
   legendCard: { marginHorizontal: 14, marginTop: 12, backgroundColor: colors.card, borderRadius: radii.card, padding: 13, borderWidth: 1, borderColor: colors.border },
   legendTitle: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
@@ -227,10 +231,11 @@ const styles = StyleSheet.create({
   legendText: { color: colors.text, fontSize: 11, fontWeight: "600" },
   offlineNotice: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: "#F6D788", padding: 11, flexDirection: "row", justifyContent: "space-between", gap: 10 },
   offlineText: { flex: 1, color: colors.warning, fontSize: 12, fontWeight: "700" },
+  retryAction: { minHeight: 44, minWidth: 44, marginVertical: -11, marginRight: -11, paddingHorizontal: 11, alignItems: "center", justifyContent: "center" },
   retry: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   emptyCard: { margin: 14, padding: 24, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", ...cardShadow },
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "800", textAlign: "center" },
-  primaryButton: { marginTop: 14, backgroundColor: colors.primary, borderRadius: radii.pill, paddingHorizontal: 18, paddingVertical: 10 },
+  primaryButton: { minHeight: 44, marginTop: 14, backgroundColor: colors.primary, borderRadius: radii.pill, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
   dayCard: { marginHorizontal: 14, marginTop: 13, backgroundColor: colors.card, borderRadius: radii.card, padding: 14, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   todayCard: { borderColor: colors.primary, borderWidth: 1.5 },
@@ -282,7 +287,7 @@ const styles = StyleSheet.create({
   pointName: { color: colors.text, fontSize: 12, fontWeight: "800" },
   pointMeta: { color: colors.muted, fontSize: 10, marginTop: 2 },
   morePoints: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 5 },
-  routeAction: { marginTop: 10, minHeight: 42, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 13 },
+  routeAction: { marginTop: 10, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 13 },
   routeActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   routeActionArrow: { color: colors.primary, fontSize: 18 },
   pressed: { opacity: 0.72 },
