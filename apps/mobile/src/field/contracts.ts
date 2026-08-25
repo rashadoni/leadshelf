@@ -2534,14 +2534,23 @@ function managerRouteDetailPoint(value: unknown): FieldManagerRouteDetailPoint |
   ) {
     return null
   }
-  if (
-    contact != null && (
-      !string(contact.id) ||
-      !string(contact.displayName) ||
-      !(contact.specialtyName == null || string(contact.specialtyName))
-    )
-  ) {
-    return null
+  let parsedContact: FieldManagerRouteDetailPoint["contact"] = null
+  if (contact != null) {
+    const contactId = contact.id
+    const contactDisplayName = contact.displayName
+    const contactSpecialtyName = contact.specialtyName
+    if (
+      !string(contactId) ||
+      !string(contactDisplayName) ||
+      !(contactSpecialtyName == null || string(contactSpecialtyName))
+    ) {
+      return null
+    }
+    parsedContact = {
+      id: contactId,
+      displayName: contactDisplayName,
+      specialtyName: contactSpecialtyName == null ? null : contactSpecialtyName,
+    }
   }
   return {
     id: point.id,
@@ -2556,13 +2565,7 @@ function managerRouteDetailPoint(value: unknown): FieldManagerRouteDetailPoint |
       latitude: customer.latitude == null ? null : customer.latitude,
       longitude: customer.longitude == null ? null : customer.longitude,
     },
-    contact: contact == null
-      ? null
-      : {
-        id: contact.id,
-        displayName: contact.displayName,
-        specialtyName: contact.specialtyName == null ? null : contact.specialtyName,
-      },
+    contact: parsedContact,
   }
 }
 
