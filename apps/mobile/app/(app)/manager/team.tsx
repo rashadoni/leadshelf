@@ -161,7 +161,7 @@ export default function ManagerTeamScreen() {
             <Text style={styles.title}>{t("managerTeamTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerTeamHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading || loadingMore, disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -170,7 +170,7 @@ export default function ManagerTeamScreen() {
             <View style={styles.stateIcon}><TabIcon name="profile" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -185,6 +185,7 @@ export default function ManagerTeamScreen() {
               <TabIcon name="search" color={colors.faint} size={20} />
               <TextInput
                 accessibilityLabel={t("managerSearch")}
+                accessibilityHint={t("managerSearchHint")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={120}
@@ -222,8 +223,21 @@ export default function ManagerTeamScreen() {
               <View style={styles.list}>
                 {data.agents.map((agent) => {
                   const workday = workdayMeta(agent, supportsTodayContract)
+                  const presence = agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")
+                  const workdayFact = workday.workedSeconds != null
+                    ? t("managerWorkedTime", { time: compactWorkedTime(workday.workedSeconds) })
+                    : workday.startedAt ? t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt) }) : null
+                  const lastSeen = agent.lastSeenAt
+                    ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale)
+                    : t("managerLastSeen") + ": —"
                   return (
-                    <View key={agent.id} style={styles.card}>
+                    <View
+                      accessible
+                      accessibilityLabel={agent.name + ". " + agentRoleLabel(agent.role) + ". " + presence + ". " + workday.label + (workdayFact ? ". " + workdayFact : "") + ". " + lastSeen}
+                      accessibilityRole="text"
+                      key={agent.id}
+                      style={styles.card}
+                    >
                       <View style={styles.cardTop}>
                         <View style={styles.avatar}><TabIcon name="profile" color={colors.primary} size={22} /></View>
                         <View style={styles.cardBody}>
@@ -232,7 +246,7 @@ export default function ManagerTeamScreen() {
                         </View>
                         <View style={[styles.presence, agent.isOnline ? styles.presenceOnline : styles.presenceOffline]}>
                           <View style={[styles.presenceDot, { backgroundColor: agent.isOnline ? colors.success : colors.faint }]} />
-                          <Text style={[styles.presenceText, { color: agent.isOnline ? colors.successDark : colors.draft }]}>{agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")}</Text>
+                          <Text style={[styles.presenceText, { color: agent.isOnline ? colors.successDark : colors.draft }]}>{presence}</Text>
                         </View>
                       </View>
                       <View style={styles.divider} />
@@ -243,7 +257,7 @@ export default function ManagerTeamScreen() {
                           {workday.workedSeconds != null ? <Text style={styles.workdaySince}>{t("managerWorkedTime", { time: compactWorkedTime(workday.workedSeconds) })}</Text> : null}
                           {workday.workedSeconds == null && workday.startedAt ? <Text style={styles.workdaySince}>{t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt) })}</Text> : null}
                         </View>
-                        <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale) : "—"}</Text>
+                        <Text style={styles.lastSeen}>{agent.lastSeenAt ? lastSeen : "—"}</Text>
                       </View>
                     </View>
                   )
@@ -253,6 +267,8 @@ export default function ManagerTeamScreen() {
             {data.page.hasMore && !hasPendingSearch ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}
+                accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
                 disabled={loading || loadingMore}
                 onPress={() => void load(search.trim(), data.page.number + 1, true)}
                 style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
