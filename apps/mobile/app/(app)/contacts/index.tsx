@@ -10,6 +10,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { contactTypeLabel } from "../../../src/field/labels"
+import { TabIcon } from "../../../src/components/TabIcon"
 
 const CACHE_KEY = "field.contacts"
 
@@ -63,7 +64,9 @@ export default function ContactsScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} />}
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+            <TabIcon name="chevronLeft" color={colors.text} size={23} />
+          </Pressable>
           <View style={styles.headerBody}>
             <Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text>
             <Text style={styles.title}>{t("contactsTitle")}</Text>
@@ -72,8 +75,8 @@ export default function ContactsScreen() {
         </View>
 
         <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>⌕</Text>
-          <TextInput style={styles.searchInput} value={search} onChangeText={setSearch} placeholder={t("contactsSearch")} placeholderTextColor={colors.faint} autoCorrect={false} />
+          <TabIcon name="search" color={colors.faint} size={20} />
+          <TextInput accessibilityLabel={t("contactsSearch")} style={styles.searchInput} value={search} onChangeText={setSearch} placeholder={t("contactsSearch")} placeholderTextColor={colors.faint} autoCorrect={false} returnKeyType="search" />
         </View>
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
 
@@ -83,7 +86,7 @@ export default function ContactsScreen() {
             {data.contacts.map((contact) => {
               const primary = contact.workplaces?.find((workplace) => workplace.isPrimary) ?? contact.workplaces?.[0]
               return (
-                <Pressable key={contact.id} onPress={() => router.push(`/(app)/contacts/${contact.id}` as never)} style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.pressed]}>
+                <Pressable key={contact.id} accessibilityRole="button" accessibilityLabel={`${t("contactsTitle")}: ${contact.displayName}`} onPress={() => router.push(`/(app)/contacts/${contact.id}` as never)} style={({ pressed }) => [styles.card, layout.isTablet && styles.cardTablet, pressed && styles.pressed]}>
                   <View style={styles.avatar}><Text style={styles.avatarText}>{contact.displayName.charAt(0).toUpperCase()}</Text></View>
                   <View style={styles.body}>
                     <Text style={styles.name}>{contact.displayName}</Text>
@@ -91,12 +94,12 @@ export default function ContactsScreen() {
                     {primary ? <Text style={styles.workplace} numberOfLines={2}>{primary.customer.name}{primary.customer.city ? ` · ${primary.customer.city}` : ""}</Text> : null}
                     {contact.phone ? <Text style={styles.phone}>{contact.phone}</Text> : null}
                   </View>
-                  <Text style={styles.arrow}>›</Text>
+                  <TabIcon name="chevronRight" color={colors.faint} size={21} />
                 </Pressable>
               )
             })}
           </View>
-          {hasMore ? <Pressable disabled={loading || loadingMore} onPress={() => void load(search.trim(), (data?.page ?? 0) + 1, true)} style={[styles.loadMore, (loading || loadingMore) && styles.pressed]}><Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text></Pressable> : null}
+          {hasMore ? <Pressable accessibilityRole="button" accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")} accessibilityState={{ disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(search.trim(), (data?.page ?? 0) + 1, true)} style={[styles.loadMore, (loading || loadingMore) && styles.pressed]}><Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text></Pressable> : null}
           </>
         ) : !loading ? <View style={styles.empty}><Text style={styles.emptyText}>{t("contactsEmpty")}</Text></View> : null}
       </ScrollView>
@@ -107,16 +110,15 @@ export default function ContactsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 28 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  backText: { color: colors.text, fontSize: 30, lineHeight: 31 }, headerBody: { flex: 1 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1 },
   eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 11, marginTop: 2 },
   searchBox: { marginHorizontal: 14, marginTop: 14, minHeight: 50, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, gap: 8 },
-  searchIcon: { color: colors.faint, fontSize: 21 }, searchInput: { flex: 1, color: colors.text, fontSize: 14, minHeight: 48 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14, minHeight: 48 },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, noticeText: { color: colors.warning, fontSize: 11, fontWeight: "800" },
-  list: { paddingTop: 4 }, card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, flexDirection: "row", alignItems: "flex-start", gap: 11, ...cardShadow },
+  list: { paddingTop: 4 }, card: { minHeight: 68, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, flexDirection: "row", alignItems: "flex-start", gap: 11, ...cardShadow },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" }, avatarText: { color: colors.holiday, fontSize: 17, fontWeight: "900" },
   body: { flex: 1, minWidth: 0 }, name: { color: colors.text, fontSize: 14, fontWeight: "900" }, meta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 }, workplace: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5 }, phone: { color: colors.successDark, fontSize: 10, fontWeight: "800", marginTop: 5 },
-  arrow: { color: colors.faint, fontSize: 26, lineHeight: 29 }, empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" }, emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" }, loadMore: { minHeight: 46, marginHorizontal: 14, marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, pressed: { opacity: 0.7 },
+  empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" }, emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" }, loadMore: { minHeight: 46, marginHorizontal: 14, marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, pressed: { opacity: 0.7 },
   listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
   cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
 })
