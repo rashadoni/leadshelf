@@ -11,6 +11,7 @@ import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/fiel
 import { objectTypeLabel } from "../../../src/field/labels"
 import { fieldTaskDateOptions, fieldTaskDueDateTime, resolveFieldTaskToday } from "../../../src/field/task-time"
 import { t, useLocale } from "../../../src/i18n"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
@@ -43,10 +44,15 @@ export default function NewAgentTaskScreen() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const customerSearchSequence = useRef(0)
+  const hydratedCopyId = useRef<string | null>(null)
 
   const defaultSelectedDate = fieldTaskDateOptions(tenantToday, 2)[1]?.key ?? tenantToday
   const effectiveSelectedDate = selectedDate === undefined ? defaultSelectedDate : selectedDate
   const dates = useMemo(() => fieldTaskDateOptions(tenantToday), [tenantToday])
+  const hasInitialInput = Boolean(
+    title || description || priority !== "MEDIUM" || effectiveSelectedDate !== defaultSelectedDate ||
+    time !== "09:00" || customerId || recurrence,
+  )
 
   const plannedCustomers = useMemo(() => {
     const map = new Map<string, FieldTaskCustomerPreview>()
@@ -85,13 +91,20 @@ export default function NewAgentTaskScreen() {
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
 
   useEffect(() => {
-    if (!copySource) return
+    if (!copySource || hydratedCopyId.current === copySource.id) return
+    // A slow Field refresh must not overwrite a task the agent already began
+    // to enter while the optional copy source was still hydrating.
+    if (hasInitialInput) {
+      hydratedCopyId.current = copySource.id
+      return
+    }
     setTitle(copySource.title)
     setDescription(copySource.description ?? "")
     setPriority(copySource.priority)
     setCustomerId(copySource.customerId)
     setRecurrence(copySource.recurrenceRule)
-  }, [copySource])
+    hydratedCopyId.current = copySource.id
+  }, [copySource, hasInitialInput])
 
   useEffect(() => {
     const query = customerSearch.trim()
@@ -168,6 +181,27 @@ export default function NewAgentTaskScreen() {
   }
 
   const createDisabled = field.agentTasks?.capabilities.createSelfTask === false
+  const hasDraft = copySource
+    ? title !== copySource.title ||
+      description !== (copySource.description ?? "") ||
+      priority !== copySource.priority ||
+      customerId !== copySource.customerId ||
+      recurrence !== copySource.recurrenceRule ||
+      effectiveSelectedDate !== defaultSelectedDate ||
+      time !== "09:00"
+    : hasInitialInput
+
+  function goBack() {
+    if (saving) return
+    if (!hasDraft) {
+      safeFieldBack("/(app)/field-tasks")
+      return
+    }
+    Alert.alert(t("agentTaskDiscardCreateTitle"), t("agentTaskDiscardCreateBody"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("agentTaskDiscardCreateConfirm"), style: "destructive", onPress: () => safeFieldBack("/(app)/field-tasks") },
+    ])
+  }
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -176,7 +210,7 @@ export default function NewAgentTaskScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={goBack} style={[styles.back, saving && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("agentTasksTitle").toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("agentTaskCopy") : t("agentTaskCreateTitle")}</Text></View>
         </View>
         <Text style={styles.intro}>{t("agentTaskCreateHint")}</Text>
