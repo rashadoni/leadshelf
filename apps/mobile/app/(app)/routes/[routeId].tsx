@@ -44,6 +44,7 @@ import {
 } from "../../../src/field/error-message"
 import { parseFieldRouteMutationConflict, routeConflictPointIndexes } from "../../../src/field/route-conflict"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import {
@@ -192,7 +193,7 @@ export default function FieldRouteDetailScreen() {
       <SafeAreaView style={styles.root}>
         <View style={styles.missing}>
           <Text style={styles.missingTitle}>{t("fieldDataError")}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.primaryButton}><Text style={styles.primaryText}>{t("back")}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/routes")} style={styles.primaryButton}><Text style={styles.primaryText}>{t("back")}</Text></Pressable>
         </View>
       </SafeAreaView>
     )
@@ -246,12 +247,12 @@ export default function FieldRouteDetailScreen() {
       return
     }
     if (!hasUnsavedRouteEdit) {
-      router.back()
+      safeFieldBack("/(app)/routes")
       return
     }
     Alert.alert(t("routeDiscardEditTitle"), t("routeDiscardEditBody"), [
       { text: t("cancel"), style: "cancel" },
-      { text: t("routeDiscardEditConfirm"), style: "destructive", onPress: () => router.back() },
+      { text: t("routeDiscardEditConfirm"), style: "destructive", onPress: () => safeFieldBack("/(app)/routes") },
     ])
   }
 

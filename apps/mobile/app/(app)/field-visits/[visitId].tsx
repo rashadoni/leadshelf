@@ -64,6 +64,7 @@ import { formatShortDateTime, formatTime } from "../../../src/i18n/date-format"
 import { formatRouteTime, shiftDateKey } from "../../../src/field/route-time"
 import { tenantDateKey } from "../../../src/field/tenant-time"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
+import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import {
   agentTaskStatusLabel,
@@ -435,7 +436,7 @@ export default function FieldVisitWorkspaceScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("back")}
-            onPress={() => router.back()}
+            onPress={() => safeFieldBack("/(app)/routes")}
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
           >
             <Text style={styles.primaryText}>{t("back")}</Text>
