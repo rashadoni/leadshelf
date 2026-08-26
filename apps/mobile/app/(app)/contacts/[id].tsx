@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { type ReactNode, useCallback, useState } from "react"
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -10,7 +10,8 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { approvalStatusLabel, assignmentRoleLabel, contactTypeLabel, lifecycleStatusLabel, objectTypeLabel } from "../../../src/field/labels"
-import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function phoneDigits(phone: string | null | undefined): string | null {
@@ -53,6 +54,7 @@ export default function ContactDetailScreen() {
   const [data, setData] = useState<FieldContactDetailData | null>(cached?.value ?? null)
   const [changeRequests, setChangeRequests] = useState<FieldContactChangeRequest[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ methods: true, workplaces: true })
 
   const load = useCallback(() => {
     if (!id) return
@@ -83,9 +85,11 @@ export default function ContactDetailScreen() {
     [t("categoryLabel"), contact.category],
     [t("statusLabel"), lifecycleStatusLabel(contact.status)],
   ] : []
+  const toggleSection = (section: string) => setOpenSections((current) => ({ ...current, [section]: !current[section] }))
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/contacts")} style={styles.back}>
@@ -109,26 +113,25 @@ export default function ContactDetailScreen() {
               <View style={styles.category}><Text style={styles.categoryText} numberOfLines={1}>{contact.category}</Text></View>
             </View>
 
-            <View style={styles.card}>
-              {details.map(([label, value]) => value ? (
-                <View key={label} style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>{label}</Text>
-                  <Text style={styles.detailValue}>{value}</Text>
-                </View>
-              ) : null)}
+            <DetailDisclosure
+              title={t("contactDetailContactMethods")}
+              icon="contacts"
+              open={Boolean(openSections.methods)}
+              onPress={() => toggleSection("methods")}
+            >
               <View style={styles.actions}>
                 {contactPhoneUrl ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`${t("phoneLabel")}: ${contact.phone}`}
                     onPress={() => void openExternalUrl(contactPhoneUrl, t("externalCallUnavailable"))}
-                    style={({ pressed }) => [styles.action, styles.callAction, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.action, styles.contactAction, pressed && styles.pressed]}
                   >
                     <View style={styles.actionBody}>
-                      <Text style={[styles.actionLabel, styles.callText]}>{t("phoneLabel")}</Text>
-                      <Text style={[styles.actionValue, styles.callText]} numberOfLines={1}>{contact.phone}</Text>
+                      <Text style={styles.actionLabel}>{t("phoneLabel")}</Text>
+                      <Text style={styles.actionValue} numberOfLines={1}>{contact.phone}</Text>
                     </View>
-                    <View accessible={false} style={styles.actionChevron}><TabIcon name="chevronRight" color={colors.successDark} size={20} /></View>
+                    <View accessible={false} style={styles.actionChevron}><TabIcon name="chevronRight" color={colors.primary} size={20} /></View>
                   </Pressable>
                 ) : null}
                 {contactEmailUrl ? (
@@ -136,13 +139,13 @@ export default function ContactDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`${t("email")}: ${contact.email}`}
                     onPress={() => void openExternalUrl(contactEmailUrl, t("externalEmailUnavailable"))}
-                    style={({ pressed }) => [styles.action, styles.mailAction, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.action, styles.contactAction, pressed && styles.pressed]}
                   >
                     <View style={styles.actionBody}>
-                      <Text style={[styles.actionLabel, styles.mailText]}>{t("email")}</Text>
-                      <Text style={[styles.actionValue, styles.mailText]} numberOfLines={1}>{contact.email}</Text>
+                      <Text style={styles.actionLabel}>{t("email")}</Text>
+                      <Text style={styles.actionValue} numberOfLines={1}>{contact.email}</Text>
                     </View>
-                    <View accessible={false} style={styles.actionChevron}><TabIcon name="chevronRight" color={colors.info} size={20} /></View>
+                    <View accessible={false} style={styles.actionChevron}><TabIcon name="chevronRight" color={colors.primary} size={20} /></View>
                   </Pressable>
                 ) : null}
                 {contactMessengerUrl ? (
@@ -150,11 +153,11 @@ export default function ContactDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`${t("messengerLabel")}: ${contact.messengerPhone}`}
                     onPress={() => void openExternalUrl(contactMessengerUrl, t("externalMessengerUnavailable"))}
-                    style={({ pressed }) => [styles.action, styles.messageAction, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.action, styles.contactAction, pressed && styles.pressed]}
                   >
                     <View style={styles.actionBody}>
-                      <Text style={[styles.actionLabel, styles.messageText]}>{t("messengerLabel")}</Text>
-                      <Text style={[styles.actionValue, styles.messageText]} numberOfLines={1}>{contact.messengerPhone}</Text>
+                      <Text style={styles.actionLabel}>{t("messengerLabel")}</Text>
+                      <Text style={styles.actionValue} numberOfLines={1}>{contact.messengerPhone}</Text>
                     </View>
                     <View accessible={false} style={styles.actionChevron}><TabIcon name="chevronRight" color={colors.primary} size={20} /></View>
                   </Pressable>
@@ -171,40 +174,72 @@ export default function ContactDetailScreen() {
                     <View accessible={false} style={styles.actionChevron}><TabIcon name="chevronRight" color={colors.headerText} size={20} /></View>
                   </Pressable>
                 ) : null}
+                {!contactPhoneUrl && !contactEmailUrl && !contactMessengerUrl && !data?.capabilities.canRequestChanges ? <Text style={styles.emptyText}>—</Text> : null}
               </View>
-            </View>
+            </DetailDisclosure>
 
-            <SectionHeader title={t("workplacesLabel")} count={contact.workplaces?.length ?? 0} />
-            {contact.workplaces?.length ? contact.workplaces.map((workplace) => (
-              <Pressable
-                key={workplace.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${t("workplacesLabel")}: ${workplace.customer.name}`}
-                onPress={() => router.push(`/(app)/organizations/${workplace.customer.id}` as never)}
-                style={({ pressed }) => [styles.workplaceCard, pressed && styles.pressed]}
-              >
-                <View style={styles.workplaceBody}>
-                  <Text style={styles.workplaceName} numberOfLines={2}>{workplace.customer.name}</Text>
-                  <Text style={styles.workplaceMeta} numberOfLines={1}>{[workplace.position, workplace.department].filter(Boolean).join(" · ") || objectTypeLabel(workplace.customer.objectType)}</Text>
-                  {workplace.customer.address || workplace.customer.city ? <Text style={styles.workplaceAddress} numberOfLines={2}>{[workplace.customer.city, workplace.customer.address].filter(Boolean).join(" · ")}</Text> : null}
+            <DetailDisclosure
+              title={t("contactDetailProfile")}
+              icon="info"
+              open={Boolean(openSections.details)}
+              onPress={() => toggleSection("details")}
+            >
+              {details.length ? details.map(([label, value]) => value ? (
+                <View key={label} style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>{label}</Text>
+                  <Text style={styles.detailValue}>{value}</Text>
                 </View>
-                {workplace.isPrimary ? <View style={styles.primaryPill}><Text style={styles.primaryText} numberOfLines={2}>{t("primaryWorkplace")}</Text></View> : null}
-                <View accessible={false} style={styles.arrow}><TabIcon name="chevronRight" color={colors.faint} size={20} /></View>
-              </Pressable>
-            )) : <View style={styles.card}><Text style={styles.emptyText}>—</Text></View>}
+              ) : null) : <Text style={styles.emptyText}>—</Text>}
+            </DetailDisclosure>
 
-            <SectionHeader title={t("assignmentsLabel")} count={contact.agentAssignments?.length ?? 0} />
-            <View style={styles.card}>
+            <DetailDisclosure
+              title={t("workplacesLabel")}
+              icon="organizations"
+              count={contact.workplaces?.length ?? 0}
+              open={Boolean(openSections.workplaces)}
+              onPress={() => toggleSection("workplaces")}
+            >
+              {contact.workplaces?.length ? contact.workplaces.map((workplace) => (
+                <Pressable
+                  key={workplace.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t("workplacesLabel")}: ${workplace.customer.name}`}
+                  onPress={() => router.push(`/(app)/organizations/${workplace.customer.id}` as never)}
+                  style={({ pressed }) => [styles.workplaceCard, pressed && styles.pressed]}
+                >
+                  <View style={styles.workplaceBody}>
+                    <Text style={styles.workplaceName} numberOfLines={2}>{workplace.customer.name}</Text>
+                    <Text style={styles.workplaceMeta} numberOfLines={1}>{[workplace.position, workplace.department].filter(Boolean).join(" · ") || objectTypeLabel(workplace.customer.objectType)}</Text>
+                    {workplace.customer.address || workplace.customer.city ? <Text style={styles.workplaceAddress} numberOfLines={2}>{[workplace.customer.city, workplace.customer.address].filter(Boolean).join(" · ")}</Text> : null}
+                  </View>
+                  {workplace.isPrimary ? <View style={styles.primaryPill}><Text style={styles.primaryText} numberOfLines={2}>{t("primaryWorkplace")}</Text></View> : null}
+                  <View accessible={false} style={styles.arrow}><TabIcon name="chevronRight" color={colors.faint} size={20} /></View>
+                </Pressable>
+              )) : <Text style={styles.emptyText}>—</Text>}
+            </DetailDisclosure>
+
+            <DetailDisclosure
+              title={t("assignmentsLabel")}
+              icon="profile"
+              count={contact.agentAssignments?.length ?? 0}
+              open={Boolean(openSections.assignments)}
+              onPress={() => toggleSection("assignments")}
+            >
               {contact.agentAssignments?.length ? contact.agentAssignments.map((assignment, index) => (
                 <View key={`${assignment.agent.id}-${index}`} style={styles.assignmentRow}>
                   <Text style={styles.assignmentName} numberOfLines={1}>{assignment.agent.name}</Text>
                   <Text style={styles.assignmentRole} numberOfLines={1}>{assignmentRoleLabel(assignment.role)}</Text>
                 </View>
               )) : <Text style={styles.emptyText}>—</Text>}
-            </View>
+            </DetailDisclosure>
 
-            <SectionHeader title={t("potentialLabel")} count={contact.fieldPotentials?.length ?? 0} />
-            <View style={styles.card}>
+            <DetailDisclosure
+              title={t("potentialLabel")}
+              icon="dashboard"
+              count={contact.fieldPotentials?.length ?? 0}
+              open={Boolean(openSections.potential)}
+              onPress={() => toggleSection("potential")}
+            >
               {contact.fieldPotentials?.length ? contact.fieldPotentials.map((potential) => (
                 <View key={potential.id} style={styles.potentialRow}>
                   <View style={styles.potentialBody}>
@@ -217,12 +252,16 @@ export default function ContactDetailScreen() {
                   <View style={styles.potentialValue}><Text style={styles.potentialValueText} numberOfLines={1}>{String(potential.coverageValue)} / {String(potential.potentialValue)}</Text></View>
                 </View>
               )) : <Text style={styles.emptyText}>—</Text>}
-            </View>
+            </DetailDisclosure>
 
             {data?.capabilities.canRequestChanges ? (
-              <>
-                <SectionHeader title={t("contactCorrectionHistory")} count={changeRequests.length} />
-                <View style={styles.card}>
+              <DetailDisclosure
+                title={t("contactCorrectionHistory")}
+                icon="document"
+                count={changeRequests.length}
+                open={Boolean(openSections.corrections)}
+                onPress={() => toggleSection("corrections")}
+              >
                   {changeRequests.length ? changeRequests.slice(0, 3).map((request) => (
                     <Pressable
                       key={request.id}
@@ -248,9 +287,9 @@ export default function ContactDetailScreen() {
                       <View accessible={false}><TabIcon name="chevronRight" color={colors.primary} size={20} /></View>
                     </Pressable>
                   )}
-                </View>
-              </>
+              </DetailDisclosure>
             ) : null}
+
           </>
         ) : null}
       </ScrollView>
@@ -258,8 +297,38 @@ export default function ContactDetailScreen() {
   )
 }
 
-function SectionHeader({ title, count }: { title: string; count: number }) {
-  return <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.sectionCount}>{count}</Text></View>
+function DetailDisclosure({
+  title,
+  icon,
+  count,
+  open,
+  onPress,
+  children,
+}: {
+  title: string
+  icon: TabIconName
+  count?: number
+  open: boolean
+  onPress: () => void
+  children: ReactNode
+}) {
+  return (
+    <View style={styles.disclosure}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ expanded: open }}
+        onPress={onPress}
+        style={({ pressed }) => [styles.disclosureToggle, pressed && styles.pressed]}
+      >
+        <View accessible={false} style={styles.disclosureIcon}><TabIcon name={icon} color={colors.primary} size={18} /></View>
+        <Text style={styles.disclosureTitle} numberOfLines={1}>{title}</Text>
+        {count !== undefined ? <View accessible={false} style={styles.disclosureCount}><Text style={styles.disclosureCountText}>{count}</Text></View> : null}
+        <View accessible={false} style={styles.disclosureChevron}><TabIcon name={open ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+      </Pressable>
+      {open ? <View style={styles.disclosureContent}>{children}</View> : null}
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -267,20 +336,26 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, noticeText: { color: colors.warning, fontSize: 11, fontWeight: "800" },
   card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow },
-  summaryCard: { flexDirection: "row", alignItems: "center", gap: 12 }, avatar: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.holidayBg, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.holiday, fontSize: 20, fontWeight: "900" }, summaryBody: { flex: 1 }, summaryName: { color: colors.text, fontSize: 17, fontWeight: "900" }, summaryMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  summaryCard: { flexDirection: "row", alignItems: "center", gap: 12 }, avatar: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: colors.primary, fontSize: 20, fontWeight: "900" }, summaryBody: { flex: 1 }, summaryName: { color: colors.text, fontSize: 17, fontWeight: "900" }, summaryMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
   category: { minWidth: 34, maxWidth: 76, height: 34, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 }, categoryText: { color: colors.primary, fontSize: 13, fontWeight: "900" },
-  detailRow: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border }, detailLabel: { color: colors.faint, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }, detailValue: { color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 3 },
-  actions: { gap: 8, marginTop: 12 }, action: { minHeight: 48, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 }, actionBody: { flex: 1, minWidth: 0 }, actionLabel: { fontSize: 9, fontWeight: "900", letterSpacing: 0.45, textTransform: "uppercase" }, actionValue: { fontSize: 12, fontWeight: "900", marginTop: 2 }, actionChevron: { flexShrink: 0 }, callAction: { backgroundColor: colors.successBg }, mailAction: { backgroundColor: colors.infoBg }, messageAction: { backgroundColor: colors.primarySoft },
-  correctionAction: { backgroundColor: colors.primary }, correctionIcon: { flexShrink: 0 }, callText: { color: colors.successDark }, mailText: { color: colors.info }, messageText: { color: colors.primary }, correctionText: { color: colors.headerText, fontSize: 12, fontWeight: "900", flex: 1, minWidth: 0 },
-  sectionHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 2, flexDirection: "row", alignItems: "center", gap: 7 }, sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" }, sectionCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 10, fontWeight: "900", lineHeight: 22, textAlign: "center" },
-  workplaceCard: { minHeight: 62, marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, workplaceBody: { flex: 1, minWidth: 0 }, workplaceName: { color: colors.text, fontSize: 13, fontWeight: "900" }, workplaceMeta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 }, workplaceAddress: { color: colors.muted, fontSize: 10, marginTop: 4 },
-  primaryPill: { flexShrink: 1, maxWidth: 108, paddingHorizontal: 7, paddingVertical: 5, borderRadius: radii.pill, backgroundColor: colors.successBg }, primaryText: { color: colors.successDark, fontSize: 8, fontWeight: "900", textAlign: "center" }, arrow: { flexShrink: 0 },
-  assignmentRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, assignmentName: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "800" }, assignmentRole: { flexShrink: 1, color: colors.primary, fontSize: 10, fontWeight: "900", textAlign: "right" },
-  potentialRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, potentialBody: { flex: 1, minWidth: 0 }, potentialName: { color: colors.text, fontSize: 12, fontWeight: "900" }, potentialMeta: { color: colors.muted, fontSize: 9, marginTop: 2 }, potentialValue: { flexShrink: 1, borderRadius: radii.pill, backgroundColor: colors.infoBg, paddingHorizontal: 9, paddingVertical: 6 }, potentialValueText: { color: colors.info, fontSize: 10, fontWeight: "900" },
-  changeRequestRow: { minHeight: 54, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, changeRequestBody: { flex: 1, minWidth: 0 }, changeRequestStatus: { color: colors.primary, fontSize: 10, fontWeight: "900" }, changeRequestReason: { color: colors.text, fontSize: 11, lineHeight: 16, marginTop: 3 }, changeRequestDate: { flexShrink: 0, color: colors.faint, fontSize: 9, fontWeight: "700" }, changeRequestEmpty: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 }, changeRequestEmptyText: { flex: 1, minWidth: 0, color: colors.primary, fontSize: 11, fontWeight: "800" },
+  disclosure: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.card, overflow: "hidden", ...cardShadow },
+  disclosureToggle: { minHeight: 58, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 10 },
+  disclosureIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureTitle: { flex: 1, minWidth: 0, color: colors.text, fontSize: 14, fontWeight: "900" },
+  disclosureCount: { minWidth: 24, height: 24, borderRadius: 12, paddingHorizontal: 6, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureCountText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, disclosureChevron: { flexShrink: 0 },
+  disclosureContent: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 12, paddingBottom: 12 },
+  detailRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, detailLabel: { color: colors.faint, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 }, detailValue: { color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 3 },
+  actions: { gap: 8, paddingTop: 12 }, action: { minHeight: 48, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 }, actionBody: { flex: 1, minWidth: 0 }, actionLabel: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.45, textTransform: "uppercase" }, actionValue: { color: colors.text, fontSize: 13, fontWeight: "900", marginTop: 2 }, actionChevron: { flexShrink: 0 }, contactAction: { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border },
+  correctionAction: { backgroundColor: colors.primary }, correctionIcon: { flexShrink: 0 }, correctionText: { color: colors.headerText, fontSize: 13, fontWeight: "900", flex: 1, minWidth: 0 },
+  workplaceCard: { minHeight: 62, marginTop: 9, borderRadius: radii.inner, padding: 13, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, workplaceBody: { flex: 1, minWidth: 0 }, workplaceName: { color: colors.text, fontSize: 13, fontWeight: "900" }, workplaceMeta: { color: colors.primary, fontSize: 11, fontWeight: "700", marginTop: 3 }, workplaceAddress: { color: colors.muted, fontSize: 11, marginTop: 4 },
+  primaryPill: { flexShrink: 1, maxWidth: 108, paddingHorizontal: 7, paddingVertical: 5, borderRadius: radii.pill, backgroundColor: colors.successBg }, primaryText: { color: colors.successDark, fontSize: 11, fontWeight: "900", textAlign: "center" }, arrow: { flexShrink: 0 },
+  assignmentRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, assignmentName: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "800" }, assignmentRole: { flexShrink: 1, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
+  potentialRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, potentialBody: { flex: 1, minWidth: 0 }, potentialName: { color: colors.text, fontSize: 12, fontWeight: "900" }, potentialMeta: { color: colors.muted, fontSize: 11, marginTop: 2 }, potentialValue: { flexShrink: 1, borderRadius: radii.pill, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 6 }, potentialValueText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  changeRequestRow: { minHeight: 54, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, changeRequestBody: { flex: 1, minWidth: 0 }, changeRequestStatus: { color: colors.primary, fontSize: 11, fontWeight: "900" }, changeRequestReason: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 3 }, changeRequestDate: { flexShrink: 0, color: colors.faint, fontSize: 11, fontWeight: "700" }, changeRequestEmpty: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 }, changeRequestEmptyText: { flex: 1, minWidth: 0, color: colors.primary, fontSize: 12, fontWeight: "800" },
   emptyText: { color: colors.muted, fontSize: 12, textAlign: "center", paddingVertical: 9 }, pressed: { opacity: 0.7 },
 })
