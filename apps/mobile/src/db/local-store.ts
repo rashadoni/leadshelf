@@ -797,7 +797,7 @@ export function cacheFieldMessageThread(next: FieldMessageThreadData): FieldMess
 export function readFieldDocuments(): FieldDocumentsData {
   return readFieldCache<FieldDocumentsData>(FIELD_DOCUMENTS_CACHE_KEY)?.value ?? {
     documents: [],
-    capabilities: { upload: true, offlineDownload: true, maxUploadBytes: 25 * 1024 * 1024 },
+    capabilities: { upload: false, offlineDownload: false, maxUploadBytes: 25 * 1024 * 1024 },
   }
 }
 

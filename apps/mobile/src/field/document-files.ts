@@ -29,6 +29,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 }
 
 const ALLOWED_TYPES = [...new Set(Object.values(MIME_BY_EXTENSION))]
+const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 function safeFileName(name: string): string {
   const withoutPath = name.split(/[\\/]/).at(-1) ?? "document"
@@ -39,7 +40,12 @@ export async function pickFieldDocument(input?: {
   title?: string | null
   visitId?: string | null
   taskId?: string | null
+  maxBytes?: number
 }): Promise<FieldDocumentDraft | null> {
+  const requestedMaxBytes = input?.maxBytes
+  const maxUploadBytes = typeof requestedMaxBytes === "number" && Number.isFinite(requestedMaxBytes) && requestedMaxBytes > 0
+    ? Math.floor(requestedMaxBytes)
+    : DEFAULT_MAX_UPLOAD_BYTES
   const result = await DocumentPicker.getDocumentAsync({
     type: ALLOWED_TYPES,
     copyToCacheDirectory: true,
@@ -54,8 +60,10 @@ export async function pickFieldDocument(input?: {
   if (!mimeType) throw new Error(t("documentTypeUnsupported"))
   const fileInfo = asset.size == null ? await FileSystem.getInfoAsync(asset.uri) : null
   const size = asset.size ?? (fileInfo?.exists ? fileInfo.size : null)
-  if (!Number.isInteger(size) || !size || size > 25 * 1024 * 1024) {
-    throw new Error(t("documentMaxSize"))
+  if (!Number.isInteger(size) || !size || size > maxUploadBytes) {
+    throw new Error(maxUploadBytes === DEFAULT_MAX_UPLOAD_BYTES
+      ? t("documentMaxSize")
+      : t("documentMaxSizeValue", { max: formatFileSize(maxUploadBytes) }))
   }
   if (!FileSystem.documentDirectory) throw new Error(t("documentStorageUnavailable"))
   const [organizationSlug, agentId] = await Promise.all([tokenStore.getOrgSlug(), tokenStore.getUserId()])

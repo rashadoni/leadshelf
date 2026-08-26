@@ -50,6 +50,7 @@ export default function DocumentsScreen() {
     choose: "Fayl seç", cancel: "Ləğv et", saved: "Fayl saxlanıldı", savedHint: "Göndərmə növbəsinə əlavə edildi.",
     refreshError: "Sənədlər yenilənmədi — telefondakı nüsxə göstərilir.", noScope: "Əvvəlcə faylın kontekstini seçin.",
     taskSearch: "Tapşırığı axtar", taskSearchEmpty: "Uyğun açıq tapşırıq yoxdur",
+    uploadUnavailable: "Bu hesab üçün fayl əlavə etmək icazəli deyil.", downloadUnavailable: "Bu sənədi telefona endirmək icazəli deyil.", uploadLimit: "Maksimum ölçü: {size}",
   } : {
     eyebrow: "РАБОЧИЙ ЦЕНТР", title: "Документы", hint: "Файлы задач, материалы визитов и документы, назначенные офисом.",
     add: "Добавить файл", all: "Все", required: "Обязательные", offline: "На телефоне", empty: "Здесь пока нет документов",
@@ -59,7 +60,10 @@ export default function DocumentsScreen() {
     choose: "Выбрать файл", cancel: "Отмена", saved: "Файл сохранён", savedHint: "Он добавлен в очередь на отправку.",
     refreshError: "Документы не обновились — показана копия с телефона.", noScope: "Сначала выберите контекст файла.",
     taskSearch: "Найти задачу", taskSearchEmpty: "Подходящих открытых задач нет",
+    uploadUnavailable: "Для этой учётной записи добавление файлов недоступно.", downloadUnavailable: "Скачать этот документ на телефон нельзя.", uploadLimit: "Максимальный размер: {size}",
   }
+  const canUpload = data.capabilities.upload
+  const uploadLimitText = copy.uploadLimit.replace("{size}", formatFileSize(data.capabilities.maxUploadBytes, locale))
 
   const activeVisit = useMemo(() => field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null, [field.week])
   const scopes = useMemo<UploadScope[]>(() => [
@@ -105,6 +109,10 @@ export default function DocumentsScreen() {
   }
 
   async function pickAndQueue() {
+    if (!data.capabilities.upload) {
+      setWarning({ message: copy.uploadUnavailable })
+      return
+    }
     if (!selectedScope) {
       setWarning({ message: copy.noScope })
       return
@@ -114,6 +122,7 @@ export default function DocumentsScreen() {
       const draft = await pickFieldDocument({
         visitId: selectedScope.kind === "visit" ? selectedScope.id : null,
         taskId: selectedScope.kind === "task" ? selectedScope.id : null,
+        maxBytes: data.capabilities.maxUploadBytes,
       })
       if (!draft) return
       enqueueFieldDocumentUpload(draft)
@@ -132,6 +141,10 @@ export default function DocumentsScreen() {
   }
 
   async function openDocument(document: FieldDocument) {
+    if (!document.localUri && !data.capabilities.offlineDownload) {
+      setWarning({ message: copy.downloadUnavailable })
+      return
+    }
     setBusyId(document.id)
     try {
       const localUri = document.localUri ?? await fieldApi.downloadDocument({
@@ -140,10 +153,13 @@ export default function DocumentsScreen() {
         downloadUrl: document.downloadUrl || undefined,
       })
       setData(setFieldDocumentLocalUri(document.id, localUri))
-      if (!document.assignment.readAt) enqueueFieldDocumentState(document.id, "READ")
       if (!document.assignment.downloadedAt) enqueueFieldDocumentState(document.id, "DOWNLOADED")
-      void sync().catch(() => {})
       await openLocalDocument(localUri, document.mimeType)
+      if (!document.assignment.readAt) {
+        enqueueFieldDocumentState(document.id, "READ")
+        setData(readFieldDocuments())
+      }
+      void sync().catch(() => {})
     } catch (cause) {
       Alert.alert(copy.title, fieldErrorMessage(cause, "documentOpenUnavailable"))
     } finally {
@@ -159,7 +175,7 @@ export default function DocumentsScreen() {
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: picking }} disabled={picking} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={[styles.back, picking && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.add} accessibilityHint={copy.uploadTitle} accessibilityState={{ expanded: uploadOpen }} onPress={() => setUploadOpen((value) => !value)} style={styles.add}><TabIcon name="add" color={colors.headerText} size={17} /><Text style={styles.addText}>{copy.add}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.add} accessibilityHint={canUpload ? copy.uploadTitle : copy.uploadUnavailable} accessibilityState={{ expanded: uploadOpen, disabled: !canUpload || picking }} disabled={!canUpload || picking} onPress={() => setUploadOpen((value) => !value)} style={[styles.add, (!canUpload || picking) && styles.disabled]}><TabIcon name="add" color={colors.headerText} size={17} /><Text style={styles.addText}>{copy.add}</Text></Pressable>
         </View>
         <Text style={styles.intro}>{copy.hint}</Text>
 
@@ -169,9 +185,10 @@ export default function DocumentsScreen() {
           <Stat value={data.documents.filter((document) => document.localUri).length} label={copy.offline} tone="success" />
         </View>
 
-        {uploadOpen ? (
+        {uploadOpen && canUpload ? (
           <View style={styles.uploadCard}>
             <View style={styles.uploadTitleRow}><Text style={styles.uploadTitle}>{copy.uploadTitle}</Text><View style={styles.localPill}><Text style={styles.localPillText}>⌁ {copy.cloudOff}</Text></View></View>
+            <Text style={styles.uploadLimit}>{uploadLimitText}</Text>
             <View style={styles.scopeList}>
               {scopes.map((scope) => {
                 const selected = selectedScope?.kind === scope.kind && selectedScope?.id === scope.id
@@ -216,11 +233,12 @@ export default function DocumentsScreen() {
         </View>
 
         {visible.length === 0 ? (
-          <View style={styles.empty}><View style={styles.emptyMark}><TabIcon name="document" color={colors.info} size={27} /></View><Text style={styles.emptyTitle}>{copy.empty}</Text><Text style={styles.emptyHint}>{copy.emptyHint}</Text><View style={styles.emptyActions}>{filter !== "all" ? <Pressable accessibilityRole="button" accessibilityLabel={copy.all} onPress={() => setFilter("all")} style={styles.emptySecondaryAction}><Text style={styles.emptySecondaryText}>{copy.all}</Text></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel={copy.add} accessibilityHint={copy.uploadTitle} accessibilityState={{ expanded: uploadOpen }} onPress={() => setUploadOpen(true)} style={styles.emptyPrimaryAction}><TabIcon name="add" color={colors.headerText} size={17} /><Text style={styles.emptyPrimaryText}>{copy.add}</Text></Pressable></View></View>
+          <View style={styles.empty}><View style={styles.emptyMark}><TabIcon name="document" color={colors.info} size={27} /></View><Text style={styles.emptyTitle}>{copy.empty}</Text><Text style={styles.emptyHint}>{canUpload ? copy.emptyHint : copy.uploadUnavailable}</Text><View style={styles.emptyActions}>{filter !== "all" ? <Pressable accessibilityRole="button" accessibilityLabel={copy.all} onPress={() => setFilter("all")} style={styles.emptySecondaryAction}><Text style={styles.emptySecondaryText}>{copy.all}</Text></Pressable> : null}{canUpload ? <Pressable accessibilityRole="button" accessibilityLabel={copy.add} accessibilityHint={copy.uploadTitle} accessibilityState={{ expanded: uploadOpen }} onPress={() => setUploadOpen(true)} style={styles.emptyPrimaryAction}><TabIcon name="add" color={colors.headerText} size={17} /><Text style={styles.emptyPrimaryText}>{copy.add}</Text></Pressable> : null}</View></View>
         ) : <View style={[styles.documentList, layout.isTablet && styles.documentListTablet]}>{visible.map((document) => {
           const actionLabel = document.localUri ? copy.open : copy.download
           const documentName = document.title || document.fileName
           const isBusy = busyId === document.id
+          const canOpen = Boolean(document.localUri) || data.capabilities.offlineDownload
           return (
           <View key={document.id} style={[styles.card, layout.isTablet && styles.cardTablet, document.assignment.required && !document.assignment.readAt && styles.cardRequired]}>
             <View style={styles.fileTop}>
@@ -236,7 +254,8 @@ export default function DocumentsScreen() {
               {document.syncState === "PENDING" ? <Badge label={copy.queued} tone="info" /> : null}
               {document.syncState === "CONFLICT" || document.syncState === "REJECTED" ? <Badge label={copy.failed} tone="danger" /> : null}
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={`${actionLabel}: ${documentName}`} accessibilityState={{ busy: isBusy, disabled: isBusy }} disabled={isBusy} onPress={() => void openDocument(document)} style={({ pressed }) => [styles.open, pressed && styles.pressed, isBusy && styles.disabled]}><Text style={styles.openText}>{isBusy ? "…" : actionLabel}</Text><Text style={styles.openArrow}>{document.localUri ? "↗" : "↓"}</Text></Pressable>
+            {!canOpen ? <Text style={styles.restrictedHint}>{copy.downloadUnavailable}</Text> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel={`${actionLabel}: ${documentName}`} accessibilityHint={canOpen ? undefined : copy.downloadUnavailable} accessibilityState={{ busy: isBusy, disabled: isBusy || !canOpen }} disabled={isBusy || !canOpen} onPress={() => void openDocument(document)} style={({ pressed }) => [styles.open, pressed && styles.pressed, (isBusy || !canOpen) && styles.disabled]}><Text style={styles.openText}>{isBusy ? "…" : actionLabel}</Text><Text style={styles.openArrow}>{document.localUri ? "↗" : "↓"}</Text></Pressable>
           </View>
           )
         })}</View>}
@@ -254,9 +273,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { paddingBottom: 36 }, content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 }, add: { minHeight: 46, minWidth: 84, borderRadius: 15, paddingHorizontal: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, addText: { color: colors.headerText, fontSize: 11, fontWeight: "900", marginTop: 2, textAlign: "center" }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
   stats: { flexDirection: "row", gap: 8, paddingHorizontal: 14, marginTop: 17 }, stat: { flex: 1, minWidth: 0, height: 67, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, statValue: { fontSize: 20, fontWeight: "900" }, statLabel: { fontSize: 11, fontWeight: "900", marginTop: 3 },
-  uploadCard: { marginHorizontal: 14, marginTop: 14, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, uploadTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 }, uploadTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" }, localPill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, localPillText: { color: colors.successDark, fontSize: 11, fontWeight: "900" }, scopeList: { gap: 7, marginTop: 12 }, scope: { minHeight: 49, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, scopePickerOpen: { borderColor: colors.primary }, scopeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, scopeText: { flex: 1, color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "800" }, scopeTextSelected: { color: colors.headerText }, taskPicker: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, overflow: "hidden" }, taskSearch: { minHeight: 46, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 7, borderBottomWidth: 1, borderBottomColor: colors.border }, taskSearchInput: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "700" }, taskResults: { maxHeight: 250 }, taskResultsContent: { paddingVertical: 4 }, taskResult: { minHeight: 48, paddingHorizontal: 11, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }, taskResultSelected: { backgroundColor: colors.primarySoft }, taskResultText: { flex: 1, color: colors.text, fontSize: 11, lineHeight: 15, fontWeight: "800" }, taskResultTextSelected: { color: colors.primary }, taskEmpty: { color: colors.muted, fontSize: 11, lineHeight: 15, paddingHorizontal: 11, paddingVertical: 14, textAlign: "center" }, scopeHint: { color: colors.warning, fontSize: 11, lineHeight: 15, fontWeight: "800", marginTop: 10 }, uploadActions: { flexDirection: "row", gap: 8, marginTop: 12 }, cancel: { flex: 1, minHeight: 45, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, cancelText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, choose: { flex: 2, minHeight: 45, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, chooseText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  uploadCard: { marginHorizontal: 14, marginTop: 14, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, uploadTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 }, uploadTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" }, localPill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, localPillText: { color: colors.successDark, fontSize: 11, fontWeight: "900" }, uploadLimit: { color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "700", marginTop: 6 }, scopeList: { gap: 7, marginTop: 12 }, scope: { minHeight: 49, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, scopePickerOpen: { borderColor: colors.primary }, scopeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, scopeText: { flex: 1, color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "800" }, scopeTextSelected: { color: colors.headerText }, taskPicker: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, overflow: "hidden" }, taskSearch: { minHeight: 46, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 7, borderBottomWidth: 1, borderBottomColor: colors.border }, taskSearchInput: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "700" }, taskResults: { maxHeight: 250 }, taskResultsContent: { paddingVertical: 4 }, taskResult: { minHeight: 48, paddingHorizontal: 11, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }, taskResultSelected: { backgroundColor: colors.primarySoft }, taskResultText: { flex: 1, color: colors.text, fontSize: 11, lineHeight: 15, fontWeight: "800" }, taskResultTextSelected: { color: colors.primary }, taskEmpty: { color: colors.muted, fontSize: 11, lineHeight: 15, paddingHorizontal: 11, paddingVertical: 14, textAlign: "center" }, scopeHint: { color: colors.warning, fontSize: 11, lineHeight: 15, fontWeight: "800", marginTop: 10 }, uploadActions: { flexDirection: "row", gap: 8, marginTop: 12 }, cancel: { flex: 1, minHeight: 45, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, cancelText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, choose: { flex: 2, minHeight: 45, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, chooseText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   warning: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, warningBody: { flexDirection: "row", alignItems: "center", gap: 10 }, warningText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" }, warningRetry: { minHeight: 44, paddingHorizontal: 8, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 2 }, warningRetryText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   filters: { flexDirection: "row", gap: 7, paddingHorizontal: 14, marginTop: 16, marginBottom: 2 }, filter: { flex: 1, minHeight: 44, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }, filterSelected: { backgroundColor: colors.text, borderColor: colors.text }, filterText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
-  documentList: {}, documentListTablet: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 14, marginTop: 10 }, card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow }, cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 }, cardRequired: { borderColor: colors.warningBorder }, fileTop: { flexDirection: "row", alignItems: "center", gap: 11 }, fileIcon: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, fileIconRequired: { backgroundColor: colors.warningBg }, fileIconText: { color: colors.info, fontSize: 11, fontWeight: "900" }, fileIconTextRequired: { color: colors.warning }, fileBody: { flex: 1, minWidth: 0 }, fileName: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "900" }, fileMeta: { color: colors.muted, fontSize: 11, marginTop: 4 }, context: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 9 }, contextText: { flex: 1, color: colors.muted, fontSize: 11, fontWeight: "700" }, badges: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 }, badge: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, badgeText: { fontSize: 11, fontWeight: "900" }, open: { minHeight: 44, borderRadius: 14, marginTop: 12, paddingHorizontal: 14, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, openText: { color: colors.primary, fontSize: 12, fontWeight: "900" }, openArrow: { color: colors.primary, fontSize: 17, fontWeight: "900" },
+  documentList: {}, documentListTablet: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 14, marginTop: 10 }, card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow }, cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 }, cardRequired: { borderColor: colors.warningBorder }, fileTop: { flexDirection: "row", alignItems: "center", gap: 11 }, fileIcon: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, fileIconRequired: { backgroundColor: colors.warningBg }, fileIconText: { color: colors.info, fontSize: 11, fontWeight: "900" }, fileIconTextRequired: { color: colors.warning }, fileBody: { flex: 1, minWidth: 0 }, fileName: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "900" }, fileMeta: { color: colors.muted, fontSize: 11, marginTop: 4 }, context: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 9 }, contextText: { flex: 1, color: colors.muted, fontSize: 11, fontWeight: "700" }, badges: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 }, badge: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, badgeText: { fontSize: 11, fontWeight: "900" }, restrictedHint: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "700", marginTop: 10 }, open: { minHeight: 44, borderRadius: 14, marginTop: 12, paddingHorizontal: 14, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, openText: { color: colors.primary, fontSize: 12, fontWeight: "900" }, openArrow: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   empty: { margin: 14, minHeight: 260, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow }, emptyMark: { width: 66, height: 66, borderRadius: 22, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "900", textAlign: "center", marginTop: 15 }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6 }, emptyActions: { alignSelf: "stretch", flexDirection: "row", gap: 8, marginTop: 16 }, emptySecondaryAction: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, emptySecondaryText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, emptyPrimaryAction: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 10 }, emptyPrimaryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" }, disabled: { opacity: 0.58 }, pressed: { opacity: 0.7 },
 })
