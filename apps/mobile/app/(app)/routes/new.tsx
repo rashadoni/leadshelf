@@ -23,6 +23,7 @@ import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
 import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
@@ -78,6 +79,7 @@ export default function NewRouteScreen() {
   const field = useField()
   const { sync } = useSync()
   const insets = useSafeAreaInsets()
+  const layout = useResponsiveLayout()
   const availableDays = field.week?.days ?? []
   const requestedDateKey = typeof requestedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate.slice(0, 10))
     ? requestedDate.slice(0, 10)
@@ -377,6 +379,7 @@ export default function NewRouteScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 94 }]}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
@@ -637,9 +640,10 @@ export default function NewRouteScreen() {
             <Text style={styles.openConflictRouteText}>{t("openRoute")}</Text>
           </Pressable>
         ) : null}
+        </View>
       </ScrollView>
       <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
-        <View style={styles.footer}>
+        <View style={[styles.footer, layout.isTablet && styles.contentTablet]}>
           {step > 1 ? <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving, busy: saving }} disabled={saving} onPress={goBack} style={[styles.footerBack, saving && styles.disabled]}><Text style={styles.footerBackText}>{t("back")}</Text></Pressable> : null}
           <Pressable accessibilityRole="button" accessibilityLabel={saving ? t("saving") : submitLabel} accessibilityState={{ disabled: submitDisabled, busy: saving }} disabled={submitDisabled} onPress={goForward} style={[styles.submit, step > 1 && styles.submitCompact, submitDisabled && styles.disabled]}><Text style={styles.submitText}>{saving ? t("saving") : submitLabel}</Text></Pressable>
         </View>
@@ -651,6 +655,8 @@ export default function NewRouteScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
@@ -678,7 +684,7 @@ const styles = StyleSheet.create({
   dateCheckingText: { flex: 1, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "800" },
   dateUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginHorizontal: 14, marginBottom: 10, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   dateUnavailableText: { flex: 1, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "800" },
-  managerSelectionHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginHorizontal: 16, marginBottom: 10 },
+  managerSelectionHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginHorizontal: 16, marginBottom: 10 },
   managerChangeSelection: { minHeight: 46, marginHorizontal: 14, borderRadius: 13, paddingHorizontal: 13, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   managerChangeSelectionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   days: { paddingHorizontal: 14, gap: 8 },
@@ -687,16 +693,16 @@ const styles = StyleSheet.create({
   dayDisabled: { opacity: 0.32 },
   dayNumber: { color: colors.text, fontSize: 17, fontWeight: "900" },
   dayNumberSelected: { color: colors.headerText },
-  dayMonth: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  dayMonth: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   dayMonthSelected: { color: colors.headerSubtext },
   dayOffDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.holiday, marginTop: 3 },
   dayOffDotSelected: { backgroundColor: colors.headerSubtext },
   weekNavigation: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 8 },
   weekButton: { flex: 1, minHeight: 44, borderRadius: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5, paddingHorizontal: 8 },
-  weekButtonText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  weekButtonText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   pointsHeader: { marginHorizontal: 16, marginTop: 20, marginBottom: 5, flexDirection: "row", alignItems: "center", gap: 7 },
   sectionTitleInline: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  count: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 10, fontWeight: "900", lineHeight: 24, textAlign: "center" },
+  count: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 11, fontWeight: "900", lineHeight: 24, textAlign: "center" },
   emptySelection: { marginHorizontal: 14, marginTop: 9, minHeight: 112, borderRadius: radii.card, padding: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 9 },
   emptySelectionText: { color: colors.muted, fontSize: 12, lineHeight: 17, fontWeight: "700", textAlign: "center", maxWidth: 290 },
   selectionCard: { marginHorizontal: 14, marginTop: 9, minHeight: 64, borderRadius: radii.card, padding: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border },
@@ -705,8 +711,8 @@ const styles = StyleSheet.create({
   reviewRow: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 9 },
   reviewValue: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "800" },
   managerPublishNotice: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  managerPublishNoticeText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "800" },
-  label: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 5, marginBottom: 6 },
+  managerPublishNoticeText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  label: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 5, marginBottom: 6 },
   input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
   notes: { minHeight: 80, paddingTop: 11 },
   targetCard: { marginHorizontal: 14, marginTop: 9, minHeight: 66, borderRadius: radii.card, padding: 11, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
@@ -720,7 +726,7 @@ const styles = StyleSheet.create({
   targetMeta: { flex: 1, minWidth: 0, color: colors.muted, fontSize: 11, lineHeight: 15 },
   targetTimePill: { minHeight: 24, borderRadius: radii.pill, paddingHorizontal: 7, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 3 },
   targetTimePillAttention: { backgroundColor: colors.missedBg },
-  targetTimeText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  targetTimeText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   targetTimeTextAttention: { color: colors.missed },
   targetExpandControl: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   targetEditor: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 10 },
@@ -748,7 +754,7 @@ const styles = StyleSheet.create({
   openConflictRoute: { marginHorizontal: 14, marginTop: 9, minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.infoBorder, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   openConflictRouteText: { color: colors.info, fontSize: 12, fontWeight: "900" },
   stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 },
-  footer: { flexDirection: "row", gap: 8 },
+  footer: { width: "100%", flexDirection: "row", gap: 8 },
   footerBack: { minWidth: 96, minHeight: 52, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   footerBackText: { color: colors.text, fontSize: 13, fontWeight: "900" },
   submit: { flex: 1, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
