@@ -17,6 +17,7 @@ import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 
@@ -135,6 +136,7 @@ export default function DocumentsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: picking }} disabled={picking} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={[styles.back, picking && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>

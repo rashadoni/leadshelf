@@ -15,6 +15,7 @@ import {
   CommercialPill,
   commercialCardStyle,
 } from "../../src/commercial/ui"
+import { FieldScreenChrome } from "../../src/components/FieldScreenChrome"
 import { SyncBar } from "../../src/components/SyncBar"
 import { TabIcon } from "../../src/components/TabIcon"
 import {
@@ -363,6 +364,7 @@ export default function SyncCenterScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <CommercialHeader title={t("syncCenterTitle")} subtitle={t("syncCenterSubtitle")} />
       <SyncBar />
       <ScrollView

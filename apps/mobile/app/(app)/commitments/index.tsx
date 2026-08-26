@@ -46,6 +46,7 @@ import {
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, radii } from "../../../src/theme"
@@ -344,6 +345,7 @@ export default function CommitmentsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <CommercialHeader title={t("commitmentsTitle")} subtitle={t("commitmentsSubtitle")} />
       <ScrollView
         contentContainerStyle={styles.scroll}
