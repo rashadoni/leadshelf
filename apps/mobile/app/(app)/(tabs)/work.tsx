@@ -39,13 +39,20 @@ export default function WorkTab() {
   const [teamOpen, setTeamOpen] = useState(false)
   const shelfOpenTasks = IS_LEADDRIVE_FIELD ? 0 : countOpenTasks()
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
+  const workdayKnown = Boolean(field.workday)
+  const workdayLoading = !workdayKnown && (field.activityPhase === "loading" || field.activityPhase === "refreshing")
+  const workdayUnavailable = !workdayKnown && !workdayLoading
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const activeWorkday = workdayStatus === "STARTED"
   const pausedWorkday = workdayStatus === "PAUSED"
   const completedWorkday = workdayStatus === "COMPLETED"
-  const workdayStatusLabel = t(workdayStatusKeys[workdayStatus])
-  const workdayStatusIcon: TabIconName = activeWorkday ? "play" : pausedWorkday ? "pause" : completedWorkday ? "check" : "today"
-  const workdayStatusColor = activeWorkday || completedWorkday ? colors.successDark : pausedWorkday ? colors.warning : colors.muted
+  const workdayStatusLabel = workdayKnown
+    ? t(workdayStatusKeys[workdayStatus])
+    : workdayLoading
+      ? t("workdayLoading")
+      : t("fieldDataError")
+  const workdayStatusIcon: TabIconName = !workdayKnown ? workdayLoading ? "refresh" : "alert" : activeWorkday ? "play" : pausedWorkday ? "pause" : completedWorkday ? "check" : "today"
+  const workdayStatusColor = !workdayKnown ? workdayLoading ? colors.info : colors.warning : activeWorkday || completedWorkday ? colors.successDark : pausedWorkday ? colors.warning : colors.muted
   const shelfExecutionEnabled = Boolean(field.profile?.capabilities.shelfExecution.enabled)
   const shelfStatusLabel = t(shelfExecutionEnabled ? "shelfConnected" : "shelfUnavailable")
   const canOpenManager = IS_LEADDRIVE_FIELD && hasFieldManagerRole(field.profile?.agent.role)
@@ -98,9 +105,9 @@ export default function WorkTab() {
             <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? t("organizationUnavailable")}</Text>
           </View>
           {IS_LEADDRIVE_FIELD ? (
-            <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionIdle]}>
+            <View accessible accessibilityRole={workdayLoading ? "status" : workdayUnavailable ? "alert" : "text"} accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, workdayLoading ? styles.connectionLoading : workdayUnavailable ? styles.connectionError : activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionIdle]}>
               <TabIcon name={workdayStatusIcon} color={workdayStatusColor} size={14} />
-              <Text style={[styles.connectionText, activeWorkday || completedWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
+              <Text style={[styles.connectionText, workdayLoading ? styles.connectionTextLoading : workdayUnavailable ? styles.connectionTextOff : activeWorkday || completedWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
                 {workdayStatusLabel}
               </Text>
             </View>
@@ -265,10 +272,13 @@ const styles = StyleSheet.create({
   connectionPaused: { backgroundColor: colors.warningBg },
   connectionOff: { backgroundColor: colors.warningBg },
   connectionIdle: { backgroundColor: colors.draftBg },
+  connectionLoading: { backgroundColor: colors.infoBg },
+  connectionError: { backgroundColor: colors.warningBg },
   connectionText: { flexShrink: 1, fontSize: 11, fontWeight: "800" },
   connectionTextOn: { color: colors.successDark },
   connectionTextOff: { color: colors.warning },
   connectionTextIdle: { color: colors.text },
+  connectionTextLoading: { color: colors.info },
   sectionTitle: { marginHorizontal: 20, marginTop: 22, marginBottom: 8, color: colors.text, fontSize: 16, fontWeight: "900" },
   moduleList: { marginHorizontal: 20, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   moduleRow: { minHeight: 64, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, position: "relative" },
