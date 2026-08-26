@@ -41,6 +41,9 @@ export default function NewAgentTaskScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null | undefined>(undefined)
   const [time, setTime] = useState("09:00")
   const [customerId, setCustomerId] = useState<string | null>(null)
+  // Search results are deliberately short-lived. Keep the selected preview
+  // separately so clearing the query never hides a valid selected customer.
+  const [selectedCustomerPreview, setSelectedCustomerPreview] = useState<FieldTaskCustomerPreview | null>(null)
   const [customerSearch, setCustomerSearch] = useState("")
   const [searchedCustomers, setSearchedCustomers] = useState<FieldTaskCustomerPreview[]>([])
   const [customerLoading, setCustomerLoading] = useState(false)
@@ -108,7 +111,10 @@ export default function NewAgentTaskScreen() {
       : plannedCustomers
     return matches.slice(0, 12)
   }, [customerQuery, customers, plannedCustomers])
-  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
+  const selectedCustomer = customerId
+    ? customers.find((customer) => customer.id === customerId) ??
+      (selectedCustomerPreview?.id === customerId ? selectedCustomerPreview : null)
+    : null
 
   useEffect(() => {
     if (!copySource || hydratedCopyId.current === copySource.id) return
@@ -122,6 +128,7 @@ export default function NewAgentTaskScreen() {
     setDescription(copySource.description ?? "")
     setPriority(copySource.priority)
     setCustomerId(copySource.customerId)
+    setSelectedCustomerPreview(copySource.customer)
     setRecurrence(copySource.recurrenceRule)
     hydratedCopyId.current = copySource.id
   }, [copySource, hasInitialInput])
@@ -162,8 +169,9 @@ export default function NewAgentTaskScreen() {
     return () => clearTimeout(timeout)
   }, [customerSearch])
 
-  function chooseCustomer(id: string | null) {
-    setCustomerId(id)
+  function chooseCustomer(customer: FieldTaskCustomerPreview | null) {
+    setCustomerId(customer?.id ?? null)
+    setSelectedCustomerPreview(customer)
     setCustomerSearch("")
   }
 
@@ -189,7 +197,6 @@ export default function NewAgentTaskScreen() {
     setSaving(true)
     setError(null)
     try {
-      const customer = customers.find((item) => item.id === customerId) ?? copySource?.customer ?? null
       const queued = enqueueFieldTaskCreate({
         title: normalizedTitle,
         description: description.trim() || null,
@@ -199,7 +206,7 @@ export default function NewAgentTaskScreen() {
         dueDate,
         copiedFromId: copySource?.id ?? null,
         recurrence: recurrence ? { rule: recurrence, interval: 1, until: null } : null,
-      }, customer)
+      }, selectedCustomer)
       const cached = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
       if (cached) field.applyLocalAgentTasks(cached.value)
       Alert.alert(t("agentTaskCreated"))
@@ -321,7 +328,7 @@ export default function NewAgentTaskScreen() {
           {customerLoading ? <Text style={styles.customerState}>{t("agentTaskCustomerLoading")}</Text> : null}
           {customerSearchError ? <Text style={styles.customerError}>{customerSearchError}</Text> : null}
           {visibleCustomers.map((customer) => (
-            <Pressable key={customer.id} accessibilityRole="button" accessibilityLabel={customer.name} accessibilityState={{ selected: customerId === customer.id }} onPress={() => chooseCustomer(customer.id)} style={[styles.customerChoice, customerId === customer.id && styles.customerChoiceSelected]}>
+            <Pressable key={customer.id} accessibilityRole="button" accessibilityLabel={customer.name} accessibilityState={{ selected: customerId === customer.id }} onPress={() => chooseCustomer(customer)} style={[styles.customerChoice, customerId === customer.id && styles.customerChoiceSelected]}>
               <View style={[styles.customerMark, customerId === customer.id && styles.customerMarkSelected]}><Text style={[styles.customerMarkText, customerId === customer.id && styles.customerMarkTextSelected]}>{customer.name.charAt(0).toUpperCase()}</Text></View>
               <View style={styles.customerChoiceBody}>
                 <Text style={[styles.customerChoiceName, customerId === customer.id && styles.customerChoiceNameSelected]} numberOfLines={1}>{customer.name}</Text>
