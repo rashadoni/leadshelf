@@ -4,7 +4,7 @@ import { useSync } from "../sync/sync-context"
 import { t } from "../i18n"
 import { colors, radii } from "../theme"
 
-export function SyncBar() {
+export function SyncBar({ showRetry = true, compact = false }: { showRetry?: boolean; compact?: boolean }) {
   const { status, sync } = useSync()
   const queued = status.pendingOps + status.pendingPhotos
   const running = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
@@ -46,7 +46,7 @@ export function SyncBar() {
         : colors.muted
 
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, compact && styles.barCompact]}>
       <View style={[styles.dot, { backgroundColor: color }]} />
       <Text style={styles.text}>
         {label}
@@ -55,8 +55,11 @@ export function SyncBar() {
         {status.rejectedOps > 0 ? ` · ${status.rejectedOps} ${t("syncRejected")}` : ""}
         {status.quarantinedPhotos > 0 ? ` · ${status.quarantinedPhotos} ${t("photosStuck")}` : ""}
       </Text>
-      {canRetry ? (
+      {showRetry && canRetry ? (
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("syncRetry")}
+          accessibilityState={{ disabled: running, busy: running }}
           disabled={running}
           onPress={() => void sync()}
           style={[styles.retry, running && styles.retryDisabled]}
@@ -79,15 +82,17 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  text: { flex: 1, fontSize: 11, fontWeight: "600", color: colors.muted },
+  barCompact: { paddingHorizontal: 0 },
+  text: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.muted },
   retry: {
+    minHeight: 44,
     borderRadius: radii.inner,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingVertical: 8,
     backgroundColor: colors.card,
   },
   retryDisabled: { opacity: 0.5 },
-  retryText: { fontSize: 10, fontWeight: "800", color: colors.text },
+  retryText: { fontSize: 12, fontWeight: "800", color: colors.text },
 })

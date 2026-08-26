@@ -1,5 +1,5 @@
 // Вкладка «Профиль»: агент, язык интерфейса, синхронизация, выход.
-import { useEffect, useState } from "react"
+import { type ReactNode, useEffect, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { router } from "expo-router"
@@ -22,7 +22,7 @@ import {
   readEncryptedMediaUsage,
 } from "../../../src/media/encrypted-media-store"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
-import { TabIcon } from "../../../src/components/TabIcon"
+import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 import { agentRoleLabel } from "../../../src/field/labels"
@@ -42,6 +42,7 @@ export default function ProfileTab() {
     photoBytes: number
     photoLevel: ReturnType<typeof photoCapacityLevel>
   } | null>(null)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ work: true })
 
   async function refreshCapacity() {
     const database = getLocalDatabaseCapacity()
@@ -133,6 +134,10 @@ export default function ProfileTab() {
     [t("profileQueueAge"), queueAge],
     [t("profileSyncIssues"), String(issueCount)],
   ]
+  const syncNeedsAttention = status.phase !== "idle" || status.pendingOps + status.pendingPhotos > 0 || issueCount > 0
+  const syncHasDanger = status.rejectedOps > 0
+  const storageNeedsAttention = capacity?.photoLevel !== "ok"
+  const toggleSection = (section: string) => setOpenSections((current) => ({ ...current, [section]: !current[section] }))
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -145,201 +150,256 @@ export default function ProfileTab() {
 
         <View style={[styles.profileGrid, layout.isTablet && styles.profileGridTablet]}>
           <View style={layout.isTablet ? styles.profileColumn : undefined}>
-        <View style={[styles.card, styles.accountCard, layout.isTablet && styles.cardTablet]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
-          <View style={styles.accountBody}>
-            <Text style={styles.accountLabel}>{t("profileAccount")}</Text>
-            <Text style={styles.accountName} numberOfLines={2}>
-              {displayName ?? "—"}
-            </Text>
-            {agent?.role ? <Text style={styles.accountMeta}>{agentRoleLabel(agent.role)}</Text> : null}
-          </View>
-        </View>
-
-        {agent ? (
-          <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>{t("organization")}</Text>
-              <Text style={styles.detailValue}>{agent.organizationName}</Text>
-            </View>
-            <View style={[styles.detailRow, IS_LEADDRIVE_FIELD && styles.detailRowLast]}>
-              <Text style={styles.detailLabel}>{t("manager")}</Text>
-              <Text style={styles.detailValue}>{agent.manager?.name ?? "—"}</Text>
-            </View>
-            {!IS_LEADDRIVE_FIELD ? (
-              <View style={[styles.detailRow, styles.detailRowLast]}>
-                <Text style={styles.detailLabel}>{t("shelfConnection")}</Text>
-                <View style={styles.connectionValue}>
-                  <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
-                  <Text style={styles.detailValue}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+            <View style={[styles.card, styles.accountCard, layout.isTablet && styles.cardTablet]}>
+              <View style={styles.accountTop}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initial}</Text>
+                </View>
+                <View style={styles.accountBody}>
+                  <Text style={styles.accountLabel}>{t("profileAccount")}</Text>
+                  <Text style={styles.accountName} numberOfLines={2}>{displayName ?? "—"}</Text>
+                  {agent?.role ? <Text style={styles.accountMeta}>{agentRoleLabel(agent.role)}</Text> : null}
                 </View>
               </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${t("personalKpiTitle")}. ${t("personalKpiOpen")}`}
-          accessibilityHint={t("personalKpiHint")}
-          onPress={() => router.push("/(app)/kpi" as never)}
-          style={({ pressed }) => [styles.card, styles.kpiEntry, layout.isTablet && styles.cardTablet, pressed && styles.kpiEntryPressed]}
-        >
-          <View accessible={false} style={styles.kpiIcon}><TabIcon name="dashboard" color={colors.primary} size={23} /></View>
-          <View style={styles.kpiBody}>
-            <Text style={styles.kpiTitle}>{t("personalKpiTitle")}</Text>
-            <Text style={styles.kpiHint}>{t("personalKpiHint")}</Text>
-            <Text style={styles.kpiAction}>{t("personalKpiOpen")}</Text>
-          </View>
-          <View accessible={false} style={styles.entryChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
-        </Pressable>
-
-        {IS_LEADDRIVE_FIELD ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("moduleHrm")}
-            accessibilityHint={t("fieldHrmEntryHint")}
-            onPress={() => router.push("/(app)/hrm" as never)}
-            style={({ pressed }) => [styles.card, styles.hrmEntry, layout.isTablet && styles.cardTablet, pressed && styles.hrmEntryPressed]}
-          >
-            <View accessible={false} style={styles.hrmIcon}><TabIcon name="week" color={colors.primary} size={23} /></View>
-            <View style={styles.hrmBody}>
-              <Text style={styles.hrmTitle}>{t("moduleHrm")}</Text>
-              <Text style={styles.hrmHint}>{t("fieldHrmEntryHint")}</Text>
+              {agent ? (
+                <View style={styles.accountDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>{t("organization")}</Text>
+                    <Text style={styles.detailValue}>{agent.organizationName}</Text>
+                  </View>
+                  <View style={[styles.detailRow, IS_LEADDRIVE_FIELD && styles.detailRowLast]}>
+                    <Text style={styles.detailLabel}>{t("manager")}</Text>
+                    <Text style={styles.detailValue}>{agent.manager?.name ?? "—"}</Text>
+                  </View>
+                  {!IS_LEADDRIVE_FIELD ? (
+                    <View style={[styles.detailRow, styles.detailRowLast]}>
+                      <Text style={styles.detailLabel}>{t("shelfConnection")}</Text>
+                      <View style={styles.connectionValue}>
+                        <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
+                        <Text style={styles.detailValue}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
-            <View accessible={false} style={styles.entryChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
-          </Pressable>
-        ) : null}
+
+            <ProfileDisclosure
+              title={t("profileWorkTools")}
+              icon="work"
+              open={Boolean(openSections.work)}
+              onPress={() => toggleSection("work")}
+              tablet={layout.isTablet}
+            >
+              <ProfileEntry
+                icon="dashboard"
+                title={t("personalKpiTitle")}
+                hint={t("personalKpiHint")}
+                accessibilityHint={t("personalKpiHint")}
+                onPress={() => router.push("/(app)/kpi" as never)}
+              />
+              {IS_LEADDRIVE_FIELD ? (
+                <ProfileEntry
+                  icon="week"
+                  title={t("moduleHrm")}
+                  hint={t("fieldHrmEntryHint")}
+                  accessibilityHint={t("fieldHrmEntryHint")}
+                  onPress={() => router.push("/(app)/hrm" as never)}
+                />
+              ) : null}
+            </ProfileDisclosure>
           </View>
 
           <View style={layout.isTablet ? styles.profileColumn : undefined}>
-
-        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
-          <Text style={styles.sectionTitle}>{t("profileLanguage")}</Text>
-          <View accessibilityRole="radiogroup" accessibilityLabel={t("profileLanguage")} style={styles.localeRow}>
-            {LOCALES.map((l) => (
+            <ProfileDisclosure
+              title={t("profileSync")}
+              icon="refresh"
+              open={Boolean(openSections.sync) || syncNeedsAttention}
+              onPress={() => toggleSection("sync")}
+              tablet={layout.isTablet}
+            >
+              <SyncBar compact showRetry={false} />
+              <View style={styles.metricsGrid}>
+                {syncMetrics.map(([label, value], index) => (
+                  <View key={label} style={styles.metric}>
+                    <Text style={styles.metricLabel}>{label}</Text>
+                    <Text style={[
+                      styles.metricValue,
+                      index === 3 && issueCount > 0 && (syncHasDanger ? styles.metricDanger : styles.metricWarning),
+                    ]}>
+                      {value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              {issueCount > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("syncCenterOpen")}
+                  accessibilityHint={t("profileSyncIssues")}
+                  onPress={() => router.push("/(app)/sync-center" as never)}
+                  style={({ pressed }) => [styles.recoveryButton, syncHasDanger && styles.recoveryButtonDanger, pressed && styles.recoveryPressed]}
+                >
+                  <View accessible={false} style={styles.recoveryMark}><TabIcon name="alert" color={syncHasDanger ? colors.dangerPressed : colors.warning} size={18} /></View>
+                  <Text style={[styles.recoveryText, syncHasDanger && styles.recoveryTextDanger]}>{t("syncCenterOpen")}</Text>
+                  <View accessible={false} style={styles.entryChevron}><TabIcon name="chevronRight" color={syncHasDanger ? colors.dangerPressed : colors.warning} size={20} /></View>
+                </Pressable>
+              ) : null}
               <Pressable
-                key={l}
-                accessibilityRole="radio"
-                accessibilityLabel={`${t("profileLanguage")}: ${l === "az" ? t("languageAz") : t("languageRu")}`}
-                accessibilityState={{ selected: locale === l }}
-                onPress={() => {
-                  setLocale(l)
-                  void tokenStore.setLocale(l)
-                }}
-                style={({ pressed }) => [styles.localeBtn, locale === l && styles.localeActive, pressed && styles.localePressed]}
+                accessibilityRole="button"
+                accessibilityLabel={running || syncing ? t("syncRunning") : t("syncNow")}
+                accessibilityState={{ disabled: running || syncing, busy: running || syncing }}
+                disabled={running || syncing}
+                onPress={() => void onSyncNow()}
+                style={({ pressed }) => [styles.syncButton, pressed && styles.syncPressed, (running || syncing) && styles.syncDisabled]}
               >
-                <Text style={[styles.localeText, locale === l && styles.localeTextActive]}>
-                  {l === "az" ? t("languageAz") : t("languageRu")}
-                </Text>
-                {locale === l ? <View accessible={false} style={styles.localeCheck}><TabIcon name="check" color={colors.primary} size={18} /></View> : null}
+                <View accessible={false}><TabIcon name="refresh" color={colors.headerText} size={19} /></View>
+                <Text style={styles.syncText}>{running || syncing ? t("syncRunning") : t("syncNow")}</Text>
               </Pressable>
-            ))}
+            </ProfileDisclosure>
+
+            <ProfileDisclosure
+              title={t("profileStorage")}
+              icon="document"
+              open={Boolean(openSections.storage) || storageNeedsAttention}
+              onPress={() => toggleSection("storage")}
+              tablet={layout.isTablet}
+            >
+              <View style={styles.metricsGrid}>
+                <View style={styles.metric}>
+                  <Text style={styles.metricLabel}>{t("profileSqliteSize")}</Text>
+                  <Text style={styles.metricValue}>{capacity ? formatCapacityBytes(capacity.databaseBytes) : "—"}</Text>
+                </View>
+                <View style={styles.metric}>
+                  <Text style={styles.metricLabel}>{t("profileOfflineMedia")}</Text>
+                  <Text style={[styles.metricValue, storageNeedsAttention && styles.metricWarning]}>
+                    {capacity ? `${capacity.photoFiles} · ${formatCapacityBytes(capacity.photoBytes)}` : "—"}
+                  </Text>
+                </View>
+              </View>
+              {storageNeedsAttention ? <Text style={styles.capacityHint}>{t("profileStorageWarning")}</Text> : null}
+            </ProfileDisclosure>
+
+            <ProfileDisclosure
+              title={t("profileLanguage")}
+              icon="profile"
+              open={Boolean(openSections.language)}
+              onPress={() => toggleSection("language")}
+              tablet={layout.isTablet}
+            >
+              <View accessibilityRole="radiogroup" accessibilityLabel={t("profileLanguage")} style={styles.localeRow}>
+                {LOCALES.map((l) => (
+                  <Pressable
+                    key={l}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${t("profileLanguage")}: ${l === "az" ? t("languageAz") : t("languageRu")}`}
+                    accessibilityState={{ selected: locale === l }}
+                    onPress={() => {
+                      setLocale(l)
+                      void tokenStore.setLocale(l)
+                    }}
+                    style={({ pressed }) => [styles.localeBtn, locale === l && styles.localeActive, pressed && styles.localePressed]}
+                  >
+                    <Text style={[styles.localeText, locale === l && styles.localeTextActive]}>{l === "az" ? t("languageAz") : t("languageRu")}</Text>
+                    {locale === l ? <View accessible={false} style={styles.localeCheck}><TabIcon name="check" color={colors.primary} size={18} /></View> : null}
+                  </Pressable>
+                ))}
+              </View>
+            </ProfileDisclosure>
           </View>
         </View>
 
-        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
-          <Text style={styles.sectionTitle}>{t("profileSync")}</Text>
-          <SyncBar />
-          <View style={styles.metricsGrid}>
-            {syncMetrics.map(([label, value], index) => (
-              <View key={label} style={styles.metric}>
-                <Text style={styles.metricLabel}>{label}</Text>
-                <Text style={[styles.metricValue, index === 3 && issueCount > 0 && styles.metricWarning]}>
-                  {value}
-                </Text>
-              </View>
-            ))}
-          </View>
-          {issueCount > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("syncCenterOpen")}
-              accessibilityHint={t("profileSyncIssues")}
-              onPress={() => router.push("/(app)/sync-center" as never)}
-              style={styles.recoveryButton}
-            >
-              <View accessible={false} style={styles.recoveryMark}><TabIcon name="alert" color={colors.dangerPressed} size={18} /></View>
-              <Text style={styles.recoveryText}>{t("syncCenterOpen")}</Text>
-              <View accessible={false} style={styles.entryChevron}><TabIcon name="chevronRight" color={colors.dangerPressed} size={20} /></View>
-            </Pressable>
-          ) : null}
+        <ProfileDisclosure
+          title={t("profileSession")}
+          icon="profile"
+          open={Boolean(openSections.session)}
+          onPress={() => toggleSection("session")}
+          tablet={false}
+        >
+          <ProfileEntry
+            icon="organizations"
+            title={t("switchOrganization")}
+            hint={t("switchOrganizationHint")}
+            accessibilityHint={t("switchOrganizationHint")}
+            onPress={requestOrganizationSwitch}
+          />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={running || syncing ? t("syncRunning") : t("syncNow")}
-            accessibilityState={{ disabled: running || syncing, busy: running || syncing }}
-            disabled={running || syncing}
-            onPress={() => void onSyncNow()}
-            style={({ pressed }) => [
-              styles.syncButton,
-              pressed && styles.syncPressed,
-              (running || syncing) && styles.syncDisabled,
-            ]}
+            accessibilityLabel={t("logout")}
+            onPress={() => void logout()}
+            style={({ pressed }) => [styles.sessionLogout, pressed && styles.logoutPressed]}
           >
-            <View accessible={false}>
-              <TabIcon name="refresh" color={colors.headerText} size={19} />
-            </View>
-            <Text style={styles.syncText}>{running || syncing ? t("syncRunning") : t("syncNow")}</Text>
+            <View accessible={false} style={[styles.entryIcon, styles.entryIconDanger]}><TabIcon name="close" color={colors.danger} size={19} /></View>
+            <Text style={styles.sessionLogoutText}>{t("logout")}</Text>
+            <View accessible={false} style={styles.entryChevron}><TabIcon name="chevronRight" color={colors.danger} size={21} /></View>
           </Pressable>
-        </View>
-
-        <View style={[styles.card, layout.isTablet && styles.cardTablet]}>
-          <Text style={styles.sectionTitle}>{t("profileStorage")}</Text>
-          <View style={styles.metricsGrid}>
-            <View style={styles.metric}>
-              <Text style={styles.metricLabel}>{t("profileSqliteSize")}</Text>
-              <Text style={styles.metricValue}>{capacity ? formatCapacityBytes(capacity.databaseBytes) : "—"}</Text>
-            </View>
-            <View style={styles.metric}>
-              <Text style={styles.metricLabel}>{t("profileOfflineMedia")}</Text>
-              <Text style={[
-                styles.metricValue,
-                capacity && capacity.photoLevel !== "ok" && styles.metricWarning,
-              ]}>
-                {capacity
-                  ? `${capacity.photoFiles} · ${formatCapacityBytes(capacity.photoBytes)}`
-                  : "—"}
-              </Text>
-            </View>
-          </View>
-          {capacity && capacity.photoLevel !== "ok" ? (
-            <Text style={styles.capacityHint}>{t("profileStorageWarning")}</Text>
-          ) : null}
-        </View>
-          </View>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("switchOrganization")}
-          accessibilityHint={t("switchOrganizationHint")}
-          onPress={requestOrganizationSwitch}
-          style={({ pressed }) => [styles.organizationSwitch, layout.isTablet && styles.organizationSwitchTablet, pressed && styles.organizationSwitchPressed]}
-        >
-          <View accessible={false} style={styles.organizationSwitchIcon}>
-            <TabIcon name="organizations" color={colors.primary} size={22} />
-          </View>
-          <View style={styles.organizationSwitchBody}>
-            <Text style={styles.organizationSwitchTitle}>{t("switchOrganization")}</Text>
-            <Text style={styles.organizationSwitchHint}>{t("switchOrganizationHint")}</Text>
-          </View>
-          <View accessible={false} style={styles.entryChevron}>
-            <TabIcon name="chevronRight" color={colors.primary} size={21} />
-          </View>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("logout")}
-          onPress={() => void logout()}
-          style={({ pressed }) => [styles.logout, layout.isTablet && styles.logoutTablet, pressed && styles.logoutPressed]}
-        >
-          <Text style={styles.logoutText}>{t("logout")}</Text>
-        </Pressable>
+        </ProfileDisclosure>
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+function ProfileDisclosure({
+  title,
+  icon,
+  open,
+  onPress,
+  children,
+  tablet,
+}: {
+  title: string
+  icon: TabIconName
+  open: boolean
+  onPress: () => void
+  children: ReactNode
+  tablet: boolean
+}) {
+  return (
+    <View style={[styles.disclosure, tablet && styles.disclosureTablet]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ expanded: open }}
+        onPress={onPress}
+        style={({ pressed }) => [styles.disclosureToggle, pressed && styles.disclosurePressed]}
+      >
+        <View accessible={false} style={styles.disclosureIcon}><TabIcon name={icon} color={colors.primary} size={19} /></View>
+        <Text style={styles.disclosureTitle} numberOfLines={1}>{title}</Text>
+        <View accessible={false} style={styles.entryChevron}><TabIcon name={open ? "chevronUp" : "chevronDown"} color={colors.primary} size={21} /></View>
+      </Pressable>
+      {open ? <View style={styles.disclosureContent}>{children}</View> : null}
+    </View>
+  )
+}
+
+function ProfileEntry({
+  icon,
+  title,
+  hint,
+  accessibilityHint,
+  onPress,
+}: {
+  icon: TabIconName
+  title: string
+  hint: string
+  accessibilityHint: string
+  onPress: () => void
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={accessibilityHint}
+      onPress={onPress}
+      style={({ pressed }) => [styles.entry, pressed && styles.entryPressed]}
+    >
+      <View accessible={false} style={styles.entryIcon}><TabIcon name={icon} color={colors.primary} size={20} /></View>
+      <View style={styles.entryBody}>
+        <Text style={styles.entryTitle}>{title}</Text>
+        <Text style={styles.entryHint} numberOfLines={1}>{hint}</Text>
+      </View>
+      <View accessible={false} style={styles.entryChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
+    </Pressable>
   )
 }
 
@@ -357,7 +417,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  accountCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderColor: colors.border },
+  accountCard: { backgroundColor: colors.card, borderColor: colors.border },
+  accountTop: { flexDirection: "row", alignItems: "center", gap: 14 },
   avatar: {
     width: 52,
     height: 52,
@@ -368,30 +429,31 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: colors.primary, fontSize: 22, fontWeight: "800" },
   accountBody: { flex: 1, minWidth: 0 },
-  accountLabel: { fontSize: 11, fontWeight: "800", color: colors.muted, letterSpacing: 0.7, textTransform: "uppercase" },
+  accountLabel: { fontSize: 12, fontWeight: "800", color: colors.muted, letterSpacing: 0.7, textTransform: "uppercase" },
   accountName: { fontSize: 18, lineHeight: 23, fontWeight: "900", color: colors.text, marginTop: 3 },
   accountMeta: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  kpiEntry: { minHeight: 104, flexDirection: "row", alignItems: "center", gap: 13 },
-  kpiEntryPressed: { backgroundColor: colors.primarySoft },
-  kpiIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  kpiBody: { flex: 1, minWidth: 0 },
-  kpiTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  kpiHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
-  kpiAction: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 7 },
+  accountDetails: { marginTop: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 2 },
   entryChevron: { width: 24, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  hrmEntry: { minHeight: 88, flexDirection: "row", alignItems: "center", gap: 13 },
-  hrmEntryPressed: { backgroundColor: colors.primarySoft },
-  hrmIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  hrmBody: { flex: 1, minWidth: 0 },
-  hrmTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  hrmHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
   detailRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   detailRowLast: { borderBottomWidth: 0 },
   detailLabel: { color: colors.muted, fontSize: 12, fontWeight: "600" },
   detailValue: { flexShrink: 1, color: colors.text, fontSize: 12, fontWeight: "800", textAlign: "right" },
   connectionValue: { flexDirection: "row", alignItems: "center", gap: 6 },
   connectionDot: { width: 7, height: 7, borderRadius: 4 },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text, marginBottom: 10 },
+  disclosure: { marginHorizontal: 20, marginTop: 16, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  disclosureTablet: { marginHorizontal: 0 },
+  disclosureToggle: { minHeight: 58, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", gap: 11 },
+  disclosurePressed: { backgroundColor: colors.primarySoft },
+  disclosureIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureTitle: { flex: 1, minWidth: 0, color: colors.text, fontSize: 14, fontWeight: "900" },
+  disclosureContent: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 14, paddingBottom: 14 },
+  entry: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
+  entryPressed: { backgroundColor: colors.primarySoft },
+  entryIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  entryIconDanger: { backgroundColor: colors.dangerBg },
+  entryBody: { flex: 1, minWidth: 0 },
+  entryTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  entryHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   localeRow: { flexDirection: "row", gap: 8 },
   localeBtn: {
     flex: 1,
@@ -413,10 +475,10 @@ const styles = StyleSheet.create({
   localeCheck: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
   syncButton: {
     marginTop: 12,
-    alignSelf: "flex-start",
     minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     backgroundColor: colors.primary,
     borderRadius: radii.inner,
@@ -433,52 +495,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     padding: 10,
   },
-  metricLabel: { fontSize: 11, color: colors.muted },
+  metricLabel: { fontSize: 12, color: colors.muted },
   metricValue: { marginTop: 5, fontSize: 13, fontWeight: "800", color: colors.text },
   metricWarning: { color: colors.warning },
+  metricDanger: { color: colors.dangerPressed },
   capacityHint: { marginTop: 10, fontSize: 12, lineHeight: 17, color: colors.warning },
-  recoveryButton: { minHeight: 50, marginTop: 12, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.dangerBorder, flexDirection: "row", alignItems: "center", gap: 9 },
+  recoveryButton: { minHeight: 50, marginTop: 12, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder, flexDirection: "row", alignItems: "center", gap: 9 },
+  recoveryButtonDanger: { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder },
+  recoveryPressed: { opacity: 0.78 },
   recoveryMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  recoveryText: { flex: 1, color: colors.dangerPressed, fontSize: 11, lineHeight: 16, fontWeight: "900" },
+  recoveryText: { flex: 1, color: colors.warning, fontSize: 12, lineHeight: 17, fontWeight: "900" },
+  recoveryTextDanger: { color: colors.dangerPressed },
   syncPressed: { backgroundColor: colors.primaryPressed },
   syncDisabled: { backgroundColor: colors.disabled },
   syncText: { color: colors.headerText, fontSize: 13, fontWeight: "800" },
-  organizationSwitch: {
-    minHeight: 78,
-    marginHorizontal: 20,
-    marginTop: 18,
-    paddingHorizontal: 17,
-    paddingVertical: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-    backgroundColor: colors.card,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  organizationSwitchPressed: { backgroundColor: colors.primarySoft },
-  organizationSwitchIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  organizationSwitchBody: { flex: 1, minWidth: 0 },
-  organizationSwitchTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-  organizationSwitchHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  logout: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    minHeight: 48,
-    alignItems: "center",
-    paddingVertical: 14,
-    borderRadius: radii.inner,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-  },
+  sessionLogout: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 11 },
+  sessionLogoutText: { flex: 1, minWidth: 0, color: colors.danger, fontSize: 14, fontWeight: "900" },
   profileGrid: { width: "100%" },
   profileGridTablet: { flexDirection: "row", alignItems: "flex-start", gap: 18, paddingHorizontal: 20 },
   profileColumn: { flex: 1, minWidth: 0 },
   cardTablet: { marginHorizontal: 0 },
-  organizationSwitchTablet: { marginHorizontal: 20 },
-  logoutTablet: { marginHorizontal: 20 },
   logoutPressed: { backgroundColor: colors.dangerBg },
-  logoutText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
 })
