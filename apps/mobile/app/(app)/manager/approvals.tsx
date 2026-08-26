@@ -12,6 +12,7 @@ import { formatCalendarDay, formatShortDateTime } from "../../../src/i18n/date-f
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type ApprovalKind = FieldManagerApprovalDecisionInput["kind"]
 type ApprovalDecision = "APPROVED" | "REJECTED" | "NEEDS_INFO" | "RESCHEDULE"
@@ -360,6 +361,7 @@ function ApprovalRequest({
 
 export default function ManagerApprovalsScreen() {
   useLocale()
+  const layout = useResponsiveLayout()
   const [data, setData] = useState<FieldManagerApprovalsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
@@ -516,6 +518,7 @@ export default function ManagerApprovalsScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}>
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: Boolean(savingId) }} disabled={Boolean(savingId)} onPress={goBack} style={[styles.back, savingId && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
@@ -581,6 +584,7 @@ export default function ManagerApprovalsScreen() {
             )}
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -589,21 +593,22 @@ export default function ManagerApprovalsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 32 },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   summary: { marginHorizontal: 14, marginTop: 16, padding: 14, borderRadius: radii.card, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder, flexDirection: "row", alignItems: "center", gap: 10 },
   summaryIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   summaryBody: { flex: 1 },
   summaryValue: { color: colors.warning, fontSize: 24, lineHeight: 26, fontWeight: "900" },
-  summaryLabel: { color: colors.warning, fontSize: 10, fontWeight: "900", marginTop: 1 },
-  summaryScope: { maxWidth: 116, color: colors.warning, fontSize: 8, lineHeight: 12, textAlign: "right", fontWeight: "700" },
+  summaryLabel: { color: colors.warning, fontSize: 11, fontWeight: "900", marginTop: 1 },
+  summaryScope: { maxWidth: 116, color: colors.warning, fontSize: 11, lineHeight: 16, textAlign: "right", fontWeight: "700" },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, padding: 11 },
-  noticeText: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  noticeText: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   sectionHeading: { marginHorizontal: 16, marginTop: 22, marginBottom: 7, flexDirection: "row", alignItems: "center", gap: 8 },
   sectionIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   sectionTitle: { flex: 1, color: colors.text, fontSize: 15, fontWeight: "900" },
@@ -615,46 +620,46 @@ const styles = StyleSheet.create({
   requestBody: { flex: 1, minWidth: 0 },
   requestTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   typePill: { alignSelf: "flex-start", marginTop: 5, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.primarySoft },
-  typePillText: { color: colors.primary, fontSize: 8, fontWeight: "900" },
+  typePillText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   reviewButton: { minHeight: 44, maxWidth: 130, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  reviewButtonText: { color: colors.primary, fontSize: 9, lineHeight: 12, textAlign: "center", fontWeight: "900" },
-  requestReason: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 8 },
+  reviewButtonText: { color: colors.primary, fontSize: 11, lineHeight: 16, textAlign: "center", fontWeight: "900" },
+  requestReason: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 8 },
   contactProposal: { marginTop: 9, borderRadius: 12, padding: 10, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, gap: 7 },
   contactProposalTop: { flexDirection: "row", alignItems: "center", gap: 8 },
-  contactProposalTitle: { flex: 1, color: colors.info, fontSize: 10, fontWeight: "900" },
+  contactProposalTitle: { flex: 1, color: colors.info, fontSize: 11, fontWeight: "900" },
   contactProposalOpen: { minHeight: 44, borderRadius: 10, paddingHorizontal: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  contactProposalOpenText: { color: colors.info, fontSize: 8, fontWeight: "900" },
+  contactProposalOpenText: { color: colors.info, fontSize: 11, fontWeight: "900" },
   contactProposalRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  contactProposalLabel: { flex: 1, color: colors.muted, fontSize: 9, fontWeight: "800" },
-  contactProposalValue: { flex: 1.2, color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "900", textAlign: "right" },
-  contactProposalWarning: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" },
+  contactProposalLabel: { flex: 1, color: colors.muted, fontSize: 11, fontWeight: "800" },
+  contactProposalValue: { flex: 1.2, color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "900", textAlign: "right" },
+  contactProposalWarning: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   requestMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 2 },
-  requestBy: { color: colors.primary, fontSize: 8, fontWeight: "800" },
-  requestAt: { color: colors.faint, fontSize: 8, fontWeight: "700" },
+  requestBy: { color: colors.primary, fontSize: 11, fontWeight: "800" },
+  requestAt: { color: colors.faint, fontSize: 11, fontWeight: "700" },
   decisionPanel: { marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, gap: 9 },
   decisionTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  decisionHint: { color: colors.muted, fontSize: 9, lineHeight: 13 },
+  decisionHint: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   decisionChoices: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   decisionChoice: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   decisionChoiceSelected: { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary },
   decisionChoiceContent: { flexDirection: "row", alignItems: "center", gap: 5 },
-  decisionChoiceText: { color: colors.muted, fontSize: 9, fontWeight: "900" },
+  decisionChoiceText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
   decisionChoiceTextSelected: { color: colors.headerText },
   notePanel: { gap: 5 },
-  fieldLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45 },
+  fieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45 },
   noteInput: { minHeight: 76, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 9, color: colors.text, fontSize: 11, lineHeight: 16 },
   datePanel: { gap: 6 },
   dateInput: { minHeight: 44, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, color: colors.text, fontSize: 12, fontWeight: "900" },
-  dateHint: { color: colors.muted, fontSize: 10, fontWeight: "700" },
+  dateHint: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   datePresets: { flexDirection: "row", gap: 6 },
   datePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   datePresetSelected: { backgroundColor: colors.primarySoft },
-  datePresetText: { color: colors.muted, fontSize: 8, fontWeight: "800" },
+  datePresetText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   datePresetTextSelected: { color: colors.primary },
   conflictAcknowledge: { minHeight: 44, borderRadius: 12, padding: 9, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.warningBg },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: colors.warning, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
-  conflictAcknowledgeText: { flex: 1, color: colors.warning, fontSize: 9, lineHeight: 13, fontWeight: "800" },
-  actionError: { color: colors.missed, fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  conflictAcknowledgeText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  actionError: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   submit: { minHeight: 46, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   submitText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   disabled: { opacity: 0.42 },
