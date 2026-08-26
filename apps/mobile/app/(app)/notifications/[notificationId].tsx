@@ -11,6 +11,8 @@ import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { useSync } from "../../../src/sync/sync-context"
 
 function notificationTypeLabel(type: string): string {
   switch (type.toLowerCase()) {
@@ -31,6 +33,8 @@ function notificationTypeLabel(type: string): string {
 export default function NotificationDetailScreen() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
+  const { sync } = useSync()
   const { notificationId: parameter } = useLocalSearchParams<{ notificationId?: string | string[] }>()
   const notificationId = typeof parameter === "string" ? parameter : ""
   const item = field.notifications.items.find((notification) => notification.id === notificationId) ?? null
@@ -41,7 +45,9 @@ export default function NotificationDetailScreen() {
     // A direct detail link still carries the exact notification id, so it can
     // use the same scoped durable read as Inbox instead of leaving its badge.
     void field.markNotificationRead(unreadNotificationId)
-  }, [field.markNotificationRead, unreadNotificationId])
+      .then(() => { void sync().catch(() => {}) })
+      .catch(() => {})
+  }, [field.markNotificationRead, sync, unreadNotificationId])
 
   const goBack = () => safeFieldBack("/(app)/(tabs)/inbox")
 
@@ -75,6 +81,7 @@ export default function NotificationDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
@@ -119,6 +126,7 @@ export default function NotificationDetailScreen() {
             <Text style={styles.noTargetText}>{t("notificationDetailNoLinkedObject")}</Text>
           </View>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -127,6 +135,8 @@ export default function NotificationDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 32 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
