@@ -18,6 +18,7 @@ import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
+import { objectTypeLabel } from "../../../src/field/labels"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import type { FieldWeekVisit } from "../../../src/field/contracts"
@@ -288,7 +289,9 @@ export default function WeekTab() {
                         ? t("continueFieldVisit")
                         : t("openRoute")
                     const primaryPointName = primaryPoint?.contact?.displayName ?? primaryPoint?.customer.name ?? null
-                    const primaryPointMeta = primaryPoint?.customer.address ?? primaryPoint?.customer.city ?? primaryPoint?.customer.objectType ?? null
+                    const primaryPointMeta = primaryPoint
+                      ? primaryPoint.customer.address ?? primaryPoint.customer.city ?? objectTypeLabel(primaryPoint.customer.objectType)
+                      : null
                     return (
                       <View key={route.id} style={styles.routeCard}>
                         <View style={styles.routeTop}>
@@ -366,7 +369,7 @@ export default function WeekTab() {
                                 </View>
                                 <View style={styles.pointBody}>
                                   <Text style={styles.pointName} numberOfLines={1}>{point.customer.name}</Text>
-                                  <Text style={styles.pointMeta} numberOfLines={1}>{point.customer.address ?? point.customer.city ?? point.customer.objectType}</Text>
+                                  <Text style={styles.pointMeta} numberOfLines={1}>{point.customer.address ?? point.customer.city ?? objectTypeLabel(point.customer.objectType)}</Text>
                                 </View>
                               </View>
                             ))}
