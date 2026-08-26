@@ -17,8 +17,10 @@ import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-f
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
+import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import type { FieldWeekVisit } from "../../../src/field/contracts"
 
 const tones: Record<RouteStatusTone, { bg: string; border: string; text: string; dot: string }> = {
   draft: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft, dot: colors.draft },
@@ -42,6 +44,7 @@ export default function WeekTab() {
   const isCurrentWeek = Boolean(week && week.weekStart === startOfIsoWeek(week.today))
   const [viewRange, setViewRange] = useState<FieldWeekViewRange>(requestedDate ? 1 : 7)
   const [selectedDate, setSelectedDate] = useState<string | null>(requestedDate)
+  const [expandedRouteRoadmaps, setExpandedRouteRoadmaps] = useState<Set<string>>(() => new Set())
   const selectedWeekStart = useRef<string | null>(null)
   const requestedDateHandled = useRef<string | null>(null)
   const activeDate = selectedDate ?? week?.days.find((day) => day.isToday)?.date ?? week?.today ?? null
@@ -53,6 +56,9 @@ export default function WeekTab() {
     () => week?.days.find((day) => day.date === activeDate) ?? null,
     [activeDate, week?.days],
   )
+  const activeVisit = useMemo<FieldWeekVisit | null>(() => (
+    week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
+  ), [week?.days])
 
   useEffect(() => {
     if (!week) return
@@ -268,10 +274,24 @@ export default function WeekTab() {
                   {selectedDay.routes.map((route) => {
                     const meta = routeStatusMeta(route.effectiveStatus)
                     const tone = tones[meta.tone]
+                    const activeVisitForRoute = activeVisit?.routeId === route.id ? activeVisit : null
+                    const routeFlow = resolveFieldRouteFlow(route, activeVisitForRoute)
+                    const primaryPoint = routeFlow.primaryPoint
+                    const roadmapExpanded = expandedRouteRoadmaps.has(route.id)
                     const percent = route.totalPoints ? Math.round((route.visitedPoints / route.totalPoints) * 100) : 0
                     const progressPercent = Math.min(100, percent)
                     const routeLabel = route.name ?? t("tabRoute")
                     const routeProgressLabel = `${route.visitedPoints}/${route.totalPoints} ${t("routePointsLabel")}`
+                    const canStartRouteVisit = route.canExecute && selectedDay.isToday && !activeVisit && Boolean(primaryPoint)
+                    const routeActionLabel = route.canEdit
+                      ? t("editRoute")
+                      : activeVisitForRoute
+                        ? t("continueFieldVisit")
+                        : canStartRouteVisit
+                          ? t("startFieldVisit")
+                          : t("openRoute")
+                    const primaryPointName = primaryPoint?.contact?.displayName ?? primaryPoint?.customer.name ?? null
+                    const primaryPointMeta = primaryPoint?.customer.address ?? primaryPoint?.customer.city ?? primaryPoint?.customer.objectType ?? null
                     return (
                       <View key={route.id} style={styles.routeCard}>
                         <View style={styles.routeTop}>
@@ -293,15 +313,59 @@ export default function WeekTab() {
                         >
                           <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: tone.dot }]} />
                         </View>
-                        {route.points.length > 0 ? (
+                        {primaryPointName ? (
+                          <View style={[styles.nextStopSurface, activeVisitForRoute && styles.nextStopSurfaceActive]}>
+                            <View style={[styles.nextStopIcon, activeVisitForRoute && styles.nextStopIconActive]}><TabIcon name="visit" color={activeVisitForRoute ? colors.successDark : colors.primary} size={19} /></View>
+                            <View style={styles.nextStopBody}>
+                              <Text style={[styles.nextStopLabel, activeVisitForRoute && styles.nextStopLabelActive]}>{activeVisitForRoute ? t("routeCurrentVisit") : t("routeNextStop")}</Text>
+                              <Text style={styles.nextStopName} numberOfLines={1}>{primaryPointName}</Text>
+                              {primaryPointMeta ? <Text style={styles.nextStopMeta} numberOfLines={1}>{primaryPointMeta}</Text> : null}
+                            </View>
+                          </View>
+                        ) : null}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`${routeActionLabel}: ${routeLabel}`}
+                          accessibilityHint={`${t(meta.labelKey)}. ${routeProgressLabel}`}
+                          accessibilityState={{ disabled: false, busy: route.syncState === "PENDING" }}
+                          onPress={() => {
+                            if (activeVisitForRoute) {
+                              router.push(`/(app)/field-visits/${activeVisitForRoute.id}` as never)
+                            } else {
+                              router.push(`/(app)/routes/${route.id}` as never)
+                            }
+                          }}
+                          style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
+                        >
+                          <Text style={styles.routeActionText}>{routeActionLabel}</Text>
+                          <TabIcon name="chevronRight" color={colors.headerText} size={19} />
+                        </Pressable>
+                        {route.points.length > 1 ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`${roadmapExpanded ? t("routeHideStops") : t("routeShowStops")}: ${t("routeRoadmap")}`}
+                            accessibilityState={{ expanded: roadmapExpanded }}
+                            onPress={() => setExpandedRouteRoadmaps((current) => {
+                              const next = new Set(current)
+                              if (next.has(route.id)) next.delete(route.id)
+                              else next.add(route.id)
+                              return next
+                            })}
+                            style={({ pressed }) => [styles.roadmapToggle, pressed && styles.pressed]}
+                          >
+                            <View style={styles.roadmapToggleBody}><Text style={styles.roadmapToggleTitle}>{t("routeRoadmap")}</Text><Text style={styles.roadmapToggleHint}>{route.points.length} {t("routePointsLabel")}</Text></View>
+                            <TabIcon name={roadmapExpanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={19} />
+                          </Pressable>
+                        ) : null}
+                        {roadmapExpanded ? (
                           <View style={styles.routeRoadmap}>
-                            {route.points.slice(0, 4).map((point, pointIndex) => (
+                            {routeFlow.steps.map(({ point, position }) => (
                               <View key={point.id} style={styles.roadmapRow}>
                                 <View style={styles.roadmapMarkerColumn}>
                                   <View style={[styles.pointIndex, point.effectiveStatus === "VISITED" && styles.pointVisited, point.effectiveStatus === "MISSED" && styles.pointMissed]}>
-                                    <Text style={styles.pointIndexText}>{pointIndex + 1}</Text>
+                                    <Text style={styles.pointIndexText}>{position}</Text>
                                   </View>
-                                  {pointIndex < Math.min(route.points.length, 4) - 1 ? <View style={styles.roadmapLine} /> : null}
+                                  {position < routeFlow.steps.length ? <View style={styles.roadmapLine} /> : null}
                                 </View>
                                 <View style={styles.pointBody}>
                                   <Text style={styles.pointName} numberOfLines={1}>{point.customer.name}</Text>
@@ -311,18 +375,6 @@ export default function WeekTab() {
                             ))}
                           </View>
                         ) : null}
-                        {route.points.length > 4 ? <Text style={styles.morePoints}>+{route.points.length - 4} {t("routePointsLabel")}</Text> : null}
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`${route.canEdit ? t("editRoute") : t("openRoute")}: ${routeLabel}`}
-                          accessibilityHint={`${t(meta.labelKey)}. ${routeProgressLabel}`}
-                          accessibilityState={{ disabled: false, busy: route.syncState === "PENDING" }}
-                          onPress={() => router.push(`/(app)/routes/${route.id}` as never)}
-                          style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
-                        >
-                          <Text style={styles.routeActionText}>{route.canEdit ? t("editRoute") : t("openRoute")}</Text>
-                          <TabIcon name="chevronRight" color={colors.primary} size={19} />
-                        </Pressable>
                       </View>
                     )
                   })}
@@ -400,7 +452,7 @@ const styles = StyleSheet.create({
   missionSurfaceDayOff: { backgroundColor: colors.holidayBg, borderColor: colors.holidayBorder },
   missionHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   missionHeading: { flex: 1, minWidth: 0 },
-  missionEyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
+  missionEyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
   missionDate: { color: colors.text, fontSize: 18, lineHeight: 24, fontWeight: "900", marginTop: 3, textTransform: "capitalize" },
   missionMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   missionMetric: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -419,7 +471,7 @@ const styles = StyleSheet.create({
   weekday: { color: colors.text, fontSize: 15, fontWeight: "900", textTransform: "capitalize" },
   dayDate: { color: colors.muted, fontSize: 11, marginTop: 2 },
   todayPill: { backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 5 },
-  todayPillText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  todayPillText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   dayOffLine: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 11, padding: 9, borderRadius: radii.inner, backgroundColor: "rgba(255,255,255,0.58)" },
   holidayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.holiday },
   dayOffText: { color: colors.holiday, fontSize: 12, fontWeight: "800" },
@@ -433,7 +485,7 @@ const styles = StyleSheet.create({
   createRouteAction: { minHeight: 44, marginTop: 2, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   createRouteActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   routeUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 2, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
-  routeUnavailableText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  routeUnavailableText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   routeList: { marginTop: 18, gap: 18 },
   routeCard: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14 },
   routeTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
@@ -442,7 +494,7 @@ const styles = StyleSheet.create({
   routeMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   statusPill: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  statusText: { fontSize: 9, fontWeight: "900" },
+  statusText: { fontSize: 11, fontWeight: "900" },
   progressTrack: { height: 5, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 10, marginBottom: 7 },
   progressFill: { height: "100%", borderRadius: radii.pill },
   routeRoadmap: { marginTop: 12, gap: 2 },
@@ -453,13 +505,26 @@ const styles = StyleSheet.create({
   pointIndex: { width: 25, height: 25, borderRadius: 9, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   pointVisited: { backgroundColor: colors.successBg },
   pointMissed: { backgroundColor: colors.missedBg },
-  pointIndexText: { color: colors.text, fontSize: 10, fontWeight: "900" },
+  pointIndexText: { color: colors.text, fontSize: 11, fontWeight: "900" },
   pointBody: { flex: 1 },
   pointName: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  pointMeta: { color: colors.muted, fontSize: 10, marginTop: 2 },
+  pointMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
   morePoints: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 5 },
-  routeAction: { marginTop: 10, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 13 },
-  routeActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  nextStopSurface: { minHeight: 68, marginTop: 12, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 9 },
+  nextStopSurfaceActive: { backgroundColor: colors.successBg },
+  nextStopIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  nextStopIconActive: { backgroundColor: colors.card },
+  nextStopBody: { flex: 1, minWidth: 0 },
+  nextStopLabel: { color: colors.primary, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 },
+  nextStopLabelActive: { color: colors.successDark },
+  nextStopName: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
+  nextStopMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  routeAction: { marginTop: 10, minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 13 },
+  routeActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
+  roadmapToggle: { minHeight: 48, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 9 },
+  roadmapToggleBody: { flex: 1, minWidth: 0 },
+  roadmapToggleTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  roadmapToggleHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   pressed: { opacity: 0.72 },
   disabled: { opacity: 0.46 },
   dayGrid: { width: "100%" },
