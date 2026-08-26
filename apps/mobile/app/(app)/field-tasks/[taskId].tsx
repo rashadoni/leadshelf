@@ -25,6 +25,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type TaskDetailPanel = "tools" | "comment" | "evidence" | "timeline"
 
@@ -74,6 +75,7 @@ export default function AgentTaskDetailScreen() {
   const locale = useLocale()
   const { taskId } = useLocalSearchParams<{ taskId: string }>()
   const field = useField()
+  const layout = useResponsiveLayout()
   const { sync } = useSync()
   const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
   const tenantToday = resolveFieldTaskToday(
@@ -208,6 +210,7 @@ export default function AgentTaskDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={goBack} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={21} />
@@ -301,6 +304,7 @@ export default function AgentTaskDetailScreen() {
         >
           <View style={styles.timelineCard}>{task.events.length === 0 ? <Text style={styles.emptyTimeline}>{t("agentTaskTimelineEmpty")}</Text> : task.events.map((event, index) => <View key={event.id} style={styles.event}><View style={styles.eventRail}><View style={[styles.eventDot, event.syncState && styles.eventDotPending]} />{index < task.events.length - 1 ? <View style={styles.eventLine} /> : null}</View><View style={styles.eventBody}><Text style={styles.eventTitle}>{eventLabel(event.type)}</Text><Text style={styles.eventTime}>{formatShortDateTime(event.occurredAt, locale, tenantTimeZone)}{event.syncState ? ` · ${t("agentTaskOfflineQueued")}` : ""}</Text>{event.comment ? <Text style={styles.eventText}>{event.comment}</Text> : null}{evidenceSummary(event) ? <Text style={styles.eventEvidence}>{evidenceSummary(event)}</Text> : null}</View></View>)}</View>
         </TaskDisclosure>
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -351,6 +355,8 @@ function TaskDisclosure({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 38 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1 },
@@ -360,7 +366,7 @@ const styles = StyleSheet.create({
   heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   status: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 },
   statusText: { fontSize: 11, fontWeight: "900" },
-  version: { color: colors.faint, fontSize: 10, fontWeight: "800" },
+  version: { color: colors.faint, fontSize: 11, fontWeight: "800" },
   taskTitle: { color: colors.text, fontSize: 22, lineHeight: 28, fontWeight: "900", marginTop: 15 },
   description: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 9 },
   source: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 14 },
@@ -380,7 +386,7 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   infoBody: { flex: 1 },
-  infoLabel: { color: colors.faint, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
+  infoLabel: { color: colors.faint, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
   infoValue: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
   infoDanger: { color: colors.missed },
   syncNotice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft },
@@ -423,7 +429,7 @@ const styles = StyleSheet.create({
   eventLine: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 3 },
   eventBody: { flex: 1, paddingBottom: 14 },
   eventTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  eventTime: { color: colors.faint, fontSize: 10, fontWeight: "700", marginTop: 3 },
+  eventTime: { color: colors.faint, fontSize: 11, fontWeight: "700", marginTop: 3 },
   eventText: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 6 },
   eventEvidence: { color: colors.info, fontSize: 11, lineHeight: 16, marginTop: 6, padding: 8, borderRadius: 9, backgroundColor: colors.infoBg },
   emptyTimeline: { color: colors.muted, fontSize: 11, textAlign: "center", paddingVertical: 20 },
