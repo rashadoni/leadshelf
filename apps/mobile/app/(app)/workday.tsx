@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   ActivityIndicator,
   Alert,
@@ -53,9 +53,11 @@ import { useSync } from "../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../src/theme"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 import { splitWorkdayActions } from "../../src/field/workday-action-layout"
+import { useResponsiveLayout } from "../../src/layout/responsive"
 import { safeFieldBack } from "../../src/navigation/safe-back"
 
 type DisplayStatus = FieldWorkdayStatus | "NOT_STARTED"
+type DetailSection = "policy" | "tracking" | "timeline" | "privacy"
 
 const statusKeys: Record<DisplayStatus, MessageKey> = {
   NOT_STARTED: "workdayStatus_NOT_STARTED",
@@ -188,9 +190,54 @@ function LocationTrail({ data, timeZone }: { data: FieldLocationHistoryData; tim
   )
 }
 
+function WorkdayDisclosure({
+  title,
+  hint,
+  icon,
+  warning = false,
+  expanded,
+  onToggle,
+  tablet = false,
+  children,
+}: {
+  title: string
+  hint: string
+  icon: "qr" | "location" | "info" | "work" | "week"
+  warning?: boolean
+  expanded: boolean
+  onToggle: () => void
+  tablet?: boolean
+  children: ReactNode
+}) {
+  const iconColor = warning ? colors.warning : colors.primary
+  return (
+    <View style={[styles.disclosure, tablet && styles.disclosureTablet, expanded && styles.disclosureOpen]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityHint={hint}
+        accessibilityState={{ expanded }}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.disclosureHeader, pressed && styles.pressed]}
+      >
+        <View style={[styles.disclosureIcon, warning && styles.disclosureIconWarning]}>
+          <TabIcon name={icon} color={iconColor} size={22} />
+        </View>
+        <View style={styles.disclosureBody}>
+          <Text style={styles.disclosureTitle}>{title}</Text>
+          <Text numberOfLines={expanded ? undefined : 2} style={styles.disclosureHint}>{hint}</Text>
+        </View>
+        <TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={21} />
+      </Pressable>
+      {expanded ? <View style={styles.disclosureContent}>{children}</View> : null}
+    </View>
+  )
+}
+
 export default function WorkdayScreen() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const { sync, status: syncStatus } = useSync()
   const [busyAction, setBusyAction] = useState<FieldWorkdayAction | null>(null)
@@ -198,7 +245,7 @@ export default function WorkdayScreen() {
   const [tracking, setTracking] = useState<WorkdayTrackingState>(() => stoppedWorkdayTrackingState())
   const [trackingBusy, setTrackingBusy] = useState(false)
   const [feedback, setFeedback] = useState<MessageKey | null>(null)
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [openDetailSection, setOpenDetailSection] = useState<DetailSection | null>(null)
   const [nowMs, setNowMs] = useState(Date.now())
 
   const date = field.workday?.date ?? field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
@@ -232,6 +279,10 @@ export default function WorkdayScreen() {
     const timer = setInterval(() => setNowMs(Date.now()), 1_000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (requiresQrBeforeStart) setOpenDetailSection("policy")
+  }, [requiresQrBeforeStart])
 
   useFocusEffect(useCallback(() => {
     void field.refreshActivity()
@@ -478,6 +529,10 @@ export default function WorkdayScreen() {
     return action === "START" || action === "RESUME" ? "play" : action === "PAUSE" ? "pause" : "stop"
   }
 
+  function toggleDetailSection(section: DetailSection) {
+    setOpenDetailSection((current) => current === section ? null : section)
+  }
+
   function renderWorkdayAction(action: FieldWorkdayAction, primary: boolean) {
     const finishing = action === "FINISH"
     const busy = busyAction === action
@@ -531,162 +586,150 @@ export default function WorkdayScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: stickyActionSpace }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
           <View style={styles.statusCard}>
             <View style={styles.statusTop}>
-            <View style={[styles.statusPill, statusPillTone]}>
-              <View style={[styles.statusDot, { backgroundColor: statusDot }]} />
-              <Text style={styles.statusText}>{t(statusKeys[displayStatus])}</Text>
+              <View style={[styles.statusPill, statusPillTone]}>
+                <View style={[styles.statusDot, { backgroundColor: statusDot }]} />
+                <Text style={styles.statusText}>{t(statusKeys[displayStatus])}</Text>
+              </View>
+              {(workday?.syncState === "PENDING" || syncStatus.pendingOps > 0) ? (
+                <View style={styles.pendingPill}><Text style={styles.pendingText}>{t("workdayPending")}</Text></View>
+              ) : null}
             </View>
-            {(workday?.syncState === "PENDING" || syncStatus.pendingOps > 0) ? (
-              <View style={styles.pendingPill}><Text style={styles.pendingText}>{t("workdayPending")}</Text></View>
-            ) : null}
-          </View>
-          <Text style={styles.timerLabel}>{t("workdayWorked")}</Text>
-          <Text style={styles.timer}>{formatDuration(workedSeconds)}</Text>
-          <Text style={styles.statusHint}>{t(policyHintKey)}</Text>
+            <Text style={styles.timerLabel}>{t("workdayWorked")}</Text>
+            <Text style={styles.timer}>{formatDuration(workedSeconds)}</Text>
+            <Text style={styles.statusHint}>{t(policyHintKey)}</Text>
 
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatDuration(pausedSeconds)}</Text>
-              <Text style={styles.statLabel}>{t("workdayPaused")}</Text>
-            </View>
-            {usesGps ? (
-              <>
-                <View style={styles.statDivider} />
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{formatDistance(locationData.distanceMeters)}</Text>
-                  <Text style={styles.statLabel}>{t("workdayDistance")}</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{locationData.locations.length}</Text>
-                  <Text style={styles.statLabel}>{t("workdayGpsShort")}</Text>
-                </View>
-              </>
-            ) : null}
-          </View>
-        </View>
-
-        {feedback ? (
-          <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("workdayDetails")}
-          accessibilityHint={t("workdayDetailsHint")}
-          accessibilityState={{ expanded: detailsOpen }}
-          onPress={() => setDetailsOpen((open) => !open)}
-          style={({ pressed }) => [styles.detailsSummary, pressed && styles.pressed]}
-        >
-          <View style={[styles.detailsIcon, requiresQrBeforeStart && styles.detailsIconWarning]}>
-            <TabIcon name={requiresQrBeforeStart ? "qr" : usesGps ? "location" : "info"} color={requiresQrBeforeStart ? colors.warning : colors.primary} size={23} />
-          </View>
-          <View style={styles.detailsBody}>
-            <Text style={styles.detailsTitle}>{t("workdayDetails")}</Text>
-            <Text style={styles.detailsHint} numberOfLines={detailsOpen ? undefined : 2}>{t("workdayDetailsHint")}</Text>
-          </View>
-          <TabIcon name={detailsOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={21} />
-        </Pressable>
-
-        {detailsOpen ? (
-          <>
-
-        <View style={styles.policyCard}>
-          <View style={[styles.policyIcon, requiresQrBeforeStart && styles.policyIconWarning]}>
-            <TabIcon
-              name={requiresQrBeforeStart ? "qr" : usesGps ? "location" : "work"}
-              color={requiresQrBeforeStart ? colors.warning : colors.primary}
-              size={25}
-            />
-          </View>
-          <View style={styles.policyBody}>
-            <Text style={styles.cardEyebrow}>{t("workdayPolicyTitle")}</Text>
-            <Text style={styles.cardTitle}>{t(policyEvidenceKey)}</Text>
-            <Text style={styles.cardHint}>{t(policyHintKey)}</Text>
-            {attendancePolicy.allowDifferentStartEndSites ? (
-              <Text style={styles.policyFlexibility}>{t("workdayPolicyFlexibleSites")}</Text>
-            ) : null}
-          </View>
-        </View>
-
-        {runsContinuousTracking ? (
-          <View style={styles.trackingCard}>
-            <View style={[styles.trackingIcon, tracking.mode === "background" ? styles.trackingIconOn : tracking.mode === "denied" || tracking.mode === "services_disabled" || tracking.mode === "unavailable" ? styles.trackingIconWarn : styles.trackingIconOff]}>
-              <TabIcon name="location" color={colors.primary} size={25} />
-            </View>
-            <View style={styles.trackingBody}>
-              <Text style={styles.cardEyebrow}>{t("workdayTracking")}</Text>
-              <Text style={styles.cardTitle}>{t(trackingKeys[tracking.mode])}</Text>
-              <Text style={styles.cardHint}>{trackingHint}</Text>
-              <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt, timezone) })}</Text>
-              {trackingRecoveryKey && workday?.status === "STARTED" ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t(trackingRecoveryKey)}
-                  disabled={trackingBusy}
-                  onPress={() => void recoverTracking()}
-                  style={({ pressed }) => [styles.trackingRecovery, pressed && styles.pressed, trackingBusy && styles.disabled]}
-                >
-                  {trackingBusy ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Text style={styles.trackingRecoveryText}>{t(trackingRecoveryKey)}</Text>
-                  )}
-                </Pressable>
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatDuration(pausedSeconds)}</Text>
+                <Text style={styles.statLabel}>{t("workdayPaused")}</Text>
+              </View>
+              {usesGps ? (
+                <>
+                  <View style={styles.statDivider} />
+                  <View style={styles.stat}>
+                    <Text style={styles.statValue}>{formatDistance(locationData.distanceMeters)}</Text>
+                    <Text style={styles.statLabel}>{t("workdayDistance")}</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.stat}>
+                    <Text style={styles.statValue}>{locationData.locations.length}</Text>
+                    <Text style={styles.statLabel}>{t("workdayGpsShort")}</Text>
+                  </View>
+                </>
               ) : null}
             </View>
           </View>
-        ) : null}
 
-        {usesGps ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>{t("workdayLocationTrail")}</Text>
-                <Text style={styles.sectionHint}>
-                  {t(runsContinuousTracking ? "workdayLocationTrailHint" : "workdayEventGpsTrailHint")}
-                </Text>
-              </View>
-              <Text style={styles.sectionMetric}>
-                {runsContinuousTracking
-                  ? formatDistance(locationData.distanceMeters)
-                  : t("workdayGpsPoints", { count: locationData.locations.length })}
-              </Text>
+          {feedback ? (
+            <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
+          ) : null}
+
+        <View style={[styles.detailGroups, layout.isTablet && styles.detailGroupsTablet]}>
+          <WorkdayDisclosure
+            title={t("workdayPolicyTitle")}
+            hint={t(policyHintKey)}
+            icon={requiresQrBeforeStart ? "qr" : usesGps ? "location" : "work"}
+            warning={requiresQrBeforeStart}
+            expanded={openDetailSection === "policy"}
+            onToggle={() => toggleDetailSection("policy")}
+            tablet={layout.isTablet}
+          >
+            <View style={styles.policyDetail}>
+              <Text style={styles.cardTitle}>{t(policyEvidenceKey)}</Text>
+              {attendancePolicy.allowDifferentStartEndSites ? (
+                <Text style={styles.policyFlexibility}>{t("workdayPolicyFlexibleSites")}</Text>
+              ) : null}
             </View>
-            <View style={styles.card}><LocationTrail data={locationData} timeZone={timezone} /></View>
-          </>
-        ) : null}
+          </WorkdayDisclosure>
 
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>{t("workdayTimeline")}</Text>
-            <Text style={styles.sectionHint}>{t("workdayTimelineHint")}</Text>
-          </View>
-        </View>
-        <View style={styles.card}>
-          {!workday || workday.events.length === 0 ? (
-            <Text style={styles.emptyText}>{t("workdayNoEvents")}</Text>
-          ) : workday.events.slice().reverse().map((event, index) => (
-            <View key={event.id} style={[styles.eventRow, index > 0 && styles.eventBorder]}>
-              <View style={[styles.eventMark, event.syncState === "PENDING" && styles.eventMarkPending]} />
-              <View style={styles.eventBody}>
-                <Text style={styles.eventTitle}>{t(eventKeys[event.type])}</Text>
-                <Text style={styles.eventMeta}>
-                  {formatTime(event.occurredAt, timezone)} · {event.latitude == null ? t("workdayWithoutGps") : t("workdayWithGps")}
-                </Text>
+          {usesGps ? (
+            <WorkdayDisclosure
+              title={t(runsContinuousTracking ? "workdayTracking" : "workdayLocationTrail")}
+              hint={runsContinuousTracking ? trackingHint : t("workdayEventGpsTrailHint")}
+              icon="location"
+              expanded={openDetailSection === "tracking"}
+              onToggle={() => toggleDetailSection("tracking")}
+              tablet={layout.isTablet}
+            >
+              {runsContinuousTracking ? (
+                <View style={styles.trackingDetail}>
+                  <View style={[styles.trackingIcon, tracking.mode === "background" ? styles.trackingIconOn : tracking.mode === "denied" || tracking.mode === "services_disabled" || tracking.mode === "unavailable" ? styles.trackingIconWarn : styles.trackingIconOff]}>
+                    <TabIcon name="location" color={colors.primary} size={23} />
+                  </View>
+                  <View style={styles.trackingBody}>
+                    <Text style={styles.cardTitle}>{t(trackingKeys[tracking.mode])}</Text>
+                    <Text style={styles.trackingObserved}>{t("workdayTrackingObservedAt", { time: formatTime(tracking.observedAt, timezone) })}</Text>
+                    {trackingRecoveryKey && workday?.status === "STARTED" ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t(trackingRecoveryKey)}
+                        disabled={trackingBusy}
+                        onPress={() => void recoverTracking()}
+                        style={({ pressed }) => [styles.trackingRecovery, pressed && styles.pressed, trackingBusy && styles.disabled]}
+                      >
+                        {trackingBusy ? (
+                          <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                          <Text style={styles.trackingRecoveryText}>{t(trackingRecoveryKey)}</Text>
+                        )}
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+              <View style={[styles.locationDetail, runsContinuousTracking && styles.locationDetailBorder]}>
+                <View style={styles.locationDetailTop}>
+                  <Text style={styles.locationDetailLabel}>{t("workdayLocationTrail")}</Text>
+                  <Text style={styles.sectionMetric}>
+                    {runsContinuousTracking
+                      ? formatDistance(locationData.distanceMeters)
+                      : t("workdayGpsPoints", { count: locationData.locations.length })}
+                  </Text>
+                </View>
+                <View style={styles.insetPanel}><LocationTrail data={locationData} timeZone={timezone} /></View>
               </View>
-              {event.syncState === "PENDING" ? <Text style={styles.eventPending}>{t("queued")}</Text> : null}
-            </View>
-          ))}
-        </View>
+            </WorkdayDisclosure>
+          ) : null}
 
-        <View style={styles.privacyCard}>
-          <View style={styles.privacyIcon}><TabIcon name="info" color={colors.headerText} size={16} /></View>
-          <View style={styles.privacyBody}>
-            <Text style={styles.privacyTitle}>{t("workdayPrivacyTitle")}</Text>
+          <WorkdayDisclosure
+            title={t("workdayTimeline")}
+            hint={t("workdayTimelineHint")}
+            icon="week"
+            expanded={openDetailSection === "timeline"}
+            onToggle={() => toggleDetailSection("timeline")}
+            tablet={layout.isTablet}
+          >
+            <View style={styles.timelineDetail}>
+              {!workday || workday.events.length === 0 ? (
+                <Text style={styles.emptyText}>{t("workdayNoEvents")}</Text>
+              ) : workday.events.slice().reverse().map((event, index) => (
+                <View key={event.id} style={[styles.eventRow, index > 0 && styles.eventBorder]}>
+                  <View style={[styles.eventMark, event.syncState === "PENDING" && styles.eventMarkPending]} />
+                  <View style={styles.eventBody}>
+                    <Text style={styles.eventTitle}>{t(eventKeys[event.type])}</Text>
+                    <Text style={styles.eventMeta}>
+                      {formatTime(event.occurredAt, timezone)} · {event.latitude == null ? t("workdayWithoutGps") : t("workdayWithGps")}
+                    </Text>
+                  </View>
+                  {event.syncState === "PENDING" ? <Text style={styles.eventPending}>{t("queued")}</Text> : null}
+                </View>
+              ))}
+            </View>
+          </WorkdayDisclosure>
+
+          <WorkdayDisclosure
+            title={t("workdayPrivacyTitle")}
+            hint={t(privacyBodyKey)}
+            icon="info"
+            expanded={openDetailSection === "privacy"}
+            onToggle={() => toggleDetailSection("privacy")}
+            tablet={layout.isTablet}
+          >
             <Text style={styles.privacyText}>{t(privacyBodyKey)}</Text>
-          </View>
+          </WorkdayDisclosure>
         </View>
 
         {IS_LEADDRIVE_FIELD ? (
@@ -703,8 +746,7 @@ export default function WorkdayScreen() {
             <TabIcon name="chevronRight" color={colors.primary} size={21} />
           </Pressable>
         ) : null}
-          </>
-        ) : null}
+        </View>
       </ScrollView>
       {primaryWorkdayAction ? (
         <View style={[styles.stickyActionTray, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -724,13 +766,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { minHeight: 72, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", backgroundColor: colors.bg },
   backButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
-  backText: { color: colors.text, fontSize: 33, fontWeight: "400", lineHeight: 35, marginTop: -3 },
   headerBody: { flex: 1, paddingHorizontal: 12 },
   eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.4, marginTop: 2 },
   refreshButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
-  refreshText: { color: colors.primary, fontSize: 24, fontWeight: "800" },
   scroll: { paddingHorizontal: 14 },
+  content: { width: "100%", maxWidth: 680, alignSelf: "center" },
+  contentTablet: { maxWidth: 1_060 },
   statusCard: { borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, ...cardShadow },
   statusTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   statusPill: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: radii.pill, paddingHorizontal: 11, paddingVertical: 7 },
@@ -748,7 +790,7 @@ const styles = StyleSheet.create({
   statsRow: { backgroundColor: colors.surfaceMuted, borderRadius: 17, flexDirection: "row", alignItems: "center", marginTop: 14, paddingVertical: 11 },
   stat: { flex: 1, alignItems: "center", paddingHorizontal: 4 },
   statValue: { color: colors.text, fontSize: 14, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  statLabel: { color: colors.muted, fontSize: 10, fontWeight: "700", marginTop: 4, textAlign: "center" },
+  statLabel: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 4, textAlign: "center" },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
   primaryActionButton: { minHeight: 60, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   primaryActionTone: { backgroundColor: colors.primary },
@@ -762,43 +804,45 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.76, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.55 },
   feedback: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
-  feedbackText: { color: colors.info, fontSize: 11, lineHeight: 17, fontWeight: "700" },
-  detailsSummary: { minHeight: 74, marginTop: 14, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, padding: 13, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, ...cardShadow },
-  detailsIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  detailsIconWarning: { backgroundColor: colors.warningBg },
-  detailsBody: { flex: 1, minWidth: 0 },
-  detailsTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  detailsHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  feedbackText: { color: colors.info, fontSize: 12, lineHeight: 18, fontWeight: "700" },
+  detailGroups: { gap: 10, marginTop: 14 },
+  detailGroupsTablet: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", columnGap: 12, rowGap: 12 },
+  disclosure: { width: "100%", borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden", ...cardShadow },
+  disclosureTablet: { width: "48.9%" },
+  disclosureOpen: { borderColor: colors.primary },
+  disclosureHeader: { minHeight: 72, paddingHorizontal: 13, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 11 },
+  disclosureIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureIconWarning: { backgroundColor: colors.warningBg },
+  disclosureBody: { flex: 1, minWidth: 0 },
+  disclosureTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  disclosureHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  disclosureContent: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 13, paddingTop: 12 },
   stickyActionTray: { position: "absolute", left: 0, right: 0, bottom: 0, gap: 8, paddingHorizontal: 14, paddingTop: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, ...cardShadow },
-  policyCard: { flexDirection: "row", alignItems: "center", gap: 13, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 15, marginTop: 14, ...cardShadow },
-  policyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  policyIconWarning: { backgroundColor: colors.warningBg },
-  policyBody: { flex: 1 },
-  policyFlexibility: { color: colors.primary, fontSize: 11, lineHeight: 16, fontWeight: "800", marginTop: 6 },
-  trackingCard: { flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card, borderRadius: radii.card, padding: 15, marginTop: 14, ...cardShadow },
+  policyDetail: { minHeight: 44, justifyContent: "center" },
+  policyFlexibility: { color: colors.primary, fontSize: 12, lineHeight: 18, fontWeight: "800", marginTop: 6 },
+  trackingDetail: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
   trackingIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   trackingIconOn: { backgroundColor: colors.successBg },
   trackingIconWarn: { backgroundColor: colors.warningBg },
   trackingIconOff: { backgroundColor: colors.draftBg },
-  trackingBody: { flex: 1 },
-  cardEyebrow: { color: colors.muted, fontSize: 11, fontWeight: "900", letterSpacing: 0.7, textTransform: "uppercase" },
+  trackingBody: { flex: 1, minWidth: 0 },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
-  cardHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  trackingObserved: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 5 },
+  trackingObserved: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
   trackingRecovery: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", borderRadius: 12, backgroundColor: colors.primarySoft, paddingHorizontal: 13, marginTop: 10 },
-  trackingRecoveryText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 24, marginBottom: 9, paddingHorizontal: 2 },
-  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
-  sectionHint: { color: colors.muted, fontSize: 10, marginTop: 3 },
+  trackingRecoveryText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  locationDetail: { marginTop: 12 },
+  locationDetailBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 12 },
+  locationDetailTop: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 8 },
+  locationDetailLabel: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "900" },
   sectionMetric: { color: colors.primary, fontSize: 13, fontWeight: "900" },
-  card: { backgroundColor: colors.card, borderRadius: radii.card, padding: 14, ...cardShadow },
+  insetPanel: { borderRadius: radii.inner, backgroundColor: colors.surfaceMuted, padding: 12 },
   trailCanvas: { minHeight: 172, overflow: "hidden" },
   trailLegend: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 },
-  trailLegendText: { color: colors.muted, fontSize: 10, fontWeight: "700" },
+  trailLegendText: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   emptyTrail: { minHeight: 150, alignItems: "center", justifyContent: "center", padding: 20 },
   emptyTrailPin: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  emptyTrailPinText: { color: colors.primary, fontSize: 24, fontWeight: "900" },
-  emptyTrailText: { color: colors.muted, fontSize: 11, textAlign: "center", lineHeight: 17, marginTop: 10 },
+  emptyTrailText: { color: colors.muted, fontSize: 12, textAlign: "center", lineHeight: 18, marginTop: 10 },
+  timelineDetail: { minHeight: 52 },
   emptyText: { color: colors.muted, fontSize: 12, textAlign: "center", paddingVertical: 20 },
   eventRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 11 },
   eventBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
@@ -806,17 +850,12 @@ const styles = StyleSheet.create({
   eventMarkPending: { backgroundColor: colors.warning },
   eventBody: { flex: 1, paddingVertical: 10 },
   eventTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  eventMeta: { color: colors.muted, fontSize: 10, marginTop: 3 },
-  eventPending: { color: colors.warning, fontSize: 9, fontWeight: "900" },
-  privacyCard: { flexDirection: "row", gap: 11, backgroundColor: colors.infoBg, borderRadius: radii.card, borderWidth: 1, borderColor: colors.infoBorder, padding: 14, marginTop: 18 },
-  privacyIcon: { width: 25, height: 25, borderRadius: 13, backgroundColor: colors.info, alignItems: "center", justifyContent: "center" },
-  privacyBody: { flex: 1 },
-  privacyTitle: { color: colors.info, fontSize: 12, fontWeight: "900" },
-  privacyText: { color: colors.info, fontSize: 10, lineHeight: 16, marginTop: 3 },
+  eventMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  eventPending: { color: colors.warning, fontSize: 11, fontWeight: "900" },
+  privacyText: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   hrmEntry: { minHeight: 74, marginTop: 12, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 11, ...cardShadow },
   hrmIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   hrmBody: { flex: 1, minWidth: 0 },
   hrmTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  hrmHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  hrmArrow: { color: colors.primary, fontSize: 28, lineHeight: 30 },
+  hrmHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
 })
