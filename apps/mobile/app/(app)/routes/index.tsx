@@ -14,12 +14,14 @@ import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
 import type { FieldWeekDay, FieldWeekVisit } from "../../../src/field/contracts"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type RouteHubItem = FieldWeekDay["routes"][number] & { day: FieldWeekDay }
 
 export default function RoutesScreen() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const { status: syncStatus } = useSync()
   const [historyOpen, setHistoryOpen] = useState(false)
   const [upcomingOpen, setUpcomingOpen] = useState(false)
@@ -44,6 +46,7 @@ export default function RoutesScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={field.phase === "refreshing"} onRefresh={() => void field.refresh()} />}>
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.headerModern}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.backModern}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBodyModern}><Text style={styles.eyebrowModern}>{t("tabWork").toUpperCase()}</Text><Text style={styles.titleModern}>{t("routeHubTitle")}</Text><Text style={styles.subtitleModern}>{t("routeHubHint")}</Text></View>
@@ -112,6 +115,7 @@ export default function RoutesScreen() {
             </Pressable>
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -127,17 +131,18 @@ function RouteGroup({ title, routes, locale, activeVisit, featured = false, coll
   expanded?: boolean
   onToggle?: () => void
 }) {
+  const layout = useResponsiveLayout()
   const visible = !collapsible || expanded
   return <View style={styles.routeGroupModern}>
     {collapsible ? <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? t("routeHideRoutes") : t("routeShowRoutes")}: ${title}`} accessibilityState={{ expanded }} onPress={onToggle} style={({ pressed }) => [styles.routeGroupToggleModern, pressed && styles.pressed]}>
       <View style={styles.routeGroupLabelModern}><Text numberOfLines={1} style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>
       <View accessible={false} style={styles.routeGroupToggleActionModern}><TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
     </Pressable> : <View style={styles.routeGroupHeadingModern}><Text style={styles.routeGroupTitleModern}>{title}</Text><View accessible={false} style={styles.routeGroupCountModern}><Text style={styles.routeGroupCountTextModern}>{routes.length}</Text></View></View>}
-    {visible ? routes.map((route, index) => <RouteCard key={route.id} route={route} locale={locale} activeVisit={activeVisit} featured={featured && index === 0} />) : null}
+    {visible ? <View style={[styles.routeGridModern, layout.isTablet && styles.routeGridTablet]}>{routes.map((route, index) => <View key={route.id} style={layout.isTablet ? styles.routeCardSlotTablet : undefined}><RouteCard route={route} locale={locale} activeVisit={activeVisit} featured={featured && index === 0} tablet={layout.isTablet} /></View>)}</View> : null}
   </View>
 }
 
-function RouteCard({ route, locale, activeVisit, featured }: { route: RouteHubItem; locale: Locale; activeVisit: FieldWeekVisit | null; featured: boolean }) {
+function RouteCard({ route, locale, activeVisit, featured, tablet }: { route: RouteHubItem; locale: Locale; activeVisit: FieldWeekVisit | null; featured: boolean; tablet: boolean }) {
   const meta = routeStatusMeta(route.effectiveStatus)
   const tone = tones[meta.tone]
   const calendarDay = formatCalendarDay(route.day.date, locale)
@@ -155,7 +160,7 @@ function RouteCard({ route, locale, activeVisit, featured }: { route: RouteHubIt
     syncText,
   ].filter(Boolean).join(". ")
   const progress = route.totalPoints > 0 ? Math.min(100, Math.round((route.visitedPoints / route.totalPoints) * 100)) : 0
-  return <Pressable accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCardModern, featured && styles.routeCardFeaturedModern, pressed && styles.pressed]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCardModern, tablet && styles.routeCardTablet, featured && styles.routeCardFeaturedModern, pressed && styles.pressed]}>
     <View style={styles.routeTopModern}>
       <View style={styles.dateBadgeModern}>
         <Text style={styles.dateDayModern}>{calendarDay.day || route.day.date.slice(8)}</Text>
@@ -196,6 +201,7 @@ const tones: Record<RouteStatusTone, { background: string; foreground: string }>
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 30 }, header: { paddingHorizontal: 16, paddingTop: 8, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: radii.pill, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, backText: { color: colors.text, fontSize: 30, lineHeight: 31 }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2, letterSpacing: -0.4 }, subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 }, headerCreate: { minHeight: 40, borderRadius: radii.pill, backgroundColor: colors.primarySoft, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 5 }, headerCreateText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   createBody: { flex: 1 }, createTitle: { color: colors.text, fontSize: 14, fontWeight: "900" }, createHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   dataNotice: { marginHorizontal: 14, marginTop: 12, minHeight: 58, borderRadius: radii.inner, padding: 9, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder }, dataNoticeBody: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }, dataNoticeIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.card }, dataNoticeText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 14, fontWeight: "800" }, retry: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginHorizontal: 16, marginTop: 22, marginBottom: 3 }, routeCard: { marginHorizontal: 14, marginTop: 9, minHeight: 96, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 10, ...cardShadow }, dateBadge: { width: 43, height: 52, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, dateDay: { color: colors.primary, fontSize: 17, fontWeight: "900" }, dateMonth: { color: colors.primary, fontSize: 8, fontWeight: "800" }, routeBody: { flex: 1, minWidth: 0 }, routeName: { color: colors.text, fontSize: 13, fontWeight: "900" }, routeMeta: { color: colors.muted, fontSize: 9, marginTop: 3 }, progressTrack: { height: 4, borderRadius: 999, overflow: "hidden", backgroundColor: colors.primarySoft, marginTop: 6 }, progressFill: { height: "100%", borderRadius: 999, backgroundColor: colors.primary }, nextStopRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 6 }, nextStopLabel: { color: colors.muted, fontSize: 8, fontWeight: "800" }, nextStop: { flex: 1, minWidth: 0, color: colors.primary, fontSize: 9, fontWeight: "900" }, routeEnd: { width: 82, alignItems: "flex-end", justifyContent: "center", gap: 7 }, routeState: { alignItems: "flex-end", gap: 4 }, syncState: { color: colors.warning, fontSize: 7, fontWeight: "900", maxWidth: 82, textAlign: "right" }, status: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6 }, statusText: { fontSize: 8, fontWeight: "900" }, openRoute: { flexDirection: "row", alignItems: "center", gap: 1 }, openRouteText: { color: colors.primary, fontSize: 8, fontWeight: "900" }, arrow: { color: colors.faint, fontSize: 24 }, empty: { marginHorizontal: 16, marginTop: 10, minHeight: 156, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 18, borderWidth: 1, borderColor: colors.border }, emptyAction: { borderColor: colors.primarySoft }, emptyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 9 }, emptyText: { color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, emptyActionRow: { minHeight: 36, marginTop: 8, flexDirection: "row", alignItems: "center", gap: 3 }, emptyActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
@@ -214,6 +220,9 @@ const styles = StyleSheet.create({
   calendarLinkTitleModern: { color: colors.text, fontSize: 14, fontWeight: "900" },
   calendarLinkHintModern: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   routeGroupModern: { marginTop: 18 },
+  routeGridModern: { width: "100%" },
+  routeGridTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, alignItems: "flex-start" },
+  routeCardSlotTablet: { flexBasis: "48%", flexGrow: 1 },
   routeGroupHeadingModern: { minHeight: 38, marginHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8 },
   routeGroupToggleModern: { minHeight: 52, marginHorizontal: 14, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   routeGroupLabelModern: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
@@ -222,6 +231,7 @@ const styles = StyleSheet.create({
   routeGroupCountTextModern: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   routeGroupToggleActionModern: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   routeCardModern: { marginHorizontal: 14, marginTop: 7, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  routeCardTablet: { marginHorizontal: 0, marginTop: 0 },
   routeCardFeaturedModern: { borderColor: colors.primary, shadowOpacity: 0.085, elevation: 2 },
   routeTopModern: { flexDirection: "row", alignItems: "center", gap: 10 },
   dateBadgeModern: { width: 50, height: 56, borderRadius: 16, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
