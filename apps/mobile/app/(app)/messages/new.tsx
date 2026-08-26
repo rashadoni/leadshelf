@@ -11,10 +11,12 @@ import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 export default function NewMessageScreen() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const { sync } = useSync()
   const inbox = field.messages
   const [recipientId, setRecipientId] = useState<string | null>(null)
@@ -114,6 +116,7 @@ export default function NewMessageScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: busy }} disabled={busy} onPress={goBack} style={[styles.back, busy && styles.disabled]}>
               <TabIcon name="chevronLeft" color={colors.text} size={21} />
@@ -150,6 +153,7 @@ export default function NewMessageScreen() {
           <View style={styles.privacy}><TabIcon name="info" color={colors.successDark} size={18} /><Text style={styles.privacyText}>{copy.local}</Text></View>
           {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Pressable accessibilityRole="button" accessibilityLabel={copy.send} accessibilityState={{ disabled: busy || !canSend, busy }} disabled={busy || !canSend} onPress={() => void send()} style={({ pressed }) => [styles.send, (pressed || busy || !canSend) && styles.pressed]}><Text style={styles.sendText}>{busy ? "…" : copy.send}</Text>{!busy ? <TabIcon name="route" color={colors.headerText} size={20} /> : null}</Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -158,26 +162,27 @@ export default function NewMessageScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 }, scroll: { paddingBottom: 34 },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
   intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
   sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginHorizontal: 16, marginTop: 22, marginBottom: 9 },
   recipients: { gap: 8, paddingHorizontal: 14 },
   recipient: { minHeight: 64, borderRadius: 17, padding: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 },
-  recipientsEmpty: { minHeight: 74, borderRadius: 17, padding: 12, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "flex-start", gap: 9 }, recipientsEmptyBody: { flex: 1 }, recipientsEmptyTitle: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "900" }, recipientsEmptyHint: { color: colors.info, fontSize: 9, lineHeight: 14, marginTop: 3 },
+  recipientsEmpty: { minHeight: 74, borderRadius: 17, padding: 12, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "flex-start", gap: 9 }, recipientsEmptyBody: { flex: 1 }, recipientsEmptyTitle: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "900" }, recipientsEmptyHint: { color: colors.info, fontSize: 11, lineHeight: 16, marginTop: 3 },
   recipientSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, avatarSelected: { backgroundColor: "rgba(255,255,255,0.18)" },
   avatarText: { color: colors.primary, fontSize: 15, fontWeight: "900" }, avatarTextSelected: { color: colors.headerText },
-  recipientBody: { flex: 1 }, recipientName: { color: colors.text, fontSize: 13, fontWeight: "900" }, recipientNameSelected: { color: colors.headerText }, recipientRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 }, recipientRoleSelected: { color: colors.headerSubtext },
+  recipientBody: { flex: 1 }, recipientName: { color: colors.text, fontSize: 13, fontWeight: "900" }, recipientNameSelected: { color: colors.headerText }, recipientRole: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 3 }, recipientRoleSelected: { color: colors.headerSubtext },
   composer: { marginHorizontal: 14, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, ...cardShadow },
   input: { minHeight: 130, color: colors.text, fontSize: 14, lineHeight: 21, padding: 2 },
   attach: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.infoBorder, borderStyle: "dashed", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   attachText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   fileCard: { minHeight: 58, borderRadius: 14, padding: 9, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 9 },
-  fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, fileIconText: { color: colors.info, fontSize: 8, fontWeight: "900" }, fileBody: { flex: 1 }, fileName: { color: colors.text, fontSize: 11, fontWeight: "900" }, fileMeta: { color: colors.info, fontSize: 9, fontWeight: "700", marginTop: 3 }, remove: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  privacy: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "flex-start", gap: 8 }, privacyText: { flex: 1, color: colors.successDark, fontSize: 9, lineHeight: 14, fontWeight: "700" },
-  error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  fileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, fileIconText: { color: colors.info, fontSize: 11, fontWeight: "900" }, fileBody: { flex: 1 }, fileName: { color: colors.text, fontSize: 11, fontWeight: "900" }, fileMeta: { color: colors.info, fontSize: 11, fontWeight: "700", marginTop: 3 }, remove: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  privacy: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "flex-start", gap: 8 }, privacyText: { flex: 1, color: colors.successDark, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   send: { minHeight: 54, marginHorizontal: 14, marginTop: 18, borderRadius: 17, backgroundColor: colors.primary, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 }, sendText: { color: colors.headerText, fontSize: 14, fontWeight: "900" }, pressed: { opacity: 0.7 }, disabled: { opacity: 0.5 },
 })

@@ -20,6 +20,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 function messageThreadTypeLabel(type: string): string {
   if (type === "DIRECT") return t("messageThreadType_DIRECT")
@@ -31,6 +32,7 @@ function messageThreadTypeLabel(type: string): string {
 export default function MessageThreadScreen() {
   const { threadId = "" } = useLocalSearchParams<{ threadId?: string }>()
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const field = useField()
   const { sync } = useSync()
   const [data, setData] = useState<FieldMessageThreadData | null>(() => readFieldMessageThread(threadId))
@@ -198,7 +200,7 @@ export default function MessageThreadScreen() {
         <ScrollView
           ref={scroll}
           style={styles.flex}
-          contentContainerStyle={styles.messages}
+          contentContainerStyle={[styles.messages, layout.isTablet && styles.messagesTablet]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
           scrollEventThrottle={16}
           onScroll={({ nativeEvent }) => {
@@ -254,7 +256,7 @@ export default function MessageThreadScreen() {
         </ScrollView>
 
         {data.capabilities.reply ? (
-          <View style={styles.composer}>
+          <View style={[styles.composer, layout.isTablet && styles.composerTablet]}>
             {attachment ? <View style={styles.selectedFile}><TabIcon name="document" color={colors.info} size={16} /><Text style={styles.selectedFileText} numberOfLines={1}>{attachment.fileName}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setAttachment(null)} style={styles.selectedFileRemove}><TabIcon name="close" color={colors.info} size={18} /></Pressable></View> : null}
             <View style={styles.composerRow}>
               <Pressable accessibilityRole="button" accessibilityLabel={copy.attach} onPress={() => void chooseFile()} style={styles.attachButton}><TabIcon name="document" color={colors.primary} size={18} /><Text style={styles.attachButtonLabel}>{copy.attach}</Text></Pressable>
@@ -271,20 +273,22 @@ export default function MessageThreadScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 },
   header: { minHeight: 70, paddingHorizontal: 13, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border },
-  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, participants: { color: colors.muted, fontSize: 8, fontWeight: "800", marginTop: 2 },
-  warning: { margin: 10, marginBottom: 0, padding: 10, borderRadius: 12, backgroundColor: colors.warningBg }, warningText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" },
+  back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, participants: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 2 },
+  warning: { margin: 10, marginBottom: 0, padding: 10, borderRadius: 12, backgroundColor: colors.warningBg }, warningText: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   messages: { paddingHorizontal: 12, paddingVertical: 14, gap: 10 }, empty: { color: colors.muted, fontSize: 12, textAlign: "center", marginTop: 80 },
+  messagesTablet: { width: "100%", maxWidth: 1_060, alignSelf: "center", paddingHorizontal: 24 },
   messageRow: { flexDirection: "row", alignItems: "flex-end", gap: 7, maxWidth: "88%" }, messageRowOwn: { alignSelf: "flex-end", justifyContent: "flex-end" },
-  smallAvatar: { width: 28, height: 28, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, smallAvatarText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  smallAvatar: { width: 28, height: 28, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, smallAvatarText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   bubble: { minWidth: 88, maxWidth: "100%", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 9 }, bubbleOwn: { backgroundColor: colors.primary, borderBottomRightRadius: 5 }, bubbleOther: { backgroundColor: colors.card, borderBottomLeftRadius: 5, ...cardShadow },
-  sender: { color: colors.primary, fontSize: 8, fontWeight: "900", marginBottom: 4 }, body: { color: colors.text, fontSize: 13, lineHeight: 19 }, bodyOwn: { color: colors.headerText },
-  attachment: { marginTop: 7, minHeight: 52, borderRadius: 13, padding: 7, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 8 }, attachmentOwn: { backgroundColor: "rgba(255,255,255,0.15)" }, attachmentIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, attachmentIconText: { color: colors.info, fontSize: 7, fontWeight: "900" }, attachmentBody: { flex: 1, minWidth: 0 }, attachmentName: { color: colors.text, fontSize: 10, fontWeight: "900" }, attachmentNameOwn: { color: colors.headerText }, attachmentMeta: { color: colors.info, fontSize: 8, fontWeight: "700", marginTop: 2 }, attachmentMetaOwn: { color: colors.headerSubtext },
-  messageMeta: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 5 }, messageTime: { color: colors.faint, fontSize: 7, fontWeight: "700" }, messageTimeOwn: { color: colors.headerSubtext }, queued: { color: "#E0E7FF", fontSize: 7, fontWeight: "900" }, delivery: { flexDirection: "row", alignItems: "center", gap: 1 }, deliveryText: { color: colors.headerSubtext, fontSize: 7, fontWeight: "900" },
-  ack: { marginTop: 8, minHeight: 44, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, ackText: { color: colors.warning, fontSize: 9, fontWeight: "900" }, acked: { marginTop: 7, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 4 }, ackedText: { color: colors.successDark, fontSize: 8, fontWeight: "900" },
+  sender: { color: colors.primary, fontSize: 11, fontWeight: "900", marginBottom: 4 }, body: { color: colors.text, fontSize: 13, lineHeight: 19 }, bodyOwn: { color: colors.headerText },
+  attachment: { marginTop: 7, minHeight: 52, borderRadius: 13, padding: 7, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 8 }, attachmentOwn: { backgroundColor: "rgba(255,255,255,0.15)" }, attachmentIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, attachmentIconText: { color: colors.info, fontSize: 11, fontWeight: "900" }, attachmentBody: { flex: 1, minWidth: 0 }, attachmentName: { color: colors.text, fontSize: 11, fontWeight: "900" }, attachmentNameOwn: { color: colors.headerText }, attachmentMeta: { color: colors.info, fontSize: 11, fontWeight: "700", marginTop: 2 }, attachmentMetaOwn: { color: colors.headerSubtext },
+  messageMeta: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 5 }, messageTime: { color: colors.faint, fontSize: 11, fontWeight: "700" }, messageTimeOwn: { color: colors.headerSubtext }, queued: { color: "#E0E7FF", fontSize: 11, fontWeight: "900" }, delivery: { flexDirection: "row", alignItems: "center", gap: 1 }, deliveryText: { color: colors.headerSubtext, fontSize: 11, fontWeight: "900" },
+  ack: { marginTop: 8, minHeight: 44, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, ackText: { color: colors.warning, fontSize: 11, fontWeight: "900" }, acked: { marginTop: 7, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 4 }, ackedText: { color: colors.successDark, fontSize: 11, fontWeight: "900" },
   composer: { padding: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border }, composerRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  selectedFile: { minHeight: 44, marginBottom: 7, borderRadius: 11, paddingHorizontal: 10, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 7 }, selectedFileText: { flex: 1, color: colors.info, fontSize: 9, fontWeight: "800" }, selectedFileRemove: { width: 44, height: 44, marginVertical: -4, marginRight: -10, alignItems: "center", justifyContent: "center" },
-  attachButton: { width: 48, minHeight: 48, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, attachButtonLabel: { color: colors.primary, fontSize: 7, fontWeight: "900" },
+  composerTablet: { width: "100%", maxWidth: 1_060, alignSelf: "center" },
+  selectedFile: { minHeight: 44, marginBottom: 7, borderRadius: 11, paddingHorizontal: 10, backgroundColor: colors.infoBg, flexDirection: "row", alignItems: "center", gap: 7 }, selectedFileText: { flex: 1, color: colors.info, fontSize: 11, fontWeight: "800" }, selectedFileRemove: { width: 44, height: 44, marginVertical: -4, marginRight: -10, alignItems: "center", justifyContent: "center" },
+  attachButton: { width: 48, minHeight: 48, borderRadius: 15, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, attachButtonLabel: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   input: { flex: 1, minHeight: 48, maxHeight: 112, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 12, backgroundColor: colors.bg, color: colors.text, fontSize: 12, lineHeight: 17 }, send: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, disabled: { opacity: 0.35 },
-  readonly: { minHeight: 58, paddingHorizontal: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, alignItems: "center", justifyContent: "center" }, readonlyText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, loadingMark: { color: colors.primary, fontSize: 24, fontWeight: "900" }, loadingText: { color: colors.muted, fontSize: 12, marginTop: 9, textAlign: "center" }, loadingHint: { maxWidth: 270, color: colors.faint, fontSize: 10, lineHeight: 15, marginTop: 6, textAlign: "center" }, loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, unavailableIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, retryButton: { minHeight: 44, marginTop: 16, borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }, retryText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  readonly: { minHeight: 58, paddingHorizontal: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, alignItems: "center", justifyContent: "center" }, readonlyText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, loadingMark: { color: colors.primary, fontSize: 24, fontWeight: "900" }, loadingText: { color: colors.muted, fontSize: 12, marginTop: 9, textAlign: "center" }, loadingHint: { maxWidth: 270, color: colors.faint, fontSize: 11, lineHeight: 16, marginTop: 6, textAlign: "center" }, loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, unavailableIcon: { width: 52, height: 52, borderRadius: 17, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" }, retryButton: { minHeight: 44, marginTop: 16, borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }, retryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
 })
