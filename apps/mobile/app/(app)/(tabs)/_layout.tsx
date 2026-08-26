@@ -26,7 +26,7 @@ export default function TabsLayout() {
         tabBarVariant: layout.isTablet ? "material" : "uikit",
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.tabInactive,
-        tabBarActiveBackgroundColor: layout.isTablet ? colors.primarySoft : undefined,
+        tabBarActiveBackgroundColor: colors.primarySoft,
         sceneStyle: layout.isTablet
           ? { width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center" }
           : undefined,
@@ -45,8 +45,8 @@ export default function TabsLayout() {
         },
         tabBarItemStyle: layout.isTablet
           ? { minHeight: 74, maxHeight: 82, marginVertical: 4, borderRadius: 12, paddingVertical: 9 }
-          : { paddingBottom: 2 },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
+          : { minHeight: 52, marginHorizontal: 4, marginTop: 2, borderRadius: 14, paddingBottom: 2 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "800" },
         tabBarBadgeStyle: {
           backgroundColor: colors.danger,
           color: colors.headerText,
