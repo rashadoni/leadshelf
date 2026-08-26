@@ -13,6 +13,7 @@ import { managerLiveMapUrl } from "../../../src/field/manager-location-map"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { useField } from "../../../src/field/field-context"
 
 const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
   ONLINE: "managerFreshness_ONLINE",
@@ -44,7 +45,9 @@ async function openLiveMap(url: string, onUnavailable: () => void) {
 
 export default function ManagerLocationsScreen() {
   const locale = useLocale()
+  const field = useField()
   const layout = useResponsiveLayout()
+  const tenantTimeZone = field.profile?.todaySummary.timezone
   const [data, setData] = useState<FieldManagerLocationsData | null>(null)
   const [search, setSearch] = useState("")
   const [loadedSearch, setLoadedSearch] = useState("")
@@ -138,12 +141,12 @@ export default function ManagerLocationsScreen() {
                 value={search}
               />
             </View>
-            <View accessible accessibilityRole="text" accessibilityLabel={String(liveCount) + " " + t("managerPageLocationSummary") + ". " + t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale)} style={styles.summary}>
+            <View accessible accessibilityRole="text" accessibilityLabel={String(liveCount) + " " + t("managerPageLocationSummary") + ". " + t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale, tenantTimeZone)} style={styles.summary}>
               <View style={styles.summaryIcon}><TabIcon name="location" color={colors.successDark} size={22} /></View>
               <View style={styles.summaryBody}>
                 <Text style={styles.summaryValue}>{liveCount}</Text>
                 <Text style={styles.summaryLabel}>{t("managerPageLocationSummary")}</Text>
-                <Text style={styles.summaryTime}>{t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale)}</Text>
+                <Text style={styles.summaryTime}>{t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale, tenantTimeZone)}</Text>
               </View>
             </View>
             <Text style={styles.pageInfo}>{t("managerLoadedOfTotal", { loaded: data.locations.length, total: data.page.total })}</Text>
@@ -161,7 +164,7 @@ export default function ManagerLocationsScreen() {
                     ? agent.freshness === "ONLINE" ? t("managerFreshness_ONLINE") : t("managerLastKnownNotLive")
                     : t("managerFreshness_NO_LOCATION")
                   const lastSeen = agent.lastSeenAt
-                    ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale)
+                    ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale, tenantTimeZone)
                     : t("managerLastSeen") + ": —"
                   return (
                     <View key={agent.id} style={[styles.card, layout.isTablet && styles.cardTablet]}>
@@ -179,12 +182,12 @@ export default function ManagerLocationsScreen() {
                             <TabIcon name="location" color={tone.foreground} size={17} />
                             <View
                               accessible
-                              accessibilityLabel={pointState + ". " + t("managerUpdated") + ": " + formatShortDateTime(point.recordedAt, locale)}
+                              accessibilityLabel={pointState + ". " + t("managerUpdated") + ": " + formatShortDateTime(point.recordedAt, locale, tenantTimeZone)}
                               accessibilityRole="text"
                               style={styles.locationBody}
                             >
                               <Text style={[styles.locationState, { color: tone.foreground }]}>{pointState}</Text>
-                              <Text style={styles.locationTime}>{t("managerUpdated") + ": " + formatShortDateTime(point.recordedAt, locale)}</Text>
+                              <Text style={styles.locationTime}>{t("managerUpdated") + ": " + formatShortDateTime(point.recordedAt, locale, tenantTimeZone)}</Text>
                               {agent.freshness !== "ONLINE" ? <Text style={styles.locationHint}>{t("managerLastKnownNotLive")}</Text> : null}
                             </View>
                           </View>
@@ -201,7 +204,7 @@ export default function ManagerLocationsScreen() {
                       )}
                       <View accessible accessibilityRole="text" accessibilityLabel={(agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")) + ". " + lastSeen} style={styles.cardFooter}>
                         <Text style={styles.presence}>{agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")}</Text>
-                        <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale) : "—"}</Text>
+                        <Text style={styles.lastSeen}>{agent.lastSeenAt ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale, tenantTimeZone) : "—"}</Text>
                       </View>
                     </View>
                   )
