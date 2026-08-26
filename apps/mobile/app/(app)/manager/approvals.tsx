@@ -678,6 +678,7 @@ const styles = StyleSheet.create({
   submit: { minHeight: 46, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   submitText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   disabled: { opacity: 0.42 },
+  pressed: { opacity: 0.72 },
   empty: { minHeight: 160, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 10, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },

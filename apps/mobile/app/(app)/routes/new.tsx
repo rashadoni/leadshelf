@@ -445,7 +445,7 @@ export default function NewRouteScreen() {
             </View>
             <Text style={styles.sectionTitle}>{t("routeDate")}</Text>
             {selectedWeekIsLoading ? (
-              <View accessibilityRole="status" accessibilityLiveRegion="polite" style={styles.dateChecking}>
+              <View accessible accessibilityLiveRegion="polite" style={styles.dateChecking}>
                 <TabIcon name="refresh" color={colors.info} size={18} />
                 <Text style={styles.dateCheckingText}>{t("routePlanningDateChecking")}</Text>
               </View>

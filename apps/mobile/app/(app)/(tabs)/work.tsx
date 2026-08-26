@@ -105,7 +105,7 @@ export default function WorkTab() {
             <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? t("organizationUnavailable")}</Text>
           </View>
           {IS_LEADDRIVE_FIELD ? (
-            <View accessible accessibilityRole={workdayLoading ? "status" : workdayUnavailable ? "alert" : "text"} accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, workdayLoading ? styles.connectionLoading : workdayUnavailable ? styles.connectionError : activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionIdle]}>
+            <View accessible accessibilityRole={workdayUnavailable ? "alert" : "text"} accessibilityLiveRegion="polite" accessibilityLabel={`${t("workdayTitle")}: ${workdayStatusLabel}`} style={[styles.connection, workdayLoading ? styles.connectionLoading : workdayUnavailable ? styles.connectionError : activeWorkday || completedWorkday ? styles.connectionOn : pausedWorkday ? styles.connectionPaused : styles.connectionIdle]}>
               <TabIcon name={workdayStatusIcon} color={workdayStatusColor} size={14} />
               <Text style={[styles.connectionText, workdayLoading ? styles.connectionTextLoading : workdayUnavailable ? styles.connectionTextOff : activeWorkday || completedWorkday ? styles.connectionTextOn : pausedWorkday ? styles.connectionTextOff : styles.connectionTextIdle]}>
                 {workdayStatusLabel}

@@ -639,7 +639,7 @@ export default function WorkdayScreen() {
           </View>
 
           {!workdayKnown ? (
-            <View accessibilityRole={workdayLoading ? "status" : "alert"} accessibilityLiveRegion="polite" style={[styles.activityNotice, !workdayLoading && styles.activityNoticeError]}>
+            <View accessible accessibilityRole={workdayLoading ? undefined : "alert"} accessibilityLiveRegion="polite" style={[styles.activityNotice, !workdayLoading && styles.activityNoticeError]}>
               <TabIcon name={workdayLoading ? "refresh" : "alert"} color={workdayLoading ? colors.info : colors.warning} size={19} />
               <Text style={[styles.activityNoticeText, !workdayLoading && styles.activityNoticeErrorText]}>{workdayNotice}</Text>
               {!workdayLoading ? <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refreshActivity()} style={styles.activityRetry}><Text style={styles.activityRetryText}>{t("refresh")}</Text></Pressable> : null}

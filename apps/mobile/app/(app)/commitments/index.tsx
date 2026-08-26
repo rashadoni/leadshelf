@@ -419,7 +419,7 @@ export default function CommitmentsScreen() {
         />
 
         {recoveryAction?.kind === "LOAD_WORKDAY" ? (
-          <View accessible accessibilityRole="status" accessibilityLiveRegion="polite" accessibilityLabel={`${t("commitmentsNeedsVisit")}. ${recoveryDestination}`} style={[styles.recoveryAction, styles.recoveryLoading]}>
+          <View accessible accessibilityRole="summary" accessibilityLiveRegion="polite" accessibilityLabel={`${t("commitmentsNeedsVisit")}. ${recoveryDestination}`} style={[styles.recoveryAction, styles.recoveryLoading]}>
             <View accessible={false} style={[styles.recoveryIcon, styles.recoveryLoadingIcon]}><TabIcon name={recoveryIcon} color={colors.info} size={20} /></View>
             <View style={styles.recoveryBody}><Text style={[styles.recoveryLabel, styles.recoveryLoadingLabel]} numberOfLines={1}>{recoveryLabel}</Text><Text style={[styles.recoveryHint, styles.recoveryLoadingHint]} numberOfLines={2}>{recoveryDestination}</Text></View>
           </View>
@@ -463,7 +463,7 @@ export default function CommitmentsScreen() {
           </Pressable>
         </View>
 
-        {!canCreateCommitment ? <View accessibilityRole={capabilitiesKnown ? "alert" : "status"} accessibilityLiveRegion="polite" style={[styles.capabilityNotice, !capabilitiesKnown && styles.capabilityNoticeLoading]}><TabIcon name={capabilitiesKnown ? "alert" : "refresh"} color={capabilitiesKnown ? colors.warning : colors.info} size={17} /><Text style={[styles.capabilityNoticeText, !capabilitiesKnown && styles.capabilityNoticeLoadingText]}>{createCapabilityHint}</Text></View> : null}
+        {!canCreateCommitment ? <View accessibilityRole={capabilitiesKnown ? "alert" : "summary"} accessibilityLiveRegion="polite" style={[styles.capabilityNotice, !capabilitiesKnown && styles.capabilityNoticeLoading]}><TabIcon name={capabilitiesKnown ? "alert" : "refresh"} color={capabilitiesKnown ? colors.warning : colors.info} size={17} /><Text style={[styles.capabilityNoticeText, !capabilitiesKnown && styles.capabilityNoticeLoadingText]}>{createCapabilityHint}</Text></View> : null}
 
         {warning ? <View accessibilityRole="alert" style={styles.warning}><View style={styles.warningBody}><Text style={styles.warningText}>{warning}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: refreshing, disabled: refreshing }} disabled={refreshing} onPress={() => void refresh()} style={[styles.warningRetry, refreshing && styles.disabled]}><TabIcon name="refresh" color={colors.warning} size={17} /><Text style={styles.warningRetryText}>{refreshing ? "…" : t("refresh")}</Text></Pressable></View></View> : null}
         {busy ? <View accessibilityRole="alert" style={styles.busyNotice}><TabIcon name="refresh" color={colors.primary} size={17} /><Text style={styles.busyNoticeText}>{t("saving")}</Text></View> : null}
@@ -525,7 +525,7 @@ export default function CommitmentsScreen() {
               <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityHint={t("commitmentsFactTitle")} onPress={closeFact} style={styles.closeButton}><TabIcon name="close" color={colors.faint} size={20} /></Pressable>
             </View>
             <Text style={styles.factInstruction}>{t("commitmentsFactHint")}</Text>
-            {!canFulfillCommitment ? <View accessibilityRole={capabilitiesKnown ? "alert" : "status"} style={[styles.inlineCapabilityNotice, !capabilitiesKnown && styles.inlineCapabilityNoticeLoading]}><Text style={[styles.inlineCapabilityNoticeText, !capabilitiesKnown && styles.inlineCapabilityNoticeLoadingText]}>{fulfillCapabilityHint}</Text></View> : null}
+            {!canFulfillCommitment ? <View accessibilityRole={capabilitiesKnown ? "alert" : "summary"} style={[styles.inlineCapabilityNotice, !capabilitiesKnown && styles.inlineCapabilityNoticeLoading]}><Text style={[styles.inlineCapabilityNoticeText, !capabilitiesKnown && styles.inlineCapabilityNoticeLoadingText]}>{fulfillCapabilityHint}</Text></View> : null}
             <FieldLabel label={t("commitmentsActualQuantity")} />
             <View style={styles.actualRow}>
               <TextInput accessibilityLabel={`${t("commitmentsActualQuantity")}: ${factTarget.productName}`} value={actualQuantity} onChangeText={setActualQuantity} keyboardType="decimal-pad" maxLength={14} style={[styles.input, styles.actualInput]} />
