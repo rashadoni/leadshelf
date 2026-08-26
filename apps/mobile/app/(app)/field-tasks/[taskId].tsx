@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { type ReactNode, useEffect, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -24,6 +24,9 @@ import { t, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+
+type TaskDetailPanel = "tools" | "comment" | "evidence" | "timeline"
 
 function statusLabel(status: FieldAgentTaskStatus): string {
   if (status === "PENDING") return t("agentTaskStatus_PENDING")
@@ -87,6 +90,7 @@ export default function AgentTaskDetailScreen() {
   const [result, setResult] = useState("")
   const [comment, setComment] = useState("")
   const [evidence, setEvidence] = useState("")
+  const [activePanel, setActivePanel] = useState<TaskDetailPanel | null>(null)
 
   useEffect(() => {
     if (!task) return
@@ -177,6 +181,10 @@ export default function AgentTaskDetailScreen() {
       Boolean(evidence.trim())
   }
 
+  function togglePanel(panel: TaskDetailPanel) {
+    setActivePanel((current) => current === panel ? null : panel)
+  }
+
   function goBack() {
     const leave = () => safeFieldBack("/(app)/field-tasks")
     if (!hasUnsavedTaskInput()) {
@@ -190,7 +198,7 @@ export default function AgentTaskDetailScreen() {
   }
 
   if (!task) {
-    return <SafeAreaView style={styles.root} edges={["top"]}><View style={styles.missing}><Text style={styles.missingTitle}>{field.taskPhase === "loading" ? "…" : t("agentTasksEmpty")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={goBack} style={styles.backButton}><Text style={styles.backButtonText}>{t("back")}</Text></Pressable></View></SafeAreaView>
+    return <SafeAreaView style={styles.root} edges={["top"]}><FieldScreenChrome /><View style={styles.missing}><Text style={styles.missingTitle}>{field.taskPhase === "loading" ? "…" : t("agentTasksEmpty")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={goBack} style={styles.backButton}><Text style={styles.backButtonText}>{t("back")}</Text></Pressable></View></SafeAreaView>
   }
 
   const tone = statusTone(task.status)
@@ -198,6 +206,7 @@ export default function AgentTaskDetailScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: false }} onPress={goBack} style={styles.back}>
@@ -207,9 +216,6 @@ export default function AgentTaskDetailScreen() {
             <Text style={styles.eyebrow}>{t("agentTasksTitle").toUpperCase()}</Text>
             <Text style={styles.headerTitle}>{t("agentTaskDetails")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCopy")} accessibilityState={{ disabled: false }} onPress={() => router.push(`/(app)/field-tasks/new?copyFrom=${task.id}` as never)} style={styles.copy}>
-            <TabIcon name="copy" color={colors.primary} size={20} />
-          </Pressable>
         </View>
 
         <View style={styles.hero}>
@@ -236,40 +242,65 @@ export default function AgentTaskDetailScreen() {
 
         {!terminal ? <View style={styles.actionCard}>
           {!task.acceptedAt && task.persistedStatus === "PENDING" ? <PrimaryAction label={t("agentTaskAccept")} busy={busy} onPress={() => void updateTask({ acceptedAt: new Date().toISOString() })} /> : task.persistedStatus === "PENDING" || task.status === "OVERDUE" ? <PrimaryAction label={t("agentTaskStart")} busy={busy} onPress={() => void updateTask({ status: "IN_PROGRESS" })} /> : <PrimaryAction label={t("agentTaskComplete")} busy={busy} success onPress={complete} />}
-          <View style={styles.quickRow}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskTomorrow")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftFieldTaskDueDate(task.dueDate, 1, tenantToday, tenantTimeZone) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskTomorrow")}</Text></Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskNextWeek")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftFieldTaskDueDate(task.dueDate, 7, tenantToday, tenantTimeZone) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskNextWeek")}</Text></Pressable>
-            {task.canEditContent ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskEdit")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => setEditing(true)} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskEdit")}</Text></Pressable> : null}
-          </View>
         </View> : null}
 
         {task.persistedStatus === "IN_PROGRESS" ? <View style={styles.formCard}><Text style={styles.formTitle}>{t("agentTaskResult")}</Text><TextInput accessibilityLabel={t("agentTaskResult")} accessibilityHint={t("agentTaskCompleteConfirmBody")} value={result} onChangeText={setResult} multiline textAlignVertical="top" placeholder={t("agentTaskEvidencePlaceholder")} placeholderTextColor={colors.faint} style={styles.textarea} /></View> : null}
 
+        <TaskDisclosure
+          title={t("agentTaskMoreActions")}
+          hint={t("agentTaskMoreActionsHint")}
+          icon="tasks"
+          open={activePanel === "tools"}
+          onPress={() => togglePanel("tools")}
+        >
+          {!terminal ? <View style={styles.quickRow}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskTomorrow")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftFieldTaskDueDate(task.dueDate, 1, tenantToday, tenantTimeZone) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskTomorrow")}</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskNextWeek")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void updateTask({ dueDate: shiftFieldTaskDueDate(task.dueDate, 7, tenantToday, tenantTimeZone) })} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskNextWeek")}</Text></Pressable>
+            {task.canEditContent ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskEdit")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => { setEditing(true); setActivePanel(null) }} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskEdit")}</Text></Pressable> : null}
+          </View> : null}
+          <View style={styles.bottomActions}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCopy")} accessibilityState={{ disabled: false }} onPress={() => router.push(`/(app)/field-tasks/new?copyFrom=${task.id}` as never)} style={styles.bottomSecondary}>
+              <TabIcon name="copy" color={colors.primary} size={17} />
+              <Text style={styles.bottomSecondaryText}>{t("agentTaskCopy")}</Text>
+            </Pressable>
+            {task.canEditContent && !terminal ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCancel")} accessibilityState={{ disabled: false }} onPress={cancelTask} style={styles.bottomDanger}><Text style={styles.bottomDangerText}>{t("agentTaskCancel")}</Text></Pressable> : null}
+          </View>
+        </TaskDisclosure>
+
         {!terminal ? <>
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>{t("agentTaskComment")}</Text>
+          <TaskDisclosure
+            title={t("agentTaskComment")}
+            hint={t("agentTaskCommentPlaceholder")}
+            icon="inbox"
+            open={activePanel === "comment"}
+            onPress={() => togglePanel("comment")}
+          >
             <TextInput accessibilityLabel={t("agentTaskComment")} accessibilityHint={t("agentTaskCommentPlaceholder")} value={comment} onChangeText={setComment} multiline textAlignVertical="top" placeholder={t("agentTaskCommentPlaceholder")} placeholderTextColor={colors.faint} style={styles.textarea} />
             <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskAddComment")} accessibilityState={{ disabled: !comment.trim() || busy, busy }} disabled={!comment.trim() || busy} onPress={() => void addEvent("COMMENTED")} style={[styles.formButton, (!comment.trim() || busy) && styles.disabled]}><Text style={styles.formButtonText}>{t("agentTaskAddComment")}</Text></Pressable>
-          </View>
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>{t("agentTaskEvidence")}</Text>
+          </TaskDisclosure>
+          <TaskDisclosure
+            title={t("agentTaskEvidence")}
+            hint={t("agentTaskEvidencePlaceholder")}
+            icon="check"
+            open={activePanel === "evidence"}
+            onPress={() => togglePanel("evidence")}
+          >
             <TextInput accessibilityLabel={t("agentTaskEvidence")} accessibilityHint={t("agentTaskEvidencePlaceholder")} value={evidence} onChangeText={setEvidence} multiline textAlignVertical="top" placeholder={t("agentTaskEvidencePlaceholder")} placeholderTextColor={colors.faint} style={styles.textarea} />
             <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskAddEvidence")} accessibilityState={{ disabled: !evidence.trim() || busy, busy }} disabled={!evidence.trim() || busy} onPress={() => void addEvent("EVIDENCE_ADDED")} style={[styles.formButton, styles.evidenceButton, (!evidence.trim() || busy) && styles.disabled]}><Text style={styles.formButtonText}>{t("agentTaskAddEvidence")}</Text></Pressable>
-          </View>
+          </TaskDisclosure>
         </> : null}
 
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
 
-        <View style={styles.timelineHeader}><Text style={styles.sectionTitle}>{t("agentTaskTimeline")}</Text><View style={styles.eventCount}><Text style={styles.eventCountText}>{task.events.length}</Text></View></View>
-        <View style={styles.timelineCard}>{task.events.length === 0 ? <Text style={styles.emptyTimeline}>{t("agentTaskTimelineEmpty")}</Text> : task.events.map((event, index) => <View key={event.id} style={styles.event}><View style={styles.eventRail}><View style={[styles.eventDot, event.syncState && styles.eventDotPending]} />{index < task.events.length - 1 ? <View style={styles.eventLine} /> : null}</View><View style={styles.eventBody}><Text style={styles.eventTitle}>{eventLabel(event.type)}</Text><Text style={styles.eventTime}>{formatShortDateTime(event.occurredAt, locale, tenantTimeZone)}{event.syncState ? ` · ${t("agentTaskOfflineQueued")}` : ""}</Text>{event.comment ? <Text style={styles.eventText}>{event.comment}</Text> : null}{evidenceSummary(event) ? <Text style={styles.eventEvidence}>{evidenceSummary(event)}</Text> : null}</View></View>)}</View>
-
-        <View style={styles.bottomActions}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCopy")} accessibilityState={{ disabled: false }} onPress={() => router.push(`/(app)/field-tasks/new?copyFrom=${task.id}` as never)} style={styles.bottomSecondary}>
-            <TabIcon name="copy" color={colors.primary} size={17} />
-            <Text style={styles.bottomSecondaryText}>{t("agentTaskCopy")}</Text>
-          </Pressable>
-          {task.canEditContent && !terminal ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCancel")} accessibilityState={{ disabled: false }} onPress={cancelTask} style={styles.bottomDanger}><Text style={styles.bottomDangerText}>{t("agentTaskCancel")}</Text></Pressable> : null}
-        </View>
+        <TaskDisclosure
+          title={t("agentTaskTimeline")}
+          icon="tasks"
+          count={task.events.length}
+          open={activePanel === "timeline"}
+          onPress={() => togglePanel("timeline")}
+        >
+          <View style={styles.timelineCard}>{task.events.length === 0 ? <Text style={styles.emptyTimeline}>{t("agentTaskTimelineEmpty")}</Text> : task.events.map((event, index) => <View key={event.id} style={styles.event}><View style={styles.eventRail}><View style={[styles.eventDot, event.syncState && styles.eventDotPending]} />{index < task.events.length - 1 ? <View style={styles.eventLine} /> : null}</View><View style={styles.eventBody}><Text style={styles.eventTitle}>{eventLabel(event.type)}</Text><Text style={styles.eventTime}>{formatShortDateTime(event.occurredAt, locale, tenantTimeZone)}{event.syncState ? ` · ${t("agentTaskOfflineQueued")}` : ""}</Text>{event.comment ? <Text style={styles.eventText}>{event.comment}</Text> : null}{evidenceSummary(event) ? <Text style={styles.eventEvidence}>{evidenceSummary(event)}</Text> : null}</View></View>)}</View>
+        </TaskDisclosure>
       </ScrollView>
     </SafeAreaView>
   )
@@ -278,12 +309,132 @@ export default function AgentTaskDetailScreen() {
 function InfoRow({ icon, label, value, danger }: { icon: TabIconName; label: string; value: string; danger?: boolean }) { return <View style={styles.infoRow}><View style={styles.infoIcon}><TabIcon name={icon} color={danger ? colors.missed : colors.primary} size={18} /></View><View style={styles.infoBody}><Text style={styles.infoLabel}>{label}</Text><Text style={[styles.infoValue, danger && styles.infoDanger]}>{value}</Text></View></View> }
 function PrimaryAction({ label, busy, success, onPress }: { label: string; busy: boolean; success?: boolean; onPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={onPress} style={[styles.mainAction, success && styles.mainActionSuccess, busy && styles.disabled]}><Text style={styles.mainActionText}>{busy ? "…" : label}</Text></Pressable> }
 
+function TaskDisclosure({
+  title,
+  hint,
+  icon,
+  count,
+  open,
+  onPress,
+  children,
+}: {
+  title: string
+  hint?: string
+  icon: TabIconName
+  count?: number
+  open: boolean
+  onPress: () => void
+  children: ReactNode
+}) {
+  return (
+    <View style={styles.disclosure}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ expanded: open }}
+        onPress={onPress}
+        style={({ pressed }) => [styles.disclosureToggle, pressed && styles.pressed]}
+      >
+        <View accessible={false} style={styles.disclosureIcon}><TabIcon name={icon} color={colors.primary} size={18} /></View>
+        <View style={styles.disclosureBody}>
+          <Text style={styles.disclosureTitle}>{title}</Text>
+          {hint ? <Text numberOfLines={1} style={styles.disclosureHint}>{hint}</Text> : null}
+        </View>
+        {count !== undefined ? <View accessible={false} style={styles.disclosureCount}><Text style={styles.disclosureCountText}>{count}</Text></View> : null}
+        <View accessible={false} style={styles.disclosureChevron}><TabIcon name={open ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+      </Pressable>
+      {open ? <View style={styles.disclosureContent}>{children}</View> : null}
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 38 }, header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 }, headerTitle: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 }, copy: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  hero: { marginHorizontal: 14, marginTop: 14, borderRadius: 22, padding: 17, backgroundColor: colors.card, ...cardShadow }, heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, status: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 }, statusText: { fontSize: 9, fontWeight: "900" }, version: { color: colors.faint, fontSize: 8, fontWeight: "800" }, taskTitle: { color: colors.text, fontSize: 22, lineHeight: 28, fontWeight: "900", marginTop: 15 }, description: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 9 }, source: { color: colors.primary, fontSize: 9, fontWeight: "900", marginTop: 14 }, editTitle: { minHeight: 48, marginTop: 12, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, color: colors.text, fontSize: 14, fontWeight: "900" }, editDescription: { minHeight: 86, marginTop: 9, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, padding: 11, color: colors.text, fontSize: 12 }, priorityRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 9 }, priorityChip: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, priorityChipSelected: { backgroundColor: colors.primary }, priorityChipText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, priorityChipTextSelected: { color: colors.headerText }, editActions: { flexDirection: "row", gap: 8, marginTop: 12 }, secondaryButton: { flex: 1, minHeight: 44, borderRadius: 12, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, secondaryButtonText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, primaryButton: { flex: 1, minHeight: 44, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, primaryButtonText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
-  infoCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, gap: 12 }, infoRow: { flexDirection: "row", alignItems: "center", gap: 10 }, infoIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, infoBody: { flex: 1 }, infoLabel: { color: colors.faint, fontSize: 8, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 }, infoValue: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 2 }, infoDanger: { color: colors.missed }, syncNotice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft }, syncError: { backgroundColor: colors.dangerBg }, syncNoticeText: { color: colors.primary, fontSize: 10, fontWeight: "800" }, syncErrorText: { color: colors.missed }, policy: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.infoBg }, policyText: { color: colors.info, fontSize: 9, lineHeight: 14, fontWeight: "700" },
-  actionCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, ...cardShadow }, mainAction: { minHeight: 50, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, mainActionSuccess: { backgroundColor: colors.success }, mainActionText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, quickRow: { flexDirection: "row", gap: 7, marginTop: 8 }, quickButton: { flex: 1, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }, quickButtonText: { color: colors.primary, fontSize: 9, fontWeight: "900", textAlign: "center" },
-  formCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 13, backgroundColor: colors.card }, formTitle: { color: colors.text, fontSize: 13, fontWeight: "900" }, textarea: { minHeight: 83, marginTop: 9, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, padding: 11, color: colors.text, fontSize: 11, lineHeight: 17 }, formButton: { alignSelf: "flex-end", minHeight: 44, marginTop: 9, borderRadius: 12, paddingHorizontal: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, evidenceButton: { backgroundColor: colors.info }, formButtonText: { color: colors.headerText, fontSize: 10, fontWeight: "900" }, error: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, fontWeight: "800" },
-  timelineHeader: { marginHorizontal: 16, marginTop: 20, flexDirection: "row", alignItems: "center", gap: 7 }, sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "900" }, eventCount: { minWidth: 23, height: 23, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, eventCountText: { color: colors.primary, fontSize: 9, fontWeight: "900" }, timelineCard: { marginHorizontal: 14, marginTop: 9, borderRadius: radii.card, padding: 14, backgroundColor: colors.card }, event: { flexDirection: "row", gap: 10, minHeight: 54 }, eventRail: { width: 14, alignItems: "center" }, eventDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4 }, eventDotPending: { backgroundColor: colors.warning }, eventLine: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 3 }, eventBody: { flex: 1, paddingBottom: 14 }, eventTitle: { color: colors.text, fontSize: 11, fontWeight: "900" }, eventTime: { color: colors.faint, fontSize: 8, fontWeight: "700", marginTop: 3 }, eventText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 6 }, eventEvidence: { color: colors.info, fontSize: 10, lineHeight: 15, marginTop: 6, padding: 8, borderRadius: 9, backgroundColor: colors.infoBg }, emptyTimeline: { color: colors.muted, fontSize: 10, textAlign: "center", paddingVertical: 20 },
-  bottomActions: { marginHorizontal: 14, marginTop: 12, flexDirection: "row", gap: 8 }, bottomSecondary: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }, bottomSecondaryText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, bottomDanger: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: colors.dangerBg, alignItems: "center", justifyContent: "center" }, bottomDangerText: { color: colors.missed, fontSize: 10, fontWeight: "900" }, disabled: { opacity: 0.4 }, missing: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, missingTitle: { color: colors.text, fontSize: 16, fontWeight: "900" }, backButton: { minHeight: 44, marginTop: 15, borderRadius: 13, paddingHorizontal: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, backButtonText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { minHeight: "100%", paddingBottom: 38 },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  headerBody: { flex: 1 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.7 },
+  headerTitle: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 },
+  hero: { marginHorizontal: 14, marginTop: 14, borderRadius: 22, padding: 17, backgroundColor: colors.card, ...cardShadow },
+  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  status: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  statusText: { fontSize: 11, fontWeight: "900" },
+  version: { color: colors.faint, fontSize: 10, fontWeight: "800" },
+  taskTitle: { color: colors.text, fontSize: 22, lineHeight: 28, fontWeight: "900", marginTop: 15 },
+  description: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 9 },
+  source: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 14 },
+  editTitle: { minHeight: 48, marginTop: 12, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, color: colors.text, fontSize: 15, fontWeight: "900" },
+  editDescription: { minHeight: 86, marginTop: 9, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, padding: 11, color: colors.text, fontSize: 13 },
+  priorityRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 9 },
+  priorityChip: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
+  priorityChipSelected: { backgroundColor: colors.primary },
+  priorityChipText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  priorityChipTextSelected: { color: colors.headerText },
+  editActions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  secondaryButton: { flex: 1, minHeight: 44, borderRadius: 12, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
+  secondaryButtonText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
+  primaryButton: { flex: 1, minHeight: 44, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  primaryButtonText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
+  infoCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, gap: 12 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  infoIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  infoBody: { flex: 1 },
+  infoLabel: { color: colors.faint, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
+  infoValue: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
+  infoDanger: { color: colors.missed },
+  syncNotice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft },
+  syncError: { backgroundColor: colors.dangerBg },
+  syncNoticeText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
+  syncErrorText: { color: colors.missed },
+  policy: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.infoBg },
+  policyText: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  actionCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, ...cardShadow },
+  mainAction: { minHeight: 52, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  mainActionSuccess: { backgroundColor: colors.success },
+  mainActionText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
+  disclosure: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, backgroundColor: colors.card, overflow: "hidden", ...cardShadow },
+  disclosureToggle: { minHeight: 58, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 9 },
+  disclosureIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureBody: { flex: 1, minWidth: 0 },
+  disclosureTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  disclosureHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  disclosureCount: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 7, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureCountText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  disclosureChevron: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  disclosureContent: { borderTopWidth: 1, borderTopColor: colors.border, padding: 12 },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.993 }] },
+  quickRow: { flexDirection: "row", gap: 7 },
+  quickButton: { flex: 1, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  quickButtonText: { color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "center" },
+  formCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, ...cardShadow },
+  formTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  textarea: { minHeight: 83, marginTop: 9, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, padding: 11, color: colors.text, fontSize: 13, lineHeight: 19 },
+  formButton: { alignSelf: "flex-end", minHeight: 44, marginTop: 9, borderRadius: 12, paddingHorizontal: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  evidenceButton: { backgroundColor: colors.info },
+  formButtonText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
+  error: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg },
+  errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" },
+  timelineCard: { borderRadius: 14, padding: 2 },
+  event: { flexDirection: "row", gap: 10, minHeight: 54 },
+  eventRail: { width: 14, alignItems: "center" },
+  eventDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4 },
+  eventDotPending: { backgroundColor: colors.warning },
+  eventLine: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 3 },
+  eventBody: { flex: 1, paddingBottom: 14 },
+  eventTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  eventTime: { color: colors.faint, fontSize: 10, fontWeight: "700", marginTop: 3 },
+  eventText: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 6 },
+  eventEvidence: { color: colors.info, fontSize: 11, lineHeight: 16, marginTop: 6, padding: 8, borderRadius: 9, backgroundColor: colors.infoBg },
+  emptyTimeline: { color: colors.muted, fontSize: 11, textAlign: "center", paddingVertical: 20 },
+  bottomActions: { marginTop: 10, flexDirection: "row", gap: 8 },
+  bottomSecondary: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  bottomSecondaryText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
+  bottomDanger: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: colors.dangerBg, alignItems: "center", justifyContent: "center" },
+  bottomDangerText: { color: colors.missed, fontSize: 12, fontWeight: "900" },
+  disabled: { opacity: 0.4 },
+  missing: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  missingTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  backButton: { minHeight: 44, marginTop: 15, borderRadius: 13, paddingHorizontal: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  backButtonText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
 })

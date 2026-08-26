@@ -10,12 +10,20 @@ import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/fiel
 import { isFieldTaskDueOnDate, resolveFieldTaskToday } from "../../../src/field/task-time"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
 type Filter = "OPEN" | "ALL" | "IN_PROGRESS" | "COMPLETED"
+
+const FILTER_LABEL_KEYS: Record<Filter, MessageKey> = {
+  OPEN: "agentTasksFilterOpen",
+  ALL: "agentTasksFilterAll",
+  IN_PROGRESS: "agentTasksFilterProgress",
+  COMPLETED: "agentTasksFilterDone",
+}
 
 const PRIORITY_WEIGHT: Record<FieldAgentTaskPriority, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
 const STATUS_WEIGHT: Record<FieldAgentTaskStatus, number> = { OVERDUE: 5, IN_PROGRESS: 4, PENDING: 3, COMPLETED: 2, CANCELLED: 1 }
@@ -59,6 +67,7 @@ export default function AgentTasksScreen() {
   const field = useField()
   const { sync } = useSync()
   const [filter, setFilter] = useState<Filter>("OPEN")
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
@@ -136,6 +145,7 @@ export default function AgentTasksScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
@@ -160,12 +170,26 @@ export default function AgentTasksScreen() {
         </View>
 
         <View style={styles.searchBox}><TabIcon name="search" color={colors.faint} size={20} /><TextInput accessibilityLabel={t("agentTasksSearch")} value={search} onChangeText={setSearch} placeholder={t("agentTasksSearch")} placeholderTextColor={colors.faint} style={styles.searchInput} /></View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          <FilterChip selected={filter === "OPEN"} label={t("agentTasksFilterOpen")} onPress={() => setFilter("OPEN")} />
-          <FilterChip selected={filter === "IN_PROGRESS"} label={t("agentTasksFilterProgress")} onPress={() => setFilter("IN_PROGRESS")} />
-          <FilterChip selected={filter === "COMPLETED"} label={t("agentTasksFilterDone")} onPress={() => setFilter("COMPLETED")} />
-          <FilterChip selected={filter === "ALL"} label={t("agentTasksFilterAll")} onPress={() => setFilter("ALL")} />
-        </ScrollView>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${t("agentTasksFilterLabel")}: ${t(FILTER_LABEL_KEYS[filter])}`}
+          accessibilityState={{ expanded: filtersOpen }}
+          onPress={() => setFiltersOpen((open) => !open)}
+          style={({ pressed }) => [styles.filterSummary, pressed && styles.pressed]}
+        >
+          <View style={styles.filterSummaryIcon}><TabIcon name="tasks" color={colors.primary} size={19} /></View>
+          <View style={styles.filterSummaryBody}>
+            <Text style={styles.filterSummaryLabel}>{t("agentTasksFilterLabel")}</Text>
+            <Text style={styles.filterSummaryValue}>{t(FILTER_LABEL_KEYS[filter])}</Text>
+          </View>
+          <View accessible={false} style={styles.filterSummaryChevron}><TabIcon name={filtersOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+        </Pressable>
+        {filtersOpen ? <View style={styles.filters}>
+          <FilterChip selected={filter === "OPEN"} label={t("agentTasksFilterOpen")} onPress={() => { setFilter("OPEN"); setFiltersOpen(false) }} />
+          <FilterChip selected={filter === "IN_PROGRESS"} label={t("agentTasksFilterProgress")} onPress={() => { setFilter("IN_PROGRESS"); setFiltersOpen(false) }} />
+          <FilterChip selected={filter === "COMPLETED"} label={t("agentTasksFilterDone")} onPress={() => { setFilter("COMPLETED"); setFiltersOpen(false) }} />
+          <FilterChip selected={filter === "ALL"} label={t("agentTasksFilterAll")} onPress={() => { setFilter("ALL"); setFiltersOpen(false) }} />
+        </View> : null}
 
         {(localError || field.taskError) ? <View style={styles.error}><Text style={styles.errorText}>{localError ?? field.taskError}</Text></View> : null}
         {visible.map((task) => {
@@ -225,9 +249,9 @@ function SyncNotice({ state }: { state: "PENDING" | "CONFLICT" | "REJECTED" }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 34 },
-  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "flex-start", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 }, add: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  summary: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.card, padding: 8, backgroundColor: colors.card, flexDirection: "row", ...cardShadow }, metric: { flex: 1, minHeight: 65, alignItems: "center", justifyContent: "center" }, metricValue: { fontSize: 22, fontWeight: "900" }, metricLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 2 },
-  searchBox: { marginHorizontal: 14, marginTop: 14, minHeight: 47, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }, searchInput: { flex: 1, minHeight: 45, color: colors.text, fontSize: 12, paddingHorizontal: 8 }, filters: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2, gap: 8 }, filter: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, filterSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, filterText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
-  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, pressed: { opacity: 0.75, transform: [{ scale: 0.993 }] }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 9 }, priorityDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 }, cardBody: { flex: 1, minWidth: 0 }, cardTitle: { color: colors.text, fontSize: 14, lineHeight: 19, fontWeight: "900" }, source: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 4 }, status: { maxWidth: 100, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, statusText: { fontSize: 8, fontWeight: "900" }, metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10 }, meta: { flex: 1, color: colors.muted, fontSize: 10, fontWeight: "700" }, overdue: { color: colors.missed }, syncNotice: { marginTop: 10, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 6 }, syncConflict: { backgroundColor: colors.warningBg }, syncRejected: { backgroundColor: colors.dangerBg }, syncText: { color: colors.primary, fontSize: 9, fontWeight: "900" }, syncTextError: { color: colors.missed }, cardFooter: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, version: { color: colors.faint, fontSize: 8, fontWeight: "800" }, action: { minHeight: 44, borderRadius: 11, paddingHorizontal: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, actionDone: { backgroundColor: colors.success }, actionText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "flex-start", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }, add: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  summary: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.card, padding: 8, backgroundColor: colors.card, flexDirection: "row", ...cardShadow }, metric: { flex: 1, minHeight: 65, alignItems: "center", justifyContent: "center" }, metricValue: { fontSize: 22, fontWeight: "900" }, metricLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 2 },
+  searchBox: { marginHorizontal: 14, marginTop: 14, minHeight: 47, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12 }, searchInput: { flex: 1, minHeight: 45, color: colors.text, fontSize: 13, paddingHorizontal: 8 }, filterSummary: { minHeight: 58, marginHorizontal: 14, marginTop: 10, borderRadius: 16, paddingHorizontal: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 9 }, filterSummaryIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, filterSummaryBody: { flex: 1, minWidth: 0 }, filterSummaryLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4 }, filterSummaryValue: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 }, filterSummaryChevron: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, filters: { marginHorizontal: 14, paddingTop: 9, flexDirection: "row", flexWrap: "wrap", gap: 8 }, filter: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, filterSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, filterText: { color: colors.muted, fontSize: 12, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
+  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, pressed: { opacity: 0.75, transform: [{ scale: 0.993 }] }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 9 }, priorityDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 }, cardBody: { flex: 1, minWidth: 0 }, cardTitle: { color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: "900" }, source: { color: colors.muted, fontSize: 11, fontWeight: "700", marginTop: 4 }, status: { maxWidth: 118, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, statusText: { fontSize: 11, fontWeight: "900" }, metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10 }, meta: { flex: 1, color: colors.muted, fontSize: 11, fontWeight: "700" }, overdue: { color: colors.missed }, syncNotice: { marginTop: 10, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 6 }, syncConflict: { backgroundColor: colors.warningBg }, syncRejected: { backgroundColor: colors.dangerBg }, syncText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, syncTextError: { color: colors.missed }, cardFooter: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, version: { color: colors.faint, fontSize: 10, fontWeight: "800" }, action: { minHeight: 44, borderRadius: 11, paddingHorizontal: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, actionDone: { backgroundColor: colors.success }, actionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   error: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, fontWeight: "800" }, empty: { margin: 14, minHeight: 300, borderRadius: radii.card, padding: 24, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow }, emptyMark: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" }, emptyTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center", marginTop: 14 }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 6 }, emptyButton: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 17, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 }, emptyButtonText: { color: colors.headerText, fontSize: 11, fontWeight: "900" }, loading: { paddingHorizontal: 14, paddingTop: 8, gap: 10 }, skeleton: { height: 150, borderRadius: radii.card, backgroundColor: colors.skeleton },
 })
