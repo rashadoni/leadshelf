@@ -366,7 +366,7 @@ export default function SyncCenterScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
-      <CommercialHeader title={t("syncCenterTitle")} subtitle={t("syncCenterSubtitle")} />
+      <CommercialHeader title={t("syncCenterTitle")} subtitle={t("syncCenterSubtitle")} backFallback="/(app)/(tabs)/profile" />
       <SyncBar />
       <ScrollView
         contentContainerStyle={styles.scroll}

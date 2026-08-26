@@ -1,14 +1,14 @@
 import type { ReactNode } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
-import { router } from "expo-router"
 import { TabIcon } from "../components/TabIcon"
 import { t } from "../i18n"
+import { safeFieldBack } from "../navigation/safe-back"
 import { colors, cardShadow, radii } from "../theme"
 
-export function CommercialHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function CommercialHeader({ title, subtitle, backFallback = "/(app)/(tabs)/work" }: { title: string; subtitle?: string; backFallback?: string }) {
   return (
     <View style={styles.header}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={title} onPress={() => router.back()} style={styles.backButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={title} onPress={() => safeFieldBack(backFallback)} style={styles.backButton}>
         <TabIcon name="chevronLeft" color={colors.text} size={23} />
       </Pressable>
       <View style={styles.headerBody}>
