@@ -1742,6 +1742,7 @@ export function purgeLocalOperationalData(): void {
       DELETE FROM tasks;
       DELETE FROM stores;
       DELETE FROM cursors;
+      DELETE FROM field_cache;
     `)
   })
 }
