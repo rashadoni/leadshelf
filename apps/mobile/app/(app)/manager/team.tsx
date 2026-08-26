@@ -10,6 +10,7 @@ import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { agentRoleLabel } from "../../../src/field/labels"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 type WorkdayMeta = {
   label: string
@@ -103,6 +104,7 @@ function workdayMeta(agent: FieldManagerTeamAgent, supportsTodayContract: boolea
 
 export default function ManagerTeamScreen() {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const [data, setData] = useState<FieldManagerTeamData | null>(null)
   const [search, setSearch] = useState("")
   const [loadedSearch, setLoadedSearch] = useState("")
@@ -154,6 +156,7 @@ export default function ManagerTeamScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
@@ -220,7 +223,7 @@ export default function ManagerTeamScreen() {
             {data.agents.length === 0 ? (
               <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="profile" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{search.trim() ? t("managerNoSearchResults") : t("managerNoTeam")}</Text></View>
             ) : (
-              <View style={styles.list}>
+              <View style={[styles.list, layout.isTablet && styles.listTablet]}>
                 {data.agents.map((agent) => {
                   const workday = workdayMeta(agent, supportsTodayContract)
                   const presence = agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")
@@ -236,7 +239,7 @@ export default function ManagerTeamScreen() {
                       accessibilityLabel={agent.name + ". " + agentRoleLabel(agent.role) + ". " + presence + ". " + workday.label + (workdayFact ? ". " + workdayFact : "") + ". " + lastSeen}
                       accessibilityRole="text"
                       key={agent.id}
-                      style={styles.card}
+                      style={[styles.card, layout.isTablet && styles.cardTablet]}
                     >
                       <View style={styles.cardTop}>
                         <View style={styles.avatar}><TabIcon name="profile" color={colors.primary} size={22} /></View>
@@ -278,6 +281,7 @@ export default function ManagerTeamScreen() {
             ) : null}
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -286,48 +290,49 @@ export default function ManagerTeamScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 32 },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   scope: { marginHorizontal: 14, marginTop: 16, borderRadius: radii.inner, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
-  scopeText: { flex: 1, color: colors.primary, fontSize: 10, fontWeight: "900" },
-  staleText: { color: colors.warning, fontSize: 9, fontWeight: "800" },
+  scopeText: { flex: 1, color: colors.primary, fontSize: 11, fontWeight: "900" },
+  staleText: { color: colors.warning, fontSize: 11, fontWeight: "800" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
-  pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },
+  pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 11, fontWeight: "800" },
   todaySummary: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, ...cardShadow },
   todaySummaryTop: { flexDirection: "row", alignItems: "center", gap: 9 },
   todaySummaryIcon: { width: 39, height: 39, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   todaySummaryBody: { flex: 1, minWidth: 0 },
   todaySummaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  todaySummaryHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 2 },
+  todaySummaryHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 2 },
   todayStats: { marginTop: 13, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row" },
   todayStat: { flex: 1, alignItems: "center", paddingHorizontal: 4 },
   todayStatValue: { fontSize: 19, lineHeight: 22, fontWeight: "900" },
-  todayStatLabel: { color: colors.muted, fontSize: 8, lineHeight: 11, fontWeight: "800", textAlign: "center", marginTop: 2 },
-  list: { paddingTop: 3 },
-  card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 14, ...cardShadow },
+  todayStatLabel: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: "800", textAlign: "center", marginTop: 2 },
+  list: { paddingTop: 3 }, listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
+  card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 14, ...cardShadow }, cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   cardBody: { flex: 1, minWidth: 0 },
   name: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  role: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 3 },
+  role: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 3 },
   presence: { maxWidth: 106, paddingHorizontal: 8, paddingVertical: 6, borderRadius: radii.pill, flexDirection: "row", alignItems: "center", gap: 5 },
   presenceOnline: { backgroundColor: colors.successBg },
   presenceOffline: { backgroundColor: colors.draftBg },
   presenceDot: { width: 6, height: 6, borderRadius: 3 },
-  presenceText: { flexShrink: 1, fontSize: 8, lineHeight: 10, fontWeight: "900" },
+  presenceText: { flexShrink: 1, fontSize: 11, lineHeight: 15, fontWeight: "900" },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 12 },
   cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   workday: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5 },
   workdayDot: { width: 7, height: 7, borderRadius: 4 },
-  workdayText: { fontSize: 9, fontWeight: "900" },
-  workdaySince: { color: colors.faint, fontSize: 9, fontWeight: "800" },
-  lastSeen: { maxWidth: "50%", color: colors.faint, fontSize: 8, textAlign: "right", fontWeight: "700" },
+  workdayText: { fontSize: 11, fontWeight: "900" },
+  workdaySince: { color: colors.faint, fontSize: 11, fontWeight: "800" },
+  lastSeen: { maxWidth: "50%", color: colors.faint, fontSize: 11, textAlign: "right", fontWeight: "700" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },
   stateWarning: { backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder },
   stateIcon: { width: 50, height: 50, borderRadius: 17, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 12 },

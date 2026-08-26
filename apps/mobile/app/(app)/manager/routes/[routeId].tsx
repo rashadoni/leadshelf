@@ -11,6 +11,7 @@ import { formatCalendarDay, formatTime } from "../../../../src/i18n/date-format"
 import { HttpError } from "../../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../../src/theme"
 import { safeFieldBack } from "../../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../../src/layout/responsive"
 
 const knownRouteStatus = new Set(["DRAFT", "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "MISSED"])
 
@@ -51,6 +52,7 @@ function routeDateKey(route: FieldManagerRouteDetail): string | null {
 
 export default function ManagerRouteDetailScreen() {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const { routeId } = useLocalSearchParams<{ routeId?: string }>()
   const id = typeof routeId === "string" && routeId.length > 0 ? routeId : null
   const [route, setRoute] = useState<FieldManagerRouteDetail | null>(null)
@@ -95,6 +97,7 @@ export default function ManagerRouteDetailScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.primary} />}
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager/planning")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
@@ -183,6 +186,7 @@ export default function ManagerRouteDetailScreen() {
             )}
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -191,6 +195,7 @@ export default function ManagerRouteDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 32 },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
@@ -205,7 +210,7 @@ const styles = StyleSheet.create({
   routeName: { color: colors.text, fontSize: 16, fontWeight: "900" },
   routeAgent: { color: colors.muted, fontSize: 12, fontWeight: "800", marginTop: 3 },
   status: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6 },
-  statusText: { fontSize: 8, fontWeight: "900" },
+  statusText: { fontSize: 11, fontWeight: "900" },
   routeDate: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 6 },
   routeDateText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   progressCard: { minHeight: 88, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, flexDirection: "row", alignItems: "center", ...cardShadow },
@@ -225,7 +230,7 @@ const styles = StyleSheet.create({
   pointSubtitle: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3, fontWeight: "800" },
   pointMeta: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
   pointStatus: { borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 5 },
-  pointStatusText: { fontSize: 10, fontWeight: "900" },
+  pointStatusText: { fontSize: 11, fontWeight: "900" },
   pointTime: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   empty: { minHeight: 112, marginHorizontal: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 9, paddingHorizontal: 18, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
@@ -237,5 +242,5 @@ const styles = StyleSheet.create({
   retry: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   retryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder, padding: 11 },
-  noticeText: { color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  noticeText: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
 })
