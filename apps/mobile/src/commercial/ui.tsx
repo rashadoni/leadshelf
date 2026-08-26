@@ -1,13 +1,15 @@
 import type { ReactNode } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { router } from "expo-router"
+import { TabIcon } from "../components/TabIcon"
+import { t } from "../i18n"
 import { colors, cardShadow, radii } from "../theme"
 
 export function CommercialHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <View style={styles.header}>
-      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
-        <Text style={styles.backGlyph}>‹</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={title} onPress={() => router.back()} style={styles.backButton}>
+        <TabIcon name="chevronLeft" color={colors.text} size={23} />
       </Pressable>
       <View style={styles.headerBody}>
         <Text style={styles.title}>{title}</Text>
@@ -113,7 +115,6 @@ export const commercialCardStyle = {
 const styles = StyleSheet.create({
   header: { minHeight: 78, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 11 },
   backButton: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
-  backGlyph: { color: colors.text, fontSize: 32, fontWeight: "500", lineHeight: 34, marginTop: -2 },
   headerBody: { flex: 1, minWidth: 0 },
   title: { color: colors.text, fontSize: 24, fontWeight: "900", letterSpacing: -0.4 },
   subtitle: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
