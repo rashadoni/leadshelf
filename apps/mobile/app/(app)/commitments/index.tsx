@@ -32,6 +32,7 @@ import {
 } from "../../../src/db/local-store"
 import { FIELD_COMMITMENTS_CACHE_KEY } from "../../../src/field/commitment-cache"
 import { fieldErrorMessage } from "../../../src/field/error-message"
+import { resolveFieldTodayPrimaryAction } from "../../../src/field/today-primary-action"
 import type {
   FieldCommitment,
   FieldCommitmentOutcome,
@@ -47,9 +48,10 @@ import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
-import { TabIcon } from "../../../src/components/TabIcon"
+import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, radii } from "../../../src/theme"
+import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 
 type ListFilter = "OPEN" | "HISTORY"
 
@@ -134,6 +136,38 @@ export default function CommitmentsScreen() {
   const [factPhoto, setFactPhoto] = useState<CommercialPhotoCapture | null>(null)
   const catalog = useMemo(listLocalCatalogProducts, [])
   const activeVisit = activeFieldVisit(field.week)
+  const recoveryAction = !activeVisit ? resolveFieldTodayPrimaryAction({
+    isField: IS_LEADDRIVE_FIELD,
+    activeVisit: null,
+    today: field.week?.days.find((day) => day.isToday) ?? null,
+    canCreateOwnDraft: field.week?.capabilities.createOwnDraft === true,
+    availableWorkdayActions: field.workday?.availableActions,
+  }) : null
+  const recoveryLabel = recoveryAction?.kind === "START_WORKDAY"
+    ? t("workdayStart")
+    : recoveryAction?.kind === "RESUME_WORKDAY"
+      ? t("workdayResume")
+      : recoveryAction?.kind === "OPEN_NEXT_ROUTE" && recoveryAction.nextStopName
+        ? `${t("routeNextStop")}: ${recoveryAction.nextStopName}`
+        : recoveryAction?.kind === "OPEN_NEXT_ROUTE"
+          ? t("openRoute")
+          : recoveryAction?.kind === "CREATE_ROUTE"
+            ? t("createRoute")
+            : t("weekSchedule")
+  const recoveryDestination = recoveryAction?.kind === "START_WORKDAY" || recoveryAction?.kind === "RESUME_WORKDAY"
+    ? t("workdayTitle")
+    : recoveryAction?.kind === "OPEN_NEXT_ROUTE"
+      ? t("routeDetails")
+      : recoveryAction?.kind === "CREATE_ROUTE"
+        ? t("routeHubTitle")
+        : t("weekSchedule")
+  const recoveryIcon: TabIconName = recoveryAction?.kind === "START_WORKDAY" || recoveryAction?.kind === "RESUME_WORKDAY"
+    ? "today"
+    : recoveryAction?.kind === "OPEN_NEXT_ROUTE"
+      ? "route"
+      : recoveryAction?.kind === "CREATE_ROUTE"
+        ? "add"
+        : "week"
 
   const reload = useCallback(() => setData(readFieldCommitments()), [])
 
@@ -358,6 +392,20 @@ export default function CommitmentsScreen() {
           activeLabel={t("commitmentsActiveVisit")}
           missingLabel={t("commitmentsNeedsVisit")}
         />
+
+        {recoveryAction ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={recoveryLabel}
+            accessibilityHint={`${t("commitmentsNeedsVisit")}. ${recoveryDestination}`}
+            onPress={() => router.push(recoveryAction.href as never)}
+            style={({ pressed }) => [styles.recoveryAction, pressed && styles.pressed]}
+          >
+            <View accessible={false} style={styles.recoveryIcon}><TabIcon name={recoveryIcon} color={colors.headerText} size={20} /></View>
+            <View style={styles.recoveryBody}><Text style={styles.recoveryLabel} numberOfLines={1}>{recoveryLabel}</Text><Text style={styles.recoveryHint} numberOfLines={2}>{recoveryDestination}</Text></View>
+            <TabIcon name="chevronRight" color={colors.headerText} size={21} />
+          </Pressable>
+        ) : null}
 
         <View style={styles.summary}>
           <Summary value={counts.open} label={t("commitmentsSummaryOpen")} color={colors.info} />
@@ -592,6 +640,11 @@ const styles = StyleSheet.create({
   warningText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
   warningRetry: { minHeight: 44, borderRadius: 12, paddingHorizontal: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 2 },
   warningRetryText: { color: colors.warning, fontSize: 8, fontWeight: "900" },
+  recoveryAction: { minHeight: 62, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 10 },
+  recoveryIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  recoveryBody: { flex: 1, minWidth: 0 },
+  recoveryLabel: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  recoveryHint: { color: colors.headerText, opacity: 0.82, fontSize: 11, lineHeight: 15, marginTop: 2 },
   busyNotice: { marginHorizontal: 14, marginTop: 10, minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 8 },
   busyNoticeText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   composer: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 14, borderWidth: 1, borderColor: colors.infoBorder },
