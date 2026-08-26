@@ -11,6 +11,7 @@ import { formatCalendarDate } from "../../../src/i18n/date-format"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 const CACHE_KEY = "field.customer-requests"
@@ -61,6 +62,7 @@ export default function CustomerRequestsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
@@ -116,7 +118,20 @@ function RequestCard({ request }: { request: FieldCustomerRequest }) {
       {request.duplicateCandidates.length > 0 ? (
         <View style={styles.duplicateLine}><TabIcon name="alert" color={colors.warning} size={16} /><Text style={styles.duplicateText}>{t("duplicateWarning")} · {request.duplicateCandidates.length}</Text></View>
       ) : null}
-      {request.approvedCustomer ? <View style={styles.approved}><TabIcon name="check" color={colors.successDark} size={16} /><Text style={styles.approvedText}>{request.approvedCustomer.name}</Text></View> : null}
+      {request.approvedCustomer ? <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${t("customerRequestApprovedCustomer")}: ${request.approvedCustomer.name}`}
+        accessibilityHint={t("customerRequestOpenApprovedCustomer")}
+        onPress={() => router.push(`/(app)/organizations/${request.approvedCustomer!.id}` as never)}
+        style={({ pressed }) => [styles.approved, pressed && styles.pressed]}
+      >
+        <View accessible={false} style={styles.approvedIcon}><TabIcon name="check" color={colors.successDark} size={17} /></View>
+        <View style={styles.approvedBody}>
+          <Text style={styles.approvedLabel}>{t("customerRequestApprovedCustomer")}</Text>
+          <Text numberOfLines={1} style={styles.approvedText}>{request.approvedCustomer.name}</Text>
+        </View>
+        <TabIcon name="chevronRight" color={colors.successDark} size={20} />
+      </Pressable> : null}
     </View>
   )
 }
@@ -124,13 +139,13 @@ function RequestCard({ request }: { request: FieldCustomerRequest }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 30 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
-  headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   add: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, noticeText: { color: colors.warning, fontSize: 11, fontWeight: "800" }, list: { paddingTop: 3 },
-  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, cardBody: { flex: 1, minWidth: 0 }, cardName: { color: colors.text, fontSize: 15, fontWeight: "900" }, cardMeta: { color: colors.primary, fontSize: 10, fontWeight: "800", marginTop: 3 },
-  status: { borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 6 }, statusText: { fontSize: 9, fontWeight: "900" }, address: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 9 }, reason: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 9 },
-  cardFooter: { marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", justifyContent: "space-between", gap: 8 }, footerText: { color: colors.faint, fontSize: 9, fontWeight: "700" }, routeInfo: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 }, routeText: { color: colors.info, fontSize: 9, fontWeight: "800", flexShrink: 1 },
-  duplicateLine: { marginTop: 10, borderRadius: 10, padding: 9, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 7 }, duplicateText: { color: colors.warning, fontSize: 10, fontWeight: "900", flex: 1 }, approved: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6 }, approvedText: { color: colors.successDark, fontSize: 11, fontWeight: "900", flex: 1 },
+  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, cardBody: { flex: 1, minWidth: 0 }, cardName: { color: colors.text, fontSize: 15, fontWeight: "900" }, cardMeta: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 3 },
+  status: { borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 6 }, statusText: { fontSize: 11, fontWeight: "900" }, address: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 9 }, reason: { color: colors.text, fontSize: 13, lineHeight: 18, marginTop: 9 },
+  cardFooter: { marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", justifyContent: "space-between", gap: 8 }, footerText: { color: colors.faint, fontSize: 11, fontWeight: "700" }, routeInfo: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 }, routeText: { color: colors.info, fontSize: 11, fontWeight: "800", flexShrink: 1 },
+  duplicateLine: { marginTop: 10, borderRadius: 10, padding: 9, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 7 }, duplicateText: { color: colors.warning, fontSize: 11, fontWeight: "900", flex: 1 }, approved: { minHeight: 54, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 8 }, approvedIcon: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, approvedBody: { flex: 1, minWidth: 0 }, approvedLabel: { color: colors.successDark, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.3 }, approvedText: { color: colors.successDark, fontSize: 13, fontWeight: "900", marginTop: 1 }, pressed: { opacity: 0.75 },
   empty: { margin: 14, minHeight: 320, borderRadius: radii.card, padding: 28, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow }, emptyMark: { width: 54, height: 54, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 16 }, emptyBody: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 7 },
   primaryButton: { minHeight: 46, marginTop: 20, borderRadius: radii.inner, paddingHorizontal: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, primaryButtonText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
 })

@@ -6,12 +6,15 @@ import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
 import type { CreateFieldCustomerRequest, FieldCustomerRequest, FieldCustomerRequestsData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
+import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { fieldErrorMessage } from "../../../src/field/error-message"
 import { t, useLocale } from "../../../src/i18n"
+import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { getCurrentDeviceLocation, type DeviceLocation } from "../../../src/location/device-location"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 
 const CACHE_KEY = "field.customer-requests"
 const OBJECT_TYPES: CreateFieldCustomerRequest["objectType"][] = ["PHARMACY", "CLINIC", "DOCTOR", "STORE", "OTHER"]
@@ -24,10 +27,16 @@ function duplicateReasonLabel(reason: string): string {
 }
 
 export default function NewCustomerRequestScreen() {
-  useLocale()
+  const locale = useLocale()
   const field = useField()
   const insets = useSafeAreaInsets()
-  const routes = useMemo(() => field.week?.days.flatMap((day) => day.routes.map((route) => ({ id: route.id, name: route.name, date: day.date }))) ?? [], [field.week])
+  const routeDays = useMemo(() => field.week?.days.map((day) => ({
+    date: day.date,
+    isToday: day.isToday,
+    isWorkingDay: day.isWorkingDay,
+    routes: day.routes.map((route) => ({ id: route.id, name: route.name, date: day.date })),
+  })) ?? [], [field.week])
+  const routes = useMemo(() => routeDays.flatMap((day) => day.routes), [routeDays])
   const [objectType, setObjectType] = useState<CreateFieldCustomerRequest["objectType"]>("CLINIC")
   const [name, setName] = useState("")
   const [address, setAddress] = useState("")
@@ -40,14 +49,24 @@ export default function NewCustomerRequestScreen() {
   const [reason, setReason] = useState("")
   const [agentComment, setAgentComment] = useState("")
   const [routeId, setRouteId] = useState<string | null>(null)
+  const [routeDate, setRouteDate] = useState<string | null>(null)
+  const [routePickerOpen, setRoutePickerOpen] = useState(false)
   const [location, setLocation] = useState<DeviceLocation | null>(null)
   const [locating, setLocating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<FieldCustomerRequest | null>(null)
+  const selectedRoute = routes.find((route) => route.id === routeId) ?? null
+  const effectiveRouteId = selectedRoute?.id ?? null
+  const firstRouteDate = routeDays.find((day) => day.routes.length > 0)?.date ?? null
+  const selectedRouteDate = selectedRoute?.date ?? routeDate ?? routeDays.find((day) => day.isToday && day.routes.length > 0)?.date ?? firstRouteDate
+  const selectedRouteDateLabel = selectedRouteDate
+    ? `${formatCalendarDay(selectedRouteDate, locale).weekday}, ${formatCalendarDay(selectedRouteDate, locale).date}`
+    : t("optionalRoute")
+  const selectedDateRoutes = selectedRouteDate ? routes.filter((route) => route.date === selectedRouteDate) : []
   const hasDraft = Boolean(
     name.trim() || address.trim() || city.trim() || district.trim() || phone.trim() || contactPerson.trim() ||
-    reason.trim() || agentComment.trim() || routeId || location || objectType !== "CLINIC" || category !== "A" || potential !== "UNKNOWN",
+    reason.trim() || agentComment.trim() || effectiveRouteId || location || objectType !== "CLINIC" || category !== "A" || potential !== "UNKNOWN",
   )
 
   async function attachLocation() {
@@ -73,7 +92,7 @@ export default function NewCustomerRequestScreen() {
     setError(null)
     try {
       const next = await fieldApi.createCustomerRequest({
-        routeId,
+        routeId: effectiveRouteId,
         objectType,
         name: name.trim(),
         address: address.trim() || null,
@@ -114,6 +133,7 @@ export default function NewCustomerRequestScreen() {
   if (created) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
+        <FieldScreenChrome />
         <ScrollView contentContainerStyle={[styles.successScroll, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
           <View style={styles.successMark}><TabIcon name="check" color={colors.success} size={31} /></View>
           <Text style={styles.successTitle}>{t("requestSubmitted")}</Text>
@@ -143,9 +163,10 @@ export default function NewCustomerRequestScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
+          contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 96 }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
@@ -155,9 +176,9 @@ export default function NewCustomerRequestScreen() {
           <Text style={styles.intro}>{t("newCustomerHint")}</Text>
 
           <FieldLabel label={t("objectType")} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <View style={styles.wrapChips}>
             {OBJECT_TYPES.map((value) => <ChoiceChip key={value} label={objectTypeLabel(value)} selected={objectType === value} onPress={() => setObjectType(value)} />)}
-          </ScrollView>
+          </View>
 
           <View style={styles.formCard}>
             <Input label={t("customerName")} value={name} onChangeText={setName} required />
@@ -173,13 +194,50 @@ export default function NewCustomerRequestScreen() {
           <View style={styles.wrapChips}>{POTENTIALS.map((value) => <ChoiceChip key={value} label={potentialLabel(value)} selected={potential === value} onPress={() => setPotential(value)} />)}</View>
 
           {routes.length > 0 ? (
-            <>
-              <FieldLabel label={t("optionalRoute")} />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                <ChoiceChip label={t("noRouteSelected")} selected={routeId === null} onPress={() => setRouteId(null)} />
-                {routes.map((route) => <ChoiceChip key={route.id} label={`${route.date.slice(5)} · ${route.name ?? t("routes")}`} selected={routeId === route.id} onPress={() => setRouteId(route.id)} />)}
-              </ScrollView>
-            </>
+            <View style={styles.routePicker}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${t("optionalRoute")}: ${selectedRoute ? selectedRoute.name ?? t("routes") : t("noRouteSelected")}`}
+                accessibilityState={{ expanded: routePickerOpen }}
+                onPress={() => setRoutePickerOpen((open) => !open)}
+                style={({ pressed }) => [styles.routeSummary, pressed && styles.pressed]}
+              >
+                <View accessible={false} style={styles.routeSummaryIcon}><TabIcon name="route" color={colors.primary} size={20} /></View>
+                <View style={styles.routeSummaryBody}>
+                  <Text style={styles.routeSummaryLabel}>{t("optionalRoute")}</Text>
+                  <Text numberOfLines={1} style={styles.routeSummaryValue}>{selectedRoute ? `${selectedRouteDateLabel} · ${selectedRoute.name ?? t("routes")}` : t("noRouteSelected")}</Text>
+                </View>
+                <View accessible={false} style={styles.routeSummaryChevron}><TabIcon name={routePickerOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} /></View>
+              </Pressable>
+              {routePickerOpen ? <View style={styles.routePickerContent}>
+                <Text style={styles.routePickerHint}>{t("customerRequestRouteHint")}</Text>
+                <FieldDayNavigator
+                  days={routeDays.map((day) => ({
+                    date: day.date,
+                    isToday: day.isToday,
+                    isWorkingDay: day.isWorkingDay,
+                    disabled: day.routes.length === 0,
+                    dotColor: day.routes.length > 0 ? colors.primary : undefined,
+                    accessibilityLabel: `${formatCalendarDay(day.date, locale).weekday}, ${formatCalendarDay(day.date, locale).date}`,
+                  }))}
+                  selectedDate={selectedRouteDate}
+                  onSelectDate={(date) => { setRouteDate(date); setRouteId(null) }}
+                  currentLabel={selectedRouteDateLabel}
+                  currentAccessibilityLabel={selectedRouteDateLabel}
+                  calendarPicker
+                  todayDate={field.week?.today}
+                  compactDay
+                  embedded
+                  dayHint={t("customerRequestChooseRoute")}
+                  isCalendarDateDisabled={(date) => !routeDays.some((day) => day.date === date && day.routes.length > 0)}
+                />
+                <Text style={styles.routeChoicesLabel}>{t("customerRequestChooseRoute")}</Text>
+                <View style={styles.routeChoiceChips}>
+                  <ChoiceChip label={t("noRouteSelected")} selected={effectiveRouteId === null} onPress={() => { setRouteId(null); setRoutePickerOpen(false) }} />
+                  {selectedDateRoutes.map((route) => <ChoiceChip key={route.id} label={route.name ?? t("routes")} selected={effectiveRouteId === route.id} onPress={() => { setRouteId(route.id); setRouteDate(route.date); setRoutePickerOpen(false) }} />)}
+                </View>
+              </View> : null}
+            </View>
           ) : null}
 
           <Pressable accessibilityRole="button" accessibilityLabel={location ? t("locationAttached") : t("useCurrentLocation")} disabled={locating} onPress={() => void attachLocation()} style={({ pressed }) => [styles.locationButton, pressed && styles.pressed]}>
@@ -191,9 +249,11 @@ export default function NewCustomerRequestScreen() {
             <Input label={t("requestReason")} value={reason} onChangeText={setReason} multiline required />
             <Input label={t("agentComment")} value={agentComment} onChangeText={setAgentComment} multiline />
           </View>
-          {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel={t("submitCustomerRequest")} disabled={submitting} onPress={() => void submit()} style={({ pressed }) => [styles.submit, (pressed || submitting) && styles.pressed]}><Text style={styles.submitText}>{submitting ? "…" : t("submitCustomerRequest")}</Text></Pressable>
         </ScrollView>
+        <View style={[styles.submitTray, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          {error ? <View accessibilityRole="alert" style={styles.trayError}><Text style={styles.errorText}>{error}</Text></View> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel={t("submitCustomerRequest")} accessibilityState={{ disabled: submitting, busy: submitting }} disabled={submitting} onPress={() => void submit()} style={({ pressed }) => [styles.submit, (pressed || submitting) && styles.pressed]}><Text style={styles.submitText}>{submitting ? "…" : t("submitCustomerRequest")}</Text></Pressable>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
@@ -219,12 +279,69 @@ function ChoiceChip({ label, selected, onPress }: { label: string; selected: boo
 function Input({ label, required, multiline, ...props }: { label: string; required?: boolean; multiline?: boolean; value: string; onChangeText: (value: string) => void; keyboardType?: "default" | "phone-pad" }) { return <View style={styles.inputGroup}><Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text><TextInput {...props} accessibilityLabel={label} multiline={multiline} placeholderTextColor={colors.faint} style={[styles.input, multiline && styles.textarea]} textAlignVertical={multiline ? "top" : "center"} /></View> }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg }, flex: { flex: 1 }, scroll: { paddingBottom: 34 }, successScroll: { minHeight: "100%", padding: 20, alignItems: "center", justifyContent: "center" },
-  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
-  fieldLabel: { color: colors.text, fontSize: 13, fontWeight: "900", marginHorizontal: 16, marginTop: 18, marginBottom: 8 }, chips: { flexDirection: "row", gap: 8, paddingHorizontal: 14 }, wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 }, chip: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }, chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 11, fontWeight: "800" }, chipTextSelected: { color: colors.headerText },
-  formCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 12, ...cardShadow }, inputGroup: { flex: 1 }, inputLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }, input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 }, textarea: { minHeight: 86, paddingTop: 12, lineHeight: 18 }, twoColumns: { flexDirection: "row", gap: 10 }, column: { flex: 1 },
-  locationButton: { marginHorizontal: 14, marginTop: 18, minHeight: 68, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border }, locationIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, locationIconDone: { backgroundColor: colors.successBg }, locationBody: { flex: 1 }, locationTitle: { color: colors.text, fontSize: 12, fontWeight: "900" }, locationMeta: { color: colors.successDark, fontSize: 10, fontWeight: "700", marginTop: 4 },
-  error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" }, submit: { marginHorizontal: 14, marginTop: 16, minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, submitText: { color: colors.headerText, fontSize: 14, fontWeight: "900" }, pressed: { opacity: 0.7 },
-  successMark: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" }, successTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 18 }, successName: { color: colors.muted, fontSize: 14, textAlign: "center", marginTop: 6 }, statusPill: { marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.primarySoft }, statusText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
-  duplicates: { width: "100%", marginTop: 22, borderRadius: radii.card, padding: 14, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder }, duplicateTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 }, duplicateTitle: { color: colors.warning, fontSize: 14, fontWeight: "900" }, duplicateHint: { color: colors.warning, fontSize: 10, lineHeight: 15, marginTop: 4 }, candidate: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.warningBorder, flexDirection: "row", alignItems: "center", gap: 10 }, candidateBody: { flex: 1 }, candidateName: { color: colors.text, fontSize: 12, fontWeight: "900" }, candidateAddress: { color: colors.muted, fontSize: 9, marginTop: 3 }, candidateReason: { color: colors.warning, fontSize: 8, fontWeight: "800", marginTop: 4 }, score: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, scoreText: { color: colors.warning, fontSize: 11, fontWeight: "900" }, doneButton: { width: "100%", minHeight: 52, marginTop: 20, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, doneButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  root: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  scroll: { paddingBottom: 34 },
+  successScroll: { minHeight: "100%", padding: 20, alignItems: "center", justifyContent: "center" },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  headerBody: { flex: 1 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
+  title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
+  intro: { color: colors.muted, fontSize: 13, lineHeight: 19, marginHorizontal: 16, marginTop: 12 },
+  fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "900", marginHorizontal: 16, marginTop: 18, marginBottom: 8 },
+  chips: { flexDirection: "row", gap: 8, paddingHorizontal: 14 },
+  wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 },
+  routeChoiceChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
+  chipTextSelected: { color: colors.headerText },
+  formCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 12, ...cardShadow },
+  inputGroup: { flex: 1 },
+  inputLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
+  textarea: { minHeight: 86, paddingTop: 12, lineHeight: 18 },
+  twoColumns: { flexDirection: "row", gap: 10 },
+  column: { flex: 1 },
+  routePicker: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.card, backgroundColor: colors.card, overflow: "hidden", ...cardShadow },
+  routeSummary: { minHeight: 58, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  routeSummaryIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  routeSummaryBody: { flex: 1, minWidth: 0 },
+  routeSummaryLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 0.35, textTransform: "uppercase" },
+  routeSummaryValue: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
+  routeSummaryChevron: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  routePickerContent: { borderTopWidth: 1, borderTopColor: colors.border, padding: 12, gap: 10 },
+  routePickerHint: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  routeChoicesLabel: { color: colors.text, fontSize: 13, fontWeight: "900", marginTop: 2 },
+  locationButton: { marginHorizontal: 14, marginTop: 18, minHeight: 68, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border },
+  locationIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  locationIconDone: { backgroundColor: colors.successBg },
+  locationBody: { flex: 1 },
+  locationTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  locationMeta: { color: colors.successDark, fontSize: 11, fontWeight: "700", marginTop: 4 },
+  submitTray: { paddingHorizontal: 14, paddingTop: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, ...cardShadow },
+  trayError: { marginBottom: 8, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg },
+  errorText: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  submitText: { color: colors.headerText, fontSize: 14, fontWeight: "900" },
+  pressed: { opacity: 0.7 },
+  successMark: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" },
+  successTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 18 },
+  successName: { color: colors.muted, fontSize: 14, textAlign: "center", marginTop: 6 },
+  statusPill: { marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.primarySoft },
+  statusText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  duplicates: { width: "100%", marginTop: 22, borderRadius: radii.card, padding: 14, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder },
+  duplicateTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  duplicateTitle: { color: colors.warning, fontSize: 14, fontWeight: "900" },
+  duplicateHint: { color: colors.warning, fontSize: 11, lineHeight: 16, marginTop: 4 },
+  candidate: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.warningBorder, flexDirection: "row", alignItems: "center", gap: 10 },
+  candidateBody: { flex: 1 },
+  candidateName: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  candidateAddress: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  candidateReason: { color: colors.warning, fontSize: 11, fontWeight: "800", marginTop: 4 },
+  score: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  scoreText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
+  doneButton: { width: "100%", minHeight: 52, marginTop: 20, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  doneButtonText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
 })
