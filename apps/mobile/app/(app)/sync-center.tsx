@@ -30,6 +30,7 @@ import {
 import { discardFieldVisitPhotoFile } from "../../src/field/visit-photo-store"
 import { formatShortDateTime } from "../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../src/i18n"
+import { useResponsiveLayout } from "../../src/layout/responsive"
 import { useSync } from "../../src/sync/sync-context"
 import { useField } from "../../src/field/field-context"
 import type { FieldVisitActionKey } from "../../src/field/contracts"
@@ -173,10 +174,12 @@ function RecoveryButton({
   busy: boolean
   disabled: boolean
   onPress: () => void
-  tone?: "primary" | "secondary"
+  tone?: "primary" | "secondary" | "danger"
 }) {
   const secondary = tone === "secondary"
+  const danger = tone === "danger"
   const foreground = secondary ? colors.primary : colors.headerText
+  const backgroundColor = secondary ? colors.primarySoft : danger ? colors.danger : colors.primary
   const visibleLabel = busy ? `${label}…` : label
   return (
     <Pressable
@@ -188,7 +191,7 @@ function RecoveryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.recoveryButton,
-        { backgroundColor: secondary ? colors.primarySoft : colors.primary },
+        { backgroundColor },
         disabled && styles.recoveryButtonDisabled,
         pressed && !disabled && styles.recoveryButtonPressed,
       ]}
@@ -199,14 +202,55 @@ function RecoveryButton({
   )
 }
 
+function RecoveryError({
+  message,
+  expanded,
+  onToggle,
+}: {
+  message: string
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const expandable = message.length > 120
+  const contents = (
+    <>
+      <TabIcon name="alert" color={colors.dangerPressed} size={17} />
+      <View style={styles.errorBody}>
+        <Text style={styles.errorText} numberOfLines={expanded ? undefined : 4}>{message}</Text>
+        {expandable ? <View style={styles.errorToggle}><Text style={styles.errorToggleText}>{t(expanded ? "syncCenterHideErrorDetails" : "syncCenterShowErrorDetails")}</Text><TabIcon name={expanded ? "chevronUp" : "chevronDown"} color={colors.dangerPressed} size={16} /></View> : null}
+      </View>
+    </>
+  )
+
+  if (!expandable) {
+    return <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" accessibilityLabel={message} style={styles.error}>{contents}</View>
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={`${message}. ${t(expanded ? "syncCenterHideErrorDetails" : "syncCenterShowErrorDetails")}`}
+      accessibilityHint={t(expanded ? "syncCenterHideErrorDetails" : "syncCenterShowErrorDetails")}
+      accessibilityState={{ expanded }}
+      onPress={onToggle}
+      style={({ pressed }) => [styles.error, pressed && styles.errorPressed]}
+    >
+      {contents}
+    </Pressable>
+  )
+}
+
 export default function SyncCenterScreen() {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const { status, sync } = useSync()
   const field = useField()
   const [rows, setRows] = useState<FieldSyncRecoveryRow[]>(listFieldSyncRecoveryQueue)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<RecoveryAction | null>(null)
   const [expandedActionsId, setExpandedActionsId] = useState<string | null>(null)
+  const [expandedErrorsId, setExpandedErrorsId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const reload = useCallback(() => setRows(listFieldSyncRecoveryQueue()), [])
 
@@ -308,7 +352,7 @@ export default function SyncCenterScreen() {
       const result = detachFieldMessageAttachment(row.clientOpId)
       if (!result) return
       if (result.fileUri) await discardFieldVisitPhotoFile(result.fileUri)
-      Alert.alert(locale === "az" ? "Fayl ayrıldı" : "Файл откреплён")
+      Alert.alert(t("syncCenterAttachmentRemoved"))
       await flush()
     } catch (error) {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "syncNeedsAttention"))
@@ -327,11 +371,11 @@ export default function SyncCenterScreen() {
 
   function confirmWithoutAttachment(row: FieldSyncRecoveryRow) {
     Alert.alert(
-      locale === "az" ? "Mesajı faylsız göndərək?" : "Отправить сообщение без файла?",
-      locale === "az" ? "Lokal fayl silinəcək, mesaj mətni isə növbədə qalacaq." : "Локальная копия файла будет удалена, а текст сообщения останется в очереди.",
+      t("syncCenterWithoutAttachmentTitle"),
+      t("syncCenterWithoutAttachmentBody"),
       [
         { text: t("cancel"), style: "cancel" },
-        { text: locale === "az" ? "Faylsız davam et" : "Продолжить без файла", style: "destructive", onPress: () => void continueWithoutAttachment(row) },
+        { text: t("syncCenterWithoutAttachmentConfirm"), style: "destructive", onPress: () => void continueWithoutAttachment(row) },
       ],
     )
   }
@@ -372,7 +416,8 @@ export default function SyncCenterScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.primary} />}
       >
-        {rows.length > 0 ? (
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
+          {rows.length > 0 ? (
           <View
             accessible
             accessibilityRole="alert"
@@ -386,11 +431,11 @@ export default function SyncCenterScreen() {
               <Text style={styles.summaryHint}>{t("syncCenterSummaryHint")}</Text>
             </View>
           </View>
-        ) : (
-          <RecoveryEmpty />
-        )}
+          ) : (
+            <RecoveryEmpty />
+          )}
 
-        {rows.length > 0 ? <View style={styles.list}>{rows.map((row) => {
+          {rows.length > 0 ? <View style={[styles.list, layout.isTablet && styles.listTablet]}>{rows.map((row) => {
           const photoUri = rowPhoto(row)
           const error = rowError(row, field.week?.timezone ?? "UTC")
           const context = rowContext(row)
@@ -423,8 +468,10 @@ export default function SyncCenterScreen() {
           ].filter(Boolean).length
           const hasSecondaryActions = actionCount > 1
           const secondaryActionsOpen = expandedActionsId === row.clientOpId
+          const errorExpanded = expandedErrorsId === row.clientOpId
           return (
-            <View key={row.clientOpId} style={styles.card}>
+            <View key={row.clientOpId} style={layout.isTablet ? styles.cardSlotTablet : undefined}>
+              <View style={styles.card}>
               <View style={styles.cardTop}>
                 {photoUri ? <View accessible accessibilityRole="image" accessibilityLabel={t("syncCenterEvidenceReady")}><EncryptedMediaImage uri={photoUri} style={styles.preview} /></View> : <View accessible={false} style={styles.kindMark}><TabIcon name="refresh" color={colors.warning} size={25} /></View>}
                 <View style={styles.cardBody}>
@@ -437,36 +484,38 @@ export default function SyncCenterScreen() {
                 </View>
               </View>
               {row.evidence ? <View accessible accessibilityRole="text" accessibilityLabel={t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")} style={styles.evidence}><TabIcon name="camera" color={colors.holiday} size={15} /><Text style={styles.evidenceText}>{t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")}</Text></View> : null}
-              {error ? <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" accessibilityLabel={error} style={styles.error}><TabIcon name="alert" color={colors.dangerPressed} size={17} /><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
+              {error ? <RecoveryError message={error} expanded={errorExpanded} onToggle={() => setExpandedErrorsId((current) => current === row.clientOpId ? null : row.clientOpId)} /> : null}
               <Text accessibilityRole="text" accessibilityLabel={t("syncCenterAttempts", { count: row.attempts })} style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
               <View style={styles.actions}>
                 {primaryAction === "retry" ? <View style={styles.action}><RecoveryButton label={t("syncCenterRetry")} hint={actionHint} busy={actionBusy("retry")} disabled={actionsDisabled} onPress={() => void retry(row)} /></View> : null}
                 {primaryAction === "openRoute" ? <View style={styles.action}><RecoveryButton label={t("syncCenterOpenRoute")} hint={actionHint} busy={false} disabled={actionsDisabled} onPress={() => openRouteRecovery(row)} /></View> : null}
-                {primaryAction === "discardRoute" ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
+                {primaryAction === "discardRoute" ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} tone="danger" disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
                 {primaryAction === "returnDraft" ? <View style={styles.action}><RecoveryButton label={t("routeReturnToDraft")} hint={actionHint} busy={actionBusy("returnDraft")} disabled={actionsDisabled} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
-                {primaryAction === "withoutPhoto" ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
-                {primaryAction === "withoutAttachment" ? <View style={styles.action}><RecoveryButton label={locale === "az" ? "Faylsız" : "Без файла"} hint={actionHint} busy={actionBusy("withoutAttachment")} disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
+                {primaryAction === "withoutPhoto" ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} tone="danger" disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
+                {primaryAction === "withoutAttachment" ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutAttachment")} hint={actionHint} busy={actionBusy("withoutAttachment")} tone="danger" disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
                 {hasSecondaryActions ? <Pressable accessibilityRole="button" accessibilityLabel={secondaryActionsOpen ? t("syncCenterHideActions") : t("syncCenterMoreActions")} accessibilityHint={actionHint} accessibilityState={{ expanded: secondaryActionsOpen }} onPress={() => setExpandedActionsId((current) => current === row.clientOpId ? null : row.clientOpId)} style={({ pressed }) => [styles.moreActions, pressed && styles.recoveryButtonPressed]}><Text style={styles.moreActionsText}>{secondaryActionsOpen ? t("syncCenterHideActions") : t("syncCenterMoreActions")}</Text><TabIcon name={secondaryActionsOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={18} /></Pressable> : null}
                 {secondaryActionsOpen ? <View style={styles.secondaryActions}>
                   {primaryAction !== "retry" && row.canRetry ? <View style={styles.action}><RecoveryButton label={t("syncCenterRetry")} hint={actionHint} busy={actionBusy("retry")} disabled={actionsDisabled} onPress={() => void retry(row)} /></View> : null}
                   {primaryAction !== "openRoute" && canOpenRoute ? <View style={styles.action}><RecoveryButton label={t("syncCenterOpenRoute")} hint={actionHint} busy={false} tone="secondary" disabled={actionsDisabled} onPress={() => openRouteRecovery(row)} /></View> : null}
-                  {primaryAction !== "discardRoute" && row.canDiscard ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
+                  {primaryAction !== "discardRoute" && row.canDiscard ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} tone="danger" disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
                   {primaryAction !== "returnDraft" && row.canReturnToDraft ? <View style={styles.action}><RecoveryButton label={t("routeReturnToDraft")} hint={actionHint} busy={actionBusy("returnDraft")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
-                  {primaryAction !== "withoutPhoto" && row.canContinueWithoutEvidence ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
-                  {primaryAction !== "withoutAttachment" && row.canDetachAttachment ? <View style={styles.action}><RecoveryButton label={locale === "az" ? "Faylsız" : "Без файла"} hint={actionHint} busy={actionBusy("withoutAttachment")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
+                  {primaryAction !== "withoutPhoto" && row.canContinueWithoutEvidence ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} tone="danger" disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
+                  {primaryAction !== "withoutAttachment" && row.canDetachAttachment ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutAttachment")} hint={actionHint} busy={actionBusy("withoutAttachment")} tone="danger" disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
                 </View> : null}
+              </View>
               </View>
             </View>
           )
         })}</View> : null}
 
-        {!IS_LEADDRIVE_FIELD ? (
-          <Pressable onPress={() => router.push("/(app)/commercial/media-queue" as never)} style={styles.commercialLink}>
-            <View style={styles.commercialMark}><Text style={styles.commercialMarkText}>⌾</Text></View>
-            <View style={styles.commercialBody}><Text style={styles.commercialTitle}>{t("syncCenterCommercialMedia")}</Text><Text style={styles.commercialHint}>{t("syncCenterCommercialMediaHint")}</Text></View>
-            <Text style={styles.arrow}>›</Text>
-          </Pressable>
-        ) : null}
+          {!IS_LEADDRIVE_FIELD ? (
+            <Pressable onPress={() => router.push("/(app)/commercial/media-queue" as never)} style={styles.commercialLink}>
+              <View style={styles.commercialMark}><Text style={styles.commercialMarkText}>⌾</Text></View>
+              <View style={styles.commercialBody}><Text style={styles.commercialTitle}>{t("syncCenterCommercialMedia")}</Text><Text style={styles.commercialHint}>{t("syncCenterCommercialMediaHint")}</Text></View>
+              <Text style={styles.arrow}>›</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -475,6 +524,8 @@ export default function SyncCenterScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   empty: { marginHorizontal: 14, paddingHorizontal: 24, paddingVertical: 30, alignItems: "center" },
   emptyMark: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" },
   emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 12, textAlign: "center" },
@@ -483,22 +534,28 @@ const styles = StyleSheet.create({
   summaryMark: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   summaryBody: { flex: 1, minWidth: 0 },
   summaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  summaryHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  summaryHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   list: { paddingHorizontal: 14, marginTop: 12, gap: 11 },
+  listTablet: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start" },
+  cardSlotTablet: { flexBasis: "48%", flexGrow: 1 },
   card: { ...commercialCardStyle, borderWidth: 1, borderColor: colors.dangerBorder },
   cardTop: { flexDirection: "row", gap: 11 },
   preview: { width: 72, height: 72, borderRadius: 14, backgroundColor: colors.skeleton },
   kindMark: { width: 58, height: 58, borderRadius: 17, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
   cardBody: { flex: 1, minWidth: 0 },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  cardContext: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4 },
+  cardContext: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" },
-  date: { color: colors.faint, fontSize: 9, fontWeight: "700" },
+  date: { color: colors.faint, fontSize: 11, fontWeight: "700" },
   evidence: { alignSelf: "flex-start", borderRadius: radii.pill, backgroundColor: colors.holidayBg, paddingHorizontal: 9, paddingVertical: 6, marginTop: 10, flexDirection: "row", alignItems: "center", gap: 5 },
-  evidenceText: { color: colors.holiday, fontSize: 8, fontWeight: "900" },
+  evidenceText: { color: colors.holiday, fontSize: 11, fontWeight: "900" },
   error: { marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg, flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  errorText: { flex: 1, color: colors.dangerPressed, fontSize: 10, lineHeight: 15 },
-  attempts: { color: colors.faint, fontSize: 8, fontWeight: "800", marginTop: 8 },
+  errorPressed: { opacity: 0.78 },
+  errorBody: { flex: 1, minWidth: 0 },
+  errorText: { color: colors.dangerPressed, fontSize: 11, lineHeight: 16 },
+  errorToggle: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 3, marginTop: 6 },
+  errorToggleText: { color: colors.dangerPressed, fontSize: 11, fontWeight: "900" },
+  attempts: { color: colors.faint, fontSize: 11, fontWeight: "800", marginTop: 8 },
   actions: { gap: 8, marginTop: 12 },
   action: { width: "100%" },
   moreActions: { minHeight: 44, borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
@@ -513,6 +570,6 @@ const styles = StyleSheet.create({
   commercialMarkText: { color: colors.primary, fontSize: 20, fontWeight: "900" },
   commercialBody: { flex: 1, minWidth: 0 },
   commercialTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  commercialHint: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 },
+  commercialHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
   arrow: { color: colors.primary, fontSize: 27 },
 })
