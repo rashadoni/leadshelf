@@ -214,6 +214,7 @@ export default function NewRouteScreen() {
       void field.loadWeek(startOfIsoWeek(date))
     } else {
       setPendingDateLoad(null)
+      if (field.week) field.cancelPendingWeekLoad(field.week.weekStart)
     }
   }
 

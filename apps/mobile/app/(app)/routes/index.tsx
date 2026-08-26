@@ -31,6 +31,9 @@ export default function RoutesScreen() {
   ), [field.week])
   const canCreateRoute = field.week?.capabilities.createOwnDraft === true
   const calendarDate = field.operationalDate ?? field.week?.today
+  const routeCreateHref = calendarDate
+    ? `/(app)/routes/new?date=${encodeURIComponent(calendarDate)}`
+    : "/(app)/routes/new"
   const nowRoutes = routes.filter((route) => route.effectiveStatus === "IN_PROGRESS")
   const groupedRouteIds = new Set(nowRoutes.map((route) => route.id))
   const todayRoutes = routes.filter((route) => route.day.date === field.week?.today && !groupedRouteIds.has(route.id))
@@ -51,7 +54,7 @@ export default function RoutesScreen() {
         <View style={styles.headerModern}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.backModern}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBodyModern}><Text style={styles.eyebrowModern}>{t("tabWork").toUpperCase()}</Text><Text style={styles.titleModern}>{t("routeHubTitle")}</Text><Text style={styles.subtitleModern}>{t("routeHubHint")}</Text></View>
-          {canCreateRoute && routes.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={t("createRoute")} accessibilityHint={t("chooseStop")} onPress={() => router.push("/(app)/routes/new" as never)} style={styles.headerCreateModern}><TabIcon name="add" color={colors.primary} size={18} /><Text style={styles.headerCreateTextModern}>{t("createRoute")}</Text></Pressable> : null}
+          {canCreateRoute && routes.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={t("createRoute")} accessibilityHint={t("chooseStop")} onPress={() => router.push(routeCreateHref as never)} style={styles.headerCreateModern}><TabIcon name="add" color={colors.primary} size={18} /><Text style={styles.headerCreateTextModern}>{t("createRoute")}</Text></Pressable> : null}
         </View>
 
         {!canCreateRoute && field.week ? (
@@ -97,7 +100,7 @@ export default function RoutesScreen() {
             accessibilityRole="button"
             accessibilityLabel={t("createRoute")}
             accessibilityHint={t("chooseStop")}
-            onPress={() => router.push("/(app)/routes/new" as never)}
+            onPress={() => router.push(routeCreateHref as never)}
             style={({ pressed }) => [styles.empty, styles.emptyAction, pressed && styles.pressed]}
           >
             <View accessible={false} style={styles.emptyIcon}><TabIcon name="route" color={colors.primary} size={25} /></View>
