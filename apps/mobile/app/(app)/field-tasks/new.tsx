@@ -18,11 +18,13 @@ import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 export default function NewAgentTaskScreen() {
   const locale = useLocale()
   const { copyFrom } = useLocalSearchParams<{ copyFrom?: string }>()
   const field = useField()
+  const layout = useResponsiveLayout()
   const { sync } = useSync()
   const insets = useSafeAreaInsets()
   const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
@@ -239,6 +241,7 @@ export default function NewAgentTaskScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 94 }]}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={goBack} style={[styles.back, saving && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("agentTasksTitle").toUpperCase()}</Text><Text style={styles.title}>{copySource ? t("agentTaskCopy") : t("agentTaskCreateTitle")}</Text></View>
@@ -335,9 +338,12 @@ export default function NewAgentTaskScreen() {
         {copySource ? <View style={styles.copyNotice}><Text style={styles.copyNoticeText}>{t("agentTaskPersonalHint")}</Text></View> : null}
         {createDisabled ? <View style={styles.error}><Text style={styles.errorText}>{t("agentTaskManagerHint")}</Text></View> : null}
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        </View>
       </ScrollView>
       <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} accessibilityState={{ disabled: saving || createDisabled, busy: saving }} disabled={saving || createDisabled} onPress={() => void create()} style={[styles.submit, (saving || createDisabled) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : t("agentTaskCreate")}</Text></Pressable>
+        <View style={[styles.footerContent, layout.isTablet && styles.footerContentTablet]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} accessibilityState={{ disabled: saving || createDisabled, busy: saving }} disabled={saving || createDisabled} onPress={() => void create()} style={[styles.submit, (saving || createDisabled) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : t("agentTaskCreate")}</Text></Pressable>
+        </View>
       </View>
     </SafeAreaView>
   )
@@ -355,9 +361,76 @@ function ChoiceChip({ label, selected, onPress }: { label: string; selected: boo
 function Input({ label, required, multiline, ...props }: { label: string; required?: boolean; multiline?: boolean; value: string; onChangeText: (value: string) => void }) { return <View><Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text><TextInput accessibilityLabel={label} {...props} multiline={multiline} textAlignVertical={multiline ? "top" : "center"} placeholderTextColor={colors.faint} style={[styles.input, multiline && styles.textarea]} /></View> }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 34 }, header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 }, intro: { marginHorizontal: 16, marginTop: 12, color: colors.muted, fontSize: 11, lineHeight: 17 },
-  formCard: { marginHorizontal: 14, marginTop: 15, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 13, ...cardShadow }, inputLabel: { color: colors.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45, marginBottom: 6 }, input: { minHeight: 47, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 12, color: colors.text, fontSize: 13 }, textarea: { minHeight: 92, paddingTop: 11, lineHeight: 18 }, sectionTitle: { marginHorizontal: 16, marginTop: 20, marginBottom: 9, color: colors.text, fontSize: 14, fontWeight: "900" }, wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 }, chip: { maxWidth: 210, minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, chipTextSelected: { color: colors.headerText },
-  dueSecondaryRow: { marginHorizontal: 14, marginTop: 8, alignItems: "flex-start" }, noDate: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }, noDateSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, noDateText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, noDateTextSelected: { color: colors.primary }, timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 }, timeLabel: { color: colors.muted, fontSize: 10, fontWeight: "900" }, timeInput: { width: 76, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, timePresets: { width: "100%", flexDirection: "row", gap: 6 }, timePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, timePresetSelected: { backgroundColor: colors.primarySoft }, timePresetText: { color: colors.muted, fontSize: 9, fontWeight: "800" }, timePresetTextSelected: { color: colors.primary },
-  customerPicker: { marginHorizontal: 14, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, gap: 8, ...cardShadow }, customerSearchBox: { minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, customerSearchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 13 }, customerHint: { color: colors.muted, fontSize: 9, lineHeight: 13, fontWeight: "700" }, noCustomerChoice: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, noCustomerChoiceSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft }, noCustomerChoiceText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, noCustomerChoiceTextSelected: { color: colors.primary }, selectedCustomer: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 }, selectedCustomerMark: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, selectedCustomerMarkText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, selectedCustomerBody: { flex: 1, minWidth: 0 }, selectedCustomerEyebrow: { color: colors.primary, fontSize: 8, lineHeight: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 }, selectedCustomerName: { color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "900", marginTop: 1 }, clearCustomer: { width: 44, minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" }, customerChoice: { minHeight: 55, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 }, customerChoiceSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, customerMark: { width: 33, height: 33, borderRadius: 11, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, customerMarkSelected: { backgroundColor: colors.primary }, customerMarkText: { color: colors.info, fontSize: 13, fontWeight: "900" }, customerMarkTextSelected: { color: colors.headerText }, customerChoiceBody: { flex: 1, minWidth: 0 }, customerChoiceName: { color: colors.text, fontSize: 11, fontWeight: "900" }, customerChoiceNameSelected: { color: colors.primary }, customerChoiceMeta: { color: colors.muted, fontSize: 9, marginTop: 2, fontWeight: "700" }, customerChoiceMetaSelected: { color: colors.primary }, customerState: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center", paddingVertical: 5, fontWeight: "800" }, customerError: { color: colors.missed, fontSize: 10, lineHeight: 15, paddingVertical: 4, fontWeight: "800" },
-  copyNotice: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg }, copyNoticeText: { color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" }, error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg }, errorText: { color: colors.missed, fontSize: 10, lineHeight: 15, fontWeight: "800" }, stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 }, submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, submitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, pressed: { opacity: 0.72 }, disabled: { opacity: 0.4 },
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { minHeight: "100%", paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
+  header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  headerBody: { flex: 1 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.7 },
+  title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 },
+  intro: { marginHorizontal: 16, marginTop: 12, color: colors.muted, fontSize: 11, lineHeight: 17 },
+  formCard: { marginHorizontal: 14, marginTop: 15, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 13, ...cardShadow },
+  inputLabel: { color: colors.muted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45, marginBottom: 6 },
+  input: { minHeight: 47, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
+  textarea: { minHeight: 92, paddingTop: 11, lineHeight: 18 },
+  sectionTitle: { marginHorizontal: 16, marginTop: 20, marginBottom: 9, color: colors.text, fontSize: 14, fontWeight: "900" },
+  wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 },
+  chip: { maxWidth: 210, minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  chipTextSelected: { color: colors.headerText },
+  dueSecondaryRow: { marginHorizontal: 14, marginTop: 8, alignItems: "flex-start" },
+  noDate: { minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  noDateSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  noDateText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  noDateTextSelected: { color: colors.primary },
+  timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 },
+  timeLabel: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  timeInput: { width: 76, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" },
+  timePresets: { width: "100%", flexDirection: "row", gap: 6 },
+  timePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
+  timePresetSelected: { backgroundColor: colors.primarySoft },
+  timePresetText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  timePresetTextSelected: { color: colors.primary },
+  customerPicker: { marginHorizontal: 14, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, gap: 8, ...cardShadow },
+  customerSearchBox: { minHeight: 46, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 },
+  customerSearchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 13 },
+  customerHint: { color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  noCustomerChoice: { minHeight: 44, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
+  noCustomerChoiceSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  noCustomerChoiceText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  noCustomerChoiceTextSelected: { color: colors.primary },
+  selectedCustomer: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 },
+  selectedCustomerMark: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  selectedCustomerMarkText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  selectedCustomerBody: { flex: 1, minWidth: 0 },
+  selectedCustomerEyebrow: { color: colors.primary, fontSize: 11, lineHeight: 14, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 },
+  selectedCustomerName: { color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "900", marginTop: 1 },
+  clearCustomer: { width: 44, minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  customerChoice: { minHeight: 55, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 9 },
+  customerChoiceSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  customerMark: { width: 33, height: 33, borderRadius: 11, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
+  customerMarkSelected: { backgroundColor: colors.primary },
+  customerMarkText: { color: colors.info, fontSize: 13, fontWeight: "900" },
+  customerMarkTextSelected: { color: colors.headerText },
+  customerChoiceBody: { flex: 1, minWidth: 0 },
+  customerChoiceName: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  customerChoiceNameSelected: { color: colors.primary },
+  customerChoiceMeta: { color: colors.muted, fontSize: 11, marginTop: 2, fontWeight: "700" },
+  customerChoiceMetaSelected: { color: colors.primary },
+  customerState: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", paddingVertical: 5, fontWeight: "800" },
+  customerError: { color: colors.missed, fontSize: 11, lineHeight: 16, paddingVertical: 4, fontWeight: "800" },
+  copyNotice: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg },
+  copyNoticeText: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg },
+  errorText: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 },
+  footerContent: { width: "100%" },
+  footerContentTablet: { maxWidth: 1_060, alignSelf: "center" },
+  submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  submitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  pressed: { opacity: 0.72 },
+  disabled: { opacity: 0.4 },
 })
