@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   Alert,
   Image,
@@ -131,9 +131,11 @@ export default function CommitmentsScreen() {
   const [dueDate, setDueDate] = useState(() => futureDateKey(3))
   const [promiseNote, setPromiseNote] = useState("")
   const [promisePhoto, setPromisePhoto] = useState<CommercialPhotoCapture | null>(null)
+  const [promiseDetailsOpen, setPromiseDetailsOpen] = useState(false)
   const [actualQuantity, setActualQuantity] = useState("")
   const [factNote, setFactNote] = useState("")
   const [factPhoto, setFactPhoto] = useState<CommercialPhotoCapture | null>(null)
+  const [factDetailsOpen, setFactDetailsOpen] = useState(false)
   const catalog = useMemo(listLocalCatalogProducts, [])
   const activeVisit = activeFieldVisit(field.week)
   const recoveryAction = !activeVisit ? resolveFieldTodayPrimaryAction({
@@ -222,6 +224,7 @@ export default function CommitmentsScreen() {
     setDueDate(futureDateKey(3))
     setPromiseNote("")
     setPromisePhoto(null)
+    setPromiseDetailsOpen(false)
   }
 
   function closePromiseForm() {
@@ -309,6 +312,7 @@ export default function CommitmentsScreen() {
     setActualQuantity(String(commitment.promisedQuantity))
     setFactNote("")
     setFactPhoto(null)
+    setFactDetailsOpen(false)
     setFactTarget(commitment)
   }
 
@@ -317,6 +321,7 @@ export default function CommitmentsScreen() {
     setActualQuantity("")
     setFactNote("")
     setFactPhoto(null)
+    setFactDetailsOpen(false)
   }
 
   async function saveFact() {
@@ -460,8 +465,6 @@ export default function CommitmentsScreen() {
                 <View style={styles.suggestionBody}><Text style={styles.suggestionName}>{product.name}</Text><Text style={styles.suggestionMeta}>{product.sku}{product.brandName ? ` · ${product.brandName}` : ""}</Text></View><TabIcon name="chevronRight" color={colors.primary} size={19} />
               </Pressable>
             ))}</View> : null}
-            <FieldLabel label={t("commitmentsBrand")} />
-            <TextInput accessibilityLabel={t("commitmentsBrand")} value={brandName} onChangeText={setBrandName} maxLength={200} style={styles.input} />
             <View style={styles.fieldRow}>
               <View style={styles.fieldWide}><FieldLabel label={t("commitmentsQuantity")} /><TextInput accessibilityLabel={t("commitmentsQuantity")} value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" maxLength={14} style={styles.input} /></View>
               <View style={styles.fieldNarrow}><FieldLabel label={t("commitmentsUnit")} /><TextInput accessibilityLabel={t("commitmentsUnit")} value={unit} onChangeText={setUnit} maxLength={40} style={styles.input} /></View>
@@ -473,13 +476,17 @@ export default function CommitmentsScreen() {
               <QuickDate selected={dueDate === futureDateKey(3)} label={t("commitmentsDue3")} onPress={() => setDueDate(futureDateKey(3))} />
               <QuickDate selected={dueDate === futureDateKey(7)} label={t("commitmentsDue7")} onPress={() => setDueDate(futureDateKey(7))} />
             </View>
-            <FieldLabel label={t("commitmentsNote")} />
-            <TextInput accessibilityLabel={t("commitmentsNote")} accessibilityHint={t("commitmentsNotePlaceholder")} value={promiseNote} onChangeText={setPromiseNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
-            <PhotoPicker photo={promisePhoto} onPress={() => void takePhoto("promise")} />
             <View style={styles.formActions}>
               <View style={styles.secondaryAction}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={closePromiseForm} /></View>
               <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSavePromise")} disabled={busy} onPress={() => void savePromise()} /></View>
             </View>
+            <CommitmentDisclosure title={t("commitmentsExtraDetails")} hint={t("commitmentsExtraDetailsHint")} open={promiseDetailsOpen} onPress={() => setPromiseDetailsOpen((open) => !open)}>
+              <FieldLabel label={t("commitmentsBrand")} />
+              <TextInput accessibilityLabel={t("commitmentsBrand")} value={brandName} onChangeText={setBrandName} maxLength={200} style={styles.input} />
+              <FieldLabel label={t("commitmentsNote")} />
+              <TextInput accessibilityLabel={t("commitmentsNote")} accessibilityHint={t("commitmentsNotePlaceholder")} value={promiseNote} onChangeText={setPromiseNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
+              <PhotoPicker photo={promisePhoto} onPress={() => void takePhoto("promise")} />
+            </CommitmentDisclosure>
           </View>
         ) : null}
 
@@ -503,13 +510,15 @@ export default function CommitmentsScreen() {
                 <Text style={styles.outcomeVariance}>{t("commitmentsVariance")}: {formatQuantity((factActual ?? 0) - factTarget.promisedQuantity)} {factTarget.unit}</Text>
               </View>
             ) : null}
-            <FieldLabel label={t("commitmentsNote")} />
-            <TextInput accessibilityLabel={t("commitmentsNote")} accessibilityHint={t("commitmentsNotePlaceholder")} value={factNote} onChangeText={setFactNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
-            {canAttachFactPhoto ? <PhotoPicker photo={factPhoto} onPress={() => void takePhoto("fact")} /> : <View accessibilityRole="alert" style={styles.photoUnavailable}><Text style={styles.photoUnavailableText}>{t("commitmentsFactPhotoUnavailable")}</Text></View>}
             <View style={styles.formActions}>
               <View style={styles.secondaryAction}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={closeFact} /></View>
               <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSaveFact")} disabled={busy || factActual == null} onPress={() => void saveFact()} /></View>
             </View>
+            <CommitmentDisclosure title={t("commitmentsExtraDetails")} hint={t("commitmentsExtraDetailsHint")} open={factDetailsOpen} onPress={() => setFactDetailsOpen((open) => !open)}>
+              <FieldLabel label={t("commitmentsNote")} />
+              <TextInput accessibilityLabel={t("commitmentsNote")} accessibilityHint={t("commitmentsNotePlaceholder")} value={factNote} onChangeText={setFactNote} maxLength={2000} multiline textAlignVertical="top" placeholder={t("commitmentsNotePlaceholder")} placeholderTextColor={colors.faint} style={[styles.input, styles.textarea]} />
+              {canAttachFactPhoto ? <PhotoPicker photo={factPhoto} onPress={() => void takePhoto("fact")} /> : <View accessibilityRole="alert" style={styles.photoUnavailable}><Text style={styles.photoUnavailableText}>{t("commitmentsFactPhotoUnavailable")}</Text></View>}
+            </CommitmentDisclosure>
           </View>
         ) : null}
 
@@ -551,6 +560,17 @@ function FieldLabel({ label }: { label: string }) {
 
 function QuickDate({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`${t("commitmentsDueDate")}: ${label}`} accessibilityState={{ selected }} onPress={onPress} style={[styles.quickDate, selected && styles.quickDateSelected]}><Text style={[styles.quickDateText, selected && styles.quickDateTextSelected]}>{label}</Text></Pressable>
+}
+
+function CommitmentDisclosure({ title, hint, open, onPress, children }: { title: string; hint: string; open: boolean; onPress: () => void; children: ReactNode }) {
+  return <View style={styles.detailsDisclosure}>
+    <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityHint={hint} accessibilityState={{ expanded: open }} onPress={onPress} style={({ pressed }) => [styles.detailsToggle, pressed && styles.pressed]}>
+      <View accessible={false} style={styles.detailsIcon}><TabIcon name="document" color={colors.primary} size={18} /></View>
+      <View style={styles.detailsBody}><Text style={styles.detailsTitle}>{title}</Text><Text style={styles.detailsHint} numberOfLines={1}>{hint}</Text></View>
+      <TabIcon name={open ? "chevronUp" : "chevronDown"} color={colors.primary} size={20} />
+    </Pressable>
+    {open ? <View style={styles.detailsContent}>{children}</View> : null}
+  </View>
 }
 
 function PhotoPicker({ photo, onPress }: { photo: CommercialPhotoCapture | null; onPress: () => void }) {
@@ -685,6 +705,13 @@ const styles = StyleSheet.create({
   formActions: { flexDirection: "row", gap: 9, marginTop: 15 },
   secondaryAction: { flex: 0.75 },
   primaryAction: { flex: 1.25 },
+  detailsDisclosure: { marginTop: 14, borderWidth: 1, borderColor: colors.border, borderRadius: 15, backgroundColor: colors.bg, overflow: "hidden" },
+  detailsToggle: { minHeight: 54, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 9 },
+  detailsIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  detailsBody: { flex: 1, minWidth: 0 },
+  detailsTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  detailsHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  detailsContent: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 12, paddingBottom: 14 },
   factInstruction: { marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.successBg, padding: 10, color: colors.successDark, fontSize: 10, lineHeight: 15, fontWeight: "700" },
   actualRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   actualInput: { flex: 1 },
@@ -727,4 +754,5 @@ const styles = StyleSheet.create({
   factNote: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
   factNoteLabel: { color: colors.faint, fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
   factNoteText: { color: colors.text, fontSize: 10, lineHeight: 15, marginTop: 4 },
+  pressed: { opacity: 0.72 },
 })
