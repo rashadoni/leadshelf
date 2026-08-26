@@ -282,14 +282,11 @@ export default function WeekTab() {
                     const progressPercent = Math.min(100, percent)
                     const routeLabel = route.name ?? t("tabRoute")
                     const routeProgressLabel = `${route.visitedPoints}/${route.totalPoints} ${t("routePointsLabel")}`
-                    const canStartRouteVisit = route.canExecute && selectedDay.isToday && !activeVisit && Boolean(primaryPoint)
                     const routeActionLabel = route.canEdit
                       ? t("editRoute")
                       : activeVisitForRoute
                         ? t("continueFieldVisit")
-                        : canStartRouteVisit
-                          ? t("startFieldVisit")
-                          : t("openRoute")
+                        : t("openRoute")
                     const primaryPointName = primaryPoint?.contact?.displayName ?? primaryPoint?.customer.name ?? null
                     const primaryPointMeta = primaryPoint?.customer.address ?? primaryPoint?.customer.city ?? primaryPoint?.customer.objectType ?? null
                     return (
