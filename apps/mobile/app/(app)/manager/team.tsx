@@ -152,6 +152,7 @@ export default function ManagerTeamScreen() {
   const pausedToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "PAUSED").length
   const completedToday = todayAgents.filter((agent) => agent.todayWorkday?.status === "COMPLETED").length
   const hasPendingSearch = loadedSearch !== search.trim()
+  const tenantTimeZone = data?.today?.timezone
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -210,7 +211,7 @@ export default function ManagerTeamScreen() {
                   <View style={styles.todaySummaryIcon}><TabIcon name="today" color={colors.primary} size={21} /></View>
                   <View style={styles.todaySummaryBody}>
                     <Text style={styles.todaySummaryTitle}>{t("managerTodayWorkdays")}</Text>
-                    <Text style={styles.todaySummaryHint}>{t("managerPageActivitySummary") + " · " + t("managerTodaySnapshot", { time: formatShortDateTime(data.today.generatedAt, locale) })}</Text>
+                    <Text style={styles.todaySummaryHint}>{t("managerPageActivitySummary") + " · " + t("managerTodaySnapshot", { time: formatShortDateTime(data.today.generatedAt, locale, data.today.timezone) })}</Text>
                   </View>
                 </View>
                 <View style={styles.todayStats}>
@@ -229,9 +230,9 @@ export default function ManagerTeamScreen() {
                   const presence = agent.isOnline ? t("managerAppOnline") : t("managerAppOffline")
                   const workdayFact = workday.workedSeconds != null
                     ? t("managerWorkedTime", { time: compactWorkedTime(workday.workedSeconds) })
-                    : workday.startedAt ? t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt) }) : null
+                    : workday.startedAt ? t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt, tenantTimeZone) }) : null
                   const lastSeen = agent.lastSeenAt
-                    ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale)
+                    ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale, tenantTimeZone)
                     : t("managerLastSeen") + ": —"
                   return (
                     <View
@@ -258,7 +259,7 @@ export default function ManagerTeamScreen() {
                           <View style={[styles.workdayDot, { backgroundColor: workday.color }]} />
                           <Text style={[styles.workdayText, { color: workday.color }]}>{workday.label}</Text>
                           {workday.workedSeconds != null ? <Text style={styles.workdaySince}>{t("managerWorkedTime", { time: compactWorkedTime(workday.workedSeconds) })}</Text> : null}
-                          {workday.workedSeconds == null && workday.startedAt ? <Text style={styles.workdaySince}>{t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt) })}</Text> : null}
+                          {workday.workedSeconds == null && workday.startedAt ? <Text style={styles.workdaySince}>{t("managerWorkdayStartedAt", { time: formatTime(workday.startedAt, tenantTimeZone) })}</Text> : null}
                         </View>
                         <Text style={styles.lastSeen}>{agent.lastSeenAt ? lastSeen : "—"}</Text>
                       </View>
