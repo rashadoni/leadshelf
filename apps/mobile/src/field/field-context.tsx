@@ -52,6 +52,9 @@ type FieldContextValue = {
   phase: FieldPhase
   error: string | null
   lastUpdatedAt: string | null
+  operationalDate: string | null
+  setOperationalDate: (date: string | null) => void
+  cancelPendingWeekLoad: (currentWeekStart: string) => void
   refresh: () => Promise<void>
   loadWeek: (start: string) => Promise<void>
   refreshActivity: (date?: string) => Promise<void>
@@ -89,6 +92,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<FieldPhase>("loading")
   const [error, setError] = useState<string | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
+  const [operationalDate, setOperationalDateState] = useState<string | null>(null)
   const requestedWeek = useRef<string | null>(null)
   const requestSequence = useRef(0)
 
@@ -304,6 +308,19 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     }
   }, [notifications])
 
+  const setOperationalDate = useCallback((date: string | null) => {
+    setOperationalDateState((current) => current === date ? current : date)
+  }, [])
+
+  const cancelPendingWeekLoad = useCallback((currentWeekStart: string) => {
+    if (requestedWeek.current === currentWeekStart) return
+    // The visible week is still valid. Invalidate a late response for another
+    // week without touching the cache, outbox, or asking the server again.
+    requestedWeek.current = currentWeekStart
+    requestSequence.current += 1
+    setPhase((current) => current === "loading" || current === "refreshing" ? "ready" : current)
+  }, [])
+
   const applyLocalWeek = useCallback((next: FieldWeekData) => {
     setWeek(next)
     requestedWeek.current = next.weekStart
@@ -380,6 +397,9 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       phase,
       error,
       lastUpdatedAt,
+      operationalDate,
+      setOperationalDate,
+      cancelPendingWeekLoad,
       refresh,
       loadWeek,
       refreshActivity,

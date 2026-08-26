@@ -30,6 +30,7 @@ export default function RoutesScreen() {
     field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
   ), [field.week])
   const canCreateRoute = field.week?.capabilities.createOwnDraft === true
+  const calendarDate = field.operationalDate ?? field.week?.today
   const nowRoutes = routes.filter((route) => route.effectiveStatus === "IN_PROGRESS")
   const groupedRouteIds = new Set(nowRoutes.map((route) => route.id))
   const todayRoutes = routes.filter((route) => route.day.date === field.week?.today && !groupedRouteIds.has(route.id))
@@ -73,8 +74,8 @@ export default function RoutesScreen() {
           accessibilityRole="button"
           accessibilityLabel={t("routeCalendarTitle")}
           accessibilityHint={t("routeCalendarHint")}
-          onPress={() => router.push((field.week?.today
-            ? `/(app)/(tabs)/week?date=${encodeURIComponent(field.week.today)}`
+          onPress={() => router.push((calendarDate
+            ? `/(app)/(tabs)/week?date=${encodeURIComponent(calendarDate)}`
             : "/(app)/(tabs)/week") as never)}
           style={({ pressed }) => [styles.calendarLinkModern, pressed && styles.pressed]}
         >
@@ -143,6 +144,7 @@ function RouteGroup({ title, routes, locale, activeVisit, featured = false, coll
 }
 
 function RouteCard({ route, locale, activeVisit, featured, tablet }: { route: RouteHubItem; locale: Locale; activeVisit: FieldWeekVisit | null; featured: boolean; tablet: boolean }) {
+  const field = useField()
   const meta = routeStatusMeta(route.effectiveStatus)
   const tone = tones[meta.tone]
   const calendarDay = formatCalendarDay(route.day.date, locale)
@@ -160,7 +162,7 @@ function RouteCard({ route, locale, activeVisit, featured, tablet }: { route: Ro
     syncText,
   ].filter(Boolean).join(". ")
   const progress = route.totalPoints > 0 ? Math.min(100, Math.round((route.visitedPoints / route.totalPoints) * 100)) : 0
-  return <Pressable accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => router.push(`/(app)/routes/${route.id}` as never)} style={({ pressed }) => [styles.routeCardModern, tablet && styles.routeCardTablet, featured && styles.routeCardFeaturedModern, pressed && styles.pressed]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={routeLabel} accessibilityHint={t("openRoute")} accessibilityState={{ busy: route.syncState === "PENDING" }} onPress={() => { field.setOperationalDate(route.day.date); router.push(`/(app)/routes/${route.id}` as never) }} style={({ pressed }) => [styles.routeCardModern, tablet && styles.routeCardTablet, featured && styles.routeCardFeaturedModern, pressed && styles.pressed]}>
     <View style={styles.routeTopModern}>
       <View style={styles.dateBadgeModern}>
         <Text style={styles.dateDayModern}>{calendarDay.day || route.day.date.slice(8)}</Text>

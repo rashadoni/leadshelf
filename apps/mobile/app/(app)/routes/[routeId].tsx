@@ -154,11 +154,16 @@ export default function FieldRouteDetailScreen() {
   useLocale()
   const { routeId } = useLocalSearchParams<{ routeId: string }>()
   const field = useField()
+  const setOperationalDate = field.setOperationalDate
   const { sync, status: syncStatus } = useSync()
   const insets = useSafeAreaInsets()
   const layout = useResponsiveLayout()
   const routeData = useMemo(
     () => field.week?.days.flatMap((day) => day.routes).find((route) => route.id === routeId) ?? null,
+    [field.week, routeId],
+  )
+  const routeDate = useMemo(
+    () => field.week?.days.find((day) => day.routes.some((route) => route.id === routeId))?.date ?? null,
     [field.week, routeId],
   )
   const [name, setName] = useState("")
@@ -202,6 +207,10 @@ export default function FieldRouteDetailScreen() {
   const routeHydrationKey = routeData
     ? `${routeData.id}:${routeData.version}:${field.week?.timezone ?? "UTC"}`
     : null
+
+  useEffect(() => {
+    if (routeDate) setOperationalDate(routeDate)
+  }, [routeDate, setOperationalDate])
 
   useEffect(() => {
     if (!routeData || !routeHydrationKey || hydratedRouteKey.current === routeHydrationKey) return

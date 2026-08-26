@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -87,11 +87,15 @@ export default function WeekTab() {
     ? dateParameter
     : null
   const week = field.week
+  const operationalDate = field.operationalDate
+  const setOperationalDate = field.setOperationalDate
+  const cancelPendingWeekLoad = field.cancelPendingWeekLoad
+  const loadWeek = field.loadWeek
   const busy = field.phase === "loading" || field.phase === "refreshing"
   const layout = useResponsiveLayout()
   const isCurrentWeek = Boolean(week && week.weekStart === startOfIsoWeek(week.today))
-  const [viewRange, setViewRange] = useState<FieldWeekViewRange>(requestedDate ? 1 : 7)
-  const [selectedDate, setSelectedDate] = useState<string | null>(requestedDate)
+  const [viewRange, setViewRange] = useState<FieldWeekViewRange>((requestedDate ?? operationalDate) ? 1 : 7)
+  const [selectedDate, setSelectedDate] = useState<string | null>(requestedDate ?? operationalDate)
   const [expandedRouteRoadmaps, setExpandedRouteRoadmaps] = useState<Set<string>>(() => new Set())
   const selectedWeekStart = useRef<string | null>(null)
   const requestedDateHandled = useRef<string | null>(null)
@@ -108,31 +112,51 @@ export default function WeekTab() {
     week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
   ), [week?.days])
 
+  const selectOperationalDay = useCallback((date: string) => {
+    setSelectedDate(date)
+    setViewRange(1)
+    setOperationalDate(date)
+    if (week && startOfIsoWeek(date) === week.weekStart) {
+      cancelPendingWeekLoad(week.weekStart)
+      return
+    }
+    void loadWeek(startOfIsoWeek(date))
+  }, [cancelPendingWeekLoad, loadWeek, setOperationalDate, week])
+
   useEffect(() => {
     if (!week) return
     if (selectedWeekStart.current === week.weekStart) return
     selectedWeekStart.current = week.weekStart
+    const nextDate = selectedDate && week.days.some((day) => day.date === selectedDate)
+      ? selectedDate
+      : week.days.find((day) => day.isToday)?.date ?? week.days[0]?.date ?? null
     setSelectedDate((current) => (
       current && week.days.some((day) => day.date === current)
         ? current
-        : week.days.find((day) => day.isToday)?.date ?? week.today
+        : nextDate
     ))
-  }, [week])
+    if (nextDate && nextDate !== operationalDate) setOperationalDate(nextDate)
+  }, [operationalDate, selectedDate, setOperationalDate, week])
+
+  useEffect(() => {
+    const contextDate = operationalDate
+    if (!contextDate || contextDate === selectedDate) return
+    setSelectedDate(contextDate)
+    setViewRange(1)
+    if (week && startOfIsoWeek(contextDate) !== week.weekStart) void loadWeek(startOfIsoWeek(contextDate))
+  }, [loadWeek, operationalDate, selectedDate, week])
 
   useEffect(() => {
     if (!requestedDate || requestedDateHandled.current === requestedDate) return
     requestedDateHandled.current = requestedDate
-    setSelectedDate(requestedDate)
-    setViewRange(1)
-    if (week && startOfIsoWeek(requestedDate) !== week.weekStart) void field.loadWeek(startOfIsoWeek(requestedDate))
-  }, [field, requestedDate, week])
+    selectOperationalDay(requestedDate)
+  }, [requestedDate, selectOperationalDay])
 
   const move = (days: -1 | 1) => {
     if (!week) return
     if (viewRange === 1) {
       const nextDate = shiftDateKey(activeDate ?? week.today, days)
-      setSelectedDate(nextDate)
-      if (startOfIsoWeek(nextDate) !== week.weekStart) void field.loadWeek(startOfIsoWeek(nextDate))
+      selectOperationalDay(nextDate)
       return
     }
     void field.loadWeek(shiftDateKey(week.weekStart, days * 7))
@@ -191,19 +215,13 @@ export default function WeekTab() {
               }
             })}
             selectedDate={activeDate}
-            onSelectDate={(date) => {
-              setSelectedDate(date)
-              setViewRange(1)
-              if (startOfIsoWeek(date) !== week.weekStart) void field.loadWeek(startOfIsoWeek(date))
-            }}
+            onSelectDate={selectOperationalDay}
             onPrevious={() => move(-1)}
             onNext={() => move(1)}
             previousLabel={previousTarget ? `${navigationLabel}: ${formatCalendarDay(previousTarget, locale).date}` : navigationLabel}
             nextLabel={nextTarget ? `${nextNavigationLabel}: ${formatCalendarDay(nextTarget, locale).date}` : nextNavigationLabel}
             onCurrent={canReturnToToday ? () => {
-              setSelectedDate(week.today)
-              setViewRange(1)
-              void field.loadWeek(startOfIsoWeek(week.today))
+              selectOperationalDay(week.today)
             } : undefined}
             currentLabel={currentNavigationLabel}
             currentAccessibilityLabel={currentNavigationAccessibilityLabel}
