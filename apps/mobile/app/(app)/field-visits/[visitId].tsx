@@ -72,6 +72,7 @@ import {
   visitPhotoStateLabel,
 } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 
 const outcomes: FieldVisitOutcome[] = ["SUCCESSFUL", "PARTIAL", "NO_CONTACT", "RESCHEDULE"]
 const potentials: FieldVisitPotential[] = ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
@@ -477,6 +478,7 @@ export default function FieldVisitWorkspaceScreen() {
   if (photoCameraOpen) {
     return (
       <SafeAreaView style={styles.cameraRoot} edges={["top", "bottom"]}>
+        <FieldScreenChrome tone="dark" />
         <CameraView ref={cameraRef} style={styles.camera} facing="back" mode="picture" />
         <View style={styles.cameraTop}>
           <Text style={styles.cameraTitle}>{t("visitAction_PHOTO")}</Text>
@@ -513,6 +515,7 @@ export default function FieldVisitWorkspaceScreen() {
   if (!workspace || !weekVisit) {
     return (
       <SafeAreaView style={styles.root}>
+        <FieldScreenChrome />
         <View style={styles.missing}>
           <Text style={styles.title}>{t("fieldDataError")}</Text>
           <Pressable
@@ -658,6 +661,7 @@ export default function FieldVisitWorkspaceScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <FieldScreenChrome />
       <ScrollView ref={visitScroll} contentContainerStyle={[styles.scroll, { paddingBottom: !isCompleted ? Math.max(insets.bottom, 20) + 108 : Math.max(insets.bottom, 20) + 28 }]} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable
