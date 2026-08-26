@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Platform,
@@ -30,7 +31,7 @@ import {
   returnFieldRoutePublishToDraft,
 } from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
-import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
+import { routeStatusMeta, startOfIsoWeek, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
@@ -99,6 +100,12 @@ function routePointMeta(point: FieldRoutePoint): string {
   return point.customer.address ?? point.customer.city ?? objectTypeLabel(point.customer.objectType)
 }
 
+function validRouteDateHint(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null
+}
+
 function fieldVisitConflictMessage(detail: unknown): string {
   const code = detail && typeof detail === "object" && !Array.isArray(detail)
     ? (detail as Record<string, unknown>).code
@@ -152,7 +159,7 @@ function RoadmapSectionToggle({
 
 export default function FieldRouteDetailScreen() {
   useLocale()
-  const { routeId } = useLocalSearchParams<{ routeId: string }>()
+  const { routeId, date } = useLocalSearchParams<{ routeId: string; date?: string }>()
   const field = useField()
   const setOperationalDate = field.setOperationalDate
   const { sync, status: syncStatus } = useSync()
@@ -166,6 +173,9 @@ export default function FieldRouteDetailScreen() {
     () => field.week?.days.find((day) => day.routes.some((route) => route.id === routeId))?.date ?? null,
     [field.week, routeId],
   )
+  const hintedRouteDate = validRouteDateHint(date)
+  const hintedWeekStart = hintedRouteDate ? startOfIsoWeek(hintedRouteDate) : null
+  const [routeHintLoading, setRouteHintLoading] = useState(Boolean(hintedWeekStart))
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
   const [points, setPoints] = useState<FieldRoutePoint[]>([])
@@ -207,6 +217,19 @@ export default function FieldRouteDetailScreen() {
   const routeHydrationKey = routeData
     ? `${routeData.id}:${routeData.version}:${field.week?.timezone ?? "UTC"}`
     : null
+
+  useEffect(() => {
+    if (routeData || !hintedWeekStart || field.week?.weekStart === hintedWeekStart) {
+      setRouteHintLoading(false)
+      return
+    }
+    let active = true
+    setRouteHintLoading(true)
+    void field.loadWeek(hintedWeekStart).finally(() => {
+      if (active) setRouteHintLoading(false)
+    })
+    return () => { active = false }
+  }, [field.loadWeek, field.week?.weekStart, hintedWeekStart, routeData])
 
   useEffect(() => {
     if (routeDate) setOperationalDate(routeDate)
@@ -252,6 +275,17 @@ export default function FieldRouteDetailScreen() {
   }, [routeId, syncStatus.lastSyncAt])
 
   if (!routeData) {
+    if (routeHintLoading) {
+      return (
+        <SafeAreaView style={styles.root}>
+          <FieldScreenChrome />
+          <View accessibilityRole="progressbar" accessibilityLabel={t("routeContextLoading")} style={styles.missing}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.missingTitle}>{t("routeContextLoading")}</Text>
+          </View>
+        </SafeAreaView>
+      )
+    }
     return (
       <SafeAreaView style={styles.root}>
         <FieldScreenChrome />

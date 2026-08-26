@@ -30,6 +30,11 @@ describe("field notification navigation", () => {
     expect(notificationDestination(notification({ metadata: { routeIds: ["route-2"] } }))).toBe("/(app)/routes/route-2")
   })
 
+  it("uses a valid route date only as a bounded route-context hint", () => {
+    expect(notificationDestination(notification({ metadata: { routeId: "route-2", routeDate: "2026-08-24" } }))).toBe("/(app)/routes/route-2?date=2026-08-24")
+    expect(notificationDestination(notification({ metadata: { routeId: "route-2", routeDate: "2026-02-30" } }))).toBe("/(app)/routes/route-2")
+  })
+
   it("keeps every verified semantic target on its specific workspace", () => {
     expect(notificationOpenDestination(notification({ target: { kind: "ROUTE", id: "route-1" } }))).toBe("/(app)/routes/route-1")
     expect(notificationOpenDestination(notification({ target: { kind: "VISIT", id: "visit-1" } }))).toBe("/(app)/field-visits/visit-1")

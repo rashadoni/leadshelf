@@ -15,6 +15,16 @@ function string(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null
 }
 
+function dateKey(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null
+}
+
+function routeDateHint(metadata: unknown): string | null {
+  return dateKey(record(metadata)?.routeDate)
+}
+
 function target(kind: string | null, id: string | null): FieldNotificationTarget | null {
   return kind && id && fieldNotificationTargetKinds.has(kind as FieldNotificationTargetKind)
     ? { kind: kind as FieldNotificationTargetKind, id }
@@ -50,8 +60,10 @@ export function notificationDestination(notification: FieldNotification): string
   const item = notificationTarget(notification)
   if (!item) return null
   switch (item.kind) {
-    case "ROUTE":
-      return "/(app)/routes/" + item.id
+    case "ROUTE": {
+      const date = routeDateHint(notification.metadata)
+      return "/(app)/routes/" + item.id + (date ? "?date=" + encodeURIComponent(date) : "")
+    }
     case "VISIT":
       return "/(app)/field-visits/" + item.id
     case "TASK":
