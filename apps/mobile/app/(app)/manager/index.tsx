@@ -62,6 +62,7 @@ function ManagerCard({
   loading,
   href,
   wide = false,
+  tablet = false,
 }: {
   title: string
   hint: string
@@ -73,6 +74,7 @@ function ManagerCard({
   loading: boolean
   href: string
   wide?: boolean
+  tablet?: boolean
 }) {
   const iconColor = tone === "warning" ? colors.warning : colors.primary
   const cardAccessibilityDetail = loading && !error
@@ -87,7 +89,7 @@ function ManagerCard({
       accessibilityLabel={title + ". " + cardAccessibilityDetail}
       accessibilityState={{ busy: loading && !error }}
       onPress={() => router.push(href as never)}
-      style={({ pressed }) => [styles.actionRow, wide && styles.actionRowWide, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.actionRow, tablet && styles.actionRowTablet, wide && styles.actionRowWide, pressed && styles.pressed]}
     >
       <View style={[styles.cardIcon, tone === "warning" ? styles.cardIconWarning : tone === "success" ? styles.cardIconSuccess : tone === "info" ? styles.cardIconInfo : styles.cardIconPrimary]}>
         <TabIcon name={icon} color={iconColor} size={21} />
@@ -199,6 +201,8 @@ export default function ManagerHomeScreen() {
       ? { title: t("managerLocationsCardTitle"), detail: t("managerLocationsCardHint"), count: noLocations, icon: "location", href: "/(app)/manager/locations" }
       : null,
   ].filter((item): item is ManagerAttention => item !== null)
+  const primaryAttention = attentionItems[0] ?? null
+  const secondaryAttentionItems = attentionItems.slice(1)
   const contextStatusLabel = loading ? t("managerLoading") : hasPartialFailure ? t("managerUnavailable") : t("managerUpdated")
 
   return (
@@ -244,17 +248,32 @@ export default function ManagerHomeScreen() {
               <View accessible accessibilityRole="text" accessibilityLiveRegion="polite" accessibilityLabel={contextStatusLabel} style={[styles.contextStatus, hasPartialFailure && styles.contextStatusWarning]}><View style={[styles.contextDot, hasPartialFailure && styles.contextDotWarning]} /><Text style={[styles.contextStatusText, hasPartialFailure && styles.contextStatusTextWarning]}>{contextStatusLabel}</Text></View>
             </View>
 
-            {attentionItems.length ? (
+            {primaryAttention ? (
               <View style={styles.attentionList}>
                 <Text style={styles.attentionListTitle}>{t("managerAttentionTitle")}</Text>
-                {attentionItems.map((attention, index) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${primaryAttention.count}. ${primaryAttention.title}`}
+                  accessibilityHint={primaryAttention.detail}
+                  onPress={() => router.push(primaryAttention.href as never)}
+                  style={({ pressed }) => [styles.attentionPrimary, pressed && styles.pressed]}
+                >
+                  <View style={styles.attentionPrimaryIcon}><TabIcon name={primaryAttention.icon} color={colors.warning} size={23} /></View>
+                  <View style={styles.attentionBody}>
+                    <Text style={styles.attentionPrimaryTitle}>{primaryAttention.title}</Text>
+                    <Text style={styles.attentionPrimaryDetail} numberOfLines={2}>{primaryAttention.detail}</Text>
+                  </View>
+                  <Text style={styles.attentionPrimaryCount}>{primaryAttention.count}</Text>
+                  <TabIcon name="chevronRight" color={colors.warning} size={22} />
+                </Pressable>
+                {secondaryAttentionItems.map((attention) => (
                   <Pressable
                     key={attention.href}
                     accessibilityRole="button"
                     accessibilityLabel={`${attention.count}. ${attention.title}`}
                     accessibilityHint={attention.detail}
                     onPress={() => router.push(attention.href as never)}
-                    style={({ pressed }) => [styles.attentionCard, index > 0 && styles.attentionCardDivider, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.attentionCard, styles.attentionCardDivider, pressed && styles.pressed]}
                   >
                     <View style={styles.attentionIcon}><TabIcon name={attention.icon} color={colors.warning} size={21} /></View>
                     <View style={styles.attentionBody}>
@@ -284,6 +303,7 @@ export default function ManagerHomeScreen() {
                 loading={loading}
                 error={team.error}
                 href="/(app)/manager/team"
+                tablet={layout.isTablet}
               />
               <ManagerCard
                 title={t("managerLocationsCardTitle")}
@@ -300,6 +320,7 @@ export default function ManagerHomeScreen() {
                 loading={loading}
                 error={locations.error}
                 href="/(app)/manager/locations"
+                tablet={layout.isTablet}
               />
               <ManagerCard
                 title={t("managerPlanningCardTitle")}
@@ -311,6 +332,7 @@ export default function ManagerHomeScreen() {
                 loading={loading}
                 error={planning.error}
                 href="/(app)/manager/planning"
+                tablet={layout.isTablet}
               />
               <ManagerCard
                 title={t("managerApprovalsCardTitle")}
@@ -322,6 +344,7 @@ export default function ManagerHomeScreen() {
                 loading={loading}
                 error={approvals.error}
                 href="/(app)/manager/approvals"
+                tablet={layout.isTablet}
               />
               <ManagerCard
                 wide
@@ -340,6 +363,7 @@ export default function ManagerHomeScreen() {
                 loading={loading}
                 error={attendance.error}
                 href="/(app)/manager/attendance"
+                tablet={layout.isTablet}
               />
             </View>
 
@@ -368,9 +392,9 @@ const styles = StyleSheet.create({
   accessIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   accessBody: { flex: 1, minWidth: 0 },
   accessTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  accessText: { color: colors.warning, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  accessText: { color: colors.warning, fontSize: 12, lineHeight: 17, marginTop: 3 },
   accessRetry: { minHeight: 44, paddingHorizontal: 11, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
-  accessRetryText: { color: colors.warning, fontSize: 10, fontWeight: "900" },
+  accessRetryText: { color: colors.warning, fontSize: 12, fontWeight: "900" },
   contextBar: { marginHorizontal: 14, marginTop: 14, minHeight: 68, paddingHorizontal: 12, paddingVertical: 10, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 },
   contextIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   contextBody: { flex: 1, minWidth: 0 },
@@ -380,10 +404,15 @@ const styles = StyleSheet.create({
   contextStatusWarning: { backgroundColor: colors.warningBg },
   contextDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
   contextDotWarning: { backgroundColor: colors.warning },
-  contextStatusText: { color: colors.successDark, fontSize: 10, fontWeight: "800", flexShrink: 1 },
+  contextStatusText: { color: colors.successDark, fontSize: 11, fontWeight: "800", flexShrink: 1 },
   contextStatusTextWarning: { color: colors.warning },
   attentionList: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder, overflow: "hidden" },
-  attentionListTitle: { color: colors.warning, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.6, paddingHorizontal: 12, paddingTop: 11, paddingBottom: 5 },
+  attentionListTitle: { color: colors.warning, fontSize: 12, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.6, paddingHorizontal: 12, paddingTop: 11, paddingBottom: 5 },
+  attentionPrimary: { minHeight: 82, paddingHorizontal: 12, paddingVertical: 11, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11 },
+  attentionPrimaryIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.warningBg, alignItems: "center", justifyContent: "center" },
+  attentionPrimaryTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  attentionPrimaryDetail: { color: colors.warning, fontSize: 12, lineHeight: 17, fontWeight: "700", marginTop: 2 },
+  attentionPrimaryCount: { color: colors.warning, fontSize: 26, fontWeight: "900", fontVariant: ["tabular-nums"] },
   attentionCard: { minHeight: 66, paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 10 },
   attentionCardDivider: { borderTopWidth: 1, borderTopColor: colors.warningBorder },
   attentionIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
@@ -392,9 +421,10 @@ const styles = StyleSheet.create({
   attentionDetail: { color: colors.warning, fontSize: 11, fontWeight: "700", marginTop: 2 },
   attentionCount: { color: colors.warning, fontSize: 22, fontWeight: "900", fontVariant: ["tabular-nums"] },
   operationList: { gap: 9, paddingHorizontal: 14, marginTop: 12 },
-  operationListTablet: { alignSelf: "center", width: "94%", maxWidth: 780, paddingHorizontal: 0 },
+  operationListTablet: { alignSelf: "center", width: "94%", maxWidth: 860, paddingHorizontal: 0, flexDirection: "row", flexWrap: "wrap", columnGap: 12, rowGap: 12 },
   actionRow: { minHeight: 86, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10, ...cardShadow },
-  actionRowWide: {},
+  actionRowTablet: { width: "48.9%" },
+  actionRowWide: { width: "100%" },
   cardIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   cardIconPrimary: { backgroundColor: colors.primarySoft },
   cardIconSuccess: { backgroundColor: colors.successBg },
@@ -407,9 +437,9 @@ const styles = StyleSheet.create({
   cardSpinner: { alignSelf: "flex-start", marginTop: 6 },
   cardError: { color: colors.warning, fontSize: 12, lineHeight: 17, marginTop: 3 },
   cardMetric: { width: 76, alignItems: "flex-end", gap: 2 },
-  cardHint: { color: colors.muted, fontSize: 10, lineHeight: 13, fontWeight: "700", textAlign: "right" },
+  cardHint: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: "700", textAlign: "right" },
   noteCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 14, padding: 13, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   noteIcon: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.info, alignItems: "center", justifyContent: "center" },
-  noteText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "700" },
+  noteText: { flex: 1, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "700" },
   pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
 })
