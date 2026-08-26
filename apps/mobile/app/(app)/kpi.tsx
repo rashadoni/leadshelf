@@ -13,7 +13,7 @@ import { fieldApi } from "../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../src/db/local-store"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 import { t, useLocale } from "../../src/i18n"
-import { formatShortDateTime } from "../../src/i18n/date-format"
+import { formatCalendarRange, formatShortDateTime } from "../../src/i18n/date-format"
 import type {
   FieldKpiCoverage,
   FieldKpiRatio,
@@ -133,7 +133,7 @@ export default function PersonalKpiScreen() {
     ? t("kpiCached")
     : refreshing
       ? `${t("kpiCached")} · ${t("kpiLoading")}`
-      : data ? `${t("kpiUpdated")}: ${formatShortDateTime(data.generatedAt, locale)}` : ""
+      : data ? `${t("kpiUpdated")}: ${formatShortDateTime(data.generatedAt, locale, data.timezone)}` : ""
   const freshnessIcon = phase === "stale" ? "alert" : refreshing ? "refresh" : "check"
   const freshnessColor = phase === "stale" ? colors.warning : refreshing ? colors.primary : colors.successDark
 
@@ -198,7 +198,7 @@ export default function PersonalKpiScreen() {
               <View style={styles.heroTop}>
                 <View>
                   <Text style={styles.heroLabel}>{t("kpiVisitPlan")}</Text>
-                  <Text style={styles.heroPeriod}>{data.period.start} — {data.period.endExclusive}</Text>
+                  <Text style={styles.heroPeriod}>{formatCalendarRange(data.period.start, data.period.endExclusive, locale)}</Text>
                 </View>
                 <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>{period === "week" ? t("kpiPeriodWeek") : t("kpiPeriodMonth")}</Text></View>
               </View>
@@ -239,7 +239,7 @@ export default function PersonalKpiScreen() {
                   <View style={styles.card}>
                     <View style={styles.commercialHeader}>
                       <View style={styles.sourceBadge}><Text style={styles.sourceBadgeText}>LEADSHELF</Text></View>
-                      <Text style={styles.commercialTime}>{formatShortDateTime(commercial.generatedAt, locale)}</Text>
+                      <Text style={styles.commercialTime}>{formatShortDateTime(commercial.generatedAt, locale, data.timezone)}</Text>
                     </View>
                     <Text style={styles.subsectionTitle}>{t("kpiOrders")}</Text>
                     <View style={styles.statRow}>

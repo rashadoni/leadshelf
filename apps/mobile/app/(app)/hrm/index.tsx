@@ -8,6 +8,8 @@ import type { FieldHrmData, FieldHrmRequest, FieldHrmRequestType } from "../../.
 import { fieldErrorMessage } from "../../../src/field/error-message"
 import { workdayStatusLabel } from "../../../src/field/labels"
 import { FieldDayNavigator, type FieldDayNavigatorItem } from "../../../src/field/FieldDayNavigator"
+import { tenantDateKey, tenantDateTimeToIso } from "../../../src/field/tenant-time"
+import { shiftDateKey } from "../../../src/field/week-status"
 import { t, type Locale, useLocale } from "../../../src/i18n"
 import {
   formatCalendarDay,
@@ -32,21 +34,8 @@ type HrmRequestDraft = {
   reason: string
 }
 
-function dateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-}
-
-function addDays(days: number): string {
-  const date = new Date()
-  date.setHours(12, 0, 0, 0)
-  date.setDate(date.getDate() + days)
-  return dateKey(date)
-}
-
-function dateTime(date: string, time: string): string | null {
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null
-  const value = new Date(`${date}T${time}:00`)
-  return Number.isNaN(value.getTime()) ? null : value.toISOString()
+function utcFallbackDate(): string {
+  return new Date().toISOString().slice(0, 10)
 }
 
 export default function HrmScreen() {
@@ -60,8 +49,8 @@ export default function HrmScreen() {
   const [scheduleDetailsOpen, setScheduleDetailsOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [type, setType] = useState<FieldHrmRequestType>("LEAVE")
-  const [startDate, setStartDate] = useState(addDays(1))
-  const [endDate, setEndDate] = useState(addDays(1))
+  const [startDate, setStartDate] = useState(() => shiftDateKey(utcFallbackDate(), 1))
+  const [endDate, setEndDate] = useState(() => shiftDateKey(utcFallbackDate(), 1))
   const [workdayId, setWorkdayId] = useState<string | null>(null)
   const [startTime, setStartTime] = useState("09:00")
   const [endTime, setEndTime] = useState("18:00")
@@ -80,6 +69,7 @@ export default function HrmScreen() {
     required: "Tarixləri, səbəbi və düzəliş üçün iş gününü düzgün seçin.", queued: "Müraciət telefonda saxlanıldı və göndərmə növbəsinə əlavə edildi.",
     refreshError: "Qrafik yenilənmədi — telefondakı nüsxə göstərilir.", decision: "Qərar", pending: "Baxılır", approved: "Təsdiqlənib", rejected: "Rədd edilib", cancelled: "Ləğv edilib", sync: "Növbədə",
     discardTitle: "Saxlanmamış müraciəti silmək?", discardBody: "Seçilmiş tarixlər, vaxtlar və səbəb yadda saxlanmayacaq.", discardConfirm: "Qaralamanı sil", noCorrectionDays: "Düzəliş üçün uyğun iş günü yoxdur.",
+    requestPolicyLoading: "Müraciət qaydaları yüklənir…", newRequestUnavailable: "Yeni müraciətlər sizin rolunuz üçün əlçatan deyil.", requestTypeUnavailable: "Bu müraciət növü sizin rolunuz üçün əlçatan deyil.", cancelUnavailable: "Gözləyən müraciətləri ləğv etmək üçün icazəniz yoxdur.",
   } : {
     eyebrow: "РАБОЧИЙ ЦЕНТР", title: "График и заявки", hint: "Рабочие дни, отпуск, отсутствие и корректировка времени в одном экране.",
     schedule: "График", requests: "Мои заявки", newRequest: "Новая заявка", working: "Рабочий день", dayOff: "Выходной",
@@ -90,16 +80,28 @@ export default function HrmScreen() {
     required: "Проверьте даты, причину и рабочий день для корректировки.", queued: "Заявка сохранена на телефоне и добавлена в очередь отправки.",
     refreshError: "График не обновился — показана копия с телефона.", decision: "Решение", pending: "На рассмотрении", approved: "Одобрено", rejected: "Отклонено", cancelled: "Отменено", sync: "В очереди",
     discardTitle: "Отменить несохранённую заявку?", discardBody: "Выбранные даты, время и причина не сохранятся.", discardConfirm: "Удалить черновик", noCorrectionDays: "Нет рабочего дня, доступного для корректировки.",
+    requestPolicyLoading: "Загружаем правила для заявок…", newRequestUnavailable: "Новые заявки недоступны для вашей роли.", requestTypeUnavailable: "Этот тип заявки недоступен для вашей роли.", cancelUnavailable: "У вас нет права отменять ожидающие заявки.",
   }
 
-  const todayDate = useMemo(() => addDays(0), [])
-  const upcomingDates = useMemo(() => Array.from({ length: 21 }, (_, index) => addDays(index)), [])
+  const tenantTimeZone = data?.timezone ?? "UTC"
+  const todayDate = useMemo(() => tenantDateKey(new Date(), tenantTimeZone) ?? utcFallbackDate(), [tenantTimeZone])
+  const upcomingDates = useMemo(() => Array.from({ length: 21 }, (_, index) => shiftDateKey(todayDate, index)), [todayDate])
   const upcomingDateSet = useMemo(() => new Set(upcomingDates), [upcomingDates])
   const upcomingDayItems = useMemo<FieldDayNavigatorItem[]>(() => upcomingDates.map((date) => ({ date, isToday: date === todayDate })), [todayDate, upcomingDates])
+  const availableRequestTypes = useMemo<FieldHrmRequestType[]>(() => {
+    if (!data) return []
+    const types: FieldHrmRequestType[] = []
+    if (data.capabilities.requestLeave) types.push("LEAVE")
+    if (data.capabilities.requestAbsence) types.push("ABSENCE")
+    if (data.capabilities.requestTimeCorrection) types.push("TIME_CORRECTION")
+    return types
+  }, [data])
+  const canCreateRequest = availableRequestTypes.length > 0
+  const canCancelPending = data?.capabilities.cancelPending === true
   const correctionDays = useMemo(() => data?.days.filter((day) => day.workday).slice(-20).reverse() ?? [], [data?.days])
   const correctionDateSet = useMemo(() => new Set(correctionDays.map((day) => day.date)), [correctionDays])
   const correctionDayItems = useMemo<FieldDayNavigatorItem[]>(() => correctionDays.map((day) => ({ date: day.date, isToday: day.date === todayDate })), [correctionDays, todayDate])
-  const scheduleDays = useMemo(() => data?.days.filter((day) => day.date >= addDays(-2)).slice(0, 35) ?? [], [data?.days])
+  const scheduleDays = useMemo(() => data?.days.filter((day) => day.date >= shiftDateKey(todayDate, -2)).slice(0, 35) ?? [], [data?.days, todayDate])
   const scheduleDateSet = useMemo(() => new Set(scheduleDays.map((day) => day.date)), [scheduleDays])
   const scheduleDayItems = useMemo<FieldDayNavigatorItem[]>(() => scheduleDays.map((day) => {
     const hasRequest = day.requests.some((request) => request.status !== "CANCELLED")
@@ -126,22 +128,27 @@ export default function HrmScreen() {
   )
   const load = useCallback(async (showWarning = false) => {
     try {
-      setData(cacheFieldHrm(await fieldApi.hrm(addDays(-14), addDays(45))))
+      setData(cacheFieldHrm(await fieldApi.hrm(shiftDateKey(todayDate, -14), shiftDateKey(todayDate, 45))))
       setWarning(null)
     } catch {
       setData(readFieldHrm())
       if (showWarning) setWarning(copy.refreshError)
     }
-  }, [copy.refreshError])
+  }, [copy.refreshError, todayDate])
 
   useFocusEffect(useCallback(() => { setData(readFieldHrm()); void load(false) }, [load]))
 
   async function refresh() { setRefreshing(true); await load(true); setRefreshing(false) }
 
   function openNewRequest() {
-    const date = addDays(1)
+    const initialType = availableRequestTypes[0]
+    if (!initialType) {
+      setWarning(data ? copy.newRequestUnavailable : copy.requestPolicyLoading)
+      return
+    }
+    const date = shiftDateKey(todayDate, 1)
     const baseline: HrmRequestDraft = {
-      type: "LEAVE",
+      type: initialType,
       startDate: date,
       endDate: date,
       workdayId: null,
@@ -199,8 +206,12 @@ export default function HrmScreen() {
 
   async function submit() {
     const normalizedReason = reason.trim()
-    const requestedStartAt = type === "TIME_CORRECTION" ? dateTime(startDate, startTime) : null
-    const requestedEndAt = type === "TIME_CORRECTION" ? dateTime(startDate, endTime) : null
+    if (!availableRequestTypes.includes(type)) {
+      setWarning(copy.requestTypeUnavailable)
+      return
+    }
+    const requestedStartAt = type === "TIME_CORRECTION" ? tenantDateTimeToIso(startDate, startTime, tenantTimeZone) : null
+    const requestedEndAt = type === "TIME_CORRECTION" ? tenantDateTimeToIso(startDate, endTime, tenantTimeZone) : null
     if (!normalizedReason || normalizedReason.length < 3 || endDate < startDate || (type === "TIME_CORRECTION" && (!workdayId || (!requestedStartAt && !requestedEndAt)))) {
       setWarning(copy.required)
       return
@@ -232,6 +243,10 @@ export default function HrmScreen() {
   }
 
   function cancelRequest(request: FieldHrmRequest) {
+    if (!canCancelPending) {
+      setWarning(copy.cancelUnavailable)
+      return
+    }
     enqueueFieldHrmCancel(request.id)
     setData(readFieldHrm())
     void sync().then(() => load(false)).catch(() => {})
@@ -246,12 +261,13 @@ export default function HrmScreen() {
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
           </Pressable>
           <View style={styles.headerBody}><Text style={styles.eyebrow}>{copy.eyebrow}</Text><Text style={styles.title}>{copy.title}</Text></View>
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.newRequest} accessibilityState={{ disabled: busy || formOpen }} disabled={busy || formOpen} onPress={openNewRequest} style={[styles.newButton, (busy || formOpen) && styles.disabled]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.newRequest} accessibilityHint={data ? (canCreateRequest ? undefined : copy.newRequestUnavailable) : copy.requestPolicyLoading} accessibilityState={{ disabled: busy || formOpen || !canCreateRequest }} disabled={busy || formOpen || !canCreateRequest} onPress={openNewRequest} style={[styles.newButton, (busy || formOpen || !canCreateRequest) && styles.disabled]}>
             <TabIcon name="add" color={colors.headerText} size={18} />
             <Text style={styles.newText}>{copy.newRequest}</Text>
           </Pressable>
         </View>
         <Text style={styles.intro}>{copy.hint}</Text>
+        {data && !canCreateRequest ? <View accessibilityRole="summary" style={styles.policyNotice}><TabIcon name="alert" color={colors.warning} size={17} /><Text style={styles.policyNoticeText}>{copy.newRequestUnavailable}</Text></View> : null}
 
         <View style={styles.segment}>
           <Segment label={copy.schedule} selected={mode === "schedule"} onPress={() => setMode("schedule")} />
@@ -267,9 +283,9 @@ export default function HrmScreen() {
               </Pressable>
             </View>
             <View style={styles.types}>
-              <TypeButton label={copy.leave} icon="week" selected={type === "LEAVE"} onPress={() => selectType("LEAVE")} />
-              <TypeButton label={copy.absence} icon="alert" selected={type === "ABSENCE"} onPress={() => selectType("ABSENCE")} />
-              <TypeButton label={copy.correction} icon="refresh" selected={type === "TIME_CORRECTION"} onPress={() => selectType("TIME_CORRECTION")} />
+              {availableRequestTypes.includes("LEAVE") ? <TypeButton label={copy.leave} icon="week" selected={type === "LEAVE"} onPress={() => selectType("LEAVE")} /> : null}
+              {availableRequestTypes.includes("ABSENCE") ? <TypeButton label={copy.absence} icon="alert" selected={type === "ABSENCE"} onPress={() => selectType("ABSENCE")} /> : null}
+              {availableRequestTypes.includes("TIME_CORRECTION") ? <TypeButton label={copy.correction} icon="refresh" selected={type === "TIME_CORRECTION"} onPress={() => selectType("TIME_CORRECTION")} /> : null}
             </View>
 
             {type === "TIME_CORRECTION" ? (
@@ -359,13 +375,13 @@ export default function HrmScreen() {
             </View> : null}
           </>
         ) : (
-          !data || data.requests.length === 0 ? <Empty title={copy.noRequests} hint={copy.noRequestsHint} /> : <View style={[styles.requestList, layout.isTablet && styles.requestListTablet]}>{data.requests.map((request) => <RequestCard key={request.id} request={request} locale={locale} copy={copy} onCancel={() => cancelRequest(request)} tablet={layout.isTablet} />)}</View>
+          !data || data.requests.length === 0 ? <Empty title={copy.noRequests} hint={copy.noRequestsHint} /> : <View style={[styles.requestList, layout.isTablet && styles.requestListTablet]}>{data.requests.map((request) => <RequestCard key={request.id} request={request} locale={locale} timezone={tenantTimeZone} copy={copy} canCancel={canCancelPending} onCancel={() => cancelRequest(request)} tablet={layout.isTablet} />)}</View>
         )}
         </View>
       </ScrollView>
       {formOpen ? <View style={[styles.stickyActionTray, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={[styles.stickyActionContent, layout.isTablet && styles.stickyActionContentTablet]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.submit} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void submit()} style={[styles.stickySubmit, busy && styles.disabled]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.submit} accessibilityState={{ disabled: busy || !availableRequestTypes.includes(type), busy }} disabled={busy || !availableRequestTypes.includes(type)} onPress={() => void submit()} style={[styles.stickySubmit, (busy || !availableRequestTypes.includes(type)) && styles.disabled]}>
             {busy ? <TabIcon name="refresh" color={colors.headerText} size={17} /> : null}<Text style={styles.stickySubmitText}>{copy.submit}</Text>
           </Pressable>
         </View>
@@ -432,13 +448,14 @@ function ScheduleRow({ day, locale, copy, onPress }: { day: HrmDay; locale: Loca
 }
 function Empty({ title, hint }: { title: string; hint: string }) { return <View accessibilityRole="summary" accessibilityLabel={`${title}. ${hint}`} style={styles.empty}><View accessible={false} style={styles.emptyMark}><TabIcon name="week" color={colors.primary} size={25} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyHint}>{hint}</Text></View> }
 
-function RequestCard({ request, locale, copy, onCancel, tablet }: { request: FieldHrmRequest; locale: Locale; copy: Record<string, string>; onCancel: () => void; tablet: boolean }) {
+function RequestCard({ request, locale, timezone, copy, canCancel, onCancel, tablet }: { request: FieldHrmRequest; locale: Locale; timezone: string; copy: Record<string, string>; canCancel: boolean; onCancel: () => void; tablet: boolean }) {
   const palette = request.status === "APPROVED" ? { bg: colors.successBg, color: colors.successDark, label: copy.approved } : request.status === "REJECTED" ? { bg: colors.dangerBg, color: colors.missed, label: copy.rejected } : request.status === "CANCELLED" ? { bg: colors.draftBg, color: colors.draft, label: copy.cancelled } : { bg: colors.warningBg, color: colors.warning, label: copy.pending }
-  return <View style={[styles.requestCard, tablet && styles.requestCardTablet]}><View style={styles.requestTop}><View accessible={false} style={[styles.requestIcon, { backgroundColor: palette.bg }]}><TabIcon name={typeIcon(request.type)} color={palette.color} size={21} /></View><View style={styles.requestBody}><Text style={styles.requestTitle}>{typeLabel(request.type, copy as never)}</Text><Text style={styles.requestDates}>{formatCalendarDay(request.startDate, locale).date} — {formatCalendarDay(request.endDate, locale).date}</Text></View><View accessibilityLabel={palette.label} style={[styles.status, { backgroundColor: palette.bg }]}><Text style={[styles.statusText, { color: palette.color }]}>{palette.label}</Text></View></View><Text style={styles.requestReason}>{request.reason}</Text>{request.decisionNote ? <View style={styles.decision}><Text style={styles.decisionLabel}>{copy.decision}</Text><Text style={styles.decisionText}>{request.decisionNote}</Text></View> : null}<View style={styles.requestFooter}>{request.syncState ? <View accessibilityLabel={copy.sync} style={styles.syncState}><TabIcon name="refresh" color={colors.info} size={15} /><Text style={styles.syncStateText}>{copy.sync}</Text></View> : <Text style={styles.submitted}>{formatShortDateTime(request.submittedAt, locale)}</Text>}{request.status === "PENDING" ? <Pressable accessibilityRole="button" accessibilityLabel={copy.cancelRequest} accessibilityState={{ disabled: false }} onPress={onCancel} style={styles.cancelRequest}><Text style={styles.cancelRequestText}>{copy.cancelRequest}</Text></Pressable> : null}</View></View>
+  return <View style={[styles.requestCard, tablet && styles.requestCardTablet]}><View style={styles.requestTop}><View accessible={false} style={[styles.requestIcon, { backgroundColor: palette.bg }]}><TabIcon name={typeIcon(request.type)} color={palette.color} size={21} /></View><View style={styles.requestBody}><Text style={styles.requestTitle}>{typeLabel(request.type, copy as never)}</Text><Text style={styles.requestDates}>{formatCalendarDay(request.startDate.slice(0, 10), locale).date} — {formatCalendarDay(request.endDate.slice(0, 10), locale).date}</Text></View><View accessibilityLabel={palette.label} style={[styles.status, { backgroundColor: palette.bg }]}><Text style={[styles.statusText, { color: palette.color }]}>{palette.label}</Text></View></View><Text style={styles.requestReason}>{request.reason}</Text>{request.decisionNote ? <View style={styles.decision}><Text style={styles.decisionLabel}>{copy.decision}</Text><Text style={styles.decisionText}>{request.decisionNote}</Text></View> : null}<View style={styles.requestFooter}>{request.syncState ? <View accessibilityLabel={copy.sync} style={styles.syncState}><TabIcon name="refresh" color={colors.info} size={15} /><Text style={styles.syncStateText}>{copy.sync}</Text></View> : <Text style={styles.submitted}>{formatShortDateTime(request.submittedAt, locale, timezone)}</Text>}{request.status === "PENDING" && canCancel ? <Pressable accessibilityRole="button" accessibilityLabel={copy.cancelRequest} accessibilityState={{ disabled: false }} onPress={onCancel} style={styles.cancelRequest}><Text style={styles.cancelRequestText}>{copy.cancelRequest}</Text></Pressable> : null}</View></View>
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { paddingBottom: 36 }, content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" }, header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, newButton: { minHeight: 46, borderRadius: 15, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }, newText: { color: colors.headerText, fontSize: 11, fontWeight: "900" }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
+  policyNotice: { minHeight: 44, marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 8 }, policyNoticeText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   segment: { marginHorizontal: 14, marginTop: 16, borderRadius: 16, padding: 4, backgroundColor: colors.surfaceMuted, flexDirection: "row", gap: 4 }, segmentButton: { flex: 1, minHeight: 44, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }, segmentSelected: { backgroundColor: colors.card, ...cardShadow }, segmentText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, segmentTextSelected: { color: colors.text }, segmentCount: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.warning, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, segmentCountText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   formCard: { marginHorizontal: 14, marginTop: 13, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, formHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, formEyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 }, formTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginTop: 3 }, close: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, types: { flexDirection: "row", gap: 7, marginTop: 13 }, typeButton: { flex: 1, minHeight: 75, borderRadius: 16, padding: 7, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, typeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, typeText: { color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "900", textAlign: "center", marginTop: 5 }, typeTextSelected: { color: colors.headerText }, label: { color: colors.text, fontSize: 12, fontWeight: "900", marginTop: 16, marginBottom: 8 }, dateFields: { gap: 10 }, dateField: { gap: 7 }, dateFieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "900" }, inlineHint: { minHeight: 46, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 8 }, inlineHintText: { color: colors.warning, flex: 1, fontSize: 11, lineHeight: 16, fontWeight: "800" }, timeRow: { flexDirection: "row", alignItems: "flex-end", gap: 10 }, timeInputWrap: { flex: 1 }, timeLabel: { color: colors.muted, fontSize: 11, fontWeight: "900", marginBottom: 5 }, timeInput: { minHeight: 46, borderRadius: 13, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 14, fontWeight: "900", textAlign: "center" }, timeArrow: { width: 18, marginBottom: 13, alignItems: "center", justifyContent: "center" }, reasonInput: { minHeight: 85, borderRadius: 14, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, padding: 11, color: colors.text, fontSize: 13, lineHeight: 18 }, stickyActionTray: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10, ...cardShadow }, stickyActionContent: { width: "100%" }, stickyActionContentTablet: { maxWidth: 1_060, alignSelf: "center" }, stickySubmit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center" }, stickySubmitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" }, disabled: { opacity: 0.62 },
   warning: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 8 }, warningText: { color: colors.warning, flex: 1, fontSize: 11, lineHeight: 16, fontWeight: "800" }, scheduleCalendar: { marginHorizontal: 14, marginTop: 16, gap: 10 }, scheduleSectionLabel: { color: colors.muted, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, textTransform: "uppercase" }, scheduleFocus: { minHeight: 92, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 12, ...cardShadow }, nearbySection: { marginHorizontal: 14, marginTop: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }, nearbyToggle: { minHeight: 52, paddingHorizontal: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }, nearbyToggleCopy: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 }, nearbyToggleText: { color: colors.text, fontSize: 13, fontWeight: "900" }, nearbyCount: { minWidth: 24, height: 24, borderRadius: radii.pill, paddingHorizontal: 6, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, nearbyCountText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, scheduleList: { gap: 8, paddingTop: 4 }, scheduleRow: { minHeight: 64, borderRadius: radii.inner, padding: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 10 }, scheduleMark: { width: 48, height: 48, borderRadius: 15, alignItems: "center", justifyContent: "center" }, scheduleMarkSmall: { width: 40, height: 40, borderRadius: 13 }, scheduleBody: { flex: 1, minWidth: 0 }, scheduleDate: { color: colors.text, fontSize: 13, fontWeight: "900", textTransform: "capitalize" }, scheduleMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "700", marginTop: 4 }, workdayPill: { alignSelf: "flex-start", marginTop: 8, borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 5 }, workdayPillText: { color: colors.successDark, fontSize: 10, fontWeight: "900" }, pressed: { opacity: 0.72 },
