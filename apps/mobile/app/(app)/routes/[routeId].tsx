@@ -33,6 +33,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { resolveFieldRouteFlow, type FieldRouteStep, type FieldRouteStepState } from "../../../src/field/route-flow"
 import {
@@ -155,6 +156,7 @@ export default function FieldRouteDetailScreen() {
   const field = useField()
   const { sync, status: syncStatus } = useSync()
   const insets = useSafeAreaInsets()
+  const layout = useResponsiveLayout()
   const routeData = useMemo(
     () => field.week?.days.flatMap((day) => day.routes).find((route) => route.id === routeId) ?? null,
     [field.week, routeId],
@@ -730,6 +732,7 @@ export default function FieldRouteDetailScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + (routeData.canEdit ? 146 : 24) }]}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: saving }} disabled={saving} onPress={goBack} hitSlop={10} style={[styles.backButton, saving && styles.disabled]}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
@@ -1046,9 +1049,11 @@ export default function FieldRouteDetailScreen() {
             <Text style={styles.copyHint}>{t("copyRouteHint")}</Text>
           </View>
         </Pressable>
+        </View>
       </ScrollView>
       {routeData.canEdit ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
+          <View style={[styles.stickyFooterContent, layout.isTablet && styles.contentTablet]}>
           {routeConflict ? <View style={styles.conflictCard}>
             <Text style={styles.conflictTitle}>{t("routeConflictTitle")}</Text>
             <Text style={styles.conflictText}>{fieldRouteConflictMessage(activeRouteConflictDetail, "syncNeedsAttention", field.week?.timezone ?? "UTC")}</Text>
@@ -1062,6 +1067,7 @@ export default function FieldRouteDetailScreen() {
           ) : (
             <Pressable accessibilityRole="button" accessibilityLabel={t("publishRoute")} accessibilityState={{ busy: saving, disabled: saving || !canPublishRoute }} disabled={saving || !canPublishRoute} onPress={publish} style={[styles.publishButton, (saving || !canPublishRoute) && styles.disabled]}><TabIcon name="check" color={colors.successDark} size={19} /><Text style={styles.publishText}>{t("publishRoute")}</Text></Pressable>
           )}
+          </View>
         </View>
       ) : null}
     </SafeAreaView>
@@ -1071,6 +1077,8 @@ export default function FieldRouteDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   backButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
@@ -1176,7 +1184,8 @@ const styles = StyleSheet.create({
   secondaryText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   primaryButton: { minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
-  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10, gap: 9 },
+  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 },
+  stickyFooterContent: { width: "100%", gap: 9 },
   addButton: { marginHorizontal: 14, marginTop: 7, minHeight: 62, borderRadius: radii.card, borderWidth: 1, borderStyle: "dashed", borderColor: colors.primary, backgroundColor: colors.primarySoft, padding: 11, flexDirection: "row", alignItems: "center", gap: 10 },
   addButtonIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   addButtonBody: { flex: 1 }, addButtonTitle: { color: colors.primary, fontSize: 13, fontWeight: "900" }, addButtonHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 3 },
