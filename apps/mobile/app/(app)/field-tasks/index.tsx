@@ -78,6 +78,7 @@ export default function AgentTasksScreen() {
     field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date,
     tenantTimeZone,
   )
+  const canCreateTask = field.agentTasks?.capabilities.createSelfTask === true
   const tasks = field.agentTasks?.tasks ?? []
   const open = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length
   const overdue = tasks.filter((task) => task.status === "OVERDUE").length
@@ -161,7 +162,7 @@ export default function AgentTasksScreen() {
             <Text style={styles.title}>{t("agentTasksTitle")}</Text>
             <Text style={styles.subtitle}>{t("agentTasksSubtitle")}</Text>
           </View>
-          {field.agentTasks?.capabilities.createSelfTask !== false ? (
+          {canCreateTask ? (
             <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.add}><TabIcon name="add" color={colors.headerText} size={22} /></Pressable>
           ) : null}
         </View>
@@ -225,7 +226,7 @@ export default function AgentTasksScreen() {
         })}</View> : null}
 
         {visible.length === 0 && field.taskPhase !== "loading" ? (
-          <View style={styles.empty}><View style={styles.emptyMark}><TabIcon name="check" color={colors.success} size={27} /></View><Text style={styles.emptyTitle}>{t("agentTasksEmpty")}</Text><Text style={styles.emptyHint}>{t("agentTasksEmptyHint")}</Text>{field.agentTasks?.capabilities.createSelfTask !== false ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.emptyButton}><TabIcon name="add" color={colors.headerText} size={18} /><Text style={styles.emptyButtonText}>{t("agentTaskCreate")}</Text></Pressable> : null}</View>
+          <View style={styles.empty}><View style={styles.emptyMark}><TabIcon name="check" color={colors.success} size={27} /></View><Text style={styles.emptyTitle}>{t("agentTasksEmpty")}</Text><Text style={styles.emptyHint}>{t("agentTasksEmptyHint")}</Text>{canCreateTask ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} onPress={() => router.push("/(app)/field-tasks/new" as never)} style={styles.emptyButton}><TabIcon name="add" color={colors.headerText} size={18} /><Text style={styles.emptyButtonText}>{t("agentTaskCreate")}</Text></Pressable> : null}</View>
         ) : null}
         {field.taskPhase === "loading" ? <View style={styles.loading}>{[1, 2, 3].map((item) => <View key={item} style={styles.skeleton} />)}</View> : null}
         </View>

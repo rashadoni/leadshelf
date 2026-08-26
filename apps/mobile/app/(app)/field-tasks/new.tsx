@@ -32,6 +32,12 @@ export default function NewAgentTaskScreen() {
     field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date,
     tenantTimeZone,
   )
+  const canCreateTask = field.agentTasks?.capabilities.createSelfTask === true
+  const createBlockMessage = field.agentTasks
+    ? t("agentTaskCreateNotAllowed")
+    : field.taskPhase === "error"
+      ? t("agentTaskCapabilityUnavailable")
+      : t("agentTaskCapabilityLoading")
   const copySource = field.agentTasks?.tasks.find((task) => task.id === copyFrom) ?? null
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -188,6 +194,10 @@ export default function NewAgentTaskScreen() {
   }
 
   async function create() {
+    if (!canCreateTask) {
+      setError(createBlockMessage)
+      return
+    }
     const normalizedTitle = title.trim()
     const dueDate = fieldTaskDueDateTime(effectiveSelectedDate, time, tenantTimeZone)
     if (!normalizedTitle || (effectiveSelectedDate && !dueDate) || (recurrence && !effectiveSelectedDate)) {
@@ -219,7 +229,7 @@ export default function NewAgentTaskScreen() {
     }
   }
 
-  const createDisabled = field.agentTasks?.capabilities.createSelfTask === false
+  const createDisabled = !canCreateTask
   const hasDraft = copySource
     ? title !== copySource.title ||
       description !== (copySource.description ?? "") ||
@@ -343,7 +353,7 @@ export default function NewAgentTaskScreen() {
         {field.agentTasks?.capabilities.recurringTasks !== false && effectiveSelectedDate ? <><SectionTitle>{t("agentTaskRecurrenceLabel")}</SectionTitle><View style={styles.wrapChips}><ChoiceChip selected={recurrence === null} label={t("agentTaskRecurrenceNone")} onPress={() => setRecurrence(null)} /><ChoiceChip selected={recurrence === "DAILY"} label={t("agentTaskRecurrenceDaily")} onPress={() => setRecurrence("DAILY")} /><ChoiceChip selected={recurrence === "WEEKLY"} label={t("agentTaskRecurrenceWeekly")} onPress={() => setRecurrence("WEEKLY")} /><ChoiceChip selected={recurrence === "MONTHLY"} label={t("agentTaskRecurrenceMonthly")} onPress={() => setRecurrence("MONTHLY")} /></View></> : null}
 
         {copySource ? <View style={styles.copyNotice}><Text style={styles.copyNoticeText}>{t("agentTaskPersonalHint")}</Text></View> : null}
-        {createDisabled ? <View style={styles.error}><Text style={styles.errorText}>{t("agentTaskManagerHint")}</Text></View> : null}
+        {createDisabled ? <View style={styles.error}><Text style={styles.errorText}>{createBlockMessage}</Text></View> : null}
         {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
         </View>
       </ScrollView>
