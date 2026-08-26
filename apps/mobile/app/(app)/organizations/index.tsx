@@ -64,6 +64,7 @@ export default function OrganizationsScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} />}
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
@@ -124,6 +125,7 @@ export default function OrganizationsScreen() {
         ) : !loading ? (
           <View style={styles.empty}><Text style={styles.emptyText}>{t("organizationsEmpty")}</Text></View>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -132,10 +134,12 @@ export default function OrganizationsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 28 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 23, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 11, marginTop: 2 },
   addButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
@@ -149,14 +153,14 @@ const styles = StyleSheet.create({
   orgMarkText: { color: colors.info, fontSize: 17, fontWeight: "900" },
   body: { flex: 1, minWidth: 0 },
   name: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  meta: { color: colors.primary, fontSize: 10, fontWeight: "700", marginTop: 3 },
+  meta: { color: colors.primary, fontSize: 11, fontWeight: "700", marginTop: 3 },
   address: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5 },
   statsRow: { flexDirection: "row", gap: 12, marginTop: 8 },
-  stat: { color: colors.faint, fontSize: 10, fontWeight: "700" },
+  stat: { color: colors.faint, fontSize: 11, fontWeight: "700" },
   empty: { margin: 14, minHeight: 220, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center" },
   emptyText: { color: colors.muted, fontSize: 14, fontWeight: "700" },
   loadMore: { minHeight: 46, marginHorizontal: 14, marginTop: 12, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   pressed: { opacity: 0.7 },
   listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
   cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
