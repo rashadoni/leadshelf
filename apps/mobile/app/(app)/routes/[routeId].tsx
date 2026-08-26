@@ -46,6 +46,7 @@ import { parseFieldRouteMutationConflict, routeConflictPointIndexes } from "../.
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
 import {
   isExistingRouteDraftDirty,
@@ -242,6 +243,7 @@ export default function FieldRouteDetailScreen() {
   if (!routeData) {
     return (
       <SafeAreaView style={styles.root}>
+        <FieldScreenChrome />
         <View style={styles.missing}>
           <Text style={styles.missingTitle}>{t("fieldDataError")}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/routes")} style={styles.primaryButton}><Text style={styles.primaryText}>{t("back")}</Text></Pressable>
@@ -259,8 +261,10 @@ export default function FieldRouteDetailScreen() {
   const activeVisit = field.week?.days
     .flatMap((day) => day.visits.items)
     .find((visit) => visit.status === "CHECKED_IN") ?? null
+  const activeVisitForRoute = activeVisit?.routeId === routeData.id ? activeVisit : null
+  const activeVisitElsewhere = activeVisit && !activeVisitForRoute ? activeVisit : null
   const routePoints = routeData.canEdit ? points : routeData.points
-  const routeFlow = resolveFieldRouteFlow({ id: routeData.id, points: routePoints }, activeVisit)
+  const routeFlow = resolveFieldRouteFlow({ id: routeData.id, points: routePoints }, activeVisitForRoute)
   const completedRouteSteps = routeFlow.steps.filter((step) => step.state === "completed")
   const upcomingRouteSteps = routeFlow.steps.filter((step) => step.state === "upcoming")
   const roadmapItems: RouteRoadmapItem[] = (() => {
@@ -289,13 +293,8 @@ export default function FieldRouteDetailScreen() {
     }
     return items
   })()
-  const activeVisitForRoute = activeVisit?.routeId === routeData.id ? activeVisit : null
-  const primaryRoutePoint = activeVisit
-    ? activeVisitForRoute
-      ? routeFlow.activePoint
-      : null
-    : routeFlow.primaryPoint
-  const canStartVisits = routeData.canExecute && routeData.date === field.week?.today
+  const primaryRoutePoint = activeVisitForRoute ? routeFlow.activePoint : routeFlow.primaryPoint
+  const canStartVisits = routeData.canExecute && routeData.date === field.week?.today && !activeVisit
   const canSaveRoute = routeData.canEdit && !routeData.syncState && (
     routeData.id.startsWith("local-route-") || routeData.version > 0
   )
@@ -726,6 +725,7 @@ export default function FieldRouteDetailScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + (routeData.canEdit ? 146 : 24) }]}
         keyboardShouldPersistTaps="handled"
@@ -755,29 +755,45 @@ export default function FieldRouteDetailScreen() {
           )}
         </View>
 
-        {!routeData.canEdit && (activeVisit || routeFlow.primaryPoint) ? (
-          <View style={[styles.missionCard, activeVisit && styles.missionCardActive]}>
+        {activeVisitElsewhere ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t("routeAnotherVisitActive")}. ${t("routeAnotherVisitActiveHint", { name: activeVisitElsewhere.contact?.displayName ?? activeVisitElsewhere.customer.name })}`}
+            onPress={() => router.push(("/(app)/field-visits/" + activeVisitElsewhere.id) as never)}
+            style={({ pressed }) => [styles.activeVisitElsewhere, pressed && styles.pressed]}
+          >
+            <View accessible={false} style={styles.activeVisitElsewhereIcon}><TabIcon name="visit" color={colors.warning} size={21} /></View>
+            <View style={styles.activeVisitElsewhereBody}>
+              <Text style={styles.activeVisitElsewhereTitle}>{t("routeAnotherVisitActive")}</Text>
+              <Text style={styles.activeVisitElsewhereHint} numberOfLines={2}>{t("routeAnotherVisitActiveHint", { name: activeVisitElsewhere.contact?.displayName ?? activeVisitElsewhere.customer.name })}</Text>
+            </View>
+            <TabIcon name="chevronRight" color={colors.warning} size={21} />
+          </Pressable>
+        ) : null}
+
+        {!routeData.canEdit && (activeVisitForRoute || routeFlow.primaryPoint) ? (
+          <View style={[styles.missionCard, activeVisitForRoute && styles.missionCardActive]}>
             <View style={styles.missionTop}>
-              <View style={[styles.missionIcon, activeVisit ? styles.missionIconActive : styles.missionIconNext]}>
-                <TabIcon name="visit" color={activeVisit ? colors.successDark : colors.primary} size={22} />
+              <View style={[styles.missionIcon, activeVisitForRoute ? styles.missionIconActive : styles.missionIconNext]}>
+                <TabIcon name="visit" color={activeVisitForRoute ? colors.successDark : colors.primary} size={22} />
               </View>
               <View style={styles.missionBody}>
                 <View style={styles.missionEyebrowRow}>
-                  <Text style={styles.missionEyebrow}>{activeVisit ? t("routeCurrentVisit").toUpperCase() : t("routeNextStop").toUpperCase()}</Text>
+                  <Text style={styles.missionEyebrow}>{activeVisitForRoute ? t("routeCurrentVisit").toUpperCase() : t("routeNextStop").toUpperCase()}</Text>
                   <Text style={styles.missionProgress}>{routeFlow.completed}/{routeData.totalPoints}</Text>
                 </View>
                 <Text style={styles.missionName} numberOfLines={2}>
-                  {activeVisit
-                    ? activeVisit.contact?.displayName ?? activeVisit.customer.name
+                  {activeVisitForRoute
+                    ? activeVisitForRoute.contact?.displayName ?? activeVisitForRoute.customer.name
                     : primaryRoutePoint?.contact?.displayName ?? primaryRoutePoint?.customer.name}
                 </Text>
-                {activeVisit?.contact ? <Text style={styles.missionMeta}>{activeVisit.customer.name}</Text> : null}
-                {!activeVisit && primaryRoutePoint?.plannedTime ? <Text style={styles.missionMeta}>{formatRouteTime(primaryRoutePoint.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
+                {activeVisitForRoute?.contact ? <Text style={styles.missionMeta}>{activeVisitForRoute.customer.name}</Text> : null}
+                {!activeVisitForRoute && primaryRoutePoint?.plannedTime ? <Text style={styles.missionMeta}>{formatRouteTime(primaryRoutePoint.plannedTime, field.week?.timezone ?? "UTC")}</Text> : null}
               </View>
             </View>
             <View style={styles.missionTrack}><View style={[styles.missionFill, { width: `${routeFlow.progressPercent}%` as `${number}%` }]} /></View>
             <View style={styles.missionActions}>
-              {!activeVisit && primaryRoutePoint && canNavigatePrimaryPoint ? (
+              {!activeVisitForRoute && primaryRoutePoint && canNavigatePrimaryPoint ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${t("routeOpenNavigation")}: ${primaryRoutePoint.contact?.displayName ?? primaryRoutePoint.customer.name}`}
@@ -788,27 +804,27 @@ export default function FieldRouteDetailScreen() {
                   <Text style={styles.navigationButtonText}>{t("routeOpenNavigation")}</Text>
                 </Pressable>
               ) : null}
-              {activeVisit || canStartVisits ? (
+              {activeVisitForRoute || canStartVisits ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${activeVisit ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}: ${activeVisit?.contact?.displayName ?? activeVisit?.customer.name ?? primaryRoutePoint?.contact?.displayName ?? primaryRoutePoint?.customer.name ?? ""}`}
+                  accessibilityLabel={`${activeVisitForRoute ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}: ${activeVisitForRoute?.contact?.displayName ?? activeVisitForRoute?.customer.name ?? primaryRoutePoint?.contact?.displayName ?? primaryRoutePoint?.customer.name ?? ""}`}
                   accessibilityState={{
-                    busy: !activeVisit && checkingInPointId === primaryRoutePoint?.id,
-                    disabled: saving || (!activeVisit && checkingInPointId !== null),
+                    busy: !activeVisitForRoute && checkingInPointId === primaryRoutePoint?.id,
+                    disabled: saving || (!activeVisitForRoute && checkingInPointId !== null),
                   }}
-                  disabled={saving || (!activeVisit && checkingInPointId !== null)}
+                  disabled={saving || (!activeVisitForRoute && checkingInPointId !== null)}
                   onPress={() => {
-                    if (activeVisit) {
-                      router.push(("/(app)/field-visits/" + activeVisit.id) as never)
+                    if (activeVisitForRoute) {
+                      router.push(("/(app)/field-visits/" + activeVisitForRoute.id) as never)
                     } else if (primaryRoutePoint) {
                       void startVisit(primaryRoutePoint)
                     }
                   }}
-                  style={[styles.missionActionButton, (saving || (!activeVisit && checkingInPointId !== null)) && styles.disabled]}
+                  style={[styles.missionActionButton, (saving || (!activeVisitForRoute && checkingInPointId !== null)) && styles.disabled]}
                 >
-                  <TabIcon name={activeVisit ? "visit" : "play"} color={colors.headerText} size={16} />
+                  <TabIcon name={activeVisitForRoute ? "visit" : "play"} color={colors.headerText} size={16} />
                   <Text style={styles.missionActionText}>
-                    {activeVisit ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}
+                    {activeVisitForRoute ? t("continueFieldVisit") : checkingInPointId === primaryRoutePoint?.id ? t("locationLoading") : t("startFieldVisit")}
                   </Text>
                 </Pressable>
               ) : null}
@@ -1065,6 +1081,11 @@ const styles = StyleSheet.create({
   card: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 15, backgroundColor: colors.card, ...cardShadow },
   hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 13 },
   readOnly: { color: colors.info, fontSize: 12, lineHeight: 18, fontWeight: "700" },
+  activeVisitElsewhere: { minHeight: 68, marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 11, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder, flexDirection: "row", alignItems: "center", gap: 10 },
+  activeVisitElsewhereIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  activeVisitElsewhereBody: { flex: 1, minWidth: 0 },
+  activeVisitElsewhereTitle: { color: colors.warning, fontSize: 13, fontWeight: "900" },
+  activeVisitElsewhereHint: { color: colors.warning, fontSize: 11, lineHeight: 15, fontWeight: "700", marginTop: 2 },
   label: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 9, marginBottom: 6 },
   input: { minHeight: 48, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted, paddingHorizontal: 12, color: colors.text, fontSize: 14 },
   notes: { minHeight: 86, paddingTop: 12 },
