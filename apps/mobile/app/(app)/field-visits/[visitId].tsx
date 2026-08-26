@@ -66,6 +66,7 @@ import { tenantDateKey } from "../../../src/field/tenant-time"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { colors, cardShadow, radii } from "../../../src/theme"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 import {
   agentTaskStatusLabel,
   visitPhotoNeedsRetake,
@@ -121,6 +122,7 @@ export default function FieldVisitWorkspaceScreen() {
   const field = useField()
   const { sync } = useSync()
   const insets = useSafeAreaInsets()
+  const layout = useResponsiveLayout()
   const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? "UTC"
   const tenantToday = field.week?.today ?? field.workday?.today ?? tenantDateKey(new Date(), tenantTimeZone) ?? new Date().toISOString().slice(0, 10)
   const defaultFollowUpDate = shiftDateKey(tenantToday, 1)
@@ -663,6 +665,7 @@ export default function FieldVisitWorkspaceScreen() {
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <FieldScreenChrome />
       <ScrollView ref={visitScroll} contentContainerStyle={[styles.scroll, { paddingBottom: !isCompleted ? Math.max(insets.bottom, 20) + 108 : Math.max(insets.bottom, 20) + 28 }]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable
             accessibilityRole="button"
@@ -1034,11 +1037,14 @@ export default function FieldVisitWorkspaceScreen() {
             <TextInput accessibilityLabel={t("fieldVisitResultNote")} value={resultNote} onChangeText={setResultNote} multiline textAlignVertical="top" style={styles.textarea} />
           </View>
         ) : null}
+        </View>
       </ScrollView>
       {!isCompleted ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
+          <View style={[styles.stickyFooterContent, layout.isTablet && styles.contentTablet]}>
           {checkoutHint ? <Text style={styles.stickyFooterHint}>{checkoutHint}</Text> : null}
           <Pressable accessibilityRole="button" accessibilityLabel={checkoutButtonText} accessibilityHint={checkoutHint} accessibilityState={{ disabled: checkoutDisabled, busy: saving }} disabled={checkoutDisabled} onPress={checkout} style={({ pressed }) => [styles.checkoutButton, checkoutDisabled && styles.disabled, pressed && !checkoutDisabled && styles.pressed]}><Text style={styles.checkoutText}>{checkoutButtonText}</Text></Pressable>
+          </View>
         </View>
       ) : null}
     </SafeAreaView>
@@ -1048,6 +1054,8 @@ export default function FieldVisitWorkspaceScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
@@ -1055,10 +1063,10 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 20, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
   livePill: { maxWidth: 92, borderRadius: radii.pill, backgroundColor: colors.warningBg, paddingHorizontal: 9, paddingVertical: 7 },
-  liveText: { color: colors.warning, fontSize: 10, fontWeight: "900", textAlign: "center" },
+  liveText: { color: colors.warning, fontSize: 11, fontWeight: "900", textAlign: "center" },
   donePill: { backgroundColor: colors.successBg }, doneText: { color: colors.successDark },
   summaryCard: { marginHorizontal: 14, marginTop: 10, minHeight: 76, borderRadius: radii.card, padding: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "space-around", ...cardShadow },
-  summaryLabel: { color: colors.headerSubtext, fontSize: 8, fontWeight: "900", textTransform: "uppercase", textAlign: "center" },
+  summaryLabel: { color: colors.headerSubtext, fontSize: 11, lineHeight: 13, fontWeight: "900", textTransform: "uppercase", textAlign: "center" },
   summaryValue: { color: colors.headerText, fontSize: 18, fontWeight: "900", textAlign: "center", marginTop: 4 },
   summaryDivider: { width: 1, height: 34, backgroundColor: "rgba(255,255,255,0.2)" },
   contextCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
@@ -1072,7 +1080,7 @@ const styles = StyleSheet.create({
   contextItem: { minHeight: 50, flexGrow: 1, flexBasis: "44%", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: radii.inner, padding: 9, backgroundColor: colors.bg },
   contextIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   contextBody: { flex: 1, minWidth: 0 },
-  contextLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  contextLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
   contextValue: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
   contextActionValue: { color: colors.primary },
   contextNavigation: { minHeight: 44, marginTop: 10, borderRadius: radii.inner, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
@@ -1126,7 +1134,7 @@ const styles = StyleSheet.create({
   workTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 }, chip: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }, chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary }, chipText: { color: colors.muted, fontSize: 11, fontWeight: "800" }, chipTextSelected: { color: colors.primary },
   followUpNotice: { marginTop: 11, borderRadius: radii.inner, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: colors.warningBg }, followUpNoticeReady: { backgroundColor: colors.successBg }, followUpNoticeText: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" }, followUpNoticeTextReady: { color: colors.successDark },
-  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 8 }, stickyFooterHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginBottom: 7, textAlign: "center" }, checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
+  stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 8 }, stickyFooterContent: { width: "100%" }, stickyFooterHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginBottom: 7, textAlign: "center" }, checkoutButton: { minHeight: 52, borderRadius: radii.inner, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, checkoutText: { color: colors.headerText, fontSize: 13, fontWeight: "900", textAlign: "center" },
   pressed: { opacity: 0.72 }, disabled: { opacity: 0.38 },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 },
   photoButton: { minHeight: 50, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
