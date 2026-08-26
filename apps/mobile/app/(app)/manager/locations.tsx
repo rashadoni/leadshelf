@@ -12,6 +12,7 @@ import { agentRoleLabel } from "../../../src/field/labels"
 import { managerLiveMapUrl } from "../../../src/field/manager-location-map"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
   ONLINE: "managerFreshness_ONLINE",
@@ -43,6 +44,7 @@ async function openLiveMap(url: string, onUnavailable: () => void) {
 
 export default function ManagerLocationsScreen() {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const [data, setData] = useState<FieldManagerLocationsData | null>(null)
   const [search, setSearch] = useState("")
   const [loadedSearch, setLoadedSearch] = useState("")
@@ -94,6 +96,7 @@ export default function ManagerLocationsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
@@ -148,7 +151,7 @@ export default function ManagerLocationsScreen() {
             {data.locations.length === 0 ? (
               <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="location" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{search.trim() ? t("managerNoSearchResults") : t("managerNoTeam")}</Text></View>
             ) : (
-              <View style={styles.list}>
+              <View style={[styles.list, layout.isTablet && styles.listTablet]}>
                 {data.locations.map((agent) => {
                   const tone = freshnessColor(agent.freshness)
                   const point = agent.liveLocation ?? agent.lastKnownLocation
@@ -161,7 +164,7 @@ export default function ManagerLocationsScreen() {
                     ? t("managerLastSeen") + ": " + formatShortDateTime(agent.lastSeenAt, locale)
                     : t("managerLastSeen") + ": —"
                   return (
-                    <View key={agent.id} style={styles.card}>
+                    <View key={agent.id} style={[styles.card, layout.isTablet && styles.cardTablet]}>
                       <View accessible accessibilityRole="text" accessibilityLabel={agent.name + ". " + agentRoleLabel(agent.role) + ". " + freshness} style={styles.cardTop}>
                         <View style={[styles.avatar, { backgroundColor: tone.background }]}><Text style={[styles.avatarText, { color: tone.foreground }]}>{agent.name.charAt(0).toUpperCase()}</Text></View>
                         <View style={styles.cardBody}>
@@ -219,6 +222,7 @@ export default function ManagerLocationsScreen() {
             ) : null}
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -227,6 +231,8 @@ export default function ManagerLocationsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 32 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
@@ -246,7 +252,9 @@ const styles = StyleSheet.create({
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, padding: 11 },
   noticeText: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   list: { paddingTop: 1 },
+  listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
   card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 14, ...cardShadow },
+  cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 16, fontWeight: "900" },

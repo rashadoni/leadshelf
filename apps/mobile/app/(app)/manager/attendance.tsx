@@ -17,6 +17,7 @@ import { formatCalendarDay, formatTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const RANGE_OPTIONS = [1, 7, 30] as const
 const MANAGER_PAGE_LIMIT = 25
@@ -65,11 +66,12 @@ function AttendanceAgentCard({
   timezone: string
   expanded: boolean
   onToggle: () => void
+  tablet: boolean
 }) {
   const locale = useLocale()
   const attendance = agent.attendance
   return (
-    <View style={styles.agentCard}>
+    <View style={[styles.agentCard, tablet && styles.agentCardTablet]}>
       <View style={styles.agentTop}>
         <View style={styles.avatar}><TabIcon name="profile" color={colors.primary} size={21} /></View>
         <View style={styles.agentBody}>
@@ -132,6 +134,7 @@ function AttendanceAgentCard({
 
 export default function ManagerAttendanceScreen() {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const field = useField()
   const today = field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
   const initialEndDate = today
@@ -232,6 +235,7 @@ export default function ManagerAttendanceScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading && !loadingMore} onRefresh={() => void load(endDate, rangeDays, searchQuery)} tintColor={colors.primary} />}
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
           <View style={styles.headerBody}>
@@ -330,7 +334,7 @@ export default function ManagerAttendanceScreen() {
             {attendance.agents.length === 0 ? (
               <View style={styles.empty}><TabIcon name="week" color={colors.primary} size={25} /><Text style={styles.emptyText}>{searchQuery ? t("managerNoSearchResults") : t("managerAttendanceNoRecords")}</Text></View>
             ) : (
-              <View style={styles.agentList}>
+              <View style={[styles.agentList, layout.isTablet && styles.agentListTablet]}>
                 {attendance.agents.map((agent) => (
                   <AttendanceAgentCard
                     key={agent.id}
@@ -338,6 +342,7 @@ export default function ManagerAttendanceScreen() {
                     timezone={attendance.timezone}
                     expanded={expandedAgentId === agent.id}
                     onToggle={() => setExpandedAgentId((current) => current === agent.id ? null : agent.id)}
+                    tablet={layout.isTablet}
                   />
                 ))}
               </View>
@@ -356,6 +361,7 @@ export default function ManagerAttendanceScreen() {
             ) : null}
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -364,6 +370,8 @@ export default function ManagerAttendanceScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 32 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
@@ -400,7 +408,9 @@ const styles = StyleSheet.create({
   pageSummaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   pageSummaryText: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3, fontWeight: "800" },
   agentList: { paddingTop: 1 },
+  agentListTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
   agentCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, ...cardShadow },
+  agentCardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 },
   agentTop: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 9 },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   agentBody: { flex: 1, minWidth: 0 },
