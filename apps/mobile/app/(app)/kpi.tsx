@@ -143,6 +143,7 @@ export default function PersonalKpiScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(period)} tintColor={colors.primary} />}
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityHint={t("personalKpiTitle")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
@@ -284,6 +285,7 @@ export default function PersonalKpiScreen() {
             </View>
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -310,10 +312,12 @@ function ExceptionRow({ label, value, action, last }: { label: string; value: nu
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { minHeight: "100%", paddingBottom: 36 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1 },
-  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 2 },
   refreshButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.55 },
@@ -347,7 +351,7 @@ const styles = StyleSheet.create({
   heroFill: { height: "100%", borderRadius: 4, backgroundColor: colors.headerText },
   heroStats: { marginTop: 14, flexDirection: "row", gap: 6 },
   heroStat: { flex: 1, minWidth: 0, padding: 9, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.12)" },
-  heroStatLabel: { color: colors.headerSubtext, fontSize: 9, fontWeight: "800" },
+  heroStatLabel: { color: colors.headerSubtext, fontSize: 11, fontWeight: "800" },
   heroStatValue: { color: colors.headerText, fontSize: 18, fontWeight: "900", marginTop: 3 },
   heroStatWarning: { color: "#FDE68A" },
   sectionHeading: { marginHorizontal: 16, marginTop: 24, marginBottom: 9 },
