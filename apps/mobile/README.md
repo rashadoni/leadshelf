@@ -40,6 +40,53 @@ This variant signs in once through LeadDrive MTM. CRM/medical routes stay in
 LeadDrive, while shelf and commercial requests go through LeadDrive's trusted
 Field BFF. No LeadShelf service credential is stored in the APK.
 
+## Standalone preview APK baseline
+
+This is a release-control record, not a claim that every Field workflow has
+passed device E2E.
+
+The confirmed physical-device baseline is **2026-08-26**:
+
+- source commit: `7bc499844550bf4fb2773914d0679a25054ca824`;
+- GitHub Actions run: `32991697133` (`Mobile standalone preview APK`);
+- artifact:
+  `mobile-android-standalone-preview-zeytunpharm-arm64-v8a-live-demo-7bc499844550bf4fb2773914d0679a25054ca824`;
+- artifact ZIP SHA-256:
+  `d5b3dd32d7e3d4f6c787a988cd7cdfd61ed66929ae5c1543a9e8a96de211e5d5`;
+- APK SHA-256 (inside the artifact and after `adb install -r`):
+  `23d6ec43eb77cdd8a0c13d40f4c9ff11bb52360dd7b5282e1939929d8c00d5cd`;
+- package/version: `org.leaddrive.field.zeytunpharm`, `1.0.0` (`versionCode` 1);
+- physical evidence: the APK was installed with data preserved and
+  `MainActivity` reached the foreground on a Samsung SM-S918B.
+
+The ZIP and APK digests intentionally differ: one identifies the downloadable
+artifact archive, the other identifies the installed Android package. Do not
+substitute APK size, a workflow run number, or a display version for either
+proof.
+
+Every later standalone preview must meet all of these conditions before it is
+called newer or ready for review:
+
+1. Its candidate commit is different from, and a descendant of,
+   `7bc499844550bf4fb2773914d0679a25054ca824`.
+2. Its Android `versionCode` is greater than `1`, and its `versionName`
+   truthfully identifies the candidate release.
+3. The recorded source commit, workflow `headSha`, and commit suffix in the
+   artifact name are identical.
+4. Release evidence records the artifact ZIP digest and the extracted/installed
+   APK digest separately.
+5. A physical-device check records `adb install -r`, installed APK digest,
+   foreground launch, a fresh screenshot, authenticated Field refresh, and the
+   route-target query. The latter two must succeed or show the documented,
+   non-error empty state.
+
+The baseline installation itself is **not** functional acceptance: a subsequent
+physical-device rerun reproduced a handled sync-cache warning and a route-target
+loading failure. The release APK did not expose safe HTTP status or error-class
+diagnostics in logcat, so the sync cause remains open. The route-target path
+requires a server-contract fix and authenticated proof before the next preview
+is accepted.
+
 ## Local Commands
 
 ```sh
