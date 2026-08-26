@@ -46,11 +46,11 @@ export default function TabsLayout() {
         tabBarItemStyle: layout.isTablet
           ? { minHeight: 74, maxHeight: 82, marginVertical: 4, borderRadius: 12, paddingVertical: 9 }
           : { paddingBottom: 2 },
-        tabBarLabelStyle: { fontSize: layout.isTablet ? 11 : 10, fontWeight: "700" },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
         tabBarBadgeStyle: {
           backgroundColor: colors.danger,
           color: colors.headerText,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: "800",
         },
       }}
