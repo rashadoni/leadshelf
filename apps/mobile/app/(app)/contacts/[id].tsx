@@ -13,6 +13,7 @@ import { approvalStatusLabel, assignmentRoleLabel, contactTypeLabel, lifecycleSt
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 function phoneDigits(phone: string | null | undefined): string | null {
   const digits = phone?.replace(/\D/g, "") ?? ""
@@ -49,6 +50,7 @@ async function openExternalUrl(url: string, unavailableMessage: string) {
 export default function ContactDetailScreen() {
   const locale = useLocale()
   const { id } = useLocalSearchParams<{ id: string }>()
+  const layout = useResponsiveLayout()
   const key = `field.contact.${id}`
   const cached = readFieldCache<FieldContactDetailData>(key)
   const [data, setData] = useState<FieldContactDetailData | null>(cached?.value ?? null)
@@ -91,6 +93,7 @@ export default function ContactDetailScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/contacts")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={22} />
@@ -292,6 +295,7 @@ export default function ContactDetailScreen() {
 
           </>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -333,6 +337,7 @@ function DetailDisclosure({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 30 },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1, minWidth: 0 },
