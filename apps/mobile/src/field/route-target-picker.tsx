@@ -10,6 +10,7 @@ import type {
 import { t, useLocale } from "../i18n"
 import { formatLongCalendarDate } from "../i18n/date-format"
 import { colors, radii } from "../theme"
+import { useResponsiveLayout } from "../layout/responsive"
 import { routeTargetKey } from "./route-target"
 import { contactTypeLabel, objectTypeLabel } from "./labels"
 import { TabIcon } from "../components/TabIcon"
@@ -55,6 +56,7 @@ export function RouteTargetPicker({
   onCancel: () => void
 }) {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const [targetTypeId, setTargetTypeId] = useState<string | null>(null)
   const [targetTypes, setTargetTypes] = useState<FieldRouteTargetType[]>([])
   const [catalog, setCatalog] = useState<FieldRouteTargetCatalogData | null>(null)
@@ -107,6 +109,9 @@ export function RouteTargetPicker({
   const scopeHint = agentName
     ? t("routeTargetScopeWithAgent", { agent: agentName, date: scopeDate })
     : t("routeTargetScope")
+  const maxHeight = layout.isTablet
+    ? Math.max(420, Math.min(720, layout.height - 180))
+    : 590
 
   function changeTargetType(id: string) {
     if (id === selectedTypeId) return
@@ -123,7 +128,7 @@ export function RouteTargetPicker({
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { maxHeight }, layout.isTablet && styles.rootTablet]}>
       <View style={styles.header}>
         <View style={styles.headerBody}>
           <Text style={styles.title}>{t("addStop")}</Text>
@@ -190,7 +195,7 @@ export function RouteTargetPicker({
           <Text style={styles.loadingText}>{t("routeTargetLoading")}</Text>
         </View>
       ) : null}
-      <ScrollView nestedScrollEnabled style={styles.results} contentContainerStyle={styles.resultsContent} keyboardShouldPersistTaps="handled">
+      <ScrollView nestedScrollEnabled style={styles.results} contentContainerStyle={[styles.resultsContent, layout.isTablet && styles.resultsContentTablet]} keyboardShouldPersistTaps="handled">
         {catalog?.items.map((item) => {
           const disabled = excluded.has(item.targetKey)
           const contact = item.contact
@@ -207,7 +212,7 @@ export function RouteTargetPicker({
               accessibilityState={{ disabled }}
               disabled={disabled}
               onPress={() => select(item)}
-              style={[styles.result, disabled && styles.disabled]}
+              style={[styles.result, layout.isTablet && styles.resultTablet, disabled && styles.disabled]}
             >
               <View style={[styles.resultMark, contact ? styles.contactMark : styles.organizationMark]}>
                 <TabIcon name={contact ? "contacts" : "organizations"} color={contact ? colors.holiday : colors.info} size={20} />
@@ -225,7 +230,7 @@ export function RouteTargetPicker({
           )
         })}
         {catalog && !loading && catalog.items.length === 0 ? (
-          <View style={styles.empty}>
+          <View style={[styles.empty, layout.isTablet && styles.emptyTablet]}>
             <TabIcon name="organizations" color={colors.faint} size={25} />
             <Text style={styles.emptyTitle}>{t("routeTargetEmpty")}</Text>
             <Text style={styles.emptyHint}>{t("routeTargetEmptyHint")}</Text>
@@ -238,7 +243,7 @@ export function RouteTargetPicker({
             accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
             disabled={loading || loadingMore}
             onPress={() => void load(selectedTypeId ?? undefined, search.trim(), catalog.page.number + 1, true)}
-            style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
+            style={[styles.loadMore, layout.isTablet && styles.loadMoreTablet, (loading || loadingMore) && styles.disabled]}
           >
             <Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
           </Pressable>
@@ -249,10 +254,11 @@ export function RouteTargetPicker({
 }
 
 const styles = StyleSheet.create({
-  root: { marginHorizontal: 14, marginTop: 12, maxHeight: 590, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary },
-  header: { flexDirection: "row", alignItems: "center", gap: 10 }, headerBody: { flex: 1, minWidth: 0 }, title: { color: colors.text, fontSize: 16, fontWeight: "900" }, subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 }, close: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
-  typeScroll: { marginTop: 13, marginHorizontal: -2 }, typeTabs: { gap: 7, paddingHorizontal: 2 }, typeTab: { minHeight: 44, maxWidth: 150, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 11 }, typeTabActive: { backgroundColor: colors.primary }, typeTabText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, typeTabTextActive: { color: colors.headerText },
+  root: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary },
+  rootTablet: { padding: 16 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10 }, headerBody: { flex: 1, minWidth: 0 }, title: { color: colors.text, fontSize: 16, fontWeight: "900" }, subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }, close: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
+  typeScroll: { marginTop: 13, marginHorizontal: -2 }, typeTabs: { gap: 7, paddingHorizontal: 2 }, typeTab: { minHeight: 44, maxWidth: 150, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 11 }, typeTabActive: { backgroundColor: colors.primary }, typeTabText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, typeTabTextActive: { color: colors.headerText },
   search: { minHeight: 46, marginTop: 10, borderRadius: 11, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 12 }, errorCard: { marginTop: 9, padding: 10, borderRadius: 11, backgroundColor: colors.missedBg, borderWidth: 1, borderColor: colors.missedBorder }, error: { color: colors.missed, fontSize: 11, lineHeight: 15, fontWeight: "800" }, retryButton: { minHeight: 44, alignSelf: "flex-start", marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.card }, retryButtonPressed: { opacity: 0.55 }, retryText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, loading: { minHeight: 64, marginTop: 12, alignItems: "center", justifyContent: "center", gap: 8 }, loadingText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
-  results: { marginTop: 5 }, resultsContent: { paddingBottom: 6 }, result: { minHeight: 76, marginTop: 8, borderRadius: 13, padding: 10, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9 }, resultMark: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" }, organizationMark: { backgroundColor: colors.infoBg }, contactMark: { backgroundColor: colors.holidayBg }, resultBody: { flex: 1, minWidth: 0 }, resultName: { color: colors.text, fontSize: 12, fontWeight: "900" }, resultMeta: { color: colors.muted, fontSize: 9, lineHeight: 13, marginTop: 3 }, scopeBadge: { alignSelf: "flex-start", color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden", fontSize: 9, lineHeight: 12, fontWeight: "900", marginTop: 5 }, added: { color: colors.successDark, fontSize: 9, lineHeight: 12, fontWeight: "900", marginTop: 3 }, actionMark: { width: 26, alignItems: "center", justifyContent: "center" },
-  empty: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 28, gap: 7 }, emptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" }, emptyHint: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center" }, loadMore: { minHeight: 44, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, disabled: { opacity: 0.45 },
+  results: { marginTop: 5 }, resultsContent: { paddingBottom: 6 }, resultsContentTablet: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 10, paddingTop: 8 }, result: { minHeight: 88, marginTop: 8, borderRadius: 13, padding: 10, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9 }, resultTablet: { flexBasis: "48%", flexGrow: 1, marginTop: 0 }, resultMark: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" }, organizationMark: { backgroundColor: colors.infoBg }, contactMark: { backgroundColor: colors.holidayBg }, resultBody: { flex: 1, minWidth: 0 }, resultName: { color: colors.text, fontSize: 12, fontWeight: "900" }, resultMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }, scopeBadge: { alignSelf: "flex-start", color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden", fontSize: 11, lineHeight: 14, fontWeight: "900", marginTop: 5 }, added: { color: colors.successDark, fontSize: 11, lineHeight: 14, fontWeight: "900", marginTop: 3 }, actionMark: { width: 26, alignItems: "center", justifyContent: "center" },
+  empty: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 28, gap: 7 }, emptyTablet: { flexBasis: "100%" }, emptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center" }, loadMore: { minHeight: 44, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreTablet: { flexBasis: "100%", marginTop: 0 }, loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, disabled: { opacity: 0.45 },
 })
