@@ -645,7 +645,7 @@ function CommitmentCard({ commitment, locale, timeZone, busy, fulfillAllowed, fu
         </View>
         <CommercialPill label={statusLabel(commitment.status)} tone={statusTone(commitment.status)} />
       </View>
-      <View style={styles.customerRow}><TabIcon name="organizations" color={colors.primary} size={16} /><View style={styles.customerBody}><Text style={styles.customerName}>{commitment.customer.name}</Text>{commitment.contact ? <Text style={styles.customerContact}>{commitment.contact.displayName}</Text> : null}</View></View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${t("openCustomerCard")}: ${commitment.customer.name}`} onPress={() => router.push(`/(app)/organizations/${commitment.customer.id}` as never)} style={({ pressed }) => [styles.customerRow, pressed && styles.pressed]}><TabIcon name="organizations" color={colors.primary} size={16} /><View style={styles.customerBody}><Text style={styles.customerName}>{commitment.customer.name}</Text>{commitment.contact ? <Text style={styles.customerContact}>{commitment.contact.displayName}</Text> : null}</View><TabIcon name="chevronRight" color={colors.faint} size={19} /></Pressable>
       <View style={styles.planRow}>
         <Metric label={t("commitmentsPromise")} value={`${formatQuantity(commitment.promisedQuantity)} ${commitment.unit}`} accent={colors.primary} />
         <Metric label={t("commitmentsFact")} value={commitment.fulfillment ? `${formatQuantity(commitment.fulfillment.actualQuantity)} ${commitment.unit}` : "—"} accent={commitment.fulfillment ? colors.successDark : colors.faint} />
