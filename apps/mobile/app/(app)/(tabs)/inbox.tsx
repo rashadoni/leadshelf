@@ -109,11 +109,14 @@ export default function InboxTab() {
 
   function openNotification(item: typeof items[number]) {
     const destination = notificationOpenDestination(item)
-    // Do not make navigation wait for a network PATCH. The durable outbox owns
-    // the scoped read update and SyncProvider retries it after a real outage.
+    // Queue the local read before changing screens. enqueueFieldNotificationRead
+    // is synchronous and durable; only the network sync stays asynchronous.
+    // This keeps the badge projection stable even when navigation unmounts the
+    // Inbox card immediately.
+    const markRead = field.markNotificationRead(item.id)
     router.push(destination as never)
-    void field.markNotificationRead(item.id)
-      .then(() => sync())
+    void markRead
+      .then(() => { void sync().catch(() => {}) })
       .catch(() => setWarning(copy.notificationReadError))
   }
 
@@ -287,25 +290,25 @@ const styles = StyleSheet.create({
   scroll: { minHeight: "100%", paddingBottom: 30 },
   header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 13, flexDirection: "row", alignItems: "center", gap: 10 },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   title: { color: colors.text, fontSize: 28, fontWeight: "900", letterSpacing: -0.7, marginTop: 3 },
   subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
   newButton: { minWidth: 84, minHeight: 48, borderRadius: 16, paddingHorizontal: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   newButtonIcon: { height: 19, alignItems: "center", justifyContent: "center" },
-  newButtonText: { color: colors.headerText, fontSize: 9, fontWeight: "900", marginTop: 2 },
+  newButtonText: { color: colors.headerText, fontSize: 11, fontWeight: "900", marginTop: 2 },
   segment: { marginHorizontal: 14, padding: 4, borderRadius: 16, backgroundColor: colors.surfaceMuted, flexDirection: "row", gap: 4 },
   segmentButton: { flex: 1, minHeight: 44, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   segmentActive: { backgroundColor: colors.card, ...cardShadow },
   segmentText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
   segmentTextActive: { color: colors.text },
   count: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  countText: { color: colors.headerText, fontSize: 9, fontWeight: "900" },
+  countText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   warning: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "flex-start", gap: 8 },
   warningIcon: { width: 17, height: 17, alignItems: "center", justifyContent: "center", marginTop: 1 },
-  warningText: { flex: 1, color: colors.warning, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  warningText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   readAll: { alignSelf: "flex-end", minHeight: 44, marginRight: 14, marginTop: 12, borderRadius: radii.pill, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   readAllDisabled: { opacity: 0.6 },
-  readAllText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  readAllText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   list: { paddingTop: 3 },
   messageCard: { minHeight: 88, marginHorizontal: 14, marginTop: 10, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   notificationCard: { minHeight: 82, marginHorizontal: 14, marginTop: 10, padding: 13, borderRadius: radii.card, backgroundColor: colors.card, flexDirection: "row", alignItems: "flex-start", gap: 11, borderWidth: 1, borderColor: colors.border, ...cardShadow },
@@ -316,7 +319,7 @@ const styles = StyleSheet.create({
   messageBody: { flex: 1, minWidth: 0 },
   messageTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   messageTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" },
-  time: { color: colors.muted, fontSize: 10, fontWeight: "700" },
+  time: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   preview: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   attachmentPreview: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
   attachmentPreviewText: { marginTop: 0 },
@@ -326,14 +329,14 @@ const styles = StyleSheet.create({
   pillWarning: { backgroundColor: colors.warningBg },
   pillInfo: { backgroundColor: colors.infoBg },
   pillSuccess: { backgroundColor: colors.successBg },
-  pillText: { fontSize: 8, fontWeight: "900" },
+  pillText: { fontSize: 11, fontWeight: "900" },
   pillWarningText: { color: colors.warning },
   pillInfoText: { color: colors.info },
   pillSuccessText: { color: colors.successDark },
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   chevron: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   typeIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  notificationDate: { color: colors.muted, fontSize: 10, fontWeight: "600", marginTop: 7 },
+  notificationDate: { color: colors.muted, fontSize: 11, fontWeight: "600", marginTop: 7 },
   emptyCard: { margin: 14, minHeight: 310, padding: 28, backgroundColor: colors.card, borderRadius: radii.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   emptyIcon: { width: 68, height: 68, borderRadius: 23, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },

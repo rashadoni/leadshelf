@@ -10,6 +10,7 @@ import { t, useLocale } from "../../../src/i18n"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { cardShadow, colors, radii } from "../../../src/theme"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 
 function notificationTypeLabel(type: string): string {
   switch (type.toLowerCase()) {
@@ -47,6 +48,7 @@ export default function NotificationDetailScreen() {
   if (!item) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
+        <FieldScreenChrome />
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
@@ -71,6 +73,7 @@ export default function NotificationDetailScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={goBack} style={styles.back}>
@@ -127,22 +130,22 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerBody: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.9 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   card: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.card, backgroundColor: colors.card, padding: 17, borderWidth: 1, borderColor: colors.border, ...cardShadow },
   icon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" },
   notificationTitle: { color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "900", marginTop: 14 },
   notificationBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 7 },
   facts: { marginTop: 18, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, gap: 7 },
   factRow: { minHeight: 22, justifyContent: "center" },
-  factLabel: { color: colors.faint, fontSize: 10, lineHeight: 14, fontWeight: "800" },
+  factLabel: { color: colors.faint, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   targetButton: { minHeight: 52, marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   targetButtonText: { flex: 1, color: colors.headerText, fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.74 },
   noTargetCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 11, padding: 12, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   noTargetIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
-  noTargetText: { flex: 1, color: colors.info, fontSize: 10, lineHeight: 15, fontWeight: "800", paddingTop: 2 },
+  noTargetText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800", paddingTop: 2 },
   unavailableCard: { minHeight: 290, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 28, ...cardShadow },
   unavailableIcon: { width: 58, height: 58, borderRadius: 19, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   unavailableTitle: { color: colors.text, fontSize: 16, fontWeight: "900", textAlign: "center" },
