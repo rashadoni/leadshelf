@@ -15,6 +15,7 @@ import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const CACHE_KEY = "field.customer-requests"
 const OBJECT_TYPES: CreateFieldCustomerRequest["objectType"][] = ["PHARMACY", "CLINIC", "DOCTOR", "STORE", "OTHER"]
@@ -29,6 +30,7 @@ function duplicateReasonLabel(reason: string): string {
 export default function NewCustomerRequestScreen() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const routeDays = useMemo(() => field.week?.days.map((day) => ({
     date: day.date,
@@ -135,6 +137,7 @@ export default function NewCustomerRequestScreen() {
       <SafeAreaView style={styles.root} edges={["top"]}>
         <FieldScreenChrome />
         <ScrollView contentContainerStyle={[styles.successScroll, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
+          <View style={[styles.successContent, layout.isTablet && styles.successContentTablet]}>
           <View style={styles.successMark}><TabIcon name="check" color={colors.success} size={31} /></View>
           <Text style={styles.successTitle}>{t("requestSubmitted")}</Text>
           <Text style={styles.successName}>{created.name}</Text>
@@ -156,6 +159,7 @@ export default function NewCustomerRequestScreen() {
             </View>
           ) : null}
           <Pressable accessibilityRole="button" accessibilityLabel={t("myCustomerRequests")} onPress={() => router.replace("/(app)/customer-requests" as never)} style={styles.doneButton}><Text style={styles.doneButtonText}>{t("myCustomerRequests")}</Text></Pressable>
+          </View>
         </ScrollView>
       </SafeAreaView>
     )
@@ -169,6 +173,7 @@ export default function NewCustomerRequestScreen() {
           contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 96 }]}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: submitting || locating }} disabled={submitting || locating} onPress={goBack} style={[styles.back, (submitting || locating) && styles.pressed]}><TabIcon name="chevronLeft" color={colors.text} size={21} /></Pressable>
             <View style={styles.headerBody}><Text style={styles.eyebrow}>{t("tabWork").toUpperCase()}</Text><Text style={styles.title}>{t("newCustomerRequest")}</Text></View>
@@ -249,10 +254,13 @@ export default function NewCustomerRequestScreen() {
             <Input label={t("requestReason")} value={reason} onChangeText={setReason} multiline required />
             <Input label={t("agentComment")} value={agentComment} onChangeText={setAgentComment} multiline />
           </View>
+          </View>
         </ScrollView>
         <View style={[styles.submitTray, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          {error ? <View accessibilityRole="alert" style={styles.trayError}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel={t("submitCustomerRequest")} accessibilityState={{ disabled: submitting, busy: submitting }} disabled={submitting} onPress={() => void submit()} style={({ pressed }) => [styles.submit, (pressed || submitting) && styles.pressed]}><Text style={styles.submitText}>{submitting ? "…" : t("submitCustomerRequest")}</Text></Pressable>
+          <View style={[styles.submitTrayContent, layout.isTablet && styles.submitTrayContentTablet]}>
+            {error ? <View accessibilityRole="alert" style={styles.trayError}><Text style={styles.errorText}>{error}</Text></View> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel={t("submitCustomerRequest")} accessibilityState={{ disabled: submitting, busy: submitting }} disabled={submitting} onPress={() => void submit()} style={({ pressed }) => [styles.submit, (pressed || submitting) && styles.pressed]}><Text style={styles.submitText}>{submitting ? "…" : t("submitCustomerRequest")}</Text></Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -282,7 +290,11 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scroll: { paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   successScroll: { minHeight: "100%", padding: 20, alignItems: "center", justifyContent: "center" },
+  successContent: { width: "100%" },
+  successContentTablet: { maxWidth: 640, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1 },
@@ -321,6 +333,8 @@ const styles = StyleSheet.create({
   locationTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   locationMeta: { color: colors.successDark, fontSize: 11, fontWeight: "700", marginTop: 4 },
   submitTray: { paddingHorizontal: 14, paddingTop: 10, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, ...cardShadow },
+  submitTrayContent: { width: "100%" },
+  submitTrayContentTablet: { maxWidth: 1_060, alignSelf: "center" },
   trayError: { marginBottom: 8, borderRadius: radii.inner, padding: 10, backgroundColor: colors.dangerBg },
   errorText: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
