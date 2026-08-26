@@ -650,7 +650,7 @@ export default function WorkdayScreen() {
             <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
           ) : null}
 
-        <View style={[styles.detailGroups, layout.isTablet && styles.detailGroupsTablet]}>
+        {workdayKnown ? <View style={[styles.detailGroups, layout.isTablet && styles.detailGroupsTablet]}>
           <WorkdayDisclosure
             title={t("workdayPolicyTitle")}
             hint={t(policyHintKey)}
@@ -753,7 +753,7 @@ export default function WorkdayScreen() {
           >
             <Text style={styles.privacyText}>{t(privacyBodyKey)}</Text>
           </WorkdayDisclosure>
-        </View>
+        </View> : null}
 
         {IS_LEADDRIVE_FIELD ? (
           <Pressable
