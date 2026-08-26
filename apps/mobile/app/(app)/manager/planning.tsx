@@ -18,7 +18,7 @@ import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 const knownRouteStatus = new Set(["DRAFT", "PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "MISSED"])
-const RANGE_OPTIONS = [1, 5, 7]
+const RANGE_OPTIONS = [1, 5, 7] as const
 const MANAGER_PAGE_LIMIT = 25
 
 const tones: Record<RouteStatusTone, { background: string; foreground: string }> = {
@@ -186,6 +186,19 @@ export default function ManagerPlanningScreen() {
   const planning = isCurrentContext ? data : null
   const denied = error instanceof HttpError && error.status === 403
   const hasPendingSearch = loadedContext?.search !== searchQuery
+  const rangeOptions = useMemo(() => {
+    const maxRangeDays = data?.maxRangeDays ?? 1
+    return [...new Set(RANGE_OPTIONS.map((days) => Math.min(days, maxRangeDays)))].sort((left, right) => left - right)
+  }, [data?.maxRangeDays])
+
+  useEffect(() => {
+    if (rangeOptions.includes(rangeDays)) return
+    sequence.current += 1
+    setLoading(true)
+    setLoadingMore(false)
+    setError(null)
+    setRangeDays(1)
+  }, [rangeDays, rangeOptions])
 
   const calendar = formatCalendarDay(date, locale)
   const endDate = shiftDateKey(date, rangeDays - 1)
@@ -310,7 +323,7 @@ export default function ManagerPlanningScreen() {
           currentAccessibilityLabel={dateLabel}
           currentActionLabel={t("tabToday")}
           busy={loading || loadingMore}
-          rangeOptions={RANGE_OPTIONS}
+          rangeOptions={rangeOptions}
           selectedRange={rangeDays}
           onSelectRange={selectRange}
           getRangeLabel={(days) => t("managerPlanningRange", { count: days })}
