@@ -83,6 +83,7 @@ export default function AgentTaskDetailScreen() {
     tenantTimeZone,
   )
   const task = field.agentTasks?.tasks.find((item) => item.id === taskId) ?? null
+  const canCreateSelfTask = field.agentTasks?.capabilities.createSelfTask === true
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -240,7 +241,7 @@ export default function AgentTaskDetailScreen() {
           {task.recurrenceRule ? <InfoRow icon="refresh" label={t("agentTaskRecurrenceLabel")} value={task.recurrenceRule === "DAILY" ? t("agentTaskRecurrenceDaily") : task.recurrenceRule === "WEEKLY" ? t("agentTaskRecurrenceWeekly") : t("agentTaskRecurrenceMonthly")} /> : null}
         </View>
 
-        {task.syncState ? <View style={[styles.syncNotice, task.syncState !== "PENDING" && styles.syncError]}><Text style={[styles.syncNoticeText, task.syncState !== "PENDING" && styles.syncErrorText]}>{task.syncState === "PENDING" ? t("agentTaskOfflineQueued") : task.syncState === "CONFLICT" ? t("agentTaskConflictHint") : t("agentTaskSyncRejected")}</Text></View> : null}
+        {task.syncState ? <TaskSyncNotice state={task.syncState} /> : null}
         <View style={styles.policy}><Text style={styles.policyText}>{task.canEditContent ? t("agentTaskPersonalHint") : t("agentTaskManagerHint")}</Text></View>
 
         {!terminal ? <View style={styles.actionCard}>
@@ -262,10 +263,10 @@ export default function AgentTaskDetailScreen() {
             {task.canEditContent ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskEdit")} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => { setEditing(true); setActivePanel(null) }} style={styles.quickButton}><Text style={styles.quickButtonText}>{t("agentTaskEdit")}</Text></Pressable> : null}
           </View> : null}
           <View style={styles.bottomActions}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCopy")} accessibilityState={{ disabled: false }} onPress={() => router.push(`/(app)/field-tasks/new?copyFrom=${task.id}` as never)} style={styles.bottomSecondary}>
+            {canCreateSelfTask ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCopy")} accessibilityState={{ disabled: false }} onPress={() => router.push(`/(app)/field-tasks/new?copyFrom=${task.id}` as never)} style={styles.bottomSecondary}>
               <TabIcon name="copy" color={colors.primary} size={17} />
               <Text style={styles.bottomSecondaryText}>{t("agentTaskCopy")}</Text>
-            </Pressable>
+            </Pressable> : null}
             {task.canEditContent && !terminal ? <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCancel")} accessibilityState={{ disabled: false }} onPress={cancelTask} style={styles.bottomDanger}><Text style={styles.bottomDangerText}>{t("agentTaskCancel")}</Text></Pressable> : null}
           </View>
         </TaskDisclosure>
@@ -313,6 +314,12 @@ export default function AgentTaskDetailScreen() {
 function InfoRow({ icon, label, value, danger }: { icon: TabIconName; label: string; value: string; danger?: boolean }) { return <View style={styles.infoRow}><View style={styles.infoIcon}><TabIcon name={icon} color={danger ? colors.missed : colors.primary} size={18} /></View><View style={styles.infoBody}><Text style={styles.infoLabel}>{label}</Text><Text style={[styles.infoValue, danger && styles.infoDanger]}>{value}</Text></View></View> }
 function InfoLinkRow({ icon, label, value, hint, onPress }: { icon: TabIconName; label: string; value: string; hint: string; onPress: () => void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityHint={hint} onPress={onPress} style={({ pressed }) => [styles.infoRow, styles.infoLinkRow, pressed && styles.pressed]}><View accessible={false} style={styles.infoIcon}><TabIcon name={icon} color={colors.primary} size={18} /></View><View accessible={false} style={styles.infoBody}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View><View accessible={false} style={styles.infoLinkChevron}><TabIcon name="chevronRight" color={colors.faint} size={20} /></View></Pressable>
+}
+function TaskSyncNotice({ state }: { state: "PENDING" | "CONFLICT" | "REJECTED" }) {
+  const error = state !== "PENDING"
+  const text = state === "PENDING" ? t("agentTaskOfflineQueued") : state === "CONFLICT" ? t("agentTaskConflictHint") : t("agentTaskSyncRejected")
+  if (!error) return <View style={styles.syncNotice}><Text style={styles.syncNoticeText}>{text}</Text></View>
+  return <Pressable accessibilityRole="button" accessibilityLabel={text} accessibilityHint={t("syncCenterOpen")} onPress={() => router.push("/(app)/sync-center" as never)} style={({ pressed }) => [styles.syncNotice, styles.syncError, styles.syncNoticeAction, pressed && styles.pressed]}><Text style={[styles.syncNoticeText, styles.syncErrorText]}>{text}</Text><TabIcon name="chevronRight" color={colors.missed} size={18} /></Pressable>
 }
 function PrimaryAction({ label, busy, success, onPress }: { label: string; busy: boolean; success?: boolean; onPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={onPress} style={[styles.mainAction, success && styles.mainActionSuccess, busy && styles.disabled]}><Text style={styles.mainActionText}>{busy ? "…" : label}</Text></Pressable> }
 
@@ -396,6 +403,7 @@ const styles = StyleSheet.create({
   infoDanger: { color: colors.missed },
   syncNotice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft },
   syncError: { backgroundColor: colors.dangerBg },
+  syncNoticeAction: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 },
   syncNoticeText: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   syncErrorText: { color: colors.missed },
   policy: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.infoBg },
