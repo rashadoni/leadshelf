@@ -45,5 +45,16 @@ export function visibleFieldWeekDays<T extends { date: string }>(
   range: FieldWeekViewRange,
 ): T[] {
   if (range === 1) return selectedDate ? days.filter((day) => day.date === selectedDate) : []
-  return days.slice(0, range)
+  if (range >= days.length || !selectedDate) return days.slice(0, range)
+
+  const selectedIndex = days.findIndex((day) => day.date === selectedDate)
+  if (selectedIndex < 0 || selectedIndex < range) return days.slice(0, range)
+
+  // The five-day view remains the familiar weekday window until someone
+  // deliberately selects a later day. In that case shift the bounded window
+  // just enough to keep the selected day visible rather than rendering a
+  // calendar rail that disagrees with the agenda below it.
+  const lastStart = Math.max(0, days.length - range)
+  const start = Math.min(lastStart, selectedIndex)
+  return days.slice(start, start + range)
 }

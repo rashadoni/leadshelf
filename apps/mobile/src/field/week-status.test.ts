@@ -26,6 +26,9 @@ describe("mobile week status presentation", () => {
     expect(visibleFieldWeekDays(days, "2026-08-27", 5).map((day) => day.date)).toEqual([
       "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28",
     ])
+    expect(visibleFieldWeekDays(days, "2026-08-29", 5).map((day) => day.date)).toEqual([
+      "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-29", "2026-08-30",
+    ])
     expect(visibleFieldWeekDays(days, "2026-08-27", 7)).toHaveLength(7)
   })
 })
