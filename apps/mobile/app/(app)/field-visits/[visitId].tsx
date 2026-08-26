@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Platform,
@@ -36,7 +37,6 @@ import { useField } from "../../../src/field/field-context"
 import { fieldErrorMessage } from "../../../src/field/error-message"
 import {
   completeOptimisticFieldVisit,
-  findFieldVisit,
   setOptimisticFieldVisitSyncState,
 } from "../../../src/field/visit-cache"
 import {
@@ -123,8 +123,8 @@ export default function FieldVisitWorkspaceScreen() {
   const { sync } = useSync()
   const insets = useSafeAreaInsets()
   const layout = useResponsiveLayout()
-  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? "UTC"
-  const tenantToday = field.week?.today ?? field.workday?.today ?? tenantDateKey(new Date(), tenantTimeZone) ?? new Date().toISOString().slice(0, 10)
+  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
+  const tenantToday = field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date ?? tenantDateKey(new Date(), tenantTimeZone) ?? new Date().toISOString().slice(0, 10)
   const defaultFollowUpDate = shiftDateKey(tenantToday, 1)
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const cameraRef = useRef<CameraView | null>(null)
@@ -135,6 +135,7 @@ export default function FieldVisitWorkspaceScreen() {
   const cached = readFieldCache<FieldVisitWorkspaceData>(cacheKey)?.value ?? null
   const local = localFieldVisitWorkspace(field.week, visitId, field.profile?.agent.id ?? "")
   const [workspace, setWorkspace] = useState<FieldVisitWorkspaceData | null>(cached ?? local)
+  const [workspaceLoading, setWorkspaceLoading] = useState(!cached && !local)
   const [activeRequirement, setActiveRequirement] = useState<FieldVisitRequirement | null>(null)
   const [actionDraft, setActionDraft] = useState<FieldVisitActionDraft>(() => emptyVisitActionDraft(defaultFollowUpDate))
   const [outcome, setOutcome] = useState<FieldVisitOutcome>("SUCCESSFUL")
@@ -145,7 +146,6 @@ export default function FieldVisitWorkspaceScreen() {
   const [contextOpen, setContextOpen] = useState(false)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
 
-  const weekVisit = findFieldVisit(field.week, visitId)
   const requirements = workspace?.visit.requirementSnapshot?.requirements
     .filter((requirement) => requirement.mode !== "HIDDEN") ?? []
   const missing = useMemo(
@@ -255,6 +255,8 @@ export default function FieldVisitWorkspaceScreen() {
       persist(next)
     } catch {
       if (!base && local) persist(local)
+    } finally {
+      setWorkspaceLoading(false)
     }
   }
 
@@ -390,7 +392,7 @@ export default function FieldVisitWorkspaceScreen() {
   }
 
   function continueCheckout() {
-    if (!workspace || !field.week) return
+    if (!workspace) return
     if (missing.length > 0) {
       Alert.alert(t("fieldVisitMissingActions", { actions: missing.map(actionLabel).join(", ") }))
       return
@@ -416,7 +418,7 @@ export default function FieldVisitWorkspaceScreen() {
   }
 
   async function submitCheckout() {
-    if (!workspace || !field.week) return
+    if (!workspace) return
     const checkedInWeek = field.week
     const checkedInWorkspace = workspace
     setSaving(true)
@@ -433,14 +435,16 @@ export default function FieldVisitWorkspaceScreen() {
         potential,
         resultNotes: resultNote.trim() || null,
       })
-      const optimisticWeek = completeOptimisticFieldVisit(field.week, {
-        visitId,
-        checkOutAt,
-        outcome,
-        potential,
-        resultNotes: resultNote.trim() || null,
-      })
-      field.applyLocalWeek(optimisticWeek)
+      const optimisticWeek = checkedInWeek
+        ? completeOptimisticFieldVisit(checkedInWeek, {
+          visitId,
+          checkOutAt,
+          outcome,
+          potential,
+          resultNotes: resultNote.trim() || null,
+        })
+        : null
+      if (optimisticWeek && optimisticWeek !== checkedInWeek) field.applyLocalWeek(optimisticWeek)
       persist({
         ...workspace,
         visit: {
@@ -457,11 +461,10 @@ export default function FieldVisitWorkspaceScreen() {
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
         const syncState = result.status === "conflict" ? "CONFLICT" : "REJECTED"
-        field.applyLocalWeek(setOptimisticFieldVisitSyncState(
-          checkedInWeek,
-          visitId,
-          syncState,
-        ))
+        if (checkedInWeek) {
+          const conflictedWeek = setOptimisticFieldVisitSyncState(checkedInWeek, visitId, syncState)
+          if (conflictedWeek !== checkedInWeek) field.applyLocalWeek(conflictedWeek)
+        }
         const recovered = setVisitWorkspaceSyncState(checkedInWorkspace, syncState)
         persist(recovered)
         await refreshWorkspace(recovered)
@@ -469,7 +472,12 @@ export default function FieldVisitWorkspaceScreen() {
         return
       }
       if (result?.status !== "applied") Alert.alert(t("fieldVisitResultQueued"))
-      router.replace(`/(app)/routes/${workspace.visit.routeId}` as never)
+      const routeIsLoaded = Boolean(checkedInWeek?.days.some((day) => day.routes.some((route) => route.id === workspace.visit.routeId)))
+      const routeDate = workspace.visit.route?.date.slice(0, 10) ?? ""
+      const calendarFallback = /^\d{4}-\d{2}-\d{2}$/.test(routeDate)
+        ? `/(app)/(tabs)/week?date=${encodeURIComponent(routeDate)}`
+        : "/(app)/(tabs)/week"
+      router.replace(routeIsLoaded && workspace.visit.routeId ? `/(app)/routes/${workspace.visit.routeId}` as never : calendarFallback as never)
     } catch (error) {
       Alert.alert(t("fieldDataError"), fieldErrorMessage(error, "fieldVisitConflict"))
     } finally {
@@ -514,20 +522,22 @@ export default function FieldVisitWorkspaceScreen() {
     )
   }
 
-  if (!workspace || !weekVisit) {
+  if (!workspace) {
     return (
       <SafeAreaView style={styles.root}>
         <FieldScreenChrome />
         <View style={styles.missing}>
-          <Text style={styles.title}>{t("fieldDataError")}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("back")}
-            onPress={() => safeFieldBack("/(app)/routes")}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.primaryText}>{t("back")}</Text>
-          </Pressable>
+          {workspaceLoading ? <ActivityIndicator accessibilityRole="progressbar" color={colors.primary} /> : <>
+            <Text style={styles.title}>{t("fieldDataError")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("back")}
+              onPress={() => safeFieldBack("/(app)/routes")}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.primaryText}>{t("back")}</Text>
+            </Pressable>
+          </>}
         </View>
       </SafeAreaView>
     )

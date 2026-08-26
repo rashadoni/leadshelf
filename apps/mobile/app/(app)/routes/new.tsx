@@ -30,6 +30,7 @@ import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from
 import { isRouteDraftDateAllowed, resolveRouteDraftDate } from "../../../src/field/route-planning-date"
 import { isRouteDraftDirty } from "../../../src/field/route-draft-state"
 import { startOfIsoWeek } from "../../../src/field/week-status"
+import { hasFieldManagerRole } from "../../../src/field/manager-access"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 
 function reorder<T>(items: T[], from: number, to: number): T[] {
@@ -84,7 +85,10 @@ export default function NewRouteScreen() {
   const requestedDateKey = typeof requestedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate.slice(0, 10))
     ? requestedDate.slice(0, 10)
     : null
-  const managerMode = managerPlan === "1" && Boolean(
+  // Route parameters only preserve context from Manager Planning. They never
+  // grant a manager flow or immediate PLANNED publish to an agent who opens a
+  // copied/deep link; the scoped server endpoint remains the final authority.
+  const managerMode = hasFieldManagerRole(field.profile?.agent.role) && managerPlan === "1" && Boolean(
     requestedDateKey &&
     typeof managerAgentId === "string" && managerAgentId &&
     typeof managerAgentName === "string" && managerAgentName,
