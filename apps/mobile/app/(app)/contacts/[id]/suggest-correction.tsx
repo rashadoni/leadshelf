@@ -35,6 +35,7 @@ import { safeFieldBack } from "../../../../src/navigation/safe-back"
 import { HttpError } from "../../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../../src/theme"
 import { TabIcon } from "../../../../src/components/TabIcon"
+import { useResponsiveLayout } from "../../../../src/layout/responsive"
 
 type Submission = { body: string; idempotencyKey: string }
 
@@ -52,6 +53,7 @@ function displayValue(value: string | null): string {
 
 export default function SuggestContactCorrectionScreen() {
   const locale = useLocale()
+  const layout = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const { id } = useLocalSearchParams<{ id: string }>()
   const [data, setData] = useState<FieldContactDetailData | null>(null)
@@ -201,7 +203,7 @@ export default function SuggestContactCorrectionScreen() {
   if (submitted) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
-        <View style={[styles.success, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
+        <View style={[styles.success, layout.isTablet && styles.successTablet, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
           <View accessible={false} style={styles.successMark}><TabIcon name="check" color={colors.success} size={32} /></View>
           <Text accessibilityRole="header" style={styles.successTitle}>{t("contactCorrectionSubmitted")}</Text>
           <Text style={styles.successHint}>{t("contactCorrectionPending")}</Text>
@@ -229,6 +231,7 @@ export default function SuggestContactCorrectionScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
         >
+          <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t("back")} accessibilityState={{ disabled: submitting }} disabled={submitting} hitSlop={6} onPress={goBack} style={[styles.back, submitting && styles.disabled]}>
               <TabIcon name="chevronLeft" color={colors.text} size={22} />
@@ -328,6 +331,7 @@ export default function SuggestContactCorrectionScreen() {
               {request.decisionComment ? <Text style={styles.historyComment}>{request.decisionComment}</Text> : null}
             </View>
           )) : <View style={styles.emptyHistory}><Text style={styles.emptyHistoryText}>{t("contactCorrectionHistoryEmpty")}</Text></View>}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -381,13 +385,15 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scroll: { paddingBottom: 34 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingBack: { position: "absolute", top: 12, left: 14, width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   loadingText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 },
   back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1 },
-  eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   subtitle: { color: colors.muted, fontSize: 11, marginTop: 2 },
   introCard: { marginHorizontal: 14, marginTop: 14, borderRadius: radii.card, padding: 13, backgroundColor: colors.infoBg, flexDirection: "row", gap: 10, alignItems: "center" },
@@ -400,7 +406,7 @@ const styles = StyleSheet.create({
   errorText: { color: colors.missed, fontSize: 11, fontWeight: "800" },
   formCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 12, ...cardShadow },
   inputGroup: { flex: 1 },
-  inputLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
+  inputLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 },
   input: { minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
   textarea: { minHeight: 86, paddingTop: 12, lineHeight: 18 },
   reviewCard: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow },
@@ -408,8 +414,8 @@ const styles = StyleSheet.create({
   reviewHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   changeRow: { paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
   changeLabel: { color: colors.text, fontSize: 12, fontWeight: "900" },
-  changeBefore: { color: colors.muted, fontSize: 10, marginTop: 5 },
-  changeAfter: { color: colors.primary, fontSize: 10, fontWeight: "900", marginTop: 3 },
+  changeBefore: { color: colors.muted, fontSize: 11, marginTop: 5 },
+  changeAfter: { color: colors.primary, fontSize: 11, fontWeight: "900", marginTop: 3 },
   reasonPreview: { paddingTop: 12 },
   reasonPreviewText: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 4 },
   buttonRow: { marginHorizontal: 14, marginTop: 14, flexDirection: "row", gap: 10 },
@@ -422,19 +428,20 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   historyHeading: { marginHorizontal: 16, marginTop: 24, marginBottom: 5, flexDirection: "row", alignItems: "center", gap: 7 },
   historyTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  historyCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 10, lineHeight: 22, textAlign: "center", fontWeight: "900" },
+  historyCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 11, lineHeight: 22, textAlign: "center", fontWeight: "900" },
   historyCard: { marginHorizontal: 14, marginTop: 8, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   historyTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  historyStatus: { color: colors.primary, fontSize: 10, fontWeight: "900" },
-  historyDate: { color: colors.faint, fontSize: 9, fontWeight: "700" },
+  historyStatus: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  historyDate: { color: colors.faint, fontSize: 11, fontWeight: "700" },
   historyReason: { color: colors.text, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  historyComment: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 7 },
+  historyComment: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 7 },
   emptyHistory: { marginHorizontal: 14, marginTop: 8, borderRadius: radii.card, padding: 14, backgroundColor: colors.card },
   emptyHistoryText: { color: colors.muted, fontSize: 11, lineHeight: 16 },
-  success: { flex: 1, paddingHorizontal: 20, alignItems: "center", justifyContent: "center" },
+  success: { flex: 1, width: "100%", paddingHorizontal: 20, alignItems: "center", justifyContent: "center" },
+  successTablet: { maxWidth: 640, alignSelf: "center" },
   successMark: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.successBg, alignItems: "center", justifyContent: "center" },
   successTitle: { color: colors.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 18 },
   successHint: { color: colors.muted, fontSize: 13, textAlign: "center", lineHeight: 19, marginTop: 7 },
   statusPill: { marginTop: 13, borderRadius: radii.pill, backgroundColor: colors.primarySoft, paddingHorizontal: 12, paddingVertical: 7 },
-  statusText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  statusText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
 })
