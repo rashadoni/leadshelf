@@ -12,6 +12,7 @@ type TodayDay = Pick<FieldWeekDay, "date" | "routePlanningAllowed"> & { routes: 
 
 export type FieldTodayPrimaryAction =
   | { kind: "CONTINUE_VISIT"; href: string }
+  | { kind: "LOAD_WORKDAY" }
   | { kind: "START_WORKDAY" | "RESUME_WORKDAY"; href: "/(app)/workday" }
   | { kind: "OPEN_NEXT_ROUTE"; href: string; nextStopName: string | null }
   | { kind: "CREATE_ROUTE"; href: string }
@@ -41,12 +42,14 @@ export function resolveFieldTodayPrimaryAction({
   activeVisit,
   today,
   canCreateOwnDraft,
+  hasLoadedWorkday,
   availableWorkdayActions,
 }: {
   isField: boolean
   activeVisit: Pick<FieldWeekVisit, "id" | "routeId" | "routePointId" | "status"> | null
   today: TodayDay | null
   canCreateOwnDraft: boolean
+  hasLoadedWorkday: boolean
   availableWorkdayActions: FieldWorkdayAction[] | null | undefined
 }): FieldTodayPrimaryAction {
   // An unfinished visit is always recovered first, rather than starting a
@@ -55,7 +58,12 @@ export function resolveFieldTodayPrimaryAction({
     return { kind: "CONTINUE_VISIT", href: `/(app)/field-visits/${activeVisit.id}` }
   }
 
-  const workdayActions = availableWorkdayActions ?? ["START"]
+  // Never infer a new workday from missing data: a still-loading response may
+  // already contain a started or paused day. Keep the agent from queuing a
+  // duplicate START until the authoritative workday snapshot is available.
+  if (isField && !hasLoadedWorkday) return { kind: "LOAD_WORKDAY" }
+
+  const workdayActions = availableWorkdayActions ?? []
   if (isField && workdayActions.includes("START")) {
     return { kind: "START_WORKDAY", href: "/(app)/workday" }
   }

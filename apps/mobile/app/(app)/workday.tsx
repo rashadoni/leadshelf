@@ -251,6 +251,7 @@ export default function WorkdayScreen() {
   const date = field.workday?.date ?? field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
   const timezone = field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? field.week?.timezone ?? "UTC"
   const intervalSeconds = field.workday?.gpsIntervalSeconds ?? field.locations?.gpsIntervalSeconds ?? 30
+  const workdayKnown = Boolean(field.workday)
   const workdayData = field.workday ?? emptyFieldWorkdayData(date, timezone, intervalSeconds)
   const locationData = field.locations?.date === date
     ? field.locations
@@ -268,6 +269,13 @@ export default function WorkdayScreen() {
     privacyBodyKey,
   } = attendancePresentation
   const displayStatus: DisplayStatus = workday?.status ?? "NOT_STARTED"
+  const workdayStatusLabel = workdayKnown ? t(statusKeys[displayStatus]) : t("workdayLoading")
+  const workdayLoading = !workdayKnown && (field.activityPhase === "loading" || field.activityPhase === "refreshing")
+  const workdayNotice = workdayLoading
+    ? t("workdayLoadingHint")
+    : field.activityPhase === "stale"
+      ? t("fieldDataStale")
+      : field.activityError ?? t("fieldDataError")
   const workedSeconds = currentWorkedSeconds(workday, nowMs)
   const pausedSeconds = currentPausedSeconds(workday, nowMs)
   const trackingNotification = useMemo<WorkdayTrackingNotification>(() => ({
@@ -343,7 +351,12 @@ export default function WorkdayScreen() {
   }
 
   async function applyAction(action: FieldWorkdayAction) {
-    const current = field.workday ?? emptyFieldWorkdayData(date, timezone, intervalSeconds)
+    if (!field.workday) {
+      setFeedback("workdayLoading")
+      void field.refreshActivity()
+      return
+    }
+    const current = field.workday
     if (!current.availableActions.includes(action)) return
     if (requiresQrBeforeStart && (action === "START" || action === "RESUME")) {
       Alert.alert(t("workdayQrNotReadyTitle"), t("workdayQrNotReady"))
@@ -520,7 +533,9 @@ export default function WorkdayScreen() {
   const trackingRecoveryKey = tracking.recovery === "none"
     ? null
     : trackingRecoveryKeys[tracking.recovery]
-  const { primary: primaryWorkdayAction, secondary: secondaryWorkdayActions } = splitWorkdayActions(workdayData.availableActions)
+  const { primary: primaryWorkdayAction, secondary: secondaryWorkdayActions } = splitWorkdayActions(
+    workdayKnown ? workdayData.availableActions : [],
+  )
   const stickyActionSpace = primaryWorkdayAction
     ? Math.max(insets.bottom, 10) + (secondaryWorkdayActions.length > 0 ? 136 : 86)
     : Math.max(insets.bottom, 28)
@@ -591,19 +606,19 @@ export default function WorkdayScreen() {
             <View style={styles.statusTop}>
               <View style={[styles.statusPill, statusPillTone]}>
                 <View style={[styles.statusDot, { backgroundColor: statusDot }]} />
-                <Text style={styles.statusText}>{t(statusKeys[displayStatus])}</Text>
+                <Text style={styles.statusText}>{workdayStatusLabel}</Text>
               </View>
               {(workday?.syncState === "PENDING" || syncStatus.pendingOps > 0) ? (
                 <View style={styles.pendingPill}><Text style={styles.pendingText}>{t("workdayPending")}</Text></View>
               ) : null}
             </View>
             <Text style={styles.timerLabel}>{t("workdayWorked")}</Text>
-            <Text style={styles.timer}>{formatDuration(workedSeconds)}</Text>
-            <Text style={styles.statusHint}>{t(policyHintKey)}</Text>
+            <Text style={styles.timer}>{workdayKnown ? formatDuration(workedSeconds) : "—"}</Text>
+            <Text style={styles.statusHint}>{workdayKnown ? t(policyHintKey) : t("workdayLoadingHint")}</Text>
 
             <View style={styles.statsRow}>
               <View style={styles.stat}>
-                <Text style={styles.statValue}>{formatDuration(pausedSeconds)}</Text>
+                <Text style={styles.statValue}>{workdayKnown ? formatDuration(pausedSeconds) : "—"}</Text>
                 <Text style={styles.statLabel}>{t("workdayPaused")}</Text>
               </View>
               {usesGps ? (
@@ -622,6 +637,14 @@ export default function WorkdayScreen() {
               ) : null}
             </View>
           </View>
+
+          {!workdayKnown ? (
+            <View accessibilityRole={workdayLoading ? "status" : "alert"} accessibilityLiveRegion="polite" style={[styles.activityNotice, !workdayLoading && styles.activityNoticeError]}>
+              <TabIcon name={workdayLoading ? "refresh" : "alert"} color={workdayLoading ? colors.info : colors.warning} size={19} />
+              <Text style={[styles.activityNoticeText, !workdayLoading && styles.activityNoticeErrorText]}>{workdayNotice}</Text>
+              {!workdayLoading ? <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refreshActivity()} style={styles.activityRetry}><Text style={styles.activityRetryText}>{t("refresh")}</Text></Pressable> : null}
+            </View>
+          ) : null}
 
           {feedback ? (
             <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
@@ -784,6 +807,12 @@ const styles = StyleSheet.create({
   statusPillCompleted: { backgroundColor: colors.primarySoft },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  activityNotice: { minHeight: 54, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, flexDirection: "row", alignItems: "center", gap: 9 },
+  activityNoticeError: { backgroundColor: colors.warningBg, borderColor: colors.warningBorder },
+  activityNoticeText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  activityNoticeErrorText: { color: colors.warning },
+  activityRetry: { minHeight: 36, borderRadius: 12, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
+  activityRetryText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   pendingPill: { backgroundColor: colors.cardOverlay, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 7 },
   pendingText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   timerLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 16, textTransform: "uppercase", letterSpacing: 0.7 },

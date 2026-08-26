@@ -145,9 +145,12 @@ export default function CommitmentsScreen() {
     activeVisit: null,
     today: field.week?.days.find((day) => day.isToday) ?? null,
     canCreateOwnDraft: field.week?.capabilities.createOwnDraft === true,
+    hasLoadedWorkday: Boolean(field.workday),
     availableWorkdayActions: field.workday?.availableActions,
   }) : null
-  const recoveryLabel = recoveryAction?.kind === "START_WORKDAY"
+  const recoveryLabel = recoveryAction?.kind === "LOAD_WORKDAY"
+    ? t("workdayLoading")
+    : recoveryAction?.kind === "START_WORKDAY"
     ? t("workdayStart")
     : recoveryAction?.kind === "RESUME_WORKDAY"
       ? t("workdayResume")
@@ -158,14 +161,18 @@ export default function CommitmentsScreen() {
           : recoveryAction?.kind === "CREATE_ROUTE"
             ? t("createRoute")
             : t("weekSchedule")
-  const recoveryDestination = recoveryAction?.kind === "START_WORKDAY" || recoveryAction?.kind === "RESUME_WORKDAY"
+  const recoveryDestination = recoveryAction?.kind === "LOAD_WORKDAY"
+    ? t("workdayLoadingHint")
+    : recoveryAction?.kind === "START_WORKDAY" || recoveryAction?.kind === "RESUME_WORKDAY"
     ? t("workdayTitle")
     : recoveryAction?.kind === "OPEN_NEXT_ROUTE"
       ? t("routeDetails")
       : recoveryAction?.kind === "CREATE_ROUTE"
         ? t("routeHubTitle")
         : t("weekSchedule")
-  const recoveryIcon: TabIconName = recoveryAction?.kind === "START_WORKDAY" || recoveryAction?.kind === "RESUME_WORKDAY"
+  const recoveryIcon: TabIconName = recoveryAction?.kind === "LOAD_WORKDAY"
+    ? "refresh"
+    : recoveryAction?.kind === "START_WORKDAY" || recoveryAction?.kind === "RESUME_WORKDAY"
     ? "today"
     : recoveryAction?.kind === "OPEN_NEXT_ROUTE"
       ? "route"
@@ -401,7 +408,12 @@ export default function CommitmentsScreen() {
           missingLabel={t("commitmentsNeedsVisit")}
         />
 
-        {recoveryAction ? (
+        {recoveryAction?.kind === "LOAD_WORKDAY" ? (
+          <View accessible accessibilityRole="status" accessibilityLiveRegion="polite" accessibilityLabel={`${t("commitmentsNeedsVisit")}. ${recoveryDestination}`} style={[styles.recoveryAction, styles.recoveryLoading]}>
+            <View accessible={false} style={[styles.recoveryIcon, styles.recoveryLoadingIcon]}><TabIcon name={recoveryIcon} color={colors.info} size={20} /></View>
+            <View style={styles.recoveryBody}><Text style={[styles.recoveryLabel, styles.recoveryLoadingLabel]} numberOfLines={1}>{recoveryLabel}</Text><Text style={[styles.recoveryHint, styles.recoveryLoadingHint]} numberOfLines={2}>{recoveryDestination}</Text></View>
+          </View>
+        ) : recoveryAction ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={recoveryLabel}
@@ -668,10 +680,14 @@ const styles = StyleSheet.create({
   warningRetry: { minHeight: 44, borderRadius: 12, paddingHorizontal: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 2 },
   warningRetryText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   recoveryAction: { minHeight: 62, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 10 },
+  recoveryLoading: { backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   recoveryIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  recoveryLoadingIcon: { backgroundColor: colors.card },
   recoveryBody: { flex: 1, minWidth: 0 },
   recoveryLabel: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
+  recoveryLoadingLabel: { color: colors.info },
   recoveryHint: { color: colors.headerText, opacity: 0.82, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  recoveryLoadingHint: { color: colors.muted, opacity: 1 },
   busyNotice: { marginHorizontal: 14, marginTop: 10, minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 8 },
   busyNoticeText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   composer: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 14, borderWidth: 1, borderColor: colors.infoBorder },

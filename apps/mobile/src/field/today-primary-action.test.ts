@@ -41,6 +41,7 @@ describe("field Today primary action", () => {
       activeVisit: { id: "visit-1", routeId: "route-1", routePointId: "point-1", status: "CHECKED_IN" },
       today: { date: "2026-08-24", routePlanningAllowed: true, routes: [route([point("point-1", 1, "PENDING")])] },
       canCreateOwnDraft: true,
+      hasLoadedWorkday: true,
       availableWorkdayActions: ["START"],
     })).toEqual({ kind: "CONTINUE_VISIT", href: "/(app)/field-visits/visit-1" })
   })
@@ -51,6 +52,7 @@ describe("field Today primary action", () => {
       activeVisit: null,
       today: { date: "2026-08-24", routePlanningAllowed: true, routes: [route([point("point-1", 1, "PENDING")])] },
       canCreateOwnDraft: true,
+      hasLoadedWorkday: true,
       availableWorkdayActions: ["START"],
     })).toEqual({ kind: "START_WORKDAY", href: "/(app)/workday" })
   })
@@ -61,6 +63,7 @@ describe("field Today primary action", () => {
       activeVisit: null,
       today: { date: "2026-08-24", routePlanningAllowed: true, routes: [route([point("point-1", 1, "PENDING")])] },
       canCreateOwnDraft: true,
+      hasLoadedWorkday: true,
       availableWorkdayActions: ["RESUME", "FINISH"],
     })).toEqual({ kind: "RESUME_WORKDAY", href: "/(app)/workday" })
   })
@@ -71,6 +74,7 @@ describe("field Today primary action", () => {
       activeVisit: null,
       today: { date: "2026-08-24", routePlanningAllowed: false, routes: [] },
       canCreateOwnDraft: true,
+      hasLoadedWorkday: true,
       availableWorkdayActions: [],
     })).toEqual({ kind: "OPEN_WEEK", href: "/(app)/(tabs)/week" })
   })
@@ -81,7 +85,19 @@ describe("field Today primary action", () => {
       activeVisit: null,
       today: { date: "2026-08-24", routePlanningAllowed: true, routes: [] },
       canCreateOwnDraft: true,
+      hasLoadedWorkday: true,
       availableWorkdayActions: [],
     })).toEqual({ kind: "CREATE_ROUTE", href: "/(app)/routes/new?date=2026-08-24" })
+  })
+
+  it("does not invent a START while the workday snapshot is still loading", () => {
+    expect(resolveFieldTodayPrimaryAction({
+      isField: true,
+      activeVisit: null,
+      today: { date: "2026-08-24", routePlanningAllowed: true, routes: [] },
+      canCreateOwnDraft: true,
+      hasLoadedWorkday: false,
+      availableWorkdayActions: undefined,
+    })).toEqual({ kind: "LOAD_WORKDAY" })
   })
 })

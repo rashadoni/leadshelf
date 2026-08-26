@@ -102,15 +102,21 @@ export default function TodayTab() {
   const visitedPoints = summary?.routeVisited ?? today?.routes.reduce((sum, route) => sum + route.visitedPoints, 0) ?? 0
   const progress = routePoints > 0 ? Math.min(100, Math.round((visitedPoints / routePoints) * 100)) : 0
   const activeVisit = field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null
+  const workdayLoaded = Boolean(field.workday)
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
   const primaryAction = resolveFieldTodayPrimaryAction({
     isField: IS_LEADDRIVE_FIELD,
     activeVisit,
     today,
     canCreateOwnDraft: field.week?.capabilities.createOwnDraft === true,
+    hasLoadedWorkday: workdayLoaded,
     availableWorkdayActions: field.workday?.availableActions,
   })
-  const routeActionLabel = primaryAction.kind === "CONTINUE_VISIT"
+  const primaryActionLoading = primaryAction.kind === "LOAD_WORKDAY"
+  const primaryActionHref = primaryAction.kind === "LOAD_WORKDAY" ? null : primaryAction.href
+  const routeActionLabel = primaryActionLoading
+    ? t("workdayLoading")
+    : primaryAction.kind === "CONTINUE_VISIT"
     ? t("continueFieldVisit")
     : primaryAction.kind === "START_WORKDAY"
       ? t("workdayStart")
@@ -121,7 +127,9 @@ export default function TodayTab() {
           : primaryAction.kind === "CREATE_ROUTE"
             ? t("createRoute")
             : t("weekSchedule")
-  const primaryActionIcon: TabIconName = primaryAction.kind === "CONTINUE_VISIT"
+  const primaryActionIcon: TabIconName = primaryActionLoading
+    ? "refresh"
+    : primaryAction.kind === "CONTINUE_VISIT"
     ? "visit"
     : primaryAction.kind === "START_WORKDAY" || primaryAction.kind === "RESUME_WORKDAY"
       ? "today"
@@ -130,7 +138,9 @@ export default function TodayTab() {
         : primaryAction.kind === "CREATE_ROUTE"
           ? "add"
           : "week"
-  const primaryActionDestination = primaryAction.kind === "CONTINUE_VISIT"
+  const primaryActionDestination = primaryActionLoading
+    ? t("workdayLoadingHint")
+    : primaryAction.kind === "CONTINUE_VISIT"
     ? t("routeCurrentVisit")
     : primaryAction.kind === "START_WORKDAY" || primaryAction.kind === "RESUME_WORKDAY"
       ? t("workdayTitle")
@@ -139,9 +149,12 @@ export default function TodayTab() {
         : primaryAction.kind === "CREATE_ROUTE"
           ? t("routeHubTitle")
           : t("weekSchedule")
-  const workdayActive = workdayStatus === "STARTED"
+  const workdayActive = workdayLoaded && workdayStatus === "STARTED"
   const attendancePresentation = presentFieldAttendancePolicy(field.workday?.attendancePolicy)
-  const workdayActionLabel = workdayStatus === "NOT_STARTED"
+  const workdayStatusLabel = workdayLoaded ? t(workdayStatusKeys[workdayStatus]) : t("workdayLoading")
+  const workdayActionLabel = !workdayLoaded
+    ? t("workdayLoading")
+    : workdayStatus === "NOT_STARTED"
     ? t("workdayStart")
     : workdayStatus === "PAUSED"
       ? t("workdayResume")
@@ -201,19 +214,21 @@ export default function TodayTab() {
         {IS_LEADDRIVE_FIELD ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${t(workdayStatusKeys[workdayStatus])}. ${workdayActionLabel}`}
-            accessibilityHint={t(attendancePresentation.hintKey)}
+            accessibilityLabel={`${workdayStatusLabel}. ${workdayActionLabel}`}
+            accessibilityHint={workdayLoaded ? t(attendancePresentation.hintKey) : t("workdayLoadingHint")}
             onPress={() => router.push("/(app)/workday" as never)}
             style={({ pressed }) => [styles.workdayCard, workdayActionIsPrimary && styles.workdayCardPrimary, pressed && styles.pressed]}
           >
             <View accessible={false} style={[styles.workdayIcon, workdayActionIsPrimary && styles.workdayIconPrimary, workdayActive && styles.workdayIconActive]}>
-              <TabIcon name={workdayStatus === "COMPLETED" ? "check" : workdayActive ? "pause" : "play"} color={workdayActionIsPrimary ? colors.headerText : colors.primary} size={22} />
+              <TabIcon name={workdayLoaded ? workdayStatus === "COMPLETED" ? "check" : workdayActive ? "pause" : "play" : "refresh"} color={workdayActionIsPrimary ? colors.headerText : colors.primary} size={22} />
             </View>
             <View style={styles.workdayBody}>
-              <Text style={[styles.workdayTitle, workdayActionIsPrimary && styles.workdayTitlePrimary]}>{t(workdayStatusKeys[workdayStatus])}</Text>
-              <Text style={[styles.workdayHint, workdayActionIsPrimary && styles.workdayHintPrimary]}>{t(attendancePresentation.hintKey)}</Text>
+              <Text style={[styles.workdayTitle, workdayActionIsPrimary && styles.workdayTitlePrimary]}>{workdayStatusLabel}</Text>
+              <Text style={[styles.workdayHint, workdayActionIsPrimary && styles.workdayHintPrimary]}>{workdayLoaded ? t(attendancePresentation.hintKey) : t("workdayLoadingHint")}</Text>
             </View>
-            {workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED" ? (
+            {!workdayLoaded ? (
+              <View style={styles.workdayChevron}><TabIcon name="refresh" color={colors.primary} size={21} /></View>
+            ) : workdayStatus === "NOT_STARTED" || workdayStatus === "PAUSED" ? (
               <Text style={[styles.workdayAction, workdayActionIsPrimary && styles.workdayActionPrimary]}>{workdayActionLabel}</Text>
             ) : (
               <View style={styles.workdayChevron}><TabIcon name="chevronRight" color={colors.primary} size={21} /></View>
@@ -249,6 +264,13 @@ export default function TodayTab() {
             </View>
           </View>
 
+          {!routeActionRepeatsWorkday && primaryActionHref ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryActionHref as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
+              <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
+              <TabIcon name="chevronRight" color={colors.headerText} size={20} />
+            </Pressable>
+          ) : null}
+
           {today?.routes.length ? (
             <View style={styles.routeList}>
               {today.routes.map((route) => {
@@ -280,12 +302,6 @@ export default function TodayTab() {
           ) : (
             <Text accessibilityRole="text" accessibilityLiveRegion="polite" style={styles.emptyText}>{t("noRouteToday")}</Text>
           )}
-              {!routeActionRepeatsWorkday ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={routeActionLabel} accessibilityHint={primaryActionDestination} onPress={() => router.push(primaryAction.href as never)} style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
-                  <View style={styles.primaryActionBody}><TabIcon name={primaryActionIcon} color={colors.headerText} size={19} /><Text style={styles.primaryActionText} numberOfLines={1}>{routeActionLabel}</Text></View>
-                  <TabIcon name="chevronRight" color={colors.headerText} size={20} />
-                </Pressable>
-              ) : null}
             </View>
           </View>
           <Pressable
