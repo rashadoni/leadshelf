@@ -26,7 +26,7 @@ describe("field notification navigation", () => {
   it("keeps existing metadata producers navigable during the API rollout", () => {
     expect(notificationDestination(notification({ metadata: { taskId: "task-1" } }))).toBe("/(app)/field-tasks/task-1")
     expect(notificationDestination(notification({ metadata: { threadId: "thread-1" } }))).toBe("/(app)/messages/thread-1")
-    expect(notificationDestination(notification({ metadata: { hrmRequestId: "request-1" } }))).toBe("/(app)/hrm")
+    expect(notificationDestination(notification({ metadata: { hrmRequestId: "request-1" } }))).toBe("/(app)/hrm?requestId=request-1")
     expect(notificationDestination(notification({ metadata: { routeIds: ["route-2"] } }))).toBe("/(app)/routes/route-2")
   })
 
@@ -37,8 +37,8 @@ describe("field notification navigation", () => {
     expect(notificationOpenDestination(notification({ target: { kind: "MESSAGE_THREAD", id: "thread-1" } }))).toBe("/(app)/messages/thread-1")
     expect(notificationOpenDestination(notification({ target: { kind: "CUSTOMER", id: "customer-1" } }))).toBe("/(app)/organizations/customer-1")
     expect(notificationOpenDestination(notification({ target: { kind: "CONTACT", id: "contact-1" } }))).toBe("/(app)/contacts/contact-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "CUSTOMER_REQUEST", id: "request-1" } }))).toBe("/(app)/customer-requests")
-    expect(notificationOpenDestination(notification({ target: { kind: "HRM_REQUEST", id: "hrm-1" } }))).toBe("/(app)/hrm")
+    expect(notificationOpenDestination(notification({ target: { kind: "CUSTOMER_REQUEST", id: "request-1" } }))).toBe("/(app)/customer-requests?requestId=request-1")
+    expect(notificationOpenDestination(notification({ target: { kind: "HRM_REQUEST", id: "hrm-1" } }))).toBe("/(app)/hrm?requestId=hrm-1")
   })
 
   it("does not invent a target from notification text", () => {

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { readFieldCache, writeFieldCache } from "../../../src/db/local-store"
@@ -41,6 +41,8 @@ function statusColors(status: string): { background: string; foreground: string 
 export default function CustomerRequestsScreen() {
   useLocale()
   const layout = useResponsiveLayout()
+  const { requestId } = useLocalSearchParams<{ requestId?: string }>()
+  const focusedRequestId = typeof requestId === "string" && requestId.length > 0 ? requestId : null
   const cached = readFieldCache<FieldCustomerRequestsData>(CACHE_KEY)
   const [data, setData] = useState<FieldCustomerRequestsData | null>(cached?.value ?? null)
   const [loading, setLoading] = useState(!cached)
@@ -62,6 +64,12 @@ export default function CustomerRequestsScreen() {
 
   useEffect(() => { void load() }, [load])
 
+  const requests = useMemo(() => {
+    const items = data?.requests ?? []
+    const focused = focusedRequestId ? items.find((item) => item.id === focusedRequestId) : null
+    return focused ? [focused, ...items.filter((item) => item.id !== focused.id)] : items
+  }, [data?.requests, focusedRequestId])
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
@@ -82,9 +90,9 @@ export default function CustomerRequestsScreen() {
         </View>
 
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
-        {data?.requests.length ? (
+        {requests.length ? (
           <View style={[styles.list, layout.isTablet && styles.listTablet]}>
-            {data.requests.map((request) => <RequestCard key={request.id} request={request} tablet={layout.isTablet} />)}
+            {requests.map((request) => <RequestCard key={request.id} request={request} focused={request.id === focusedRequestId} tablet={layout.isTablet} />)}
           </View>
         ) : !loading ? (
           <View style={styles.empty}>
@@ -100,12 +108,13 @@ export default function CustomerRequestsScreen() {
   )
 }
 
-function RequestCard({ request, tablet }: { request: FieldCustomerRequest; tablet: boolean }) {
+function RequestCard({ request, focused, tablet }: { request: FieldCustomerRequest; focused: boolean; tablet: boolean }) {
   const locale = useLocale()
   const tone = statusColors(request.status)
   const submittedAt = request.submittedAt ?? request.updatedAt
   return (
-    <View style={[styles.card, tablet && styles.cardTablet]}>
+    <View accessibilityRole={focused ? "summary" : undefined} accessibilityLabel={focused ? t("customerRequestFromNotification") : undefined} style={[styles.card, tablet && styles.cardTablet, focused && styles.cardFocused]}>
+      {focused ? <View style={styles.focusedNotice}><TabIcon name="inbox" color={colors.primary} size={15} /><Text style={styles.focusedNoticeText}>{t("customerRequestFromNotification")}</Text></View> : null}
       <View style={styles.cardTop}>
         <View style={styles.cardBody}>
           <Text style={styles.cardName}>{request.name}</Text>
@@ -147,7 +156,7 @@ const styles = StyleSheet.create({
   headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   add: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, noticeText: { color: colors.warning, fontSize: 11, fontWeight: "800" }, list: { paddingTop: 3 }, listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
-  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, cardBody: { flex: 1, minWidth: 0 }, cardName: { color: colors.text, fontSize: 15, fontWeight: "900" }, cardMeta: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 3 },
+  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, cardFocused: { borderWidth: 2, borderColor: colors.primary }, cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 }, focusedNotice: { minHeight: 26, alignSelf: "flex-start", marginBottom: 9, borderRadius: radii.pill, paddingHorizontal: 8, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 5 }, focusedNoticeText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, cardBody: { flex: 1, minWidth: 0 }, cardName: { color: colors.text, fontSize: 15, fontWeight: "900" }, cardMeta: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 3 },
   status: { borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 6 }, statusText: { fontSize: 11, fontWeight: "900" }, address: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 9 }, reason: { color: colors.text, fontSize: 13, lineHeight: 18, marginTop: 9 },
   cardFooter: { marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", justifyContent: "space-between", gap: 8 }, footerText: { color: colors.faint, fontSize: 11, fontWeight: "700" }, routeInfo: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 }, routeText: { color: colors.info, fontSize: 11, fontWeight: "800", flexShrink: 1 },
   duplicateLine: { marginTop: 10, borderRadius: 10, padding: 9, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 7 }, duplicateText: { color: colors.warning, fontSize: 11, fontWeight: "900", flex: 1 }, approved: { minHeight: 54, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 8 }, approvedIcon: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, approvedBody: { flex: 1, minWidth: 0 }, approvedLabel: { color: colors.successDark, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.3 }, approvedText: { color: colors.successDark, fontSize: 13, fontWeight: "900", marginTop: 1 }, pressed: { opacity: 0.75 },

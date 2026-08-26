@@ -26,6 +26,7 @@ type ReviewItem = {
   requestedBy: string
   submittedAt: string
   period?: { startDate: string; endDate: string }
+  routeId?: string
   canReschedule: boolean
   contactId?: string
   contactPreview?: FieldContactChangePreview
@@ -229,6 +230,7 @@ function ApprovalRequest({
       </View>
       <Text style={styles.requestReason} numberOfLines={reviewing ? undefined : 3}>{item.reason}</Text>
       {item.period ? <View style={styles.requestPeriod}><TabIcon name="week" color={colors.primary} size={16} /><Text style={styles.requestPeriodText}>{t("managerHrmRequestedPeriod")}: {requestedPeriodLabel(item.period.startDate, item.period.endDate, locale)}</Text></View> : null}
+      {item.routeId ? <Pressable accessibilityRole="button" accessibilityLabel={t("managerApprovalOpenRoute")} onPress={() => router.push(`/(app)/manager/routes/${item.routeId}` as never)} style={({ pressed }) => [styles.routeContext, pressed && styles.pressed]}><View accessible={false} style={styles.routeContextIcon}><TabIcon name="route" color={colors.primary} size={17} /></View><Text style={styles.routeContextText}>{t("managerApprovalOpenRoute")}</Text><TabIcon name="chevronRight" color={colors.primary} size={19} /></Pressable> : null}
       {item.contactPreview ? (
         <View style={styles.contactProposal}>
           <View style={styles.contactProposalTop}>
@@ -567,7 +569,7 @@ export default function ManagerApprovalsScreen() {
                   {data.hrm.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "HRM", title: item.agent.name, typeLabel: hrmRequestTypeLabel(item.type), reason: item.reason, requestedBy: item.agent.name, submittedAt: item.submittedAt, period: { startDate: item.startDate, endDate: item.endDate }, canReschedule: false }, index)} />)}
                 </Section>
                 <Section title={t("managerApprovalRoute")} count={data.counts.routeChanges} icon="route">
-                  {data.routeChanges.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "ROUTE_CHANGE", title: item.requestedByAgent.name, typeLabel: routeChangeTypeLabel(item.changeType), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: item.changeType === "REMOVE_STOP" }, index)} />)}
+                  {data.routeChanges.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "ROUTE_CHANGE", title: item.requestedByAgent.name, typeLabel: routeChangeTypeLabel(item.changeType), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, routeId: item.routeId, canReschedule: item.changeType === "REMOVE_STOP" }, index)} />)}
                 </Section>
                 <Section title={t("managerApprovalCustomer")} count={data.counts.customers} icon="organizations">
                   {data.customers.map((item, index) => <ApprovalRequest key={item.id} {...reviewProps({ id: item.id, kind: "CUSTOMER_CREATE", title: item.name, typeLabel: objectTypeLabel(item.objectType), reason: item.reason, requestedBy: item.requestedByAgent.name, submittedAt: item.submittedAt, canReschedule: false }, index)} />)}
@@ -634,6 +636,7 @@ const styles = StyleSheet.create({
   reviewButtonText: { color: colors.primary, fontSize: 11, lineHeight: 16, textAlign: "center", fontWeight: "900" },
   requestReason: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 8 },
   requestPeriod: { minHeight: 32, marginTop: 9, paddingHorizontal: 9, borderRadius: 11, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 6 }, requestPeriodText: { flex: 1, color: colors.primary, fontSize: 11, fontWeight: "800" },
+  routeContext: { minHeight: 48, marginTop: 9, paddingHorizontal: 9, borderRadius: 12, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 8 }, routeContextIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, routeContextText: { flex: 1, color: colors.primary, fontSize: 11, fontWeight: "900" },
   contactProposal: { marginTop: 9, borderRadius: 12, padding: 10, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, gap: 7 },
   contactProposalTop: { flexDirection: "row", alignItems: "center", gap: 8 },
   contactProposalTitle: { flex: 1, color: colors.info, fontSize: 11, fontWeight: "900" },

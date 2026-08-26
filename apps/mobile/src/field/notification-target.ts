@@ -63,9 +63,9 @@ export function notificationDestination(notification: FieldNotification): string
     case "CONTACT":
       return "/(app)/contacts/" + item.id
     case "CUSTOMER_REQUEST":
-      return "/(app)/customer-requests"
+      return "/(app)/customer-requests?requestId=" + encodeURIComponent(item.id)
     case "HRM_REQUEST":
-      return "/(app)/hrm"
+      return "/(app)/hrm?requestId=" + encodeURIComponent(item.id)
   }
   return null
 }
