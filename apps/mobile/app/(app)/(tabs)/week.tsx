@@ -17,7 +17,7 @@ import { formatCalendarDay, formatCalendarRange } from "../../../src/i18n/date-f
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
-import { resolveFieldRouteFlow } from "../../../src/field/route-flow"
+import { resolveFieldRouteFlow, type FieldRouteStep } from "../../../src/field/route-flow"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
@@ -30,6 +30,53 @@ const tones: Record<RouteStatusTone, { bg: string; border: string; text: string;
   completed: { bg: colors.successBg, border: colors.successBorder, text: colors.successDark, dot: colors.success },
   cancelled: { bg: colors.draftBg, border: colors.draftBorder, text: colors.draft, dot: colors.faint },
   missed: { bg: colors.missedBg, border: colors.missedBorder, text: colors.missed, dot: colors.missed },
+}
+
+function routeRailTone(state: FieldRouteStep["state"]): { background: string; color: string; line: string } {
+  if (state === "completed") return { background: colors.successBg, color: colors.successDark, line: colors.successBorder }
+  if (state === "missed") return { background: colors.missedBg, color: colors.missed, line: colors.missedBorder }
+  if (state === "active") return { background: colors.primary, color: colors.headerText, line: colors.primary }
+  if (state === "next") return { background: colors.primarySoft, color: colors.primary, line: colors.primary }
+  return { background: colors.surfaceMuted, color: colors.muted, line: colors.borderStrong }
+}
+
+function routeStepLabel(state: FieldRouteStep["state"]): string {
+  if (state === "completed") return t("routeCompletedStop")
+  if (state === "active") return t("routeCurrentVisit")
+  if (state === "next") return t("routeNextStop")
+  if (state === "missed") return t("routeMissedStop")
+  return t("routeUpcomingStop")
+}
+
+function RouteProgressRail({ routeLabel, steps }: { routeLabel: string; steps: FieldRouteStep[] }) {
+  if (steps.length < 2) return null
+  const activeIndex = steps.findIndex((step) => step.state === "active")
+  const nextIndex = steps.findIndex((step) => step.state === "next")
+  const focalIndex = activeIndex >= 0 ? activeIndex : nextIndex >= 0 ? nextIndex : steps.length - 1
+  const start = Math.max(0, Math.min(focalIndex - 1, steps.length - 4))
+  const visibleSteps = steps.slice(start, start + 4)
+  const hiddenBefore = start
+  const hiddenAfter = Math.max(0, steps.length - start - visibleSteps.length)
+  const label = `${routeLabel}. ${t("routeRoadmap")}: ${steps.map((step) => `${step.position} ${routeStepLabel(step.state)}`).join(", ")}`
+  return (
+    <View accessible accessibilityRole="summary" accessibilityLabel={label} style={styles.roadmapSummary}>
+      <Text style={styles.roadmapSummaryTitle}>{t("routeRoadmap")}</Text>
+      <View style={styles.roadmapSummaryRail}>
+        {hiddenBefore > 0 ? <View style={styles.roadmapSummaryOverflow}><Text style={styles.roadmapSummaryOverflowText}>+{hiddenBefore}</Text></View> : null}
+        {visibleSteps.map((step, index) => {
+          const tone = routeRailTone(step.state)
+          const last = index === visibleSteps.length - 1 && hiddenAfter === 0
+          return <View key={step.point.id} style={styles.roadmapSummaryStep}>
+            <View style={[styles.roadmapSummaryNode, { backgroundColor: tone.background }]}>
+              {step.state === "completed" ? <TabIcon name="check" color={tone.color} size={16} /> : step.state === "missed" ? <TabIcon name="alert" color={tone.color} size={15} /> : step.state === "active" ? <TabIcon name="visit" color={tone.color} size={16} /> : <Text style={[styles.roadmapSummaryNodeText, { color: tone.color }]}>{step.position}</Text>}
+            </View>
+            {!last ? <View style={[styles.roadmapSummaryLine, { backgroundColor: tone.line }]} /> : null}
+          </View>
+        })}
+        {hiddenAfter > 0 ? <View style={styles.roadmapSummaryOverflow}><Text style={styles.roadmapSummaryOverflowText}>+{hiddenAfter}</Text></View> : null}
+      </View>
+    </View>
+  )
 }
 
 export default function WeekTab() {
@@ -313,6 +360,7 @@ export default function WeekTab() {
                         >
                           <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: tone.dot }]} />
                         </View>
+                        <RouteProgressRail routeLabel={routeLabel} steps={routeFlow.steps} />
                         {primaryPointName ? (
                           <View style={[styles.nextStopSurface, activeVisitForRoute && styles.nextStopSurfaceActive]}>
                             <View style={[styles.nextStopIcon, activeVisitForRoute && styles.nextStopIconActive]}><TabIcon name="visit" color={activeVisitForRoute ? colors.successDark : colors.primary} size={19} /></View>
@@ -497,6 +545,15 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: "900" },
   progressTrack: { height: 5, borderRadius: radii.pill, backgroundColor: colors.skeleton, overflow: "hidden", marginTop: 10, marginBottom: 7 },
   progressFill: { height: "100%", borderRadius: radii.pill },
+  roadmapSummary: { marginTop: 12, borderRadius: radii.inner, padding: 10, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
+  roadmapSummaryTitle: { color: colors.muted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 },
+  roadmapSummaryRail: { minHeight: 34, marginTop: 8, flexDirection: "row", alignItems: "center" },
+  roadmapSummaryStep: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" },
+  roadmapSummaryNode: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  roadmapSummaryNodeText: { fontSize: 11, fontWeight: "900" },
+  roadmapSummaryLine: { flex: 1, height: 2, borderRadius: radii.pill, marginHorizontal: 4 },
+  roadmapSummaryOverflow: { minWidth: 30, height: 30, borderRadius: 10, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  roadmapSummaryOverflowText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
   routeRoadmap: { marginTop: 12, gap: 2 },
   roadmapRow: { flexDirection: "row", gap: 10, minHeight: 44 },
   roadmapMarkerColumn: { width: 26, alignItems: "center" },
