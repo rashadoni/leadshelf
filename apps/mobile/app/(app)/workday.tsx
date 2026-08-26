@@ -735,6 +735,8 @@ export default function WorkdayScreen() {
         {IS_LEADDRIVE_FIELD ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={t("moduleHrm")}
+            accessibilityHint={t("fieldHrmEntryHint")}
             onPress={() => router.push("/(app)/hrm" as never)}
             style={({ pressed }) => [styles.hrmEntry, pressed && styles.pressed]}
           >
