@@ -57,11 +57,17 @@ export default function NewAgentTaskScreen() {
   const [recurrence, setRecurrence] = useState<FieldAgentTaskRecurrence | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showValidation, setShowValidation] = useState(false)
   const customerSearchSequence = useRef(0)
   const hydratedCopyId = useRef<string | null>(null)
 
   const defaultSelectedDate = fieldTaskDateOptions(tenantToday, 2)[1]?.key ?? tenantToday
   const effectiveSelectedDate = selectedDate === undefined ? defaultSelectedDate : selectedDate
+  const normalizedTitle = title.trim()
+  const dueDate = fieldTaskDueDateTime(effectiveSelectedDate, time, tenantTimeZone)
+  const titleInvalid = showValidation && !normalizedTitle
+  const timeInvalid = showValidation && Boolean(effectiveSelectedDate && !dueDate)
+  const formInvalid = !normalizedTitle || Boolean(effectiveSelectedDate && !dueDate) || Boolean(recurrence && !effectiveSelectedDate)
   const selectedTaskDate = effectiveSelectedDate ? formatCalendarDay(effectiveSelectedDate, locale) : null
   const taskDateLabel = selectedTaskDate
     ? `${selectedTaskDate.weekday}, ${selectedTaskDate.date}`
@@ -198,10 +204,9 @@ export default function NewAgentTaskScreen() {
       setError(createBlockMessage)
       return
     }
-    const normalizedTitle = title.trim()
-    const dueDate = fieldTaskDueDateTime(effectiveSelectedDate, time, tenantTimeZone)
-    if (!normalizedTitle || (effectiveSelectedDate && !dueDate) || (recurrence && !effectiveSelectedDate)) {
-      setError(t("agentTaskCreateRequired"))
+    setShowValidation(true)
+    if (formInvalid) {
+      setError(null)
       return
     }
     setSaving(true)
@@ -230,6 +235,7 @@ export default function NewAgentTaskScreen() {
   }
 
   const createDisabled = !canCreateTask
+  const submitDisabled = saving || createDisabled || (showValidation && formInvalid)
   const hasDraft = copySource
     ? title !== copySource.title ||
       description !== (copySource.description ?? "") ||
@@ -266,7 +272,7 @@ export default function NewAgentTaskScreen() {
         <Text style={styles.intro}>{t("agentTaskCreateHint")}</Text>
 
         <View style={styles.formCard}>
-          <Input label={t("agentTaskTitleLabel")} value={title} onChangeText={setTitle} required />
+          <Input label={t("agentTaskTitleLabel")} value={title} onChangeText={setTitle} required validationMessage={titleInvalid ? t("agentTaskTitleRequired") : null} />
           <Input label={t("agentTaskDescriptionLabel")} value={description} onChangeText={setDescription} multiline />
         </View>
 
@@ -305,7 +311,7 @@ export default function NewAgentTaskScreen() {
             <Text style={[styles.noDateText, effectiveSelectedDate === null && styles.noDateTextSelected]}>{t("agentTaskDueNone")}</Text>
           </Pressable>
         </View>
-        {effectiveSelectedDate ? <View style={styles.timeCard}><Text style={styles.timeLabel}>{t("agentTaskTimeLabel")}</Text><TextInput accessibilityLabel={t("agentTaskTimeLabel")} value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} placeholder="09:00" placeholderTextColor={colors.faint} style={styles.timeInput} /><View style={styles.timePresets}>{["09:00", "12:00", "15:00", "18:00"].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${t("agentTaskTimeLabel")}: ${value}`} accessibilityState={{ selected: time === value }} onPress={() => setTime(value)} style={[styles.timePreset, time === value && styles.timePresetSelected]}><Text style={[styles.timePresetText, time === value && styles.timePresetTextSelected]}>{value}</Text></Pressable>)}</View></View> : null}
+        {effectiveSelectedDate ? <View style={styles.timeCard}><Text style={styles.timeLabel}>{t("agentTaskTimeLabel")}</Text><TextInput accessibilityLabel={t("agentTaskTimeLabel")} accessibilityHint={timeInvalid ? t("agentTaskTimeInvalid") : undefined} value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" maxLength={5} placeholder="09:00" placeholderTextColor={colors.faint} style={[styles.timeInput, timeInvalid && styles.timeInputInvalid]} /><View style={styles.timePresets}>{["09:00", "12:00", "15:00", "18:00"].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${t("agentTaskTimeLabel")}: ${value}`} accessibilityState={{ selected: time === value }} onPress={() => setTime(value)} style={[styles.timePreset, time === value && styles.timePresetSelected]}><Text style={[styles.timePresetText, time === value && styles.timePresetTextSelected]}>{value}</Text></Pressable>)}</View>{timeInvalid ? <Text accessibilityRole="alert" style={styles.timeValidation}>{t("agentTaskTimeInvalid")}</Text> : null}</View> : null}
 
         <SectionTitle>{t("agentTaskCustomerLabel")}</SectionTitle>
         <View style={styles.customerPicker}>
@@ -359,7 +365,8 @@ export default function NewAgentTaskScreen() {
       </ScrollView>
       <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
         <View style={[styles.footerContent, layout.isTablet && styles.footerContentTablet]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} accessibilityState={{ disabled: saving || createDisabled, busy: saving }} disabled={saving || createDisabled} onPress={() => void create()} style={[styles.submit, (saving || createDisabled) && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : t("agentTaskCreate")}</Text></Pressable>
+          {showValidation && formInvalid ? <Text accessibilityRole="alert" style={styles.footerValidation}>{t("agentTaskCreateRequired")}</Text> : null}
+          {!field.agentTasks && field.taskPhase === "error" ? <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} onPress={() => void field.refreshAgentTasks()} style={styles.submit}><TabIcon name="refresh" color={colors.headerText} size={18} /><Text style={styles.submitText}>{t("refresh")}</Text></Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={t("agentTaskCreate")} accessibilityState={{ disabled: submitDisabled, busy: saving }} disabled={submitDisabled} onPress={() => void create()} style={[styles.submit, submitDisabled && styles.disabled]}><Text style={styles.submitText}>{saving ? "…" : t("agentTaskCreate")}</Text></Pressable>}
         </View>
       </View>
     </SafeAreaView>
@@ -375,7 +382,7 @@ function priorityLabel(priority: FieldAgentTaskPriority): string {
 
 function SectionTitle({ children }: { children: string }) { return <Text style={styles.sectionTitle}>{children}</Text> }
 function ChoiceChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>{label}</Text></Pressable> }
-function Input({ label, required, multiline, ...props }: { label: string; required?: boolean; multiline?: boolean; value: string; onChangeText: (value: string) => void }) { return <View><Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text><TextInput accessibilityLabel={label} {...props} multiline={multiline} textAlignVertical={multiline ? "top" : "center"} placeholderTextColor={colors.faint} style={[styles.input, multiline && styles.textarea]} /></View> }
+function Input({ label, required, multiline, validationMessage, ...props }: { label: string; required?: boolean; multiline?: boolean; validationMessage?: string | null; value: string; onChangeText: (value: string) => void }) { return <View><Text style={styles.inputLabel}>{label}{required ? " *" : ""}</Text><TextInput accessibilityLabel={label} accessibilityHint={validationMessage ?? undefined} {...props} multiline={multiline} textAlignVertical={multiline ? "top" : "center"} placeholderTextColor={colors.faint} style={[styles.input, multiline && styles.textarea, validationMessage && styles.inputInvalid]} />{validationMessage ? <Text accessibilityRole="alert" style={styles.inputValidation}>{validationMessage}</Text> : null}</View> }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
@@ -391,6 +398,8 @@ const styles = StyleSheet.create({
   formCard: { marginHorizontal: 14, marginTop: 15, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, gap: 13, ...cardShadow },
   inputLabel: { color: colors.muted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45, marginBottom: 6 },
   input: { minHeight: 47, borderRadius: radii.inner, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
+  inputInvalid: { borderColor: colors.missed },
+  inputValidation: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800", marginTop: 5 },
   textarea: { minHeight: 92, paddingTop: 11, lineHeight: 18 },
   sectionTitle: { marginHorizontal: 16, marginTop: 20, marginBottom: 9, color: colors.text, fontSize: 14, fontWeight: "900" },
   wrapChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 },
@@ -406,7 +415,9 @@ const styles = StyleSheet.create({
   timeCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 12, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9 },
   timeLabel: { color: colors.muted, fontSize: 11, fontWeight: "900" },
   timeInput: { width: 76, minHeight: 44, borderRadius: 11, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" },
+  timeInputInvalid: { borderColor: colors.missed },
   timePresets: { width: "100%", flexDirection: "row", gap: 6 },
+  timeValidation: { width: "100%", color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   timePreset: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
   timePresetSelected: { backgroundColor: colors.primarySoft },
   timePresetText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
@@ -446,7 +457,8 @@ const styles = StyleSheet.create({
   stickyFooter: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 14, paddingTop: 10 },
   footerContent: { width: "100%" },
   footerContentTablet: { maxWidth: 1_060, alignSelf: "center" },
-  submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  footerValidation: { color: colors.missed, fontSize: 11, lineHeight: 16, fontWeight: "800", textAlign: "center", paddingHorizontal: 10, paddingBottom: 8 },
+  submit: { minHeight: 52, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
   submitText: { color: colors.headerText, fontSize: 13, fontWeight: "900" },
   pressed: { opacity: 0.72 },
   disabled: { opacity: 0.4 },
