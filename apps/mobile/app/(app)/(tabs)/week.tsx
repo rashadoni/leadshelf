@@ -189,8 +189,8 @@ export default function WeekTab() {
         refreshControl={<RefreshControl refreshing={busy} onRefresh={() => void field.refresh()} />}
       >
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>{t("tabWeek").toUpperCase()}</Text>
-          <Text accessibilityRole="header" style={styles.title}>{t("weekSchedule")}</Text>
+          <Text style={styles.eyebrow}>{t("tabCalendar").toUpperCase()}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{viewRange === 1 ? t("dailyMission") : t("weekSchedule")}</Text>
         </View>
 
         {week ? (
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   createRouteActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   routeUnavailable: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 2, padding: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   routeUnavailableText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
-  routeList: { marginTop: 18, gap: 18 },
+  routeList: { marginTop: 14, gap: 14 },
   routeCard: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 14 },
   routeTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   routeBody: { flex: 1 },

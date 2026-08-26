@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   currentText: { color: colors.text, flexShrink: 1, fontSize: 13, fontWeight: "900", textAlign: "center" },
   currentShortcut: { alignSelf: "center", minHeight: 44, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   currentShortcutText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
-  viewToggle: { alignSelf: "center", minHeight: 40, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  viewToggle: { alignSelf: "center", minHeight: 44, paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.infoBorder, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   viewToggleText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   rangeRail: { alignSelf: "center", flexDirection: "row", gap: 4, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, padding: 3, borderWidth: 1, borderColor: colors.border },
   rangeChoice: { minWidth: 44, minHeight: 44, borderRadius: radii.pill, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
