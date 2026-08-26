@@ -61,6 +61,7 @@ function AttendanceAgentCard({
   timezone,
   expanded,
   onToggle,
+  tablet,
 }: {
   agent: FieldManagerAttendanceAgent
   timezone: string
