@@ -128,6 +128,10 @@ export function FieldDayNavigator({
   // need the surrounding frame to tighten rather than shrinking the targets.
   const compactPhone = !layout.isTablet && layout.width < 390
   const narrowPhone = !layout.isTablet && layout.width < 360
+  // A seven-column calendar must never shrink below seven 44dp targets. The
+  // standard dialog gutters would make that impossible on 320–360dp phones,
+  // so the picker uses the full available width before reducing a touch area.
+  const compactCalendar = !layout.isTablet && layout.width < 376
   const calendarDays = calendarOpen ? monthGrid(calendarMonth) : []
   const calendarWeekdays = calendarDays.slice(0, 7).map((date) => formatCalendarWeekdayShort(date, locale))
   const calendarMonthLabel = calendarMonth
@@ -315,9 +319,9 @@ export function FieldDayNavigator({
 
       {calendarEnabled ? (
         <Modal visible={calendarOpen} transparent animationType="fade" onRequestClose={() => setCalendarOpen(false)}>
-          <View style={styles.calendarOverlay}>
+          <View style={[styles.calendarOverlay, compactCalendar && styles.calendarOverlayCompact]}>
             <Pressable accessibilityRole="button" accessibilityLabel={t("calendarClose")} onPress={() => setCalendarOpen(false)} style={styles.calendarBackdrop} />
-            <View accessibilityViewIsModal style={styles.calendarDialog}>
+            <View accessibilityViewIsModal style={[styles.calendarDialog, compactCalendar && styles.calendarDialogCompact]}>
               <View style={styles.calendarHeader}>
                 <Pressable accessibilityRole="button" accessibilityLabel={t("calendarPreviousMonth")} onPress={() => setCalendarMonth((month) => shiftMonth(month, -1))} style={styles.calendarArrow}>
                   <TabIcon name="chevronLeft" color={colors.primary} size={21} />
@@ -399,7 +403,7 @@ const styles = StyleSheet.create({
   daySolo: { flexGrow: 0, flexBasis: 72 },
   daySelected: { backgroundColor: colors.primary },
   dayOff: { opacity: 0.66 },
-  weekday: { color: colors.muted, fontSize: 10, fontWeight: "900" },
+  weekday: { color: colors.muted, fontSize: 11, fontWeight: "900" },
   weekdaySelected: { color: colors.headerText },
   date: { color: colors.text, fontSize: 18, fontWeight: "900" },
   dateSelected: { color: colors.headerText },
@@ -407,17 +411,19 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: radii.pill },
   visibleHint: { color: colors.muted, fontSize: 11, lineHeight: 15, textAlign: "center", paddingHorizontal: 8 },
   calendarOverlay: { flex: 1, justifyContent: "center", paddingHorizontal: 14, backgroundColor: "rgba(16,38,61,0.42)" },
+  calendarOverlayCompact: { paddingHorizontal: 0 },
   calendarBackdrop: { ...StyleSheet.absoluteFill },
   calendarDialog: { width: "100%", maxWidth: 500, maxHeight: "90%", alignSelf: "center", borderRadius: 24, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
+  calendarDialogCompact: { borderRadius: 18, paddingHorizontal: 4 },
   calendarHeader: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 },
   calendarArrow: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   calendarTitle: { flex: 1, color: colors.text, fontSize: 17, fontWeight: "900", textAlign: "center", textTransform: "capitalize" },
   calendarBody: { flexShrink: 1 },
   calendarBodyContent: { paddingBottom: 2 },
   calendarWeekdays: { flexDirection: "row", marginTop: 10 },
-  calendarWeekday: { width: "14.2857%", color: colors.muted, fontSize: 10, fontWeight: "900", textAlign: "center" },
+  calendarWeekday: { width: "14.2857%", color: colors.muted, fontSize: 11, fontWeight: "900", textAlign: "center" },
   calendarGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 5 },
-  calendarDay: { width: "14.2857%", minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  calendarDay: { width: "14.2857%", minWidth: 44, minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   calendarDayOutside: { opacity: 0.42 },
   calendarDayDisabled: { opacity: 0.34 },
   calendarDayToday: { borderWidth: 1, borderColor: colors.primary },
