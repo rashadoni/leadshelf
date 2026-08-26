@@ -46,6 +46,7 @@ import {
 } from "../../../src/field/visit-photo-store"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
@@ -115,6 +116,7 @@ function activeFieldVisit(fieldWeek: ReturnType<typeof useField>["week"]): Field
 export default function CommitmentsScreen() {
   const locale = useLocale()
   const field = useField()
+  const layout = useResponsiveLayout()
   const { sync, status: syncStatus } = useSync()
   const [data, setData] = useState(readFieldCommitments)
   const [filter, setFilter] = useState<ListFilter>("OPEN")
@@ -391,6 +393,7 @@ export default function CommitmentsScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.primary} />}
       >
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <CommercialVisitContext
           active={Boolean(activeVisit)}
           storeName={activeVisit?.customer.name ?? null}
@@ -442,7 +445,7 @@ export default function CommitmentsScreen() {
         {busy ? <View accessibilityRole="alert" style={styles.busyNotice}><TabIcon name="refresh" color={colors.primary} size={17} /><Text style={styles.busyNoticeText}>{t("saving")}</Text></View> : null}
 
         {createOpen && activeVisit ? (
-          <View style={styles.composer}>
+          <View style={[styles.composer, layout.isTablet && styles.composerTablet]}>
             <View style={styles.composerHeader}>
               <View style={styles.stepMark}><Text style={styles.stepMarkText}>1</Text></View>
               <View style={styles.composerTitleBody}><Text style={styles.composerTitle}>{t("commitmentsNewTitle")}</Text><Text style={styles.composerHint}>{t("commitmentsNewHint")}</Text></View>
@@ -491,7 +494,7 @@ export default function CommitmentsScreen() {
         ) : null}
 
         {factTarget ? (
-          <View style={[styles.composer, styles.factComposer]}>
+          <View style={[styles.composer, styles.factComposer, layout.isTablet && styles.composerTablet]}>
             <View style={styles.composerHeader}>
               <View style={[styles.stepMark, styles.factMark]}><Text style={styles.stepMarkText}>✓</Text></View>
               <View style={styles.composerTitleBody}><Text style={styles.composerTitle}>{t("commitmentsFactTitle")}</Text><Text style={styles.composerHint}>{factTarget.productName} · {factTarget.customer.name}</Text></View>
@@ -522,15 +525,16 @@ export default function CommitmentsScreen() {
           </View>
         ) : null}
 
-        <View style={styles.list}>
+        <View style={[styles.list, layout.isTablet && styles.listTablet]}>
           {visible.map((commitment) => (
-            <CommitmentCard
-              key={commitment.id}
-              commitment={commitment}
-              locale={locale}
-              busy={busy}
-              onFact={() => { setCreateOpen(false); openFact(commitment) }}
-            />
+            <View key={commitment.id} style={layout.isTablet ? styles.cardSlotTablet : undefined}>
+              <CommitmentCard
+                commitment={commitment}
+                locale={locale}
+                busy={busy}
+                onFact={() => { setCreateOpen(false); openFact(commitment) }}
+              />
+            </View>
           ))}
         </View>
 
@@ -541,6 +545,7 @@ export default function CommitmentsScreen() {
             hint={filter === "OPEN" ? t("commitmentsEmptyOpenHint") : t("commitmentsEmptyHistoryHint")}
           />
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -641,6 +646,8 @@ function SyncNotice({ state }: { state: "PENDING" | "CONFLICT" | "REJECTED" }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { paddingBottom: 36 },
+  content: { width: "100%" },
+  contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   summary: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 10, paddingVertical: 11, flexDirection: "row", alignItems: "stretch" },
   summaryItem: { flex: 1, minHeight: 54, alignItems: "center", justifyContent: "center" },
   summaryDivider: { width: 1, backgroundColor: colors.border },
@@ -668,6 +675,7 @@ const styles = StyleSheet.create({
   busyNotice: { marginHorizontal: 14, marginTop: 10, minHeight: 44, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 8 },
   busyNoticeText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
   composer: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 14, borderWidth: 1, borderColor: colors.infoBorder },
+  composerTablet: { width: "100%", maxWidth: 720, alignSelf: "center", marginHorizontal: 0 },
   factComposer: { borderColor: colors.successBorder },
   composerHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   stepMark: { width: 35, height: 35, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
@@ -722,6 +730,8 @@ const styles = StyleSheet.create({
   photoUnavailable: { marginTop: 14, borderRadius: radii.inner, padding: 11, backgroundColor: colors.warningBg },
   photoUnavailableText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "700" },
   list: { gap: 11, paddingHorizontal: 14, marginTop: 16, marginBottom: 12 },
+  listTablet: { flexDirection: "row", flexWrap: "wrap" },
+  cardSlotTablet: { flexBasis: "48%", flexGrow: 1 },
   card: { ...commercialCardStyle },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
   productMark: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
