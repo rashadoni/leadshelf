@@ -13,6 +13,7 @@ import { objectTypeLabel } from "../../../src/field/labels"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { useResponsiveLayout } from "../../../src/layout/responsive"
 
 const CACHE_KEY = "field.customer-requests"
 
@@ -39,6 +40,7 @@ function statusColors(status: string): { background: string; foreground: string 
 
 export default function CustomerRequestsScreen() {
   useLocale()
+  const layout = useResponsiveLayout()
   const cached = readFieldCache<FieldCustomerRequestsData>(CACHE_KEY)
   const [data, setData] = useState<FieldCustomerRequestsData | null>(cached?.value ?? null)
   const [loading, setLoading] = useState(!cached)
@@ -64,6 +66,7 @@ export default function CustomerRequestsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
+        <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/(tabs)/work")} style={styles.back}>
             <TabIcon name="chevronLeft" color={colors.text} size={23} />
@@ -80,8 +83,8 @@ export default function CustomerRequestsScreen() {
 
         {error ? <View style={styles.notice}><Text style={styles.noticeText}>{data ? t("fieldDataStale") : t("fieldDataError")}</Text></View> : null}
         {data?.requests.length ? (
-          <View style={styles.list}>
-            {data.requests.map((request) => <RequestCard key={request.id} request={request} />)}
+          <View style={[styles.list, layout.isTablet && styles.listTablet]}>
+            {data.requests.map((request) => <RequestCard key={request.id} request={request} tablet={layout.isTablet} />)}
           </View>
         ) : !loading ? (
           <View style={styles.empty}>
@@ -91,17 +94,18 @@ export default function CustomerRequestsScreen() {
             <Pressable accessibilityRole="button" accessibilityLabel={t("newCustomerRequest")} onPress={() => router.push("/(app)/customer-requests/new" as never)} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{t("newCustomerRequest")}</Text></Pressable>
           </View>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
 }
 
-function RequestCard({ request }: { request: FieldCustomerRequest }) {
+function RequestCard({ request, tablet }: { request: FieldCustomerRequest; tablet: boolean }) {
   const locale = useLocale()
   const tone = statusColors(request.status)
   const submittedAt = request.submittedAt ?? request.updatedAt
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, tablet && styles.cardTablet]}>
       <View style={styles.cardTop}>
         <View style={styles.cardBody}>
           <Text style={styles.cardName}>{request.name}</Text>
@@ -138,11 +142,12 @@ function RequestCard({ request }: { request: FieldCustomerRequest }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { minHeight: "100%", paddingBottom: 30 },
+  content: { width: "100%" }, contentTablet: { maxWidth: 1_060, alignSelf: "center" },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, subtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   add: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, noticeText: { color: colors.warning, fontSize: 11, fontWeight: "800" }, list: { paddingTop: 3 },
-  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, cardBody: { flex: 1, minWidth: 0 }, cardName: { color: colors.text, fontSize: 15, fontWeight: "900" }, cardMeta: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 3 },
+  notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, noticeText: { color: colors.warning, fontSize: 11, fontWeight: "800" }, list: { paddingTop: 3 }, listTablet: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 14, paddingTop: 12, alignItems: "flex-start" },
+  card: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, ...cardShadow }, cardTablet: { flexBasis: "48%", flexGrow: 1, marginHorizontal: 0, marginTop: 0 }, cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, cardBody: { flex: 1, minWidth: 0 }, cardName: { color: colors.text, fontSize: 15, fontWeight: "900" }, cardMeta: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 3 },
   status: { borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 6 }, statusText: { fontSize: 11, fontWeight: "900" }, address: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 9 }, reason: { color: colors.text, fontSize: 13, lineHeight: 18, marginTop: 9 },
   cardFooter: { marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", justifyContent: "space-between", gap: 8 }, footerText: { color: colors.faint, fontSize: 11, fontWeight: "700" }, routeInfo: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 }, routeText: { color: colors.info, fontSize: 11, fontWeight: "800", flexShrink: 1 },
   duplicateLine: { marginTop: 10, borderRadius: 10, padding: 9, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 7 }, duplicateText: { color: colors.warning, fontSize: 11, fontWeight: "900", flex: 1 }, approved: { minHeight: 54, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 10, backgroundColor: colors.successBg, flexDirection: "row", alignItems: "center", gap: 8 }, approvedIcon: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, approvedBody: { flex: 1, minWidth: 0 }, approvedLabel: { color: colors.successDark, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.3 }, approvedText: { color: colors.successDark, fontSize: 13, fontWeight: "900", marginTop: 1 }, pressed: { opacity: 0.75 },
