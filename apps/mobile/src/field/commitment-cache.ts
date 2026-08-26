@@ -126,7 +126,7 @@ export function projectFieldCommitments(
   operations: FieldCommitmentProjectionOperation[],
   now = Date.now(),
 ): FieldCommitmentsData {
-  const capabilities = cached?.capabilities ?? { create: true, fulfillOwn: true }
+  const capabilities = cached?.capabilities ?? { create: false, fulfillOwn: false }
   let commitments = [...(cached?.commitments ?? [])]
 
   for (const operation of operations) {

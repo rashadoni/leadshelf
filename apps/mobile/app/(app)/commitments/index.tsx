@@ -26,6 +26,7 @@ import {
   enqueueFieldCommitmentCreate,
   enqueueFieldCommitmentFulfill,
   listLocalCatalogProducts,
+  readFieldCache,
   readFieldCommitments,
   writeFieldCache,
   type LocalCatalogProductRow,
@@ -35,6 +36,7 @@ import { fieldErrorMessage } from "../../../src/field/error-message"
 import { resolveFieldTodayPrimaryAction } from "../../../src/field/today-primary-action"
 import type {
   FieldCommitment,
+  FieldCommitmentsData,
   FieldCommitmentOutcome,
   FieldCommitmentStatus,
   FieldWeekVisit,
@@ -46,6 +48,9 @@ import {
 } from "../../../src/field/visit-photo-store"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
+import { resolveFieldTaskToday } from "../../../src/field/task-time"
+import { shiftDateKey } from "../../../src/field/route-time"
+import { tenantDateTimeToIso } from "../../../src/field/tenant-time"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { getCurrentDeviceLocation } from "../../../src/location/device-location"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
@@ -56,30 +61,13 @@ import { IS_LEADDRIVE_FIELD } from "../../../src/config/mobile-variant"
 
 type ListFilter = "OPEN" | "HISTORY"
 
-function futureDateKey(days: number): string {
-  const date = new Date()
-  date.setDate(date.getDate() + days)
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-")
+function futureDateKey(today: string, days: number): string {
+  return shiftDateKey(today, days)
 }
 
-function dueAtFromDateKey(value: string): string | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
-  if (!match) return null
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const date = new Date(year, month - 1, day, 23, 59, 59, 999)
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day ||
-    date.getTime() <= Date.now()
-  ) return null
-  return date.toISOString()
+function dueAtFromDateKey(value: string, timeZone: string): string | null {
+  const dueAt = tenantDateTimeToIso(value.trim(), "23:59", timeZone)
+  return dueAt && new Date(dueAt).getTime() > Date.now() ? dueAt : null
 }
 
 function decimal(value: string, allowZero: boolean): number | null {
@@ -119,6 +107,7 @@ export default function CommitmentsScreen() {
   const layout = useResponsiveLayout()
   const { sync, status: syncStatus } = useSync()
   const [data, setData] = useState(readFieldCommitments)
+  const [capabilitiesKnown, setCapabilitiesKnown] = useState(() => Boolean(readFieldCache<FieldCommitmentsData>(FIELD_COMMITMENTS_CACHE_KEY)))
   const [filter, setFilter] = useState<ListFilter>("OPEN")
   const [createOpen, setCreateOpen] = useState(false)
   const [factTarget, setFactTarget] = useState<FieldCommitment | null>(null)
@@ -130,7 +119,9 @@ export default function CommitmentsScreen() {
   const [brandName, setBrandName] = useState("")
   const [quantity, setQuantity] = useState("")
   const [unit, setUnit] = useState(t("commitmentsUnitDefault"))
-  const [dueDate, setDueDate] = useState(() => futureDateKey(3))
+  const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
+  const tenantToday = resolveFieldTaskToday(field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date, tenantTimeZone)
+  const [dueDate, setDueDate] = useState(() => futureDateKey(tenantToday, 3))
   const [promiseNote, setPromiseNote] = useState("")
   const [promisePhoto, setPromisePhoto] = useState<CommercialPhotoCapture | null>(null)
   const [promiseDetailsOpen, setPromiseDetailsOpen] = useState(false)
@@ -140,6 +131,10 @@ export default function CommitmentsScreen() {
   const [factDetailsOpen, setFactDetailsOpen] = useState(false)
   const catalog = useMemo(listLocalCatalogProducts, [])
   const activeVisit = activeFieldVisit(field.week)
+  const canCreateCommitment = capabilitiesKnown && data.capabilities.create
+  const canFulfillCommitment = capabilitiesKnown && data.capabilities.fulfillOwn
+  const createCapabilityHint = capabilitiesKnown ? t("commitmentsCreateUnavailable") : t("commitmentsCapabilitiesLoading")
+  const fulfillCapabilityHint = capabilitiesKnown ? t("commitmentsFulfillUnavailable") : t("commitmentsCapabilitiesLoading")
   const recoveryAction = !activeVisit ? resolveFieldTodayPrimaryAction({
     isField: IS_LEADDRIVE_FIELD,
     activeVisit: null,
@@ -180,7 +175,10 @@ export default function CommitmentsScreen() {
         ? "add"
         : "week"
 
-  const reload = useCallback(() => setData(readFieldCommitments()), [])
+  const reload = useCallback(() => {
+    setData(readFieldCommitments())
+    setCapabilitiesKnown(Boolean(readFieldCache<FieldCommitmentsData>(FIELD_COMMITMENTS_CACHE_KEY)))
+  }, [])
 
   const refreshServer = useCallback(async (showWarning: boolean) => {
     try {
@@ -202,6 +200,10 @@ export default function CommitmentsScreen() {
   useEffect(() => {
     if (syncStatus.phase === "idle" || syncStatus.phase === "offline" || syncStatus.phase === "error") reload()
   }, [reload, syncStatus.lastSyncAt, syncStatus.phase])
+
+  useEffect(() => {
+    if (!createOpen) setDueDate(futureDateKey(tenantToday, 3))
+  }, [createOpen, tenantToday])
 
   const counts = useMemo(() => ({
     open: data.commitments.filter((item) => !item.fulfillment).length,
@@ -230,7 +232,7 @@ export default function CommitmentsScreen() {
     setBrandName("")
     setQuantity("")
     setUnit(t("commitmentsUnitDefault"))
-    setDueDate(futureDateKey(3))
+    setDueDate(futureDateKey(tenantToday, 3))
     setPromiseNote("")
     setPromisePhoto(null)
     setPromiseDetailsOpen(false)
@@ -266,8 +268,12 @@ export default function CommitmentsScreen() {
   }
 
   async function savePromise() {
+    if (!canCreateCommitment) {
+      setWarning(createCapabilityHint)
+      return
+    }
     const promisedQuantity = decimal(quantity, false)
-    const dueAt = dueAtFromDateKey(dueDate)
+    const dueAt = dueAtFromDateKey(dueDate, tenantTimeZone)
     const name = productName.trim()
     const normalizedUnit = unit.trim()
     if (!activeVisit || !field.profile || !name || !promisedQuantity || !normalizedUnit || !dueAt || busy) {
@@ -334,6 +340,10 @@ export default function CommitmentsScreen() {
   }
 
   async function saveFact() {
+    if (!canFulfillCommitment) {
+      setWarning(fulfillCapabilityHint)
+      return
+    }
     if (!factTarget || busy) return
     const actual = decimal(actualQuantity, true)
     if (actual == null || factTarget.id.startsWith("local:")) {
@@ -443,15 +453,17 @@ export default function CommitmentsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={busy ? t("saving") : t("commitmentsNew")}
-            accessibilityHint={activeVisit ? t("commitmentsNewHint") : t("commitmentsNeedsVisit")}
-            accessibilityState={{ busy, disabled: !activeVisit || busy, expanded: createOpen }}
-            disabled={!activeVisit || busy}
+            accessibilityHint={!canCreateCommitment ? createCapabilityHint : activeVisit ? t("commitmentsNewHint") : t("commitmentsNeedsVisit")}
+            accessibilityState={{ busy, disabled: !activeVisit || busy || !canCreateCommitment, expanded: createOpen }}
+            disabled={!activeVisit || busy || !canCreateCommitment}
             onPress={() => { setFactTarget(null); setCreateOpen((current) => !current) }}
-            style={[styles.addButton, (!activeVisit || busy) && styles.disabled]}
+            style={[styles.addButton, (!activeVisit || busy || !canCreateCommitment) && styles.disabled]}
           >
             <TabIcon name="add" color={colors.headerText} size={19} /><Text style={styles.addLabel}>{t("commitmentsNew")}</Text>
           </Pressable>
         </View>
+
+        {!canCreateCommitment ? <View accessibilityRole={capabilitiesKnown ? "alert" : "status"} accessibilityLiveRegion="polite" style={[styles.capabilityNotice, !capabilitiesKnown && styles.capabilityNoticeLoading]}><TabIcon name={capabilitiesKnown ? "alert" : "refresh"} color={capabilitiesKnown ? colors.warning : colors.info} size={17} /><Text style={[styles.capabilityNoticeText, !capabilitiesKnown && styles.capabilityNoticeLoadingText]}>{createCapabilityHint}</Text></View> : null}
 
         {warning ? <View accessibilityRole="alert" style={styles.warning}><View style={styles.warningBody}><Text style={styles.warningText}>{warning}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: refreshing, disabled: refreshing }} disabled={refreshing} onPress={() => void refresh()} style={[styles.warningRetry, refreshing && styles.disabled]}><TabIcon name="refresh" color={colors.warning} size={17} /><Text style={styles.warningRetryText}>{refreshing ? "…" : t("refresh")}</Text></Pressable></View></View> : null}
         {busy ? <View accessibilityRole="alert" style={styles.busyNotice}><TabIcon name="refresh" color={colors.primary} size={17} /><Text style={styles.busyNoticeText}>{t("saving")}</Text></View> : null}
@@ -487,13 +499,13 @@ export default function CommitmentsScreen() {
             <FieldLabel label={t("commitmentsDueDate")} />
             <TextInput accessibilityLabel={t("commitmentsDueDate")} accessibilityHint={t("dateInputHint")} value={dueDate} onChangeText={setDueDate} keyboardType="numbers-and-punctuation" maxLength={10} placeholder={t("dateInputHint")} placeholderTextColor={colors.faint} style={styles.input} />
             <View style={styles.quickDates}>
-              <QuickDate selected={dueDate === futureDateKey(1)} label={t("commitmentsDue1")} onPress={() => setDueDate(futureDateKey(1))} />
-              <QuickDate selected={dueDate === futureDateKey(3)} label={t("commitmentsDue3")} onPress={() => setDueDate(futureDateKey(3))} />
-              <QuickDate selected={dueDate === futureDateKey(7)} label={t("commitmentsDue7")} onPress={() => setDueDate(futureDateKey(7))} />
+              <QuickDate selected={dueDate === futureDateKey(tenantToday, 1)} label={t("commitmentsDue1")} onPress={() => setDueDate(futureDateKey(tenantToday, 1))} />
+              <QuickDate selected={dueDate === futureDateKey(tenantToday, 3)} label={t("commitmentsDue3")} onPress={() => setDueDate(futureDateKey(tenantToday, 3))} />
+              <QuickDate selected={dueDate === futureDateKey(tenantToday, 7)} label={t("commitmentsDue7")} onPress={() => setDueDate(futureDateKey(tenantToday, 7))} />
             </View>
             <View style={styles.formActions}>
               <View style={styles.secondaryAction}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={closePromiseForm} /></View>
-              <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSavePromise")} disabled={busy} onPress={() => void savePromise()} /></View>
+              <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSavePromise")} disabled={busy || !canCreateCommitment} onPress={() => void savePromise()} /></View>
             </View>
             <CommitmentDisclosure title={t("commitmentsExtraDetails")} hint={t("commitmentsExtraDetailsHint")} open={promiseDetailsOpen} onPress={() => setPromiseDetailsOpen((open) => !open)}>
               <FieldLabel label={t("commitmentsBrand")} />
@@ -513,6 +525,7 @@ export default function CommitmentsScreen() {
               <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} accessibilityHint={t("commitmentsFactTitle")} onPress={closeFact} style={styles.closeButton}><TabIcon name="close" color={colors.faint} size={20} /></Pressable>
             </View>
             <Text style={styles.factInstruction}>{t("commitmentsFactHint")}</Text>
+            {!canFulfillCommitment ? <View accessibilityRole={capabilitiesKnown ? "alert" : "status"} style={[styles.inlineCapabilityNotice, !capabilitiesKnown && styles.inlineCapabilityNoticeLoading]}><Text style={[styles.inlineCapabilityNoticeText, !capabilitiesKnown && styles.inlineCapabilityNoticeLoadingText]}>{fulfillCapabilityHint}</Text></View> : null}
             <FieldLabel label={t("commitmentsActualQuantity")} />
             <View style={styles.actualRow}>
               <TextInput accessibilityLabel={`${t("commitmentsActualQuantity")}: ${factTarget.productName}`} value={actualQuantity} onChangeText={setActualQuantity} keyboardType="decimal-pad" maxLength={14} style={[styles.input, styles.actualInput]} />
@@ -527,7 +540,7 @@ export default function CommitmentsScreen() {
             ) : null}
             <View style={styles.formActions}>
               <View style={styles.secondaryAction}><CommercialButton label={t("cancel")} tone="secondary" disabled={busy} onPress={closeFact} /></View>
-              <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSaveFact")} disabled={busy || factActual == null} onPress={() => void saveFact()} /></View>
+              <View style={styles.primaryAction}><CommercialButton label={t("commitmentsSaveFact")} disabled={busy || factActual == null || !canFulfillCommitment} onPress={() => void saveFact()} /></View>
             </View>
             <CommitmentDisclosure title={t("commitmentsExtraDetails")} hint={t("commitmentsExtraDetailsHint")} open={factDetailsOpen} onPress={() => setFactDetailsOpen((open) => !open)}>
               <FieldLabel label={t("commitmentsNote")} />
@@ -543,7 +556,10 @@ export default function CommitmentsScreen() {
               <CommitmentCard
                 commitment={commitment}
                 locale={locale}
+                timeZone={tenantTimeZone}
                 busy={busy}
+                fulfillAllowed={canFulfillCommitment}
+                fulfillHint={fulfillCapabilityHint}
                 onFact={() => { setCreateOpen(false); openFact(commitment) }}
               />
             </View>
@@ -607,10 +623,13 @@ function formatQuantity(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100)
 }
 
-function CommitmentCard({ commitment, locale, busy, onFact }: {
+function CommitmentCard({ commitment, locale, timeZone, busy, fulfillAllowed, fulfillHint, onFact }: {
   commitment: FieldCommitment
   locale: ReturnType<typeof useLocale>
+  timeZone: string
   busy: boolean
+  fulfillAllowed: boolean
+  fulfillHint: string
   onFact: () => void
 }) {
   const pendingServerId = commitment.id.startsWith("local:")
@@ -632,13 +651,13 @@ function CommitmentCard({ commitment, locale, busy, onFact }: {
         <Metric label={t("commitmentsFact")} value={commitment.fulfillment ? `${formatQuantity(commitment.fulfillment.actualQuantity)} ${commitment.unit}` : "—"} accent={commitment.fulfillment ? colors.successDark : colors.faint} />
         <Metric label={t("commitmentsVariance")} value={commitment.fulfillment ? `${formatQuantity(commitment.fulfillment.varianceQuantity)} ${commitment.unit}` : "—"} accent={commitment.fulfillment && commitment.fulfillment.varianceQuantity < 0 ? colors.missed : colors.successDark} />
       </View>
-      <View style={styles.dueRow}><TabIcon name="week" color={colors.faint} size={14} /><Text style={styles.dueLabel}>{t("commitmentsDue")}</Text><Text style={[styles.dueValue, commitment.status === "OVERDUE" && styles.dueOverdue]}>{formatShortDateTime(commitment.dueAt, locale)}</Text></View>
+      <View style={styles.dueRow}><TabIcon name="week" color={colors.faint} size={14} /><Text style={styles.dueLabel}>{t("commitmentsDue")}</Text><Text style={[styles.dueValue, commitment.status === "OVERDUE" && styles.dueOverdue]}>{formatShortDateTime(commitment.dueAt, locale, timeZone)}</Text></View>
       {commitment.note ? <Text style={styles.note}>{commitment.note}</Text> : null}
       {(hasEvidence || factEvidence) ? <View style={styles.evidence}><TabIcon name="camera" color={colors.holiday} size={14} /><Text style={styles.evidenceText}>{t("commitmentsPhotoAttached")}</Text></View> : null}
       {commitment.syncState ? <SyncNotice state={commitment.syncState} /> : null}
       {!commitment.fulfillment ? (
         <View style={styles.cardFooter}>
-          {pendingServerId ? <Text style={styles.pendingHint}>{t("commitmentsWaitingForSync")}</Text> : <View style={styles.factButtonWrap}><CommercialButton label={t("commitmentsRecordFact")} disabled={busy || Boolean(commitment.syncState)} onPress={onFact} /></View>}
+          {pendingServerId ? <Text style={styles.pendingHint}>{t("commitmentsWaitingForSync")}</Text> : !fulfillAllowed ? <Text style={styles.capabilityHint}>{fulfillHint}</Text> : <View style={styles.factButtonWrap}><CommercialButton label={t("commitmentsRecordFact")} disabled={busy || Boolean(commitment.syncState)} onPress={onFact} /></View>}
         </View>
       ) : commitment.fulfillment.note ? <View style={styles.factNote}><Text style={styles.factNoteLabel}>{t("commitmentsFact")}</Text><Text style={styles.factNoteText}>{commitment.fulfillment.note}</Text></View> : null}
     </View>
@@ -679,6 +698,10 @@ const styles = StyleSheet.create({
   warningText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   warningRetry: { minHeight: 44, borderRadius: 12, paddingHorizontal: 8, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 2 },
   warningRetryText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
+  capabilityNotice: { minHeight: 44, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 11, backgroundColor: colors.warningBg, flexDirection: "row", alignItems: "center", gap: 8 },
+  capabilityNoticeText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  capabilityNoticeLoading: { backgroundColor: colors.infoBg },
+  capabilityNoticeLoadingText: { color: colors.info },
   recoveryAction: { minHeight: 62, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, paddingHorizontal: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 10 },
   recoveryLoading: { backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   recoveryIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
@@ -737,6 +760,10 @@ const styles = StyleSheet.create({
   detailsHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   detailsContent: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 12, paddingBottom: 14 },
   factInstruction: { marginTop: 12, borderRadius: radii.inner, backgroundColor: colors.successBg, padding: 10, color: colors.successDark, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  inlineCapabilityNotice: { marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.warningBg, padding: 10 },
+  inlineCapabilityNoticeText: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  inlineCapabilityNoticeLoading: { backgroundColor: colors.infoBg },
+  inlineCapabilityNoticeLoadingText: { color: colors.info },
   actualRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   actualInput: { flex: 1 },
   actualUnit: { minWidth: 45, color: colors.text, fontSize: 12, fontWeight: "900" },
@@ -777,6 +804,7 @@ const styles = StyleSheet.create({
   cardFooter: { marginTop: 13, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   factButtonWrap: { alignSelf: "stretch" },
   pendingHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center" },
+  capabilityHint: { color: colors.warning, fontSize: 11, lineHeight: 16, textAlign: "center" },
   factNote: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
   factNoteLabel: { color: colors.faint, fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   factNoteText: { color: colors.text, fontSize: 11, lineHeight: 16, marginTop: 4 },
