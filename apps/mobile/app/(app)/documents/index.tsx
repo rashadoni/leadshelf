@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { useFocusEffect } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
@@ -33,6 +33,8 @@ export default function DocumentsScreen() {
   const [filter, setFilter] = useState<DocumentFilter>("all")
   const [uploadOpen, setUploadOpen] = useState(false)
   const [selectedScope, setSelectedScope] = useState<UploadScope | null>(null)
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false)
+  const [taskQuery, setTaskQuery] = useState("")
   const [refreshing, setRefreshing] = useState(false)
   const [picking, setPicking] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -45,6 +47,7 @@ export default function DocumentsScreen() {
     uploadTitle: "Faylı hara bağlayaq?", general: "Ümumi sənəd", visit: "Aktiv vizit", task: "Tapşırıq",
     choose: "Fayl seç", cancel: "Ləğv et", saved: "Fayl saxlanıldı", savedHint: "Göndərmə növbəsinə əlavə edildi.",
     refreshError: "Sənədlər yenilənmədi — telefondakı nüsxə göstərilir.", noScope: "Əvvəlcə faylın kontekstini seçin.",
+    taskSearch: "Tapşırığı axtar", taskSearchEmpty: "Uyğun açıq tapşırıq yoxdur",
   } : {
     eyebrow: "РАБОЧИЙ ЦЕНТР", title: "Документы", hint: "Файлы задач, материалы визитов и документы, назначенные офисом.",
     add: "Добавить файл", all: "Все", required: "Обязательные", offline: "На телефоне", empty: "Здесь пока нет документов",
@@ -53,14 +56,24 @@ export default function DocumentsScreen() {
     uploadTitle: "К чему привязать файл?", general: "Общий документ", visit: "Активный визит", task: "Задача",
     choose: "Выбрать файл", cancel: "Отмена", saved: "Файл сохранён", savedHint: "Он добавлен в очередь на отправку.",
     refreshError: "Документы не обновились — показана копия с телефона.", noScope: "Сначала выберите контекст файла.",
+    taskSearch: "Найти задачу", taskSearchEmpty: "Подходящих открытых задач нет",
   }
 
   const activeVisit = useMemo(() => field.week?.days.flatMap((day) => day.visits.items).find((visit) => visit.status === "CHECKED_IN") ?? null, [field.week])
   const scopes = useMemo<UploadScope[]>(() => [
     { kind: "general", id: null, label: copy.general },
     ...(activeVisit ? [{ kind: "visit" as const, id: activeVisit.id, label: `${copy.visit}: ${activeVisit.customer.name}` }] : []),
-    ...(field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").slice(0, 8).map((task) => ({ kind: "task" as const, id: task.id, label: `${copy.task}: ${task.title}` })) ?? []),
-  ], [activeVisit, copy.general, copy.task, copy.visit, field.agentTasks?.tasks])
+  ], [activeVisit, copy.general, copy.visit])
+  const taskScopes = useMemo<UploadScope[]>(() => (
+    field.agentTasks?.tasks
+      .filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED")
+      .map((task) => ({ kind: "task" as const, id: task.id, label: `${copy.task}: ${task.title}` })) ?? []
+  ), [copy.task, field.agentTasks?.tasks])
+  const visibleTaskScopes = useMemo(() => {
+    const query = taskQuery.trim().toLocaleLowerCase()
+    if (!query) return taskScopes
+    return taskScopes.filter((scope) => scope.label.toLocaleLowerCase().includes(query))
+  }, [taskQuery, taskScopes])
 
   const visible = useMemo(() => data.documents.filter((document) => {
     if (filter === "required") return document.assignment.required && !document.assignment.readAt
@@ -105,6 +118,8 @@ export default function DocumentsScreen() {
       setData(readFieldDocuments())
       setUploadOpen(false)
       setSelectedScope(null)
+      setTaskPickerOpen(false)
+      setTaskQuery("")
       Alert.alert(copy.saved, copy.savedHint)
       void sync().then(() => load(false)).catch(() => {})
     } catch (cause) {
@@ -160,8 +175,31 @@ export default function DocumentsScreen() {
                 const iconName = scope.kind === "general" ? "document" : scope.kind === "visit" ? "visit" : "tasks"
                 return <Pressable key={`${scope.kind}-${scope.id}`} accessibilityRole="button" accessibilityLabel={scope.label} accessibilityState={{ selected }} onPress={() => setSelectedScope(scope)} style={[styles.scope, selected && styles.scopeSelected]}><TabIcon name={iconName} color={selected ? colors.headerText : colors.primary} size={17} /><Text style={[styles.scopeText, selected && styles.scopeTextSelected]} numberOfLines={2}>{scope.label}</Text>{selected ? <TabIcon name="check" color={colors.headerText} size={17} /> : null}</Pressable>
               })}
+              {taskScopes.length > 0 ? <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={selectedScope?.kind === "task" ? selectedScope.label : copy.task}
+                  accessibilityHint={copy.taskSearch}
+                  accessibilityState={{ expanded: taskPickerOpen, selected: selectedScope?.kind === "task" }}
+                  onPress={() => setTaskPickerOpen((value) => !value)}
+                  style={[styles.scope, taskPickerOpen && styles.scopePickerOpen, selectedScope?.kind === "task" && styles.scopeSelected]}
+                >
+                  <TabIcon name="tasks" color={selectedScope?.kind === "task" ? colors.headerText : colors.primary} size={17} />
+                  <Text style={[styles.scopeText, selectedScope?.kind === "task" && styles.scopeTextSelected]} numberOfLines={1}>{selectedScope?.kind === "task" ? selectedScope.label : copy.task}</Text>
+                  <TabIcon name={taskPickerOpen ? "chevronUp" : "chevronDown"} color={selectedScope?.kind === "task" ? colors.headerText : colors.primary} size={18} />
+                </Pressable>
+                {taskPickerOpen ? <View style={styles.taskPicker}>
+                  <View style={styles.taskSearch}><TabIcon name="search" color={colors.faint} size={18} /><TextInput accessibilityLabel={copy.taskSearch} value={taskQuery} onChangeText={setTaskQuery} placeholder={copy.taskSearch} placeholderTextColor={colors.faint} autoCapitalize="none" autoCorrect={false} style={styles.taskSearchInput} /></View>
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.taskResults} contentContainerStyle={styles.taskResultsContent}>
+                    {visibleTaskScopes.length ? visibleTaskScopes.map((scope) => {
+                      const selected = selectedScope?.kind === "task" && selectedScope.id === scope.id
+                      return <Pressable key={`${scope.kind}-${scope.id}`} accessibilityRole="button" accessibilityLabel={scope.label} accessibilityState={{ selected }} onPress={() => { setSelectedScope(scope); setTaskPickerOpen(false); setTaskQuery("") }} style={[styles.taskResult, selected && styles.taskResultSelected]}><Text style={[styles.taskResultText, selected && styles.taskResultTextSelected]} numberOfLines={2}>{scope.label}</Text>{selected ? <TabIcon name="check" color={colors.primary} size={17} /> : null}</Pressable>
+                    }) : <Text style={styles.taskEmpty}>{copy.taskSearchEmpty}</Text>}
+                  </ScrollView>
+                </View> : null}
+              </> : null}
             </View>
-            <View style={styles.uploadActions}><Pressable accessibilityRole="button" accessibilityLabel={copy.cancel} accessibilityState={{ disabled: picking }} disabled={picking} onPress={() => { setUploadOpen(false); setSelectedScope(null) }} style={[styles.cancel, picking && styles.disabled]}><Text style={styles.cancelText}>{copy.cancel}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={copy.choose} accessibilityHint={selectedScope ? undefined : copy.noScope} accessibilityState={{ busy: picking, disabled: picking }} disabled={picking} onPress={() => void pickAndQueue()} style={[styles.choose, picking && styles.disabled]}><Text style={styles.chooseText}>{picking ? "…" : copy.choose}</Text></Pressable></View>
+            <View style={styles.uploadActions}><Pressable accessibilityRole="button" accessibilityLabel={copy.cancel} accessibilityState={{ disabled: picking }} disabled={picking} onPress={() => { setUploadOpen(false); setSelectedScope(null); setTaskPickerOpen(false); setTaskQuery("") }} style={[styles.cancel, picking && styles.disabled]}><Text style={styles.cancelText}>{copy.cancel}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={copy.choose} accessibilityHint={selectedScope ? undefined : copy.noScope} accessibilityState={{ busy: picking, disabled: picking }} disabled={picking} onPress={() => void pickAndQueue()} style={[styles.choose, picking && styles.disabled]}><Text style={styles.chooseText}>{picking ? "…" : copy.choose}</Text></Pressable></View>
           </View>
         ) : null}
 
@@ -211,7 +249,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { paddingBottom: 36 },
   header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border }, headerBody: { flex: 1 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 22, fontWeight: "900", marginTop: 2 }, add: { minHeight: 46, minWidth: 62, borderRadius: 15, paddingHorizontal: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, addText: { color: colors.headerText, fontSize: 8, fontWeight: "900", marginTop: 2, textAlign: "center" }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
   stats: { flexDirection: "row", gap: 8, paddingHorizontal: 14, marginTop: 17 }, stat: { flex: 1, minWidth: 0, height: 67, borderRadius: 17, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, statValue: { fontSize: 20, fontWeight: "900" }, statLabel: { fontSize: 8, fontWeight: "900", marginTop: 3 },
-  uploadCard: { marginHorizontal: 14, marginTop: 14, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, uploadTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 }, uploadTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" }, localPill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, localPillText: { color: colors.successDark, fontSize: 7, fontWeight: "900" }, scopeList: { gap: 7, marginTop: 12, maxHeight: 300 }, scope: { minHeight: 49, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, scopeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, scopeText: { flex: 1, color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "800" }, scopeTextSelected: { color: colors.headerText }, uploadActions: { flexDirection: "row", gap: 8, marginTop: 12 }, cancel: { flex: 1, minHeight: 45, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, cancelText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, choose: { flex: 2, minHeight: 45, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, chooseText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  uploadCard: { marginHorizontal: 14, marginTop: 14, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, uploadTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 }, uploadTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "900" }, localPill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, localPillText: { color: colors.successDark, fontSize: 7, fontWeight: "900" }, scopeList: { gap: 7, marginTop: 12 }, scope: { minHeight: 49, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border }, scopePickerOpen: { borderColor: colors.primary }, scopeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, scopeText: { flex: 1, color: colors.text, fontSize: 10, lineHeight: 14, fontWeight: "800" }, scopeTextSelected: { color: colors.headerText }, taskPicker: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, overflow: "hidden" }, taskSearch: { minHeight: 46, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 7, borderBottomWidth: 1, borderBottomColor: colors.border }, taskSearchInput: { flex: 1, minWidth: 0, color: colors.text, fontSize: 12, fontWeight: "700" }, taskResults: { maxHeight: 250 }, taskResultsContent: { paddingVertical: 4 }, taskResult: { minHeight: 48, paddingHorizontal: 11, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }, taskResultSelected: { backgroundColor: colors.primarySoft }, taskResultText: { flex: 1, color: colors.text, fontSize: 11, lineHeight: 15, fontWeight: "800" }, taskResultTextSelected: { color: colors.primary }, taskEmpty: { color: colors.muted, fontSize: 11, lineHeight: 15, paddingHorizontal: 11, paddingVertical: 14, textAlign: "center" }, uploadActions: { flexDirection: "row", gap: 8, marginTop: 12 }, cancel: { flex: 1, minHeight: 45, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, cancelText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, choose: { flex: 2, minHeight: 45, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, chooseText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
   warning: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, warningBody: { flexDirection: "row", alignItems: "center", gap: 10 }, warningText: { flex: 1, color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, warningRetry: { minHeight: 44, paddingHorizontal: 8, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 2 }, warningRetryText: { color: colors.warning, fontSize: 8, fontWeight: "900" },
   filters: { flexDirection: "row", gap: 7, paddingHorizontal: 14, marginTop: 16, marginBottom: 2 }, filter: { flex: 1, minHeight: 44, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }, filterSelected: { backgroundColor: colors.text, borderColor: colors.text }, filterText: { color: colors.muted, fontSize: 9, fontWeight: "900" }, filterTextSelected: { color: colors.headerText },
   card: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow }, cardRequired: { borderColor: colors.warningBorder }, fileTop: { flexDirection: "row", alignItems: "center", gap: 11 }, fileIcon: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center" }, fileIconRequired: { backgroundColor: colors.warningBg }, fileIconText: { color: colors.info, fontSize: 9, fontWeight: "900" }, fileIconTextRequired: { color: colors.warning }, fileBody: { flex: 1, minWidth: 0 }, fileName: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "900" }, fileMeta: { color: colors.muted, fontSize: 9, marginTop: 4 }, context: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 9 }, contextText: { flex: 1, color: colors.muted, fontSize: 9, fontWeight: "700" }, badges: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 }, badge: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5 }, badgeText: { fontSize: 8, fontWeight: "900" }, open: { minHeight: 44, borderRadius: 14, marginTop: 12, paddingHorizontal: 14, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, openText: { color: colors.primary, fontSize: 10, fontWeight: "900" }, openArrow: { color: colors.primary, fontSize: 17, fontWeight: "900" },
