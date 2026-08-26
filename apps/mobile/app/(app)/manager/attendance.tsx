@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { TabIcon } from "../../../src/components/TabIcon"
+import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import type {
   FieldManagerAttendanceAgent,
   FieldManagerAttendanceData,
@@ -82,7 +83,6 @@ function AttendanceAgentCard({
       </View>
 
       <View style={styles.agentStats}>
-        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceRecordedOnly")}: ${attendance.recordedDays}`} style={styles.agentStat}><Text style={styles.agentStatValue}>{attendance.recordedDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceRecordedShort")}</Text></View>
         <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerWorkingNow")}: ${attendance.activeDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.info }]}>{attendance.activeDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceActiveShort")}</Text></View>
         <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerCompleted")}: ${attendance.completedDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.successDark }]}>{attendance.completedDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceCompletedShort")}</Text></View>
         <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceWorked")}: ${compactWorkedTime(attendance.workedSeconds)}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.primary }]}>{compactWorkedTime(attendance.workedSeconds)}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceWorkedShort")}</Text></View>
@@ -226,6 +226,7 @@ export default function ManagerAttendanceScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
+      <FieldScreenChrome />
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
@@ -376,12 +377,12 @@ const styles = StyleSheet.create({
   dateWeekday: { color: colors.muted, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 },
   dateLabel: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
   todayAction: { minHeight: 44, marginHorizontal: 14, marginTop: 9, borderRadius: radii.inner, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
-  todayActionText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  todayActionText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   rangePicker: { marginHorizontal: 14, marginTop: 9, flexDirection: "row", gap: 7 },
   rangeChoice: { flex: 1, minHeight: 44, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   rangeChoiceSelected: { borderWidth: 2, backgroundColor: colors.primary, borderColor: colors.primary },
   rangeChoiceContent: { flexDirection: "row", alignItems: "center", gap: 5 },
-  rangeChoiceText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  rangeChoiceText: { color: colors.muted, fontSize: 12, fontWeight: "900" },
   rangeChoiceTextSelected: { color: colors.headerText },
   scope: { minHeight: 44, marginHorizontal: 14, marginTop: 13, borderRadius: radii.inner, backgroundColor: colors.primarySoft, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 8 },
   scopeText: { flex: 1, color: colors.primary, fontSize: 11, fontWeight: "900" },
@@ -389,55 +390,55 @@ const styles = StyleSheet.create({
   recordedOnlyCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 10, padding: 12, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
   recordedOnlyIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   recordedOnlyBody: { flex: 1, minWidth: 0 },
-  recordedOnlyTitle: { color: colors.info, fontSize: 11, fontWeight: "900" },
-  recordedOnlyText: { color: colors.info, fontSize: 11, lineHeight: 16, marginTop: 2, fontWeight: "700" },
-  timezone: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4, fontWeight: "800" },
+  recordedOnlyTitle: { color: colors.info, fontSize: 12, fontWeight: "900" },
+  recordedOnlyText: { color: colors.info, fontSize: 12, lineHeight: 17, marginTop: 2, fontWeight: "700" },
+  timezone: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4, fontWeight: "800" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
-  pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 9, fontWeight: "800" },
+  pageInfo: { marginHorizontal: 16, marginTop: 8, color: colors.muted, fontSize: 12, fontWeight: "800" },
   pageSummary: { marginHorizontal: 14, marginTop: 9, padding: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...cardShadow },
-  pageSummaryTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
-  pageSummaryText: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3, fontWeight: "800" },
+  pageSummaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  pageSummaryText: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3, fontWeight: "800" },
   agentList: { paddingTop: 1 },
   agentCard: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, padding: 13, ...cardShadow },
   agentTop: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 9 },
   avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   agentBody: { flex: 1, minWidth: 0 },
-  agentName: { color: colors.text, fontSize: 13, fontWeight: "900" },
-  agentRole: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 2 },
-  recordBadge: { maxWidth: 82, alignItems: "flex-end" },
+  agentName: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  agentRole: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 2 },
+  recordBadge: { maxWidth: 96, alignItems: "flex-end" },
   recordBadgeValue: { color: colors.primary, fontSize: 20, lineHeight: 21, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  recordBadgeText: { color: colors.faint, fontSize: 8, lineHeight: 10, textAlign: "right", fontWeight: "800" },
-  agentStats: { marginTop: 12, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row" },
+  recordBadgeText: { color: colors.faint, fontSize: 11, lineHeight: 14, textAlign: "right", fontWeight: "800" },
+  agentStats: { marginTop: 12, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", gap: 4 },
   agentStat: { flex: 1, alignItems: "center", paddingHorizontal: 2 },
   agentStatValue: { color: colors.text, fontSize: 15, lineHeight: 18, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  agentStatLabel: { color: colors.muted, fontSize: 9, lineHeight: 12, marginTop: 2, textAlign: "center", fontWeight: "800" },
-  noRecords: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 12, fontWeight: "800" },
+  agentStatLabel: { color: colors.muted, fontSize: 11, lineHeight: 14, marginTop: 2, textAlign: "center", fontWeight: "800" },
+  noRecords: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 12, fontWeight: "800" },
   daysToggle: { minHeight: 44, marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  daysToggleText: { color: colors.primary, fontSize: 10, fontWeight: "900" },
+  daysToggleText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   daysList: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8 },
   dayRow: { paddingVertical: 9 },
   dayRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   dayTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   dayDate: { flex: 1, minWidth: 0 },
-  dayWeekday: { color: colors.text, fontSize: 10, fontWeight: "900" },
-  dayDateText: { color: colors.muted, fontSize: 9, fontWeight: "800", marginTop: 2 },
+  dayWeekday: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  dayDateText: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 2 },
   dayStatus: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6 },
-  dayStatusText: { fontSize: 8, fontWeight: "900" },
+  dayStatusText: { fontSize: 11, fontWeight: "900" },
   dayFacts: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 7 },
-  dayFact: { color: colors.muted, fontSize: 8, fontWeight: "800" },
-  dayWorked: { color: colors.primary, fontSize: 8, fontWeight: "900" },
+  dayFact: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  dayWorked: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   empty: { minHeight: 112, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 9, paddingHorizontal: 18, ...cardShadow },
-  emptyText: { color: colors.muted, fontSize: 11, fontWeight: "800", textAlign: "center" },
+  emptyText: { color: colors.muted, fontSize: 12, fontWeight: "800", textAlign: "center" },
   state: { minHeight: 230, margin: 14, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", padding: 24, ...cardShadow },
   stateWarning: { backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder },
   stateIcon: { width: 50, height: 50, borderRadius: 17, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: 12 },
   stateTitle: { color: colors.text, fontSize: 15, fontWeight: "900", textAlign: "center" },
-  stateText: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 7 },
+  stateText: { color: colors.muted, fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: 7 },
   retry: { minHeight: 44, marginTop: 16, borderRadius: 13, paddingHorizontal: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  retryText: { color: colors.headerText, fontSize: 11, fontWeight: "900" },
+  retryText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   loadMore: { minHeight: 44, marginHorizontal: 14, marginTop: 16, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
+  loadMoreText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
 })
