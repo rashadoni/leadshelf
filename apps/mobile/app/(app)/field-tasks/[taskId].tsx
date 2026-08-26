@@ -236,7 +236,7 @@ export default function AgentTaskDetailScreen() {
 
         <View style={styles.infoCard}>
           <InfoRow icon="week" label={t("agentTaskDueLabel")} value={task.dueDate ? formatShortDateTime(task.dueDate, locale, tenantTimeZone) : t("agentTaskDueNone")} danger={task.status === "OVERDUE"} />
-          <InfoRow icon="organizations" label={t("agentTaskCustomerLabel")} value={task.customer?.name ?? t("agentTaskNoCustomer")} />
+          {task.customer ? <InfoLinkRow icon="organizations" label={t("agentTaskCustomerLabel")} value={task.customer.name} hint={t("agentTaskCustomerOpenHint")} onPress={() => router.push(`/(app)/organizations/${task.customer!.id}` as never)} /> : <InfoRow icon="organizations" label={t("agentTaskCustomerLabel")} value={t("agentTaskNoCustomer")} />}
           {task.recurrenceRule ? <InfoRow icon="refresh" label={t("agentTaskRecurrenceLabel")} value={task.recurrenceRule === "DAILY" ? t("agentTaskRecurrenceDaily") : task.recurrenceRule === "WEEKLY" ? t("agentTaskRecurrenceWeekly") : t("agentTaskRecurrenceMonthly")} /> : null}
         </View>
 
@@ -311,6 +311,9 @@ export default function AgentTaskDetailScreen() {
 }
 
 function InfoRow({ icon, label, value, danger }: { icon: TabIconName; label: string; value: string; danger?: boolean }) { return <View style={styles.infoRow}><View style={styles.infoIcon}><TabIcon name={icon} color={danger ? colors.missed : colors.primary} size={18} /></View><View style={styles.infoBody}><Text style={styles.infoLabel}>{label}</Text><Text style={[styles.infoValue, danger && styles.infoDanger]}>{value}</Text></View></View> }
+function InfoLinkRow({ icon, label, value, hint, onPress }: { icon: TabIconName; label: string; value: string; hint: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityHint={hint} onPress={onPress} style={({ pressed }) => [styles.infoRow, styles.infoLinkRow, pressed && styles.pressed]}><View accessible={false} style={styles.infoIcon}><TabIcon name={icon} color={colors.primary} size={18} /></View><View accessible={false} style={styles.infoBody}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View><View accessible={false} style={styles.infoLinkChevron}><TabIcon name="chevronRight" color={colors.faint} size={20} /></View></Pressable>
+}
 function PrimaryAction({ label, busy, success, onPress }: { label: string; busy: boolean; success?: boolean; onPress: () => void }) { return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={onPress} style={[styles.mainAction, success && styles.mainActionSuccess, busy && styles.disabled]}><Text style={styles.mainActionText}>{busy ? "…" : label}</Text></Pressable> }
 
 function TaskDisclosure({
@@ -384,10 +387,12 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   infoCard: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.card, padding: 13, backgroundColor: colors.card, gap: 12 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  infoLinkRow: { minHeight: 44, marginVertical: -4, paddingVertical: 4, borderRadius: 12 },
   infoIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   infoBody: { flex: 1 },
   infoLabel: { color: colors.faint, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.4 },
   infoValue: { color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 2 },
+  infoLinkChevron: { width: 28, height: 44, alignItems: "center", justifyContent: "center" },
   infoDanger: { color: colors.missed },
   syncNotice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft },
   syncError: { backgroundColor: colors.dangerBg },
