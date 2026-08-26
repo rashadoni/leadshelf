@@ -142,7 +142,7 @@ function rowPhoto(row: FieldSyncRecoveryRow): string | null {
   return row.kind === "field.visit.photo" ? string(row.payload.fileUri) : null
 }
 
-type RecoveryAction = "retry" | "discardRoute" | "returnDraft" | "withoutPhoto" | "withoutAttachment"
+type RecoveryAction = "retry" | "openRoute" | "discardRoute" | "returnDraft" | "withoutPhoto" | "withoutAttachment"
 
 function RecoveryEmpty() {
   return (
@@ -206,6 +206,7 @@ export default function SyncCenterScreen() {
   const [rows, setRows] = useState<FieldSyncRecoveryRow[]>(listFieldSyncRecoveryQueue)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<RecoveryAction | null>(null)
+  const [expandedActionsId, setExpandedActionsId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const reload = useCallback(() => setRows(listFieldSyncRecoveryQueue()), [])
 
@@ -398,6 +399,30 @@ export default function SyncCenterScreen() {
           const rowBusy = busyId === row.clientOpId
           const actionBusy = (action: RecoveryAction) => rowBusy && busyAction === action
           const actionsDisabled = busyId !== null || syncBusy
+          const canOpenRoute = row.canDiscard && Boolean(string(row.payload.routeId))
+          const primaryAction: RecoveryAction | null = row.canRetry
+            ? "retry"
+            : canOpenRoute
+              ? "openRoute"
+              : row.canReturnToDraft
+                ? "returnDraft"
+                : row.canContinueWithoutEvidence
+                  ? "withoutPhoto"
+                  : row.canDetachAttachment
+                    ? "withoutAttachment"
+                    : row.canDiscard
+                      ? "discardRoute"
+                      : null
+          const actionCount = [
+            row.canRetry,
+            canOpenRoute,
+            row.canDiscard,
+            row.canReturnToDraft,
+            row.canContinueWithoutEvidence,
+            row.canDetachAttachment,
+          ].filter(Boolean).length
+          const hasSecondaryActions = actionCount > 1
+          const secondaryActionsOpen = expandedActionsId === row.clientOpId
           return (
             <View key={row.clientOpId} style={styles.card}>
               <View style={styles.cardTop}>
@@ -415,12 +440,21 @@ export default function SyncCenterScreen() {
               {error ? <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" accessibilityLabel={error} style={styles.error}><TabIcon name="alert" color={colors.dangerPressed} size={17} /><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
               <Text accessibilityRole="text" accessibilityLabel={t("syncCenterAttempts", { count: row.attempts })} style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
               <View style={styles.actions}>
-                {row.canRetry ? <View style={styles.action}><RecoveryButton label={t("syncCenterRetry")} hint={actionHint} busy={actionBusy("retry")} disabled={actionsDisabled} onPress={() => void retry(row)} /></View> : null}
-                {row.canDiscard && string(row.payload.routeId) ? <View style={styles.action}><RecoveryButton label={t("syncCenterOpenRoute")} hint={actionHint} busy={false} tone="secondary" disabled={actionsDisabled} onPress={() => openRouteRecovery(row)} /></View> : null}
-                {row.canDiscard ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
-                {row.canReturnToDraft ? <View style={styles.action}><RecoveryButton label={t("routeReturnToDraft")} hint={actionHint} busy={actionBusy("returnDraft")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
-                {row.canContinueWithoutEvidence ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
-                {row.canDetachAttachment ? <View style={styles.action}><RecoveryButton label={locale === "az" ? "Faylsız" : "Без файла"} hint={actionHint} busy={actionBusy("withoutAttachment")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
+                {primaryAction === "retry" ? <View style={styles.action}><RecoveryButton label={t("syncCenterRetry")} hint={actionHint} busy={actionBusy("retry")} disabled={actionsDisabled} onPress={() => void retry(row)} /></View> : null}
+                {primaryAction === "openRoute" ? <View style={styles.action}><RecoveryButton label={t("syncCenterOpenRoute")} hint={actionHint} busy={false} disabled={actionsDisabled} onPress={() => openRouteRecovery(row)} /></View> : null}
+                {primaryAction === "discardRoute" ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
+                {primaryAction === "returnDraft" ? <View style={styles.action}><RecoveryButton label={t("routeReturnToDraft")} hint={actionHint} busy={actionBusy("returnDraft")} disabled={actionsDisabled} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
+                {primaryAction === "withoutPhoto" ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
+                {primaryAction === "withoutAttachment" ? <View style={styles.action}><RecoveryButton label={locale === "az" ? "Faylsız" : "Без файла"} hint={actionHint} busy={actionBusy("withoutAttachment")} disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
+                {hasSecondaryActions ? <Pressable accessibilityRole="button" accessibilityLabel={secondaryActionsOpen ? t("syncCenterHideActions") : t("syncCenterMoreActions")} accessibilityHint={actionHint} accessibilityState={{ expanded: secondaryActionsOpen }} onPress={() => setExpandedActionsId((current) => current === row.clientOpId ? null : row.clientOpId)} style={({ pressed }) => [styles.moreActions, pressed && styles.recoveryButtonPressed]}><Text style={styles.moreActionsText}>{secondaryActionsOpen ? t("syncCenterHideActions") : t("syncCenterMoreActions")}</Text><TabIcon name={secondaryActionsOpen ? "chevronUp" : "chevronDown"} color={colors.primary} size={18} /></Pressable> : null}
+                {secondaryActionsOpen ? <View style={styles.secondaryActions}>
+                  {primaryAction !== "retry" && row.canRetry ? <View style={styles.action}><RecoveryButton label={t("syncCenterRetry")} hint={actionHint} busy={actionBusy("retry")} disabled={actionsDisabled} onPress={() => void retry(row)} /></View> : null}
+                  {primaryAction !== "openRoute" && canOpenRoute ? <View style={styles.action}><RecoveryButton label={t("syncCenterOpenRoute")} hint={actionHint} busy={false} tone="secondary" disabled={actionsDisabled} onPress={() => openRouteRecovery(row)} /></View> : null}
+                  {primaryAction !== "discardRoute" && row.canDiscard ? <View style={styles.action}><RecoveryButton label={t("syncCenterDiscardRoute")} hint={actionHint} busy={actionBusy("discardRoute")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmDiscardOutdatedRouteChange(row)} /></View> : null}
+                  {primaryAction !== "returnDraft" && row.canReturnToDraft ? <View style={styles.action}><RecoveryButton label={t("routeReturnToDraft")} hint={actionHint} busy={actionBusy("returnDraft")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmReturnRouteToDraft(row)} /></View> : null}
+                  {primaryAction !== "withoutPhoto" && row.canContinueWithoutEvidence ? <View style={styles.action}><RecoveryButton label={t("syncCenterWithoutPhoto")} hint={actionHint} busy={actionBusy("withoutPhoto")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
+                  {primaryAction !== "withoutAttachment" && row.canDetachAttachment ? <View style={styles.action}><RecoveryButton label={locale === "az" ? "Faylsız" : "Без файла"} hint={actionHint} busy={actionBusy("withoutAttachment")} tone="secondary" disabled={actionsDisabled} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
+                </View> : null}
               </View>
             </View>
           )
@@ -467,6 +501,9 @@ const styles = StyleSheet.create({
   attempts: { color: colors.faint, fontSize: 8, fontWeight: "800", marginTop: 8 },
   actions: { gap: 8, marginTop: 12 },
   action: { width: "100%" },
+  moreActions: { minHeight: 44, borderRadius: 14, paddingHorizontal: 14, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  moreActionsText: { flex: 1, color: colors.primary, fontSize: 12, fontWeight: "900" },
+  secondaryActions: { gap: 8, paddingTop: 1 },
   recoveryButton: { minHeight: 46, borderRadius: 15, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   recoveryButtonText: { fontSize: 13, fontWeight: "900", textAlign: "center" },
   recoveryButtonDisabled: { opacity: 0.42 },
