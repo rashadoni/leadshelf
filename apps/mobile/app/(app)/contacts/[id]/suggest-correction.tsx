@@ -36,6 +36,7 @@ import { HttpError } from "../../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../../src/theme"
 import { TabIcon } from "../../../../src/components/TabIcon"
 import { useResponsiveLayout } from "../../../../src/layout/responsive"
+import { useField } from "../../../../src/field/field-context"
 
 type Submission = { body: string; idempotencyKey: string }
 
@@ -53,8 +54,10 @@ function displayValue(value: string | null): string {
 
 export default function SuggestContactCorrectionScreen() {
   const locale = useLocale()
+  const field = useField()
   const layout = useResponsiveLayout()
   const insets = useSafeAreaInsets()
+  const tenantTimeZone = field.profile?.todaySummary.timezone
   const { id } = useLocalSearchParams<{ id: string }>()
   const [data, setData] = useState<FieldContactDetailData | null>(null)
   const [history, setHistory] = useState<FieldContactChangeRequest[]>([])
@@ -326,7 +329,7 @@ export default function SuggestContactCorrectionScreen() {
           <View style={styles.historyHeading}><Text style={styles.historyTitle}>{t("contactCorrectionHistory")}</Text><Text style={styles.historyCount}>{history.length}</Text></View>
           {history.length ? history.map((request) => (
             <View key={request.id} style={styles.historyCard}>
-              <View style={styles.historyTop}><Text style={styles.historyStatus}>{approvalStatusLabel(request.status)}</Text><Text style={styles.historyDate}>{formatShortDateTime(request.submittedAt, locale)}</Text></View>
+              <View style={styles.historyTop}><Text style={styles.historyStatus}>{approvalStatusLabel(request.status)}</Text><Text style={styles.historyDate}>{formatShortDateTime(request.submittedAt, locale, tenantTimeZone)}</Text></View>
               <Text style={styles.historyReason}>{request.reason}</Text>
               {request.decisionComment ? <Text style={styles.historyComment}>{request.decisionComment}</Text> : null}
             </View>

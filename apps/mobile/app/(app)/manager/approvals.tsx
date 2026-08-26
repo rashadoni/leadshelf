@@ -13,6 +13,7 @@ import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { useField } from "../../../src/field/field-context"
 
 type ApprovalKind = FieldManagerApprovalDecisionInput["kind"]
 type ApprovalDecision = "APPROVED" | "REJECTED" | "NEEDS_INFO" | "RESCHEDULE"
@@ -132,10 +133,11 @@ function buildDecisionInput(
 
 function RequestMeta({ by, at }: { by: string; at: string }) {
   const locale = useLocale()
+  const tenantTimeZone = useField().profile?.todaySummary.timezone
   return (
     <View style={styles.requestMeta}>
       <Text style={styles.requestBy}>{t("managerRequestedBy")}: {by}</Text>
-      <Text style={styles.requestAt}>{t("managerRequestedAt")}: {formatShortDateTime(at, locale)}</Text>
+      <Text style={styles.requestAt}>{t("managerRequestedAt")}: {formatShortDateTime(at, locale, tenantTimeZone)}</Text>
     </View>
   )
 }

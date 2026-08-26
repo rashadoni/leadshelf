@@ -29,6 +29,7 @@ export default function InboxTab() {
   const locale = useLocale()
   const field = useField()
   const layout = useResponsiveLayout()
+  const tenantTimeZone = field.profile?.todaySummary.timezone
   const [mode, setMode] = useState<InboxMode>("messages")
   const [messages, setMessages] = useState(readFieldMessages)
   const [refreshing, setRefreshing] = useState(false)
@@ -207,7 +208,7 @@ export default function InboxTab() {
                     <View style={styles.messageBody}>
                       <View style={styles.messageTitleRow}>
                         <Text style={styles.messageTitle} numberOfLines={1}>{thread.title}</Text>
-                        <Text style={styles.time}>{formatShortDateTime(thread.lastMessageAt, locale)}</Text>
+                        <Text style={styles.time}>{formatShortDateTime(thread.lastMessageAt, locale, tenantTimeZone)}</Text>
                       </View>
                       {thread.lastMessage?.body ? (
                         <Text style={styles.preview} numberOfLines={2}>{thread.lastMessage.body}</Text>
@@ -261,7 +262,7 @@ export default function InboxTab() {
                       <View style={styles.messageBody}>
                         <Text style={styles.messageTitle}>{presented.title}</Text>
                         {presented.body ? <Text style={styles.preview} numberOfLines={2}>{presented.body}</Text> : null}
-                        <Text style={styles.notificationDate}>{formatShortDateTime(item.createdAt, locale)}</Text>
+                        <Text style={styles.notificationDate}>{formatShortDateTime(item.createdAt, locale, tenantTimeZone)}</Text>
                       </View>
                       {!item.isRead ? <View style={styles.unreadDot} /> : null}
                     </Pressable>

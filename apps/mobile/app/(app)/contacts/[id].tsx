@@ -14,6 +14,7 @@ import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
+import { useField } from "../../../src/field/field-context"
 
 function phoneDigits(phone: string | null | undefined): string | null {
   const digits = phone?.replace(/\D/g, "") ?? ""
@@ -49,8 +50,10 @@ async function openExternalUrl(url: string, unavailableMessage: string) {
 
 export default function ContactDetailScreen() {
   const locale = useLocale()
+  const field = useField()
   const { id } = useLocalSearchParams<{ id: string }>()
   const layout = useResponsiveLayout()
+  const tenantTimeZone = field.profile?.todaySummary.timezone
   const key = `field.contact.${id}`
   const cached = readFieldCache<FieldContactDetailData>(key)
   const [data, setData] = useState<FieldContactDetailData | null>(cached?.value ?? null)
@@ -277,7 +280,7 @@ export default function ContactDetailScreen() {
                         <Text style={styles.changeRequestStatus}>{approvalStatusLabel(request.status)}</Text>
                         <Text style={styles.changeRequestReason} numberOfLines={2}>{request.reason}</Text>
                       </View>
-                      <Text style={styles.changeRequestDate}>{formatShortDateTime(request.submittedAt, locale)}</Text>
+                      <Text style={styles.changeRequestDate}>{formatShortDateTime(request.submittedAt, locale, tenantTimeZone)}</Text>
                     </Pressable>
                   )) : (
                     <Pressable

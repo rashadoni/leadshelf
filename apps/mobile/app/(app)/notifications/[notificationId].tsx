@@ -34,6 +34,7 @@ export default function NotificationDetailScreen() {
   const locale = useLocale()
   const field = useField()
   const layout = useResponsiveLayout()
+  const tenantTimeZone = field.profile?.todaySummary.timezone
   const { sync } = useSync()
   const { notificationId: parameter } = useLocalSearchParams<{ notificationId?: string | string[] }>()
   const notificationId = typeof parameter === "string" ? parameter : ""
@@ -102,7 +103,7 @@ export default function NotificationDetailScreen() {
               <Text style={styles.factLabel}>{t("notificationDetailType", { type: notificationTypeLabel(item.type) })}</Text>
             </View>
             <View style={styles.factRow}>
-              <Text style={styles.factLabel}>{t("notificationDetailDate", { date: formatShortDateTime(item.createdAt, locale) })}</Text>
+              <Text style={styles.factLabel}>{t("notificationDetailDate", { date: formatShortDateTime(item.createdAt, locale, tenantTimeZone) })}</Text>
             </View>
           </View>
         </View>
