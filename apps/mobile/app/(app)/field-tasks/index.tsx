@@ -80,6 +80,7 @@ export default function AgentTasksScreen() {
   )
   const canCreateTask = field.agentTasks?.capabilities.createSelfTask === true
   const tasks = field.agentTasks?.tasks ?? []
+  const displayedError = localError ?? (field.taskError ? t(field.taskError) : null)
   const open = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length
   const overdue = tasks.filter((task) => task.status === "OVERDUE").length
   const today = tasks.filter((task) => dueToday(task, tenantToday, tenantTimeZone) && task.status !== "COMPLETED" && task.status !== "CANCELLED").length
@@ -195,7 +196,7 @@ export default function AgentTasksScreen() {
           <FilterChip selected={filter === "ALL"} label={t("agentTasksFilterAll")} onPress={() => { setFilter("ALL"); setFiltersOpen(false) }} />
         </View> : null}
 
-        {(localError || field.taskError) ? <View style={styles.error}><Text style={styles.errorText}>{localError ?? field.taskError}</Text></View> : null}
+        {displayedError ? <View style={styles.error}><Text style={styles.errorText}>{displayedError}</Text></View> : null}
         {visible.length > 0 ? <View style={[styles.taskList, layout.isTablet && styles.taskListTablet]}>{visible.map((task) => {
           const tone = statusTone(task.status)
           const action = !task.acceptedAt && task.persistedStatus === "PENDING"

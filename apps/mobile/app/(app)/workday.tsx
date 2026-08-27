@@ -141,7 +141,9 @@ function currentPausedSeconds(
 }
 
 function formatDistance(meters: number): string {
-  return meters >= 1_000 ? `${(meters / 1_000).toFixed(1)} km` : `${Math.round(meters)} m`
+  return meters >= 1_000
+    ? `${(meters / 1_000).toFixed(1)} ${t("kpiKmShort")}`
+    : `${Math.round(meters)} ${t("kpiMetersShort")}`
 }
 
 function LocationTrail({ data, timeZone }: { data: FieldLocationHistoryData; timeZone: string }) {
@@ -275,7 +277,7 @@ export default function WorkdayScreen() {
     ? t("workdayLoadingHint")
     : field.activityPhase === "stale"
       ? t("fieldDataStale")
-      : field.activityError ?? t("fieldDataError")
+      : t(field.activityError ?? "fieldDataError")
   const workedSeconds = currentWorkedSeconds(workday, nowMs)
   const pausedSeconds = currentPausedSeconds(workday, nowMs)
   const trackingNotification = useMemo<WorkdayTrackingNotification>(() => ({

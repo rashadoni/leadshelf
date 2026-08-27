@@ -22,7 +22,8 @@ import {
 } from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
-import { fieldErrorMessage } from "./error-message"
+import type { MessageKey } from "../i18n"
+import { fieldErrorMessageKey } from "./error-message"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
 import { adjacentWeekStarts } from "./week-cache-window"
 import type {
@@ -46,11 +47,11 @@ type FieldContextValue = {
   locations: FieldLocationHistoryData | null
   agentTasks: FieldAgentTasksData | null
   taskPhase: FieldPhase
-  taskError: string | null
+  taskError: MessageKey | null
   activityPhase: FieldPhase
-  activityError: string | null
+  activityError: MessageKey | null
   phase: FieldPhase
-  error: string | null
+  error: MessageKey | null
   lastUpdatedAt: string | null
   operationalDate: string | null
   setOperationalDate: (date: string | null) => void
@@ -86,11 +87,11 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   const [locations, setLocations] = useState<FieldLocationHistoryData | null>(null)
   const [agentTasks, setAgentTasks] = useState<FieldAgentTasksData | null>(null)
   const [taskPhase, setTaskPhase] = useState<FieldPhase>("loading")
-  const [taskError, setTaskError] = useState<string | null>(null)
+  const [taskError, setTaskError] = useState<MessageKey | null>(null)
   const [activityPhase, setActivityPhase] = useState<FieldPhase>("loading")
-  const [activityError, setActivityError] = useState<string | null>(null)
+  const [activityError, setActivityError] = useState<MessageKey | null>(null)
   const [phase, setPhase] = useState<FieldPhase>("loading")
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
   const [operationalDate, setOperationalDateState] = useState<string | null>(null)
   const requestedWeek = useRef<string | null>(null)
@@ -148,7 +149,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
         await loseSession()
         return
       }
-      setError(fieldErrorMessage(reason, "fieldDataError"))
+      setError(fieldErrorMessageKey(reason, "fieldDataError"))
       setPhase(cached ? "stale" : "error")
     }
   }, [loseSession, prefetchAdjacentWeeks])
@@ -196,7 +197,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       : locationResult.status === "rejected"
         ? locationResult.reason
         : null
-    setActivityError(fieldErrorMessage(reason, "fieldDataError"))
+    setActivityError(fieldErrorMessageKey(reason, "fieldDataError"))
     setActivityPhase(workdayCache || locationsCache ? "stale" : "error")
   }, [loseSession])
 
@@ -215,7 +216,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
         await loseSession()
         return
       }
-      setTaskError(fieldErrorMessage(reason, "fieldDataError"))
+      setTaskError(fieldErrorMessageKey(reason, "fieldDataError"))
       setTaskPhase(cached ? "stale" : "error")
     }
   }, [loseSession])
@@ -283,7 +284,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
             : messagesResult.status === "rejected"
               ? messagesResult.reason
             : null
-      setError(fieldErrorMessage(firstError, "fieldDataError"))
+      setError(fieldErrorMessageKey(firstError, "fieldDataError"))
       setPhase(profile || week ? "stale" : "error")
     }
   }, [loseSession, prefetchAdjacentWeeks, profile, week])

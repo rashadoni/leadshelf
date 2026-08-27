@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { getLocale, setLocale, t } from "../i18n"
 import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
-import { FIELD_VISIT_ERROR_OVERRIDES, fieldErrorMessage, fieldErrorMessageForCode } from "./error-message"
+import { FIELD_VISIT_ERROR_OVERRIDES, fieldErrorMessage, fieldErrorMessageForCode, fieldErrorMessageKey } from "./error-message"
 
 const initialLocale = getLocale()
 
@@ -27,6 +27,15 @@ describe("field error message", () => {
     setLocale("ru")
     expect(fieldErrorMessage(new AuthLostError(), "fieldDataError")).toBe(t("fieldSessionExpired"))
     expect(fieldErrorMessage(new UpgradeRequiredError(), "fieldDataError")).toBe(t("upgradeBody"))
+  })
+
+  it("keeps a stored error locale-independent until render", () => {
+    const key = fieldErrorMessageKey(new AuthLostError(), "fieldDataError")
+    expect(key).toBe("fieldSessionExpired")
+    setLocale("az")
+    expect(t(key)).toBe("Giriş sessiyası bitdi. Yenidən daxil olun.")
+    setLocale("ru")
+    expect(t(key)).toBe("Сессия входа завершилась. Войдите снова.")
   })
 
   it("explains the known visit geofence rejection without exposing backend text", () => {

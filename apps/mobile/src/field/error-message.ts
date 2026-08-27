@@ -41,12 +41,25 @@ export function fieldErrorMessage(
   fallback: MessageKey,
   overrides: FieldErrorCodeOverrides = {},
 ): string {
-  if (error instanceof UpgradeRequiredError) return t("upgradeBody")
-  if (error instanceof AuthLostError) return t("fieldSessionExpired")
+  return t(fieldErrorMessageKey(error, fallback, overrides))
+}
+
+/**
+ * Returns stable copy metadata rather than translated text. Screens that keep
+ * an error in state can render this key with the current locale, so switching
+ * AZ/RU never leaves an earlier language trapped in an otherwise new UI.
+ */
+export function fieldErrorMessageKey(
+  error: unknown,
+  fallback: MessageKey,
+  overrides: FieldErrorCodeOverrides = {},
+): MessageKey {
+  if (error instanceof UpgradeRequiredError) return "upgradeBody"
+  if (error instanceof AuthLostError) return "fieldSessionExpired"
   if (error instanceof HttpError) {
-    return fieldErrorMessageForCode(detailCode(error.detail), fallback, overrides)
+    return fieldErrorMessageKeyForCode(detailCode(error.detail), fallback, overrides)
   }
-  return t(fallback)
+  return fallback
 }
 
 /** Same safe mapping for an outbox result, where only a persisted API code remains. */
@@ -55,8 +68,17 @@ export function fieldErrorMessageForCode(
   fallback: MessageKey,
   overrides: FieldErrorCodeOverrides = {},
 ): string {
-  if (typeof code === "string" && overrides[code]) return t(overrides[code])
-  return t(fallback)
+  return t(fieldErrorMessageKeyForCode(code, fallback, overrides))
+}
+
+/** Same mapping as fieldErrorMessageForCode, kept as locale-independent data. */
+export function fieldErrorMessageKeyForCode(
+  code: unknown,
+  fallback: MessageKey,
+  overrides: FieldErrorCodeOverrides = {},
+): MessageKey {
+  if (typeof code === "string" && overrides[code]) return overrides[code]
+  return fallback
 }
 
 /**
