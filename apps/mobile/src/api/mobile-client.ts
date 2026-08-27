@@ -111,6 +111,7 @@ import {
   type FieldManagerApprovalsData,
   type FieldManagerApprovalDecisionInput,
   type FieldManagerAttendanceData,
+  type FieldManagerGpsFreshness,
   type FieldManagerLocationsData,
   type FieldManagerPlanningData,
   type FieldManagerRouteDetailData,
@@ -457,6 +458,7 @@ export type FieldManagerListOptions = {
   page?: number
   limit?: number
   search?: string
+  freshness?: FieldManagerGpsFreshness
 }
 
 function managerListPath(path: string, options?: FieldManagerListOptions): string {
@@ -465,6 +467,7 @@ function managerListPath(path: string, options?: FieldManagerListOptions): strin
   if (options?.limit != null) query.set("limit", String(options.limit))
   const search = options?.search?.trim()
   if (search) query.set("search", search)
+  if (options?.freshness) query.set("freshness", options.freshness)
   const suffix = query.toString()
   return suffix ? `${path}?${suffix}` : path
 }

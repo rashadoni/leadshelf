@@ -23,6 +23,13 @@ const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
 }
 
 const MANAGER_PAGE_LIMIT = 25
+const FRESHNESS_FILTERS: Array<{ value: FieldManagerGpsFreshness | null; label: MessageKey }> = [
+  { value: null, label: "managerLocationFilterAll" },
+  { value: "ONLINE", label: "managerFreshness_ONLINE" },
+  { value: "DELAYED", label: "managerFreshness_DELAYED" },
+  { value: "STALE", label: "managerFreshness_STALE" },
+  { value: "NO_LOCATION", label: "managerFreshness_NO_LOCATION" },
+]
 
 function freshnessColor(freshness: FieldManagerGpsFreshness): { background: string; foreground: string } {
   if (freshness === "ONLINE") return { background: colors.successBg, foreground: colors.successDark }
@@ -51,20 +58,33 @@ export default function ManagerLocationsScreen() {
   const [data, setData] = useState<FieldManagerLocationsData | null>(null)
   const [search, setSearch] = useState("")
   const [loadedSearch, setLoadedSearch] = useState("")
+  const [freshnessFilter, setFreshnessFilter] = useState<FieldManagerGpsFreshness | null>(null)
+  const [loadedFreshness, setLoadedFreshness] = useState<FieldManagerGpsFreshness | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const sequence = useRef(0)
 
-  const load = useCallback(async (query: string, page = 1, append = false) => {
+  const load = useCallback(async (
+    query: string,
+    freshness: FieldManagerGpsFreshness | null,
+    page = 1,
+    append = false,
+  ) => {
     const request = ++sequence.current
     if (append) setLoadingMore(true)
     else setLoading(true)
     setError(null)
     try {
-      const next = await fieldApi.managerLocations({ page, limit: MANAGER_PAGE_LIMIT, search: query || undefined })
+      const next = await fieldApi.managerLocations({
+        page,
+        limit: MANAGER_PAGE_LIMIT,
+        search: query || undefined,
+        freshness: freshness ?? undefined,
+      })
       if (request !== sequence.current) return
       setLoadedSearch(query)
+      setLoadedFreshness(freshness)
       setData((current) => {
         if (!append || !current) return next
         const existing = new Set(current.locations.map((agent) => agent.id))
@@ -84,21 +104,28 @@ export default function ManagerLocationsScreen() {
   }, [])
 
   useEffect(() => {
-    const id = setTimeout(() => void load(search.trim()), 300)
+    const id = setTimeout(() => void load(search.trim(), freshnessFilter), 300)
     return () => clearTimeout(id)
-  }, [load, search])
+  }, [freshnessFilter, load, search])
 
   const denied = error instanceof HttpError && error.status === 403
   const liveCount = useMemo(
     () => data?.locations.filter((agent) => agent.freshness === "ONLINE").length ?? 0,
     [data],
   )
-  const hasPendingSearch = loadedSearch !== search.trim()
+  const hasPendingSearch = loadedSearch !== search.trim() || loadedFreshness !== freshnessFilter
+  const summaryValue = loadedFreshness ? data?.page.total ?? 0 : liveCount
+  const summaryLabel = loadedFreshness ? t(freshnessKeys[loadedFreshness]) : t("managerPageLocationSummary")
+  const emptyTitle = loadedSearch
+    ? t("managerNoSearchResults")
+    : loadedFreshness
+      ? t("managerNoLocationFilterResults")
+      : t("managerNoTeam")
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FieldScreenChrome />
-      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim())} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load(search.trim(), freshnessFilter)} tintColor={colors.primary} />} keyboardShouldPersistTaps="handled">
         <View style={[styles.content, layout.isTablet && styles.contentTablet]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => safeFieldBack("/(app)/manager")} style={styles.back}><TabIcon name="chevronLeft" color={colors.text} size={23} /></Pressable>
@@ -107,7 +134,7 @@ export default function ManagerLocationsScreen() {
             <Text style={styles.title}>{t("managerLocationsTitle")}</Text>
             <Text style={styles.subtitle}>{t("managerLocationsHint")}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading || loadingMore, disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(search.trim())} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("refresh")} accessibilityState={{ busy: loading || loadingMore, disabled: loading || loadingMore }} disabled={loading || loadingMore} onPress={() => void load(search.trim(), freshnessFilter)} style={styles.refresh}><TabIcon name="refresh" color={colors.primary} size={22} /></Pressable>
         </View>
 
         {loading && !data ? <View style={styles.state}><ActivityIndicator color={colors.primary} /><Text style={styles.stateText}>{t("managerLoading")}</Text></View> : null}
@@ -116,7 +143,7 @@ export default function ManagerLocationsScreen() {
             <View style={styles.stateIcon}><TabIcon name="location" color={denied ? colors.warning : colors.primary} size={25} /></View>
             <Text style={styles.stateTitle}>{denied ? t("managerAccessDeniedTitle") : t("managerUnavailable")}</Text>
             <Text style={styles.stateText}>{denied ? t("managerAccessDeniedBody") : t("managerRetry")}</Text>
-            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load(search.trim())} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
+            <Pressable accessibilityLabel={t("managerRetry")} accessibilityRole="button" accessibilityState={{ busy: loading }} onPress={() => void load(search.trim(), freshnessFilter)} style={styles.retry}><Text style={styles.retryText}>{t("managerRetry")}</Text></Pressable>
           </View>
         ) : null}
 
@@ -141,18 +168,46 @@ export default function ManagerLocationsScreen() {
                 value={search}
               />
             </View>
-            <View accessible accessibilityRole="text" accessibilityLabel={String(liveCount) + " " + t("managerPageLocationSummary") + ". " + t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale, tenantTimeZone)} style={styles.summary}>
+            <Text style={styles.filterHint}>{t("managerLocationFilterHint")}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filters}
+              keyboardShouldPersistTaps="handled"
+            >
+              {FRESHNESS_FILTERS.map((option) => {
+                const selected = option.value === freshnessFilter
+                return (
+                  <Pressable
+                    key={option.value ?? "ALL"}
+                    accessibilityRole="button"
+                    accessibilityLabel={t(option.label)}
+                    accessibilityState={{ selected, disabled: loading || loadingMore }}
+                    disabled={loading || loadingMore}
+                    onPress={() => {
+                      sequence.current += 1
+                      setFreshnessFilter(option.value)
+                    }}
+                    style={({ pressed }) => [styles.filter, selected && styles.filterSelected, pressed && styles.pressed]}
+                  >
+                    {option.value ? <View style={[styles.filterDot, { backgroundColor: freshnessColor(option.value).foreground }]} /> : null}
+                    <Text style={[styles.filterText, selected && styles.filterTextSelected]}>{t(option.label)}</Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+            <View accessible accessibilityRole="text" accessibilityLabel={String(summaryValue) + " " + summaryLabel + ". " + t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale, tenantTimeZone)} style={styles.summary}>
               <View style={styles.summaryIcon}><TabIcon name="location" color={colors.successDark} size={22} /></View>
               <View style={styles.summaryBody}>
-                <Text style={styles.summaryValue}>{liveCount}</Text>
-                <Text style={styles.summaryLabel}>{t("managerPageLocationSummary")}</Text>
+                <Text style={styles.summaryValue}>{summaryValue}</Text>
+                <Text style={styles.summaryLabel}>{summaryLabel}</Text>
                 <Text style={styles.summaryTime}>{t("managerUpdated") + ": " + formatShortDateTime(data.generatedAt, locale, tenantTimeZone)}</Text>
               </View>
             </View>
             <Text style={styles.pageInfo}>{t("managerLoadedOfTotal", { loaded: data.locations.length, total: data.page.total })}</Text>
-            {liveCount === 0 && data.locations.length > 0 ? <View style={styles.notice}><Text style={styles.noticeText}>{t("managerNoLiveLocations")}</Text></View> : null}
+            {loadedFreshness === null && liveCount === 0 && data.locations.length > 0 ? <View style={styles.notice}><Text style={styles.noticeText}>{t("managerNoLiveLocations")}</Text></View> : null}
             {data.locations.length === 0 ? (
-              <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="location" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{search.trim() ? t("managerNoSearchResults") : t("managerNoTeam")}</Text></View>
+              <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="location" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{emptyTitle}</Text></View>
             ) : (
               <View style={[styles.list, layout.isTablet && styles.listTablet]}>
                 {data.locations.map((agent) => {
@@ -217,7 +272,7 @@ export default function ManagerLocationsScreen() {
                 accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}
                 accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
                 disabled={loading || loadingMore}
-                onPress={() => void load(search.trim(), data.page.number + 1, true)}
+                onPress={() => void load(search.trim(), freshnessFilter, data.page.number + 1, true)}
                 style={[styles.loadMore, (loading || loadingMore) && styles.disabled]}
               >
                 <Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
@@ -245,6 +300,13 @@ const styles = StyleSheet.create({
   refresh: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 16, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 13 },
+  filterHint: { marginHorizontal: 16, marginTop: 12, color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  filters: { paddingHorizontal: 14, paddingTop: 7, paddingBottom: 2, gap: 7 },
+  filter: { minHeight: 44, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  filterSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  filterDot: { width: 8, height: 8, borderRadius: 4 },
+  filterText: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  filterTextSelected: { color: colors.primary },
   summary: { marginHorizontal: 14, marginTop: 16, padding: 14, borderRadius: radii.card, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder, flexDirection: "row", alignItems: "center", gap: 10 },
   summaryIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   summaryBody: { flex: 1 },
