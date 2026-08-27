@@ -29,7 +29,7 @@ import {
   type FieldContactCorrectionField,
 } from "../../../../src/field/contact-correction"
 import { approvalStatusLabel, contactCorrectionFieldLabel } from "../../../../src/field/labels"
-import { t, useLocale } from "../../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../../src/i18n"
 import { formatShortDateTime } from "../../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../../src/navigation/safe-back"
 import { HttpError } from "../../../../src/sync/ports-error"
@@ -40,11 +40,11 @@ import { useField } from "../../../../src/field/field-context"
 
 type Submission = { body: string; idempotencyKey: string }
 
-function issueCopy(issue: ReturnType<typeof fieldContactCorrectionIssue>): string | null {
-  if (issue === "FIRST_NAME_REQUIRED") return t("contactCorrectionFirstNameRequired")
-  if (issue === "LAST_NAME_REQUIRED") return t("contactCorrectionLastNameRequired")
-  if (issue === "EMAIL_INVALID") return t("contactCorrectionEmailInvalid")
-  if (issue === "NO_CHANGES") return t("contactCorrectionNoChanges")
+function issueKey(issue: ReturnType<typeof fieldContactCorrectionIssue>): MessageKey | null {
+  if (issue === "FIRST_NAME_REQUIRED") return "contactCorrectionFirstNameRequired"
+  if (issue === "LAST_NAME_REQUIRED") return "contactCorrectionLastNameRequired"
+  if (issue === "EMAIL_INVALID") return "contactCorrectionEmailInvalid"
+  if (issue === "NO_CHANGES") return "contactCorrectionNoChanges"
   return null
 }
 
@@ -68,7 +68,7 @@ export default function SuggestContactCorrectionScreen() {
   const [reviewing, setReviewing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState<FieldContactChangeRequest | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   const submission = useRef<Submission | null>(null)
   const dirtyDraft = useRef(false)
 
@@ -91,7 +91,7 @@ export default function SuggestContactCorrectionScreen() {
         setHistory([])
       }
     } catch {
-      setError(t("fieldDataError"))
+      setError("fieldDataError")
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -122,20 +122,20 @@ export default function SuggestContactCorrectionScreen() {
   const beginReview = () => {
     if (!data || !draft) return
     if (!data.capabilities.canRequestChanges) {
-      setError(t("contactCorrectionDenied"))
+      setError("contactCorrectionDenied")
       return
     }
     if (!data.contact.updatedAt) {
-      setError(t("contactCorrectionUnavailable"))
+      setError("contactCorrectionUnavailable")
       return
     }
-    const issue = issueCopy(fieldContactCorrectionIssue(data.contact, draft))
+    const issue = issueKey(fieldContactCorrectionIssue(data.contact, draft))
     if (issue) {
       setError(issue)
       return
     }
     if (reason.trim().length < 3) {
-      setError(t("contactCorrectionReasonRequired"))
+      setError("contactCorrectionReasonRequired")
       return
     }
     setError(null)
@@ -144,7 +144,7 @@ export default function SuggestContactCorrectionScreen() {
 
   const send = async () => {
     if (!data || !draft || !id || !data.contact.updatedAt) {
-      setError(t("contactCorrectionUnavailable"))
+      setError("contactCorrectionUnavailable")
       return
     }
     const payload = buildFieldContactUpdatePayload(data.contact, draft)
@@ -176,11 +176,11 @@ export default function SuggestContactCorrectionScreen() {
       setHistory((current) => [request, ...current.filter((item) => item.id !== request.id)])
     } catch (cause) {
       if (cause instanceof HttpError && cause.status === 409) {
-        setError(t("contactCorrectionUnavailable"))
+        setError("contactCorrectionUnavailable")
       } else if (cause instanceof HttpError && cause.status === 403) {
-        setError(t("contactCorrectionDenied"))
+        setError("contactCorrectionDenied")
       } else {
-        setError(t("contactCorrectionFailed"))
+        setError("contactCorrectionFailed")
       }
     } finally {
       setSubmitting(false)
@@ -252,7 +252,7 @@ export default function SuggestContactCorrectionScreen() {
           </View>
 
           {data && !canRequestChanges ? <View style={styles.warning}><Text style={styles.warningText}>{t("contactCorrectionDenied")}</Text></View> : null}
-          {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+          {error ? <View style={styles.error}><Text style={styles.errorText}>{t(error)}</Text></View> : null}
 
           {contact && draft ? (
             reviewing ? (
