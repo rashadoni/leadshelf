@@ -78,6 +78,7 @@ import {
   parseFieldCustomerRequest,
   parseFieldCustomerRequests,
   parseFieldOrganizationDetail,
+  parseFieldOrganizationAssignment,
   parseFieldOrganizations,
   parseFieldRouteTargets,
   parseFieldManagerApprovals,
@@ -115,12 +116,14 @@ import {
   type FieldManagerRouteDetailData,
   type FieldManagerTeamData,
   type FieldOrganizationDetailData,
+  type FieldOrganizationAssignmentData,
   type FieldOrganizationListData,
   type FieldRouteTargetCatalogData,
   type FieldWeekData,
   type FieldWorkdayData,
   type FieldVisitWorkspaceData,
 } from "../field/contracts"
+import { fieldOrganizationQuery, type FieldOrganizationQueryOptions } from "../field/organization-assignment"
 
 export const API_URL = mobileVariant.apiUrl
 export const PROTOCOL_VERSION = MOBILE_PROTOCOL_VERSION
@@ -709,9 +712,25 @@ export const fieldApi = {
   }) => {
     await request(`/api/v1/mtm/routes/${encodeURIComponent(routeId)}/change-requests`, json(input))
   },
-  organizations: (search = "", page = 1, limit = 50) =>
-    request<unknown>(`/api/v1/mtm/organizations?limit=${encodeURIComponent(String(limit))}&page=${encodeURIComponent(String(page))}${search ? `&search=${encodeURIComponent(search)}` : ""}`)
+  organizations: (options: FieldOrganizationQueryOptions = {}) =>
+    request<unknown>(`/api/v1/mtm/organizations?${fieldOrganizationQuery(options)}`)
       .then(parseFieldOrganizations),
+  assignOrganization: (input: {
+    organizationId: string
+    agentId: string
+    effectiveFrom: string
+  }) => request<unknown>("/api/v1/mtm/field-assignments", {
+    ...json({
+      subjectType: "ORGANIZATION",
+      subjectId: input.organizationId,
+      agentId: input.agentId,
+      role: "PRIMARY",
+      effectiveFrom: input.effectiveFrom,
+      reason: "Mobile route planning: existing organization",
+      requireUnassigned: true,
+    }),
+    method: "PUT",
+  }).then(parseFieldOrganizationAssignment),
   organization: (id: string) =>
     request<unknown>(`/api/v1/mtm/organizations/${encodeURIComponent(id)}`)
       .then(parseFieldOrganizationDetail),
@@ -808,7 +827,12 @@ export const fieldApi = {
     reason: string
     payload?: Record<string, unknown>
   }): Promise<void>
-  organizations(search?: string, page?: number, limit?: number): Promise<FieldOrganizationListData>
+  organizations(options?: FieldOrganizationQueryOptions): Promise<FieldOrganizationListData>
+  assignOrganization(input: {
+    organizationId: string
+    agentId: string
+    effectiveFrom: string
+  }): Promise<FieldOrganizationAssignmentData>
   organization(id: string): Promise<FieldOrganizationDetailData>
   contacts(search?: string, page?: number, limit?: number): Promise<FieldContactListData>
   routeTargets(input: {

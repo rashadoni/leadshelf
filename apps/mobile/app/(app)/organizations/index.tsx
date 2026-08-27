@@ -32,7 +32,7 @@ export default function OrganizationsScreen() {
     else setLoading(true)
     setError(null)
     try {
-      const next = await fieldApi.organizations(query, page)
+      const next = await fieldApi.organizations({ search: query, page })
       if (request !== sequence.current) return
       setData((current) => {
         if (!append || !current) return next

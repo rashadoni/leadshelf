@@ -551,6 +551,7 @@ export default function NewRouteScreen() {
                 agentId={selectedAgent.id}
                 agentName={selectedAgent.name}
                 date={selectedDate}
+                canAssignExisting={hasFieldManagerRole(field.profile?.agent.role)}
                 onSelect={(target) => { setTargets((current) => [...current, { ...target, time: "" }]); setError(null) }}
                 onCancel={() => setPickerOpen(false)}
               />

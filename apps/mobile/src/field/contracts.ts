@@ -1184,6 +1184,10 @@ export interface FieldOrganizationListData {
   capabilities: { canManage: boolean; canRequestChanges: boolean }
 }
 
+export interface FieldOrganizationAssignmentData {
+  id: string
+}
+
 export interface FieldOrganizationDetailData {
   organization: FieldOrganization
   asOf: string
@@ -3053,6 +3057,12 @@ export function parseFieldOrganizations(value: unknown): FieldOrganizationListDa
     throw new FieldContractError("organizations")
   }
   return data as unknown as FieldOrganizationListData
+}
+
+export function parseFieldOrganizationAssignment(value: unknown): FieldOrganizationAssignmentData {
+  const data = validEnvelope(value)
+  if (!data || !string(data.id)) throw new FieldContractError("organization assignment")
+  return data as unknown as FieldOrganizationAssignmentData
 }
 
 export function parseFieldOrganizationDetail(value: unknown): FieldOrganizationDetailData {

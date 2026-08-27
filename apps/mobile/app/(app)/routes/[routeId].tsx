@@ -47,6 +47,7 @@ import {
 import { parseFieldRouteMutationConflict, routeConflictPointIndexes } from "../../../src/field/route-conflict"
 import { routeNavigationUrls, type RouteNavigationPlatform } from "../../../src/field/route-navigation"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
+import { hasFieldManagerRole } from "../../../src/field/manager-access"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
@@ -906,6 +907,7 @@ export default function FieldRouteDetailScreen() {
             agentId={routeData.agentId}
             agentName={routeData.agentId === field.profile?.agent.id ? field.profile.agent.name : null}
             date={routeData.date}
+            canAssignExisting={hasFieldManagerRole(field.profile?.agent.role)}
             onSelect={selectTarget}
             onCancel={() => setPickerOpen(false)}
           />

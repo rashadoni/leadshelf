@@ -17,6 +17,7 @@ import {
   parseFieldHrm,
   parseFieldOrganizationDetail,
   parseFieldOrganizations,
+  parseFieldOrganizationAssignment,
   parseFieldPersonalKpi,
   parseFieldLocationHistory,
   parseFieldManagerApprovals,
@@ -1000,6 +1001,10 @@ describe("LeadDrive field contracts", () => {
         capabilities: { canManage: false, canRequestChanges: true },
       },
     }).organization.id).toBe("customer-1")
+    expect(parseFieldOrganizationAssignment({
+      success: true,
+      data: { id: "assignment-1", customerId: "customer-1" },
+    }).id).toBe("assignment-1")
   })
 
   it("accepts scoped contact list and detail envelopes", () => {
@@ -1233,6 +1238,7 @@ describe("LeadDrive field contracts", () => {
 
   it("rejects malformed master data and request envelopes", () => {
     expect(() => parseFieldOrganizations({ success: true, data: { organizations: [{}] } })).toThrow(FieldContractError)
+    expect(() => parseFieldOrganizationAssignment({ success: true, data: {} })).toThrow(FieldContractError)
     expect(() => parseFieldContacts({ success: true, data: { contacts: [{ id: "c" }] } })).toThrow(FieldContractError)
     expect(() => parseFieldCustomerRequests({ success: true, data: { requests: [{ status: "SUBMITTED" }] } })).toThrow(FieldContractError)
   })

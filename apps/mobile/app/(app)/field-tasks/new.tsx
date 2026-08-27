@@ -172,7 +172,7 @@ export default function NewAgentTaskScreen() {
       return
     }
     const timeout = setTimeout(() => {
-      void fieldApi.organizations(query)
+      void fieldApi.organizations({ search: query })
         .then((data) => {
           if (request !== customerSearchSequence.current) return
           setSearchedCustomers(data.organizations.map((organization) => ({
