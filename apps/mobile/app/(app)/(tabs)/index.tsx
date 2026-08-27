@@ -196,7 +196,7 @@ export default function TodayTab() {
             </View>
           </View>
           <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
-          <Text style={styles.headerTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
+          <Text style={styles.headerTitle}>{field.profile?.agent.name ?? mobileVariant.appName}</Text>
         </View>
 
         {shelf.status.phase === "error" ? <SyncBar /> : null}
