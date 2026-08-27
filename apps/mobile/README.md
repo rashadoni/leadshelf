@@ -67,8 +67,9 @@ proof.
 
 Release sequencing is stricter than the original physical baseline: the prior
 Field source candidate was version 1.0.1 / Android code 2. The current
-browse-list candidate is version 1.0.2 / Android code 3. A future preview must
-use a code greater than 3; a different workflow run or APK size is never
+browse-list candidate is version 1.0.2 / Android code 3. Once that candidate
+is distributed, any later preview must use a code greater than 3; a different
+workflow run or APK size is never
 evidence of a newer release. Source version changes alone are also not
 acceptance evidence.
 
