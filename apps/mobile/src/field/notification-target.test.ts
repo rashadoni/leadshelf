@@ -30,6 +30,14 @@ describe("field notification navigation", () => {
     expect(notificationDestination(notification({ metadata: { routeIds: ["route-2"] } }))).toBe("/(app)/routes/route-2")
   })
 
+  it("falls back to a verified legacy target when an additive target is malformed", () => {
+    const item = notification({
+      target: { kind: "UNKNOWN" as never, id: "x" },
+      metadata: { taskId: "task-1" },
+    })
+    expect(notificationDestination(item)).toBe("/(app)/field-tasks/task-1")
+  })
+
   it("uses a valid route date only as a bounded route-context hint", () => {
     expect(notificationDestination(notification({ metadata: { routeId: "route-2", routeDate: "2026-08-24" } }))).toBe("/(app)/routes/route-2?date=2026-08-24")
     expect(notificationDestination(notification({ metadata: { routeId: "route-2", routeDate: "2026-02-30" } }))).toBe("/(app)/routes/route-2")

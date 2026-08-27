@@ -37,7 +37,10 @@ function target(kind: string | null, id: string | null): FieldNotificationTarget
  * infer a target from notification copy.
  */
 export function notificationTarget(notification: FieldNotification): FieldNotificationTarget | null {
-  if (notification.target) return target(notification.target.kind, notification.target.id)
+  const responseTarget = notification.target
+    ? target(notification.target.kind, notification.target.id)
+    : null
+  if (responseTarget) return responseTarget
   const metadata = record(notification.metadata)
   if (!metadata) return null
   const nested = record(metadata.target)
