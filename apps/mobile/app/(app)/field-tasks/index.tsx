@@ -6,7 +6,7 @@ import { enqueueFieldTaskUpdate, readFieldCache } from "../../../src/db/local-st
 import type { FieldAgentTask, FieldAgentTaskPriority, FieldAgentTasksData, FieldAgentTaskStatus } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
-import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
+import { fieldErrorMessageKey, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { isFieldTaskDueOnDate, resolveFieldTaskToday } from "../../../src/field/task-time"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
@@ -72,7 +72,7 @@ export default function AgentTasksScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [localError, setLocalError] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<MessageKey | null>(null)
   const tenantTimeZone = field.week?.timezone ?? field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? "UTC"
   const tenantToday = resolveFieldTaskToday(
     field.week?.today ?? field.workday?.today ?? field.profile?.todaySummary.date,
@@ -80,7 +80,7 @@ export default function AgentTasksScreen() {
   )
   const canCreateTask = field.agentTasks?.capabilities.createSelfTask === true
   const tasks = field.agentTasks?.tasks ?? []
-  const displayedError = localError ?? (field.taskError ? t(field.taskError) : null)
+  const displayedError = localError ?? field.taskError
   const open = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length
   const overdue = tasks.filter((task) => task.status === "OVERDUE").length
   const today = tasks.filter((task) => dueToday(task, tenantToday, tenantTimeZone) && task.status !== "COMPLETED" && task.status !== "CANCELLED").length
@@ -118,7 +118,7 @@ export default function AgentTasksScreen() {
       await sync()
       await field.refreshAgentTasks()
     } catch (cause) {
-      setLocalError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
+      setLocalError(fieldErrorMessageKey(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
     } finally {
       setBusyId(null)
@@ -196,7 +196,7 @@ export default function AgentTasksScreen() {
           <FilterChip selected={filter === "ALL"} label={t("agentTasksFilterAll")} onPress={() => { setFilter("ALL"); setFiltersOpen(false) }} />
         </View> : null}
 
-        {displayedError ? <View style={styles.error}><Text style={styles.errorText}>{displayedError}</Text></View> : null}
+        {displayedError ? <View style={styles.error}><Text style={styles.errorText}>{t(displayedError)}</Text></View> : null}
         {visible.length > 0 ? <View style={[styles.taskList, layout.isTablet && styles.taskListTablet]}>{visible.map((task) => {
           const tone = statusTone(task.status)
           const action = !task.acceptedAt && task.persistedStatus === "PENDING"

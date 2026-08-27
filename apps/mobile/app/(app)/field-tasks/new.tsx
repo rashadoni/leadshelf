@@ -7,11 +7,11 @@ import { enqueueFieldTaskCreate, readFieldCache } from "../../../src/db/local-st
 import type { FieldAgentTaskPriority, FieldAgentTaskRecurrence, FieldAgentTasksData } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY, type FieldTaskCustomerPreview } from "../../../src/field/task-cache"
-import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
+import { fieldErrorMessageKey, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { fieldTaskDateOptions, fieldTaskDueDateTime, resolveFieldTaskToday } from "../../../src/field/task-time"
 import { shiftDateKey } from "../../../src/field/route-time"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
@@ -33,11 +33,12 @@ export default function NewAgentTaskScreen() {
     tenantTimeZone,
   )
   const canCreateTask = field.agentTasks?.capabilities.createSelfTask === true
-  const createBlockMessage = field.agentTasks
-    ? t("agentTaskCreateNotAllowed")
+  const createBlockMessageKey: MessageKey = field.agentTasks
+    ? "agentTaskCreateNotAllowed"
     : field.taskPhase === "error"
-      ? t("agentTaskCapabilityUnavailable")
-      : t("agentTaskCapabilityLoading")
+      ? "agentTaskCapabilityUnavailable"
+      : "agentTaskCapabilityLoading"
+  const createBlockMessage = t(createBlockMessageKey)
   const copySource = field.agentTasks?.tasks.find((task) => task.id === copyFrom) ?? null
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -53,10 +54,10 @@ export default function NewAgentTaskScreen() {
   const [customerSearch, setCustomerSearch] = useState("")
   const [searchedCustomers, setSearchedCustomers] = useState<FieldTaskCustomerPreview[]>([])
   const [customerLoading, setCustomerLoading] = useState(false)
-  const [customerSearchError, setCustomerSearchError] = useState<string | null>(null)
+  const [customerSearchError, setCustomerSearchError] = useState<MessageKey | null>(null)
   const [recurrence, setRecurrence] = useState<FieldAgentTaskRecurrence | null>(null)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   const [showValidation, setShowValidation] = useState(false)
   const customerSearchSequence = useRef(0)
   const hydratedCopyId = useRef<string | null>(null)
@@ -170,7 +171,7 @@ export default function NewAgentTaskScreen() {
         .catch(() => {
           if (request !== customerSearchSequence.current) return
           setSearchedCustomers([])
-          setCustomerSearchError(t("agentTaskCustomerSearchFailed"))
+          setCustomerSearchError("agentTaskCustomerSearchFailed")
         })
         .finally(() => {
           if (request === customerSearchSequence.current) setCustomerLoading(false)
@@ -201,7 +202,7 @@ export default function NewAgentTaskScreen() {
 
   async function create() {
     if (!canCreateTask) {
-      setError(createBlockMessage)
+      setError(createBlockMessageKey)
       return
     }
     setShowValidation(true)
@@ -228,7 +229,7 @@ export default function NewAgentTaskScreen() {
       router.replace(`/(app)/field-tasks/${queued.taskId}` as never)
       void sync().then(() => field.refreshAgentTasks()).catch(() => {})
     } catch (cause) {
-      setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
+      setError(fieldErrorMessageKey(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
     } finally {
       setSaving(false)
     }
@@ -342,7 +343,7 @@ export default function NewAgentTaskScreen() {
             <Text style={[styles.noCustomerChoiceText, customerId === null && styles.noCustomerChoiceTextSelected]}>{t("agentTaskNoCustomerChoice")}</Text>
           </Pressable>
           {customerLoading ? <Text style={styles.customerState}>{t("agentTaskCustomerLoading")}</Text> : null}
-          {customerSearchError ? <Text style={styles.customerError}>{customerSearchError}</Text> : null}
+          {customerSearchError ? <Text style={styles.customerError}>{t(customerSearchError)}</Text> : null}
           {visibleCustomers.map((customer) => (
             <Pressable key={customer.id} accessibilityRole="button" accessibilityLabel={customer.name} accessibilityState={{ selected: customerId === customer.id }} onPress={() => chooseCustomer(customer)} style={[styles.customerChoice, customerId === customer.id && styles.customerChoiceSelected]}>
               <View style={[styles.customerMark, customerId === customer.id && styles.customerMarkSelected]}><Text style={[styles.customerMarkText, customerId === customer.id && styles.customerMarkTextSelected]}>{customer.name.charAt(0).toUpperCase()}</Text></View>
@@ -360,7 +361,7 @@ export default function NewAgentTaskScreen() {
 
         {copySource ? <View style={styles.copyNotice}><Text style={styles.copyNoticeText}>{t("agentTaskPersonalHint")}</Text></View> : null}
         {createDisabled ? <View style={styles.error}><Text style={styles.errorText}>{createBlockMessage}</Text></View> : null}
-        {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        {error ? <View style={styles.error}><Text style={styles.errorText}>{t(error)}</Text></View> : null}
         </View>
       </ScrollView>
       <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>

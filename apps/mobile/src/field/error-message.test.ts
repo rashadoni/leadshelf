@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { getLocale, setLocale, t } from "../i18n"
 import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
-import { FIELD_VISIT_ERROR_OVERRIDES, fieldErrorMessage, fieldErrorMessageForCode, fieldErrorMessageKey } from "./error-message"
+import {
+  FIELD_VISIT_ERROR_OVERRIDES,
+  fieldErrorMessage,
+  fieldErrorMessageForCode,
+  fieldErrorMessageKey,
+  fieldMessageText,
+  fieldRouteConflictMessageData,
+} from "./error-message"
 
 const initialLocale = getLocale()
 
@@ -45,5 +52,17 @@ describe("field error message", () => {
       "fieldVisitConflict",
       FIELD_VISIT_ERROR_OVERRIDES,
     )).toBe(t("fieldVisitOutsideAllowedArea"))
+  })
+
+  it("keeps route conflict values locale-independent until render", () => {
+    const message = fieldRouteConflictMessageData({
+      code: "ROUTE_POINT_TIME_CONFLICT",
+      conflicts: [{ plannedTime: "2026-08-27T09:30:00.000Z", pointIndexes: [0, 2] }],
+    }, "fieldDataError", "UTC")
+    expect(message).toEqual({ key: "routeConflictTime", values: { points: "1, 3", time: "09:30" } })
+    setLocale("az")
+    expect(fieldMessageText(message)).toBe(t("routeConflictTime", message.values))
+    setLocale("ru")
+    expect(fieldMessageText(message)).toBe(t("routeConflictTime", message.values))
   })
 })

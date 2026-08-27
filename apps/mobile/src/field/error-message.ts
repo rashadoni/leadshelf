@@ -4,6 +4,10 @@ import { parseFieldRouteMutationConflict } from "./route-conflict"
 import { formatRouteTime } from "./route-time"
 
 export type FieldErrorCodeOverrides = Readonly<Record<string, MessageKey>>
+export type FieldMessage = {
+  key: MessageKey
+  values?: Record<string, string | number>
+}
 
 export const FIELD_TASK_ERROR_OVERRIDES: FieldErrorCodeOverrides = {
   MTM_TASK_VERSION_CONFLICT: "agentTaskConflictHint",
@@ -41,7 +45,24 @@ export function fieldErrorMessage(
   fallback: MessageKey,
   overrides: FieldErrorCodeOverrides = {},
 ): string {
-  return t(fieldErrorMessageKey(error, fallback, overrides))
+  return fieldMessageText(fieldErrorMessageData(error, fallback, overrides))
+}
+
+/** Renders a locale-independent Field message with the locale active now. */
+export function fieldMessageText(message: FieldMessage): string {
+  return t(message.key, message.values)
+}
+
+/**
+ * Keeps error copy as a key until the screen renders it. This prevents a
+ * language switch from leaving an old AZ/RU string in otherwise new UI.
+ */
+export function fieldErrorMessageData(
+  error: unknown,
+  fallback: MessageKey,
+  overrides: FieldErrorCodeOverrides = {},
+): FieldMessage {
+  return { key: fieldErrorMessageKey(error, fallback, overrides) }
 }
 
 /**
@@ -90,21 +111,27 @@ export function fieldRouteConflictMessage(
   fallback: MessageKey,
   timeZone = "UTC",
 ): string {
+  return fieldMessageText(fieldRouteConflictMessageData(detail, fallback, timeZone))
+}
+
+/** Same route recovery guidance as locale-independent key and values. */
+export function fieldRouteConflictMessageData(
+  detail: unknown,
+  fallback: MessageKey,
+  timeZone = "UTC",
+): FieldMessage {
   const conflict = parseFieldRouteMutationConflict(detail)
-  if (conflict?.kind === "duplicate") return t("routeConflictDuplicate")
-  if (conflict?.kind === "schedule") return t("routeConflictSchedule")
-  if (conflict?.kind === "version") return t("routeRefreshRequired")
+  if (conflict?.kind === "duplicate") return { key: "routeConflictDuplicate" }
+  if (conflict?.kind === "schedule") return { key: "routeConflictSchedule" }
+  if (conflict?.kind === "version") return { key: "routeRefreshRequired" }
   if (conflict?.kind === "point_time") {
     const first = conflict.conflicts[0]
     if (first) {
       const points = first.pointIndexes.map((index) => index + 1).join(", ")
-      return t("routeConflictTime", {
-        points,
-        time: formatRouteTime(first.plannedTime, timeZone),
-      })
+      return { key: "routeConflictTime", values: { points, time: formatRouteTime(first.plannedTime, timeZone) } }
     }
   }
-  return fieldErrorMessageForCode(detailCode(detail), fallback, FIELD_ROUTE_ERROR_OVERRIDES)
+  return { key: fieldErrorMessageKeyForCode(detailCode(detail), fallback, FIELD_ROUTE_ERROR_OVERRIDES) }
 }
 
 /** Same route recovery copy for a direct API error, including auth/upgrade states. */
@@ -113,9 +140,18 @@ export function fieldRouteMutationErrorMessage(
   fallback: MessageKey,
   timeZone = "UTC",
 ): string {
+  return fieldMessageText(fieldRouteMutationErrorMessageData(error, fallback, timeZone))
+}
+
+/** Same direct API error mapping as locale-independent key and values. */
+export function fieldRouteMutationErrorMessageData(
+  error: unknown,
+  fallback: MessageKey,
+  timeZone = "UTC",
+): FieldMessage {
   if (error instanceof UpgradeRequiredError || error instanceof AuthLostError) {
-    return fieldErrorMessage(error, fallback, FIELD_ROUTE_ERROR_OVERRIDES)
+    return fieldErrorMessageData(error, fallback, FIELD_ROUTE_ERROR_OVERRIDES)
   }
-  if (error instanceof HttpError) return fieldRouteConflictMessage(error.detail, fallback, timeZone)
-  return fieldErrorMessage(error, fallback, FIELD_ROUTE_ERROR_OVERRIDES)
+  if (error instanceof HttpError) return fieldRouteConflictMessageData(error.detail, fallback, timeZone)
+  return fieldErrorMessageData(error, fallback, FIELD_ROUTE_ERROR_OVERRIDES)
 }

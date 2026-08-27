@@ -16,11 +16,11 @@ import type {
 } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "../../../src/field/task-cache"
-import { fieldErrorMessage, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
+import { fieldErrorMessageKey, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { resolveFieldTaskToday, shiftFieldTaskDueDate } from "../../../src/field/task-time"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { formatShortDateTime } from "../../../src/i18n/date-format"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
@@ -85,7 +85,7 @@ export default function AgentTaskDetailScreen() {
   const task = field.agentTasks?.tasks.find((item) => item.id === taskId) ?? null
   const canCreateSelfTask = field.agentTasks?.capabilities.createSelfTask === true
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -123,7 +123,7 @@ export default function AgentTaskDetailScreen() {
       await flush()
       return true
     } catch (cause) {
-      setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
+      setError(fieldErrorMessageKey(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
       return false
     } finally {
@@ -151,7 +151,7 @@ export default function AgentTaskDetailScreen() {
       Alert.alert(type === "COMMENTED" ? t("agentTaskCommentSaved") : t("agentTaskEvidenceSaved"))
       await flush()
     } catch (cause) {
-      setError(fieldErrorMessage(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
+      setError(fieldErrorMessageKey(cause, "agentTaskActionFailed", FIELD_TASK_ERROR_OVERRIDES))
       applyCachedTasks()
     } finally {
       setBusy(false)
@@ -295,7 +295,7 @@ export default function AgentTaskDetailScreen() {
           </TaskDisclosure>
         </> : null}
 
-        {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        {error ? <View style={styles.error}><Text style={styles.errorText}>{t(error)}</Text></View> : null}
 
         <TaskDisclosure
           title={t("agentTaskTimeline")}

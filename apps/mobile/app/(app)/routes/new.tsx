@@ -17,7 +17,7 @@ import type { FieldWeekRoute } from "../../../src/field/contracts"
 import { addOptimisticRoute } from "../../../src/field/route-cache"
 import { enqueueFieldRouteCreate, fieldRouteOutboxResult } from "../../../src/db/local-store"
 import { useSync } from "../../../src/sync/sync-context"
-import { t, useLocale } from "../../../src/i18n"
+import { t, type MessageKey, useLocale } from "../../../src/i18n"
 import { formatCalendarDay } from "../../../src/i18n/date-format"
 import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
@@ -25,7 +25,11 @@ import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { contactTypeLabel, objectTypeLabel } from "../../../src/field/labels"
-import { fieldRouteConflictMessage, fieldRouteMutationErrorMessage } from "../../../src/field/error-message"
+import {
+  type FieldMessage,
+  fieldRouteConflictMessageData,
+  fieldRouteMutationErrorMessageData,
+} from "../../../src/field/error-message"
 import { parseFieldRouteMutationConflict, type FieldRouteMutationConflict } from "../../../src/field/route-conflict"
 import { isRouteDraftDateAllowed, resolveRouteDraftDate } from "../../../src/field/route-planning-date"
 import { isRouteDraftDirty } from "../../../src/field/route-draft-state"
@@ -44,6 +48,10 @@ function reorder<T>(items: T[], from: number, to: number): T[] {
 
 type RouteDraftTarget = RouteTarget & { time: string }
 type RouteDraftStep = 1 | 2 | 3
+
+function fieldMessage(key: MessageKey, values?: Record<string, string | number>): FieldMessage {
+  return values ? { key, values } : { key }
+}
 
 function targetMeta(target: RouteDraftTarget): string {
   if (target.contact) {
@@ -109,7 +117,7 @@ export default function NewRouteScreen() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [expandedTargetKey, setExpandedTargetKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<FieldMessage | null>(null)
   const [routeConflict, setRouteConflict] = useState<FieldRouteMutationConflict | null>(null)
   const [step, setStep] = useState<RouteDraftStep>(1)
   const excluded = useMemo(() => new Set(targets.map((target) => target.key)), [targets])
@@ -141,6 +149,7 @@ export default function NewRouteScreen() {
         ? t("managerRoutePublish")
         : t("createRoute")
     : t("routeWizardContinue")
+  const errorText = error ? t(error.key, error.values) : null
   const hasUnsavedDraft = isRouteDraftDirty({
     initialDate,
     selectedDate,
@@ -172,7 +181,7 @@ export default function NewRouteScreen() {
   useEffect(() => {
     if (!pendingDateLoad || (field.phase !== "error" && field.phase !== "stale")) return
     setPendingDateLoad(null)
-    setError(t("fieldDataError"))
+    setError(fieldMessage("fieldDataError"))
   }, [field.phase, pendingDateLoad])
 
   useEffect(() => {
@@ -245,16 +254,16 @@ export default function NewRouteScreen() {
 
   function goForward() {
     if (!canCreateRoute) {
-      setError(t("routePlanningUnavailable"))
+      setError(fieldMessage("routePlanningUnavailable"))
       return
     }
     if (selectedDateUnavailable) {
-      setError(t("routePlanningDateUnavailable"))
+      setError(fieldMessage("routePlanningDateUnavailable"))
       return
     }
     if (step === 1) {
       if (!selectedDate || !selectedAgent?.id) {
-        setError(t("routeCreateRequired"))
+        setError(fieldMessage("routeCreateRequired"))
         return
       }
       setError(null)
@@ -264,7 +273,7 @@ export default function NewRouteScreen() {
     }
     if (step === 2) {
       if (targets.length === 0) {
-        setError(t("routeCreateRequired"))
+        setError(fieldMessage("routeCreateRequired"))
         return
       }
       setError(null)
@@ -277,11 +286,11 @@ export default function NewRouteScreen() {
 
   async function create() {
     if (!canCreateRoute) {
-      setError(t("routePlanningUnavailable"))
+      setError(fieldMessage("routePlanningUnavailable"))
       return
     }
     if (selectedDateUnavailable) {
-      setError(t("routePlanningDateUnavailable"))
+      setError(fieldMessage("routePlanningDateUnavailable"))
       return
     }
     const agentId = selectedAgent?.id
@@ -299,11 +308,11 @@ export default function NewRouteScreen() {
       targets.length === 0 ||
       invalidTime
     ) {
-      setError(invalidTime ? t("invalidRouteTime") : t("routeCreateRequired"))
+      setError(fieldMessage(invalidTime ? "invalidRouteTime" : "routeCreateRequired"))
       return
     }
     if (localTimeConflict) {
-      setError(t("routeConflictTime", {
+      setError(fieldMessage("routeConflictTime", {
         points: localTimeConflict.indexes.map((index) => index + 1).join(", "),
         time: localTimeConflict.time,
       }))
@@ -362,7 +371,7 @@ export default function NewRouteScreen() {
         router.replace(`/(app)/routes/${result.routeId}` as never)
       } else if (result?.status === "conflict" || result?.status === "rejected") {
         setRouteConflict(parseFieldRouteMutationConflict(result.detail))
-        setError(fieldRouteConflictMessage(result.detail, "fieldDataError", timezone))
+        setError(fieldRouteConflictMessageData(result.detail, "fieldDataError", timezone))
       } else {
         Alert.alert(t("routeQueued"))
         router.replace("/(app)/routes" as never)
@@ -371,7 +380,7 @@ export default function NewRouteScreen() {
       setRouteConflict(parseFieldRouteMutationConflict(
         cause && typeof cause === "object" && "detail" in cause ? (cause as { detail?: unknown }).detail : null,
       ))
-      setError(fieldRouteMutationErrorMessage(cause, managerMode ? "managerRoutePublishFailed" : "fieldDataError", timezone))
+      setError(fieldRouteMutationErrorMessageData(cause, managerMode ? "managerRoutePublishFailed" : "fieldDataError", timezone))
     } finally {
       setSaving(false)
     }
@@ -639,7 +648,7 @@ export default function NewRouteScreen() {
           </>
         ) : null}
 
-        {error ? <View accessibilityRole="alert" style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        {errorText ? <View accessibilityRole="alert" style={styles.error}><Text style={styles.errorText}>{errorText}</Text></View> : null}
         {routeConflict?.kind === "duplicate" && routeConflict.duplicateRouteId ? (
           <Pressable accessibilityRole="button" accessibilityLabel={t("openRoute")} accessibilityState={{ disabled: false }} onPress={() => router.replace(`/(app)/routes/${routeConflict.duplicateRouteId}` as never)} style={styles.openConflictRoute}>
             <Text style={styles.openConflictRouteText}>{t("openRoute")}</Text>
