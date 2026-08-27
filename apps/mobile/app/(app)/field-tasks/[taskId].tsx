@@ -238,6 +238,7 @@ export default function AgentTaskDetailScreen() {
         <View style={styles.infoCard}>
           <InfoRow icon="week" label={t("agentTaskDueLabel")} value={task.dueDate ? formatShortDateTime(task.dueDate, locale, tenantTimeZone) : t("agentTaskDueNone")} danger={task.status === "OVERDUE"} />
           {task.customer ? <InfoLinkRow icon="organizations" label={t("agentTaskCustomerLabel")} value={task.customer.name} hint={t("agentTaskCustomerOpenHint")} onPress={() => router.push(`/(app)/organizations/${task.customer!.id}` as never)} /> : <InfoRow icon="organizations" label={t("agentTaskCustomerLabel")} value={t("agentTaskNoCustomer")} />}
+          {task.visitId ? <InfoLinkRow icon="visit" label={t("agentTaskVisitLabel")} value={t("openVisit")} hint={t("agentTaskVisitOpenHint")} onPress={() => router.push(`/(app)/field-visits/${task.visitId}` as never)} /> : null}
           {task.recurrenceRule ? <InfoRow icon="refresh" label={t("agentTaskRecurrenceLabel")} value={task.recurrenceRule === "DAILY" ? t("agentTaskRecurrenceDaily") : task.recurrenceRule === "WEEKLY" ? t("agentTaskRecurrenceWeekly") : t("agentTaskRecurrenceMonthly")} /> : null}
         </View>
 

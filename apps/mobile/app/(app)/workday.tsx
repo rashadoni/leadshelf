@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
   activityNoticeError: { backgroundColor: colors.warningBg, borderColor: colors.warningBorder },
   activityNoticeText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   activityNoticeErrorText: { color: colors.warning },
-  activityRetry: { minHeight: 36, borderRadius: 12, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
+  activityRetry: { minHeight: 44, borderRadius: 12, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.card },
   activityRetryText: { color: colors.primary, fontSize: 11, fontWeight: "900" },
   pendingPill: { backgroundColor: colors.cardOverlay, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 7 },
   pendingText: { color: colors.warning, fontSize: 11, fontWeight: "900" },

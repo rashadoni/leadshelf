@@ -18,7 +18,7 @@ import { TabIcon } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
 import { FieldDayNavigator } from "../../../src/field/FieldDayNavigator"
 import { resolveFieldRouteFlow, type FieldRouteStep } from "../../../src/field/route-flow"
-import { objectTypeLabel } from "../../../src/field/labels"
+import { agentTaskStatusLabel, objectTypeLabel } from "../../../src/field/labels"
 import { colors, cardShadow, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import type { FieldWeekVisit } from "../../../src/field/contracts"
@@ -46,6 +46,14 @@ function routeStepLabel(state: FieldRouteStep["state"]): string {
   if (state === "next") return t("routeNextStop")
   if (state === "missed") return t("routeMissedStop")
   return t("routeUpcomingStop")
+}
+
+function taskTone(status: string): { background: string; text: string } {
+  if (status === "OVERDUE") return { background: colors.dangerBg, text: colors.missed }
+  if (status === "IN_PROGRESS") return { background: colors.infoBg, text: colors.info }
+  if (status === "COMPLETED") return { background: colors.successBg, text: colors.successDark }
+  if (status === "CANCELLED") return { background: colors.draftBg, text: colors.draft }
+  return { background: colors.warningBg, text: colors.warning }
 }
 
 function RouteProgressRail({ routeLabel, steps }: { routeLabel: string; steps: FieldRouteStep[] }) {
@@ -279,6 +287,11 @@ export default function WeekTab() {
             selectedDay.tasks.total > 0 ? `${selectedDay.tasks.completed}/${selectedDay.tasks.total} ${t("dayTasks")}` : null,
             selectedDay.visits.total > 0 ? `${selectedDay.visits.completed}/${selectedDay.visits.total} ${t("dayVisits")}` : null,
           ].filter(Boolean).join(", ")
+          const dayTasks = [...selectedDay.tasks.items].sort((left, right) => {
+            const statusWeight = (status: string) => status === "OVERDUE" ? 4 : status === "IN_PROGRESS" ? 3 : status === "PENDING" ? 2 : status === "COMPLETED" ? 1 : 0
+            return statusWeight(right.status) - statusWeight(left.status)
+          })
+          const visibleTasks = dayTasks.slice(0, 3)
           return (
             <View style={[styles.missionSurface, layout.isTablet && styles.missionSurfaceTablet, isDayOff && styles.missionSurfaceDayOff]}>
               <View accessible accessibilityRole="header" accessibilityLabel={dayLabel} style={styles.missionHeader}>
@@ -446,6 +459,49 @@ export default function WeekTab() {
                   })}
                 </View>
               )}
+
+              {visibleTasks.length ? (
+                <View style={styles.dayAgenda}>
+                  <View style={styles.dayAgendaHeading}>
+                    <View style={styles.dayAgendaTitleRow}><TabIcon name="tasks" color={colors.primary} size={18} /><Text style={styles.dayAgendaTitle}>{t("agentTasksTitle")}</Text></View>
+                    <Text style={styles.dayAgendaCount}>{dayTasks.length}</Text>
+                  </View>
+                  <View style={styles.dayTaskRows}>
+                    {visibleTasks.map((task, index) => {
+                      const tone = taskTone(task.status)
+                      return (
+                        <Pressable
+                          key={task.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t("agentTaskDetails")}: ${task.title}`}
+                          accessibilityHint={agentTaskStatusLabel(task.status)}
+                          onPress={() => router.push(`/(app)/field-tasks/${task.id}` as never)}
+                          style={({ pressed }) => [styles.dayTaskRow, index > 0 && styles.dayTaskRowDivider, pressed && styles.pressed]}
+                        >
+                          <View style={[styles.dayTaskStatus, { backgroundColor: tone.background }]}><Text style={[styles.dayTaskStatusText, { color: tone.text }]}>{agentTaskStatusLabel(task.status)}</Text></View>
+                          <View style={styles.dayTaskBody}>
+                            <Text numberOfLines={1} style={styles.dayTaskTitle}>{task.title}</Text>
+                            <Text numberOfLines={1} style={styles.dayTaskCustomer}>{task.customer?.name ?? t("agentTaskNoCustomer")}</Text>
+                          </View>
+                          <TabIcon name="chevronRight" color={colors.faint} size={19} />
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                  {dayTasks.length > visibleTasks.length ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t("agentTasksTitle")}
+                      accessibilityHint={t("taskActionOpen")}
+                      onPress={() => router.push("/(app)/field-tasks" as never)}
+                      style={({ pressed }) => [styles.dayAgendaMore, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.dayAgendaMoreText}>{t("agentTasksTitle")}</Text>
+                      <TabIcon name="chevronRight" color={colors.primary} size={18} />
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           )
         })() : null}
@@ -541,7 +597,22 @@ const styles = StyleSheet.create({
   dayOffLine: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 11, padding: 9, borderRadius: radii.inner, backgroundColor: "rgba(255,255,255,0.58)" },
   holidayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.holiday },
   dayOffText: { color: colors.holiday, fontSize: 12, fontWeight: "800" },
-  dayMission: { marginTop: 11, padding: 10, borderRadius: radii.inner, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: "rgba(255,90,0,0.14)" },
+  dayMission: { marginTop: 11, padding: 10, borderRadius: radii.inner, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.infoBorder },
+  dayAgenda: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  dayAgendaHeading: { minHeight: 30, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  dayAgendaTitleRow: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7 },
+  dayAgendaTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  dayAgendaCount: { minWidth: 24, minHeight: 24, borderRadius: radii.pill, paddingHorizontal: 7, backgroundColor: colors.primarySoft, color: colors.primary, fontSize: 12, fontWeight: "900", textAlign: "center", textAlignVertical: "center" },
+  dayTaskRows: { marginTop: 7, borderRadius: radii.inner, overflow: "hidden", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg },
+  dayTaskRow: { minHeight: 60, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 8 },
+  dayTaskRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  dayTaskStatus: { maxWidth: 96, borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 4 },
+  dayTaskStatusText: { fontSize: 11, fontWeight: "900" },
+  dayTaskBody: { flex: 1, minWidth: 0 },
+  dayTaskTitle: { color: colors.text, fontSize: 14, lineHeight: 19, fontWeight: "900" },
+  dayTaskCustomer: { color: colors.muted, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  dayAgendaMore: { minHeight: 44, marginTop: 7, paddingHorizontal: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  dayAgendaMoreText: { color: colors.primary, fontSize: 13, fontWeight: "900" },
   dayMissionTitle: { color: colors.primary, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 },
   dayMissionStats: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 7 },
   dayMissionStat: { flexDirection: "row", alignItems: "center", gap: 5 },
