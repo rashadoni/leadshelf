@@ -393,32 +393,52 @@ export default function WeekTab() {
                         </View>
                         <RouteProgressRail routeLabel={routeLabel} steps={routeFlow.steps} />
                         {primaryPointName ? (
-                          <View style={[styles.nextStopSurface, activeVisitForRoute && styles.nextStopSurfaceActive]}>
-                            <View style={[styles.nextStopIcon, activeVisitForRoute && styles.nextStopIconActive]}><TabIcon name="visit" color={activeVisitForRoute ? colors.successDark : colors.primary} size={19} /></View>
-                            <View style={styles.nextStopBody}>
-                              <Text style={[styles.nextStopLabel, activeVisitForRoute && styles.nextStopLabelActive]}>{activeVisitForRoute ? t("routeCurrentVisit") : t("routeNextStop")}</Text>
-                              <Text style={styles.nextStopName} numberOfLines={1}>{primaryPointName}</Text>
-                              {primaryPointMeta ? <Text style={styles.nextStopMeta} numberOfLines={1}>{primaryPointMeta}</Text> : null}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`${routeActionLabel}: ${primaryPointName}`}
+                            accessibilityHint={`${t(meta.labelKey)}. ${routeProgressLabel}`}
+                            accessibilityState={{ disabled: false, busy: route.syncState === "PENDING" }}
+                            onPress={() => {
+                              if (activeVisitForRoute) {
+                                router.push(`/(app)/field-visits/${activeVisitForRoute.id}` as never)
+                              } else {
+                                router.push(`/(app)/routes/${route.id}` as never)
+                              }
+                            }}
+                            style={({ pressed }) => [styles.nextStopSurface, activeVisitForRoute && styles.nextStopSurfaceActive, pressed && styles.pressed]}
+                          >
+                            <View style={styles.nextStopContent}>
+                              <View style={[styles.nextStopIcon, activeVisitForRoute && styles.nextStopIconActive]}><TabIcon name="visit" color={activeVisitForRoute ? colors.successDark : colors.primary} size={19} /></View>
+                              <View style={styles.nextStopBody}>
+                                <Text style={[styles.nextStopLabel, activeVisitForRoute && styles.nextStopLabelActive]}>{activeVisitForRoute ? t("routeCurrentVisit") : t("routeNextStop")}</Text>
+                                <Text style={styles.nextStopName} numberOfLines={1}>{primaryPointName}</Text>
+                                {primaryPointMeta ? <Text style={styles.nextStopMeta} numberOfLines={1}>{primaryPointMeta}</Text> : null}
+                              </View>
                             </View>
-                          </View>
-                        ) : null}
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`${routeActionLabel}: ${routeLabel}`}
-                          accessibilityHint={`${t(meta.labelKey)}. ${routeProgressLabel}`}
-                          accessibilityState={{ disabled: false, busy: route.syncState === "PENDING" }}
-                          onPress={() => {
-                            if (activeVisitForRoute) {
-                              router.push(`/(app)/field-visits/${activeVisitForRoute.id}` as never)
-                            } else {
-                              router.push(`/(app)/routes/${route.id}` as never)
-                            }
-                          }}
-                          style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
-                        >
-                          <Text style={styles.routeActionText}>{routeActionLabel}</Text>
-                          <TabIcon name="chevronRight" color={colors.headerText} size={19} />
-                        </Pressable>
+                            <View style={styles.nextStopAction}>
+                              <Text style={[styles.nextStopActionText, activeVisitForRoute && styles.nextStopActionTextActive]}>{routeActionLabel}</Text>
+                              <TabIcon name="chevronRight" color={activeVisitForRoute ? colors.successDark : colors.primary} size={19} />
+                            </View>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`${routeActionLabel}: ${routeLabel}`}
+                            accessibilityHint={`${t(meta.labelKey)}. ${routeProgressLabel}`}
+                            accessibilityState={{ disabled: false, busy: route.syncState === "PENDING" }}
+                            onPress={() => {
+                              if (activeVisitForRoute) {
+                                router.push(`/(app)/field-visits/${activeVisitForRoute.id}` as never)
+                              } else {
+                                router.push(`/(app)/routes/${route.id}` as never)
+                              }
+                            }}
+                            style={({ pressed }) => [styles.routeAction, pressed && styles.pressed]}
+                          >
+                            <Text style={styles.routeActionText}>{routeActionLabel}</Text>
+                            <TabIcon name="chevronRight" color={colors.headerText} size={19} />
+                          </Pressable>
+                        )}
                         {route.points.length > 1 ? (
                           <Pressable
                             accessibilityRole="button"
@@ -656,8 +676,9 @@ const styles = StyleSheet.create({
   pointName: { color: colors.text, fontSize: 12, fontWeight: "800" },
   pointMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
   morePoints: { color: colors.primary, fontSize: 11, fontWeight: "800", marginTop: 5 },
-  nextStopSurface: { minHeight: 68, marginTop: 12, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft, flexDirection: "row", alignItems: "center", gap: 9 },
+  nextStopSurface: { minHeight: 76, marginTop: 12, borderRadius: radii.inner, padding: 10, backgroundColor: colors.primarySoft, gap: 7 },
   nextStopSurfaceActive: { backgroundColor: colors.successBg },
+  nextStopContent: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 9 },
   nextStopIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   nextStopIconActive: { backgroundColor: colors.card },
   nextStopBody: { flex: 1, minWidth: 0 },
@@ -665,6 +686,9 @@ const styles = StyleSheet.create({
   nextStopLabelActive: { color: colors.successDark },
   nextStopName: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
   nextStopMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  nextStopAction: { minHeight: 26, paddingLeft: 49, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  nextStopActionText: { flex: 1, color: colors.primary, fontSize: 12, fontWeight: "900" },
+  nextStopActionTextActive: { color: colors.successDark },
   routeAction: { marginTop: 10, minHeight: 46, borderRadius: radii.inner, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 13 },
   routeActionText: { color: colors.headerText, fontSize: 12, fontWeight: "900" },
   roadmapToggle: { minHeight: 48, marginTop: 10, borderRadius: radii.inner, paddingHorizontal: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 9 },
