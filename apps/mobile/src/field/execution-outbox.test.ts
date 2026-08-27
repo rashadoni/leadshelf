@@ -132,6 +132,7 @@ describe("field execution outbox", () => {
       payload: parseFieldTaskCreatePayload({
         taskId: "field-task-1",
         title: "Call clinic",
+        visitId: "field-visit-1",
         priority: "HIGH",
         dueDate: "2026-07-16T09:00:00.000Z",
         recurrence: { rule: "WEEKLY", interval: 1, until: null },
@@ -156,7 +157,7 @@ describe("field execution outbox", () => {
         comment: "Doctor asked to call later",
       }),
     }
-    expect(toFieldServerOperation(create)).toMatchObject({ op: "create", entity: "tasks", data: { id: "field-task-1", title: "Call clinic" } })
+    expect(toFieldServerOperation(create)).toMatchObject({ op: "create", entity: "tasks", data: { id: "field-task-1", title: "Call clinic", visitId: "field-visit-1" } })
     expect(toFieldServerOperation(update)).toMatchObject({ op: "update", entity: "tasks", data: { id: "field-task-1", expectedVersion: 1, status: "IN_PROGRESS" } })
     expect(toFieldServerOperation(comment)).toMatchObject({ op: "create", entity: "taskEvents", data: { taskId: "field-task-1", type: "COMMENTED" } })
   })

@@ -10,9 +10,10 @@ import { FIELD_AGENT_TASKS_CACHE_KEY, type FieldTaskCustomerPreview } from "../.
 import { fieldErrorMessageKey, FIELD_TASK_ERROR_OVERRIDES } from "../../../src/field/error-message"
 import { objectTypeLabel } from "../../../src/field/labels"
 import { fieldTaskDateOptions, fieldTaskDueDateTime, resolveFieldTaskToday } from "../../../src/field/task-time"
+import { fieldTaskVisitOptions, type FieldTaskVisitOption, type FieldTaskVisitOptionState } from "../../../src/field/task-visit-options"
 import { shiftDateKey } from "../../../src/field/route-time"
 import { t, type MessageKey, useLocale } from "../../../src/i18n"
-import { formatCalendarDay } from "../../../src/i18n/date-format"
+import { formatCalendarDay, formatTime } from "../../../src/i18n/date-format"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
@@ -55,6 +56,8 @@ export default function NewAgentTaskScreen() {
   const [searchedCustomers, setSearchedCustomers] = useState<FieldTaskCustomerPreview[]>([])
   const [customerLoading, setCustomerLoading] = useState(false)
   const [customerSearchError, setCustomerSearchError] = useState<MessageKey | null>(null)
+  const [visitId, setVisitId] = useState<string | null>(null)
+  const [visitPickerOpen, setVisitPickerOpen] = useState(false)
   const [recurrence, setRecurrence] = useState<FieldAgentTaskRecurrence | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<MessageKey | null>(null)
@@ -85,9 +88,15 @@ export default function NewAgentTaskScreen() {
       }
     })
   }, [effectiveSelectedDate, locale, tenantToday])
+  const visitOptions = useMemo(() => fieldTaskVisitOptions(field.week, {
+    canCreateTask,
+    selectedCustomerId: customerId,
+    selectedDate: effectiveSelectedDate,
+  }), [canCreateTask, customerId, effectiveSelectedDate, field.week])
+  const selectedVisit = visitId ? visitOptions.find((visit) => visit.id === visitId) ?? null : null
   const hasInitialInput = Boolean(
     title || description || priority !== "MEDIUM" || effectiveSelectedDate !== defaultSelectedDate ||
-    time !== "09:00" || customerId || recurrence,
+    time !== "09:00" || customerId || visitId || recurrence,
   )
 
   const plannedCustomers = useMemo(() => {
@@ -142,9 +151,16 @@ export default function NewAgentTaskScreen() {
     setPriority(copySource.priority)
     setCustomerId(copySource.customerId)
     setSelectedCustomerPreview(copySource.customer)
+    setVisitId(null)
     setRecurrence(copySource.recurrenceRule)
     hydratedCopyId.current = copySource.id
   }, [copySource, hasInitialInput])
+
+  useEffect(() => {
+    if (field.week && visitId && !visitOptions.some((visit) => visit.id === visitId)) {
+      setVisitId(null)
+    }
+  }, [field.week, visitId, visitOptions])
 
   useEffect(() => {
     const query = customerSearch.trim()
@@ -183,9 +199,33 @@ export default function NewAgentTaskScreen() {
   }, [customerSearch])
 
   function chooseCustomer(customer: FieldTaskCustomerPreview | null) {
+    if (visitId && selectedVisit?.customer.id !== customer?.id) setVisitId(null)
     setCustomerId(customer?.id ?? null)
     setSelectedCustomerPreview(customer)
     setCustomerSearch("")
+  }
+
+  function chooseVisit(visit: FieldTaskVisitOption | null) {
+    setVisitId(visit?.id ?? null)
+    if (visit) {
+      setCustomerId(visit.customer.id)
+      setSelectedCustomerPreview({
+        id: visit.customer.id,
+        name: visit.customer.name,
+        objectType: visit.customer.objectType,
+        address: null,
+        city: null,
+      })
+      setCustomerSearch("")
+    }
+    setVisitPickerOpen(false)
+  }
+
+  function visitMeta(visit: FieldTaskVisitOption): string {
+    const calendar = formatCalendarDay(visit.date, locale)
+    return [calendar.date, formatTime(visit.checkInAt, tenantTimeZone), visit.contact?.displayName]
+      .filter(Boolean)
+      .join(" · ")
   }
 
   function selectTaskDate(date: string) {
@@ -217,7 +257,7 @@ export default function NewAgentTaskScreen() {
         title: normalizedTitle,
         description: description.trim() || null,
         customerId,
-        visitId: null,
+        visitId,
         priority,
         dueDate,
         copiedFromId: copySource?.id ?? null,
@@ -242,6 +282,7 @@ export default function NewAgentTaskScreen() {
       description !== (copySource.description ?? "") ||
       priority !== copySource.priority ||
       customerId !== copySource.customerId ||
+      visitId !== null ||
       recurrence !== copySource.recurrenceRule ||
       effectiveSelectedDate !== defaultSelectedDate ||
       time !== "09:00"
@@ -357,6 +398,72 @@ export default function NewAgentTaskScreen() {
           {customerQuery.length >= 2 && !customerLoading && !customerSearchError && visibleCustomers.length === 0 ? <Text style={styles.customerState}>{t("agentTaskCustomerNoMatches")}</Text> : null}
         </View>
 
+        <SectionTitle>{t("agentTaskVisitOptionalLabel")}</SectionTitle>
+        <View style={styles.visitPicker}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={selectedVisit ? `${t("agentTaskVisitOptionalLabel")}: ${selectedVisit.customer.name}` : t("agentTaskNoVisitChoice")}
+            accessibilityHint={visitPickerOpen ? t("agentTaskVisitHideChoices") : t("agentTaskVisitShowChoices")}
+            accessibilityState={{ expanded: visitPickerOpen, selected: Boolean(selectedVisit) }}
+            onPress={() => setVisitPickerOpen((open) => !open)}
+            style={({ pressed }) => [styles.visitPickerSummary, pressed && styles.pressed]}
+          >
+            <View style={[styles.visitPickerIcon, selectedVisit && styles.visitPickerIconSelected]}>
+              <TabIcon name="visit" color={selectedVisit ? colors.headerText : colors.primary} size={21} />
+            </View>
+            <View style={styles.visitPickerBody}>
+              <Text style={styles.visitPickerEyebrow}>{t("agentTaskVisitLabel")}</Text>
+              <Text style={styles.visitPickerTitle} numberOfLines={1}>{selectedVisit?.customer.name ?? t("agentTaskNoVisitChoice")}</Text>
+              <Text style={styles.visitPickerMeta} numberOfLines={2}>
+                {selectedVisit
+                  ? `${visitMeta(selectedVisit)} · ${visitStateLabel(selectedVisit.state)}`
+                  : t("agentTaskVisitPickerHint")}
+              </Text>
+            </View>
+            <View style={styles.visitPickerChevron}>
+              <TabIcon name={visitPickerOpen ? "chevronUp" : "chevronDown"} color={colors.muted} size={20} />
+            </View>
+          </Pressable>
+          {visitPickerOpen ? (
+            <View style={styles.visitChoices}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("agentTaskNoVisitChoice")}
+                accessibilityState={{ selected: visitId === null }}
+                onPress={() => chooseVisit(null)}
+                style={({ pressed }) => [styles.visitChoice, visitId === null && styles.visitChoiceSelected, pressed && styles.pressed]}
+              >
+                <View style={styles.visitChoiceIcon}><TabIcon name="close" color={visitId === null ? colors.primary : colors.muted} size={17} /></View>
+                <View style={styles.visitChoiceBody}><Text style={[styles.visitChoiceName, visitId === null && styles.visitChoiceNameSelected]}>{t("agentTaskNoVisitChoice")}</Text></View>
+                {visitId === null ? <TabIcon name="check" color={colors.primary} size={20} /> : null}
+              </Pressable>
+              {visitOptions.map((visit) => {
+                const selected = visit.id === visitId
+                const status = visitStateLabel(visit.state)
+                return (
+                  <Pressable
+                    key={visit.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${visit.customer.name}. ${visitMeta(visit)}. ${status}`}
+                    accessibilityState={{ selected }}
+                    onPress={() => chooseVisit(visit)}
+                    style={({ pressed }) => [styles.visitChoice, selected && styles.visitChoiceSelected, pressed && styles.pressed]}
+                  >
+                    <View style={[styles.visitChoiceIcon, selected && styles.visitChoiceIconSelected]}><TabIcon name="visit" color={selected ? colors.headerText : colors.primary} size={18} /></View>
+                    <View style={styles.visitChoiceBody}>
+                      <Text style={[styles.visitChoiceName, selected && styles.visitChoiceNameSelected]} numberOfLines={1}>{visit.customer.name}</Text>
+                      <Text style={styles.visitChoiceMeta} numberOfLines={1}>{visitMeta(visit)}</Text>
+                      <Text style={[styles.visitChoiceStatus, visit.state === "ACTIVE" && styles.visitChoiceStatusActive, visit.state === "SYNCING" && styles.visitChoiceStatusSync]}>{status}</Text>
+                    </View>
+                    {selected ? <TabIcon name="check" color={colors.primary} size={20} /> : null}
+                  </Pressable>
+                )
+              })}
+              {visitOptions.length === 0 ? <Text style={styles.visitEmpty}>{field.week ? t("agentTaskVisitEmpty") : t("agentTaskVisitUnavailable")}</Text> : null}
+            </View>
+          ) : null}
+        </View>
+
         {field.agentTasks?.capabilities.recurringTasks !== false && effectiveSelectedDate ? <><SectionTitle>{t("agentTaskRecurrenceLabel")}</SectionTitle><View style={styles.wrapChips}><ChoiceChip selected={recurrence === null} label={t("agentTaskRecurrenceNone")} onPress={() => setRecurrence(null)} /><ChoiceChip selected={recurrence === "DAILY"} label={t("agentTaskRecurrenceDaily")} onPress={() => setRecurrence("DAILY")} /><ChoiceChip selected={recurrence === "WEEKLY"} label={t("agentTaskRecurrenceWeekly")} onPress={() => setRecurrence("WEEKLY")} /><ChoiceChip selected={recurrence === "MONTHLY"} label={t("agentTaskRecurrenceMonthly")} onPress={() => setRecurrence("MONTHLY")} /></View></> : null}
 
         {copySource ? <View style={styles.copyNotice}><Text style={styles.copyNoticeText}>{t("agentTaskPersonalHint")}</Text></View> : null}
@@ -379,6 +486,12 @@ function priorityLabel(priority: FieldAgentTaskPriority): string {
   if (priority === "MEDIUM") return t("agentTaskPriority_MEDIUM")
   if (priority === "HIGH") return t("agentTaskPriority_HIGH")
   return t("agentTaskPriority_URGENT")
+}
+
+function visitStateLabel(state: FieldTaskVisitOptionState): string {
+  if (state === "ACTIVE") return t("agentTaskVisitActive")
+  if (state === "COMPLETED") return t("agentTaskVisitCompleted")
+  return t("agentTaskVisitSyncing")
 }
 
 function SectionTitle({ children }: { children: string }) { return <Text style={styles.sectionTitle}>{children}</Text> }
@@ -451,6 +564,28 @@ const styles = StyleSheet.create({
   customerChoiceMetaSelected: { color: colors.primary },
   customerState: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", paddingVertical: 5, fontWeight: "800" },
   customerError: { color: colors.missed, fontSize: 11, lineHeight: 16, paddingVertical: 4, fontWeight: "800" },
+  visitPicker: { marginHorizontal: 14, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, overflow: "hidden" },
+  visitPickerSummary: { minHeight: 76, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  visitPickerIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  visitPickerIconSelected: { backgroundColor: colors.primary },
+  visitPickerBody: { flex: 1, minWidth: 0 },
+  visitPickerEyebrow: { color: colors.primary, fontSize: 10, lineHeight: 13, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.45 },
+  visitPickerTitle: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "900", marginTop: 1 },
+  visitPickerMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: "700", marginTop: 2 },
+  visitPickerChevron: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  visitChoices: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },
+  visitChoice: { minHeight: 62, paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  visitChoiceSelected: { backgroundColor: colors.primarySoft },
+  visitChoiceIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  visitChoiceIconSelected: { backgroundColor: colors.primary },
+  visitChoiceBody: { flex: 1, minWidth: 0 },
+  visitChoiceName: { color: colors.text, fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  visitChoiceNameSelected: { color: colors.primary },
+  visitChoiceMeta: { color: colors.muted, fontSize: 10, lineHeight: 14, fontWeight: "700", marginTop: 1 },
+  visitChoiceStatus: { color: colors.muted, fontSize: 10, lineHeight: 14, fontWeight: "900", marginTop: 1 },
+  visitChoiceStatusActive: { color: colors.primary },
+  visitChoiceStatusSync: { color: colors.info },
+  visitEmpty: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center", paddingHorizontal: 16, paddingVertical: 14, fontWeight: "700" },
   copyNotice: { marginHorizontal: 14, marginTop: 18, borderRadius: radii.inner, padding: 11, backgroundColor: colors.infoBg },
   copyNoticeText: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "700" },
   error: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.inner, padding: 11, backgroundColor: colors.dangerBg },

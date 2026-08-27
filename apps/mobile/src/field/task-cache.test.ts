@@ -19,6 +19,7 @@ describe("agent task offline cache", () => {
       title: "Call clinic",
       description: null,
       customerId: "clinic-1",
+      visitId: "visit-1",
       priority: "HIGH",
       dueDate: "2099-07-16T09:00:00.000Z",
       recurrence: { rule: "WEEKLY", interval: 1, until: null },
@@ -39,6 +40,7 @@ describe("agent task offline cache", () => {
       version: 2,
       syncState: "PENDING",
       customer: { name: "Clinic" },
+      visitId: "visit-1",
     })
     expect(started.tasks[0]?.events.map((event) => event.type)).toEqual(["STARTED", "CREATED"])
   })
