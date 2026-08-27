@@ -64,12 +64,20 @@ artifact archive, the other identifies the installed Android package. Do not
 substitute APK size, a workflow run number, or a display version for either
 proof.
 
+
+Release sequencing is stricter than the original physical baseline: the prior
+Field source candidate was version 1.0.1 / Android code 2. The current
+browse-list candidate is version 1.0.2 / Android code 3. A future preview must
+use a code greater than 3; a different workflow run or APK size is never
+evidence of a newer release. Source version changes alone are also not
+acceptance evidence.
+
 Every later standalone preview must meet all of these conditions before it is
 called newer or ready for review:
 
 1. Its candidate commit is different from, and a descendant of,
    `7bc499844550bf4fb2773914d0679a25054ca824`.
-2. Its Android `versionCode` is greater than `1`, and its `versionName`
+2. Its Android `versionCode` is greater than `2`, and its `versionName`
    truthfully identifies the candidate release.
 3. The recorded source commit, workflow `headSha`, and commit suffix in the
    artifact name are identical.
@@ -83,9 +91,10 @@ called newer or ready for review:
 The baseline installation itself is **not** functional acceptance: a subsequent
 physical-device rerun reproduced a handled sync-cache warning and a route-target
 loading failure. The release APK did not expose safe HTTP status or error-class
-diagnostics in logcat, so the sync cause remains open. The route-target path
-requires a server-contract fix and authenticated proof before the next preview
-is accepted.
+diagnostics in logcat, so the sync cause remains open. The production route-target
+handler was deployed after this diagnostic; a public probe now reaches it
+(401 without credentials rather than the previous 404). It still requires
+authenticated physical-device proof before a new preview is accepted.
 
 ## Local Commands
 

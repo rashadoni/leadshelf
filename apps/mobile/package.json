@@ -1,6 +1,6 @@
 {
   "name": "@leadshelf/mobile",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "expo-router/entry",
   "dependencies": {
     "@leadshelf/api-contracts": "workspace:*",

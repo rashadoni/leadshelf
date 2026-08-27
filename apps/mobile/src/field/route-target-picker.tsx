@@ -23,6 +23,13 @@ import {
   canSearchUnassignedOrganization,
   existingOrganizationAssignmentFailure,
 } from "./organization-assignment"
+import {
+  ALL_ROUTE_TARGETS_FILTER_ID,
+  appendRouteTargetBrowsePage,
+  initialBrowseTargetTypes,
+  makeRouteTargetBrowseGroups,
+  type RouteTargetBrowseGroup,
+} from "./route-target-browse"
 
 export { routeTargetKey } from "./route-target"
 
@@ -53,6 +60,8 @@ function organizationMeta(item: FieldOrganization): string {
   return [objectTypeLabel(item.objectType), item.city, item.address].filter(Boolean).join(" · ")
 }
 
+
+const BROWSE_PAGE_LIMIT = 12
 export function RouteTargetPicker({
   excluded,
   agentId,
@@ -73,12 +82,13 @@ export function RouteTargetPicker({
   const locale = useLocale()
   const layout = useResponsiveLayout()
   const { endSession } = useSync()
-  const [targetTypeId, setTargetTypeId] = useState<string | null>(null)
+  const [targetTypeId, setTargetTypeId] = useState(ALL_ROUTE_TARGETS_FILTER_ID)
   const [targetTypes, setTargetTypes] = useState<FieldRouteTargetType[]>([])
   const [catalog, setCatalog] = useState<FieldRouteTargetCatalogData | null>(null)
+  const [browseGroups, setBrowseGroups] = useState<RouteTargetBrowseGroup[]>([])
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadingMoreTargetTypeId, setLoadingMoreTargetTypeId] = useState<string | null>(null)
   const [error, setError] = useState<RouteTargetLoadFailure | null>(null)
   const [assignmentOpen, setAssignmentOpen] = useState(false)
   const [assignmentSearch, setAssignmentSearch] = useState("")
@@ -91,21 +101,72 @@ export function RouteTargetPicker({
   const sequence = useRef(0)
   const assignmentSequence = useRef(0)
 
-  const load = useCallback(async (typeId: string | undefined, query: string, page = 1, append = false) => {
+  const load = useCallback(async (typeId: string, query: string, page = 1, append = false) => {
     const request = ++sequence.current
-    if (append) setLoadingMore(true)
+    if (append) setLoadingMoreTargetTypeId(typeId)
     else setLoading(true)
     setError(null)
     try {
+      if (typeId === ALL_ROUTE_TARGETS_FILTER_ID) {
+        // The first server-scoped call becomes visible straight away. Extra
+        // configured groups such as doctors append without hiding customers.
+        const firstCatalog = await fieldApi.routeTargets({
+          agentId,
+          date,
+          search: query || undefined,
+          page: 1,
+          limit: BROWSE_PAGE_LIMIT,
+        })
+        if (request !== sequence.current) return
+
+        const catalogs = [firstCatalog]
+        setTargetTypes(firstCatalog.targetTypes)
+        setCatalog(null)
+        setBrowseGroups(makeRouteTargetBrowseGroups(catalogs))
+
+        const additionalTypes = initialBrowseTargetTypes(firstCatalog)
+          .filter((targetType) => targetType.id !== firstCatalog.targetType.id)
+        let supplementalFailure: RouteTargetLoadFailure | null = null
+        for (const targetType of additionalTypes) {
+          try {
+            const next = await fieldApi.routeTargets({
+              agentId,
+              date,
+              targetTypeId: targetType.id,
+              search: query || undefined,
+              page: 1,
+              limit: BROWSE_PAGE_LIMIT,
+            })
+            if (request !== sequence.current) return
+            catalogs.push(next)
+            setBrowseGroups(makeRouteTargetBrowseGroups(catalogs))
+          } catch (reason) {
+            if (request !== sequence.current) return
+            const failure = routeTargetLoadFailure(reason)
+            if (failure.kind === "session") {
+              await endSession().catch(() => {})
+              return
+            }
+            supplementalFailure ??= failure
+          }
+        }
+        if (supplementalFailure) {
+          // Keep successful groups usable; retry reloads every missing group.
+          setError({ ...supplementalFailure, messageKey: "routeTargetSupplementalLoadError" })
+        }
+        return
+      }
       const next = await fieldApi.routeTargets({
         agentId,
         date,
         targetTypeId: typeId,
         search: query || undefined,
         page,
+        limit: BROWSE_PAGE_LIMIT,
       })
       if (request !== sequence.current) return
       setTargetTypes(next.targetTypes)
+      setBrowseGroups([])
       setCatalog((current) => {
         if (!append || !current) return next
         const existing = new Set(current.items.map((item) => item.targetKey + ":" + item.customer.id))
@@ -125,18 +186,27 @@ export function RouteTargetPicker({
     } finally {
       if (request === sequence.current) {
         setLoading(false)
-        setLoadingMore(false)
+        setLoadingMoreTargetTypeId(null)
       }
     }
   }, [agentId, date, endSession])
 
   useEffect(() => {
-    const id = setTimeout(() => void load(targetTypeId ?? undefined, search.trim()), 300)
+    // Cancel the old query immediately, rather than waiting for the debounce,
+    // so its response cannot overwrite a newer search or filter choice.
+    sequence.current += 1
+    const id = setTimeout(() => void load(targetTypeId, search.trim()), 300)
     return () => clearTimeout(id)
   }, [load, search, targetTypeId])
 
-  const selectedTypeId = targetTypeId ?? catalog?.targetType.id ?? targetTypes[0]?.id ?? null
-  const selectedTargetType = catalog?.targetType ?? targetTypes.find((item) => item.id === selectedTypeId) ?? null
+  const browsingAllTargets = targetTypeId === ALL_ROUTE_TARGETS_FILTER_ID
+  const selectedTypeId = browsingAllTargets ? ALL_ROUTE_TARGETS_FILTER_ID : targetTypeId
+  const allCustomersTargetType = targetTypes.find((type) => (
+    type.direction !== "DOCTOR" && type.objectType === null && type.organizationKind === null
+  )) ?? targetTypes.find((type) => type.direction !== "DOCTOR") ?? null
+  const selectedTargetType = browsingAllTargets
+    ? allCustomersTargetType
+    : catalog?.targetType ?? targetTypes.find((item) => item.id === selectedTypeId) ?? null
   const canAssignOrganization = canAssignExisting && Boolean(selectedTargetType && selectedTargetType.direction !== "DOCTOR")
   const scopeDate = formatLongCalendarDate(date, locale)
   const scopeHint = agentName
@@ -210,6 +280,7 @@ export function RouteTargetPicker({
   function changeTargetType(id: string) {
     if (id === selectedTypeId) return
     setCatalog(null)
+    setBrowseGroups([])
     setTargetTypeId(id)
     setAssignmentOpen(false)
     setAssignmentSearch("")
@@ -242,7 +313,7 @@ export function RouteTargetPicker({
       const refreshed = await fieldApi.routeTargets({
         agentId,
         date,
-        targetTypeId: selectedTypeId ?? undefined,
+        targetTypeId: selectedTargetType?.id,
         search: candidate.name,
         page: 1,
       })
@@ -255,7 +326,7 @@ export function RouteTargetPicker({
         return
       }
       select(target)
-      void load(selectedTypeId ?? undefined, search.trim())
+      void load(targetTypeId, search.trim())
       setAssignmentOpen(false)
       setAssignmentSearch("")
       setAssignmentResults([])
@@ -289,78 +360,77 @@ export function RouteTargetPicker({
     }
   }
 
-  return (
-    <View style={[styles.root, { maxHeight }, layout.isTablet && styles.rootTablet]}>
-      <View style={styles.header}>
-        <View style={styles.headerBody}>
-          <Text style={styles.title}>{t("addStop")}</Text>
-          <Text style={styles.subtitle}>{scopeHint}</Text>
+  async function loadMoreBrowseGroup(group: RouteTargetBrowseGroup) {
+    if (loadingMoreTargetTypeId || !group.catalog.page.hasMore) return
+    const request = ++sequence.current
+    setLoadingMoreTargetTypeId(group.targetType.id)
+    setError(null)
+    try {
+      const next = await fieldApi.routeTargets({
+        agentId,
+        date,
+        targetTypeId: group.targetType.id,
+        search: search.trim() || undefined,
+        page: group.catalog.page.number + 1,
+        limit: BROWSE_PAGE_LIMIT,
+      })
+      if (request !== sequence.current) return
+      setBrowseGroups((current) => appendRouteTargetBrowsePage(current, group.targetType.id, next))
+    } catch (reason) {
+      if (request !== sequence.current) return
+      const failure = routeTargetLoadFailure(reason)
+      if (failure.kind === "session") {
+        await endSession().catch(() => {})
+        return
+      }
+      setError(failure)
+    } finally {
+      if (request === sequence.current) setLoadingMoreTargetTypeId(null)
+    }
+  }
+
+  const browseHasItems = browseGroups.some((group) => group.items.length > 0)
+  const showBrowseEmpty = browsingAllTargets && !loading && browseGroups.length > 0 && !browseHasItems
+  const showCategoryEmpty = !browsingAllTargets && Boolean(catalog && !loading && catalog.items.length === 0)
+  const loadingMore = !browsingAllTargets && loadingMoreTargetTypeId === targetTypeId
+
+  function renderTargetRow(item: FieldRouteTargetCatalogItem) {
+    const disabled = excluded.has(item.targetKey)
+    const contact = item.contact
+    return (
+      <Pressable
+        key={item.targetKey}
+        accessibilityRole="button"
+        accessibilityLabel={[
+          contact?.displayName ?? item.customer.name,
+          targetMeta(item),
+          availabilityLabel(item),
+          disabled ? t("stopAlreadyAdded") : t("addStop"),
+        ].filter(Boolean).join(". ")}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={() => select(item)}
+        style={[styles.result, layout.isTablet && styles.resultTablet, disabled && styles.disabled]}
+      >
+        <View style={[styles.resultMark, contact ? styles.contactMark : styles.organizationMark]}>
+          <TabIcon name={contact ? "contacts" : "organizations"} color={contact ? colors.holiday : colors.info} size={20} />
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={onCancel} style={styles.close}>
-          <TabIcon name="close" color={colors.text} size={20} />
-        </Pressable>
-      </View>
-      {targetTypes.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeScroll} contentContainerStyle={styles.typeTabs}>
-          {targetTypes.map((targetType) => {
-            const active = targetType.id === selectedTypeId
-            const icon: "contacts" | "organizations" = targetType.direction === "DOCTOR" ? "contacts" : "organizations"
-            return (
-              <Pressable
-                key={targetType.id}
-                accessibilityRole="button"
-                accessibilityLabel={targetTypeLabel(targetType, locale)}
-                accessibilityState={{ selected: active }}
-                onPress={() => changeTargetType(targetType.id)}
-                style={[styles.typeTab, active && styles.typeTabActive]}
-              >
-                <TabIcon name={icon} color={active ? colors.headerText : colors.primary} size={15} />
-                <Text style={[styles.typeTabText, active && styles.typeTabTextActive]}>{targetTypeLabel(targetType, locale)}</Text>
-              </Pressable>
-            )
-          })}
-        </ScrollView>
-      ) : null}
-      <View style={styles.search}>
-        <TabIcon name="contacts" color={colors.faint} size={18} />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          accessibilityLabel={t("routeTargetSearch")}
-          accessibilityHint={t("routeTargetSearchHint")}
-          placeholder={t("routeTargetSearch")}
-          placeholderTextColor={colors.faint}
-          style={styles.searchInput}
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-      </View>
-      {error ? (
-        <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.errorCard}>
-          <Text style={styles.error}>{t(error.messageKey)}</Text>
-          {error.correlationId ? <Text style={styles.errorMeta}>{t("syncSupportCode", { code: error.correlationId })}</Text> : null}
-          {error.retryable ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("routeTargetRetry")}
-              accessibilityState={{ busy: loading }}
-              disabled={loading}
-              onPress={() => void load(targetTypeId ?? selectedTypeId ?? undefined, search.trim())}
-              style={({ pressed }) => [styles.retryButton, (loading || pressed) && styles.retryButtonPressed]}
-            >
-              <TabIcon name="refresh" color={colors.primary} size={16} />
-              <Text style={styles.retryText}>{t("routeTargetRetry")}</Text>
-            </Pressable>
-          ) : null}
+        <View style={styles.resultBody}>
+          <Text style={styles.resultName} numberOfLines={1}>{contact?.displayName ?? item.customer.name}</Text>
+          <Text style={styles.resultMeta} numberOfLines={2}>{targetMeta(item)}</Text>
+          <Text style={styles.scopeBadge}>{availabilityLabel(item)}</Text>
+          {disabled ? <Text style={styles.added}>{t("stopAlreadyAdded")}</Text> : null}
         </View>
-      ) : null}
-      {loading && !catalog ? (
-        <View accessible accessibilityRole="progressbar" accessibilityLabel={t("routeTargetLoading")} style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>{t("routeTargetLoading")}</Text>
+        <View style={styles.actionMark}>
+          <TabIcon name={disabled ? "check" : "add"} color={disabled ? colors.successDark : colors.primary} size={20} />
         </View>
-      ) : null}
-      {canAssignOrganization ? (
+      </Pressable>
+    )
+  }
+
+  function renderAssignmentArea() {
+    if (canAssignOrganization) {
+      return (
         <View style={styles.assignmentDisclosure}>
           <Pressable
             accessibilityRole="button"
@@ -434,7 +504,7 @@ export function RouteTargetPicker({
                       <Pressable
                         key={organization.id}
                         accessibilityRole="button"
-                        accessibilityLabel={`${organization.name}. ${organizationMeta(organization)}`}
+                        accessibilityLabel={[organization.name, organizationMeta(organization)].filter(Boolean).join(". ")}
                         accessibilityState={{ selected, disabled: assignmentSaving }}
                         disabled={assignmentSaving}
                         onPress={() => { setAssignmentCandidate(organization); setAssignmentError(null) }}
@@ -486,64 +556,147 @@ export function RouteTargetPicker({
             </View>
           ) : null}
         </View>
-      ) : selectedTargetType?.direction === "DOCTOR" && canAssignExisting ? (
-        <View style={styles.assignmentInfo}><TabIcon name="info" color={colors.info} size={17} /><Text style={styles.assignmentInfoText}>{t("routeTargetContactAssignmentHint")}</Text></View>
-      ) : catalog && !loading && catalog.items.length === 0 ? (
-        <View style={styles.assignmentInfo}><TabIcon name="info" color={colors.info} size={17} /><Text style={styles.assignmentInfoText}>{t("routeTargetManagerHint")}</Text></View>
+      )
+    }
+
+    if (selectedTargetType?.direction === "DOCTOR" && canAssignExisting) {
+      return <View style={styles.assignmentInfo}><TabIcon name="info" color={colors.info} size={17} /><Text style={styles.assignmentInfoText}>{t("routeTargetContactAssignmentHint")}</Text></View>
+    }
+    if (showCategoryEmpty) {
+      return <View style={styles.assignmentInfo}><TabIcon name="info" color={colors.info} size={17} /><Text style={styles.assignmentInfoText}>{t("routeTargetManagerHint")}</Text></View>
+    }
+    return null
+  }
+
+  return (
+    <View style={[styles.root, { maxHeight }, layout.isTablet && styles.rootTablet]}>
+      <View style={styles.header}>
+        <View style={styles.headerBody}>
+          <Text style={styles.title}>{t("addStop")}</Text>
+          <Text style={styles.subtitle}>{scopeHint}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={onCancel} style={styles.close}>
+          <TabIcon name="close" color={colors.text} size={20} />
+        </Pressable>
+      </View>
+      {targetTypes.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeScroll} contentContainerStyle={styles.typeTabs}>
+          <Pressable
+            key={ALL_ROUTE_TARGETS_FILTER_ID}
+            accessibilityRole="button"
+            accessibilityLabel={t("routeTargetAll")}
+            accessibilityState={{ selected: browsingAllTargets }}
+            onPress={() => changeTargetType(ALL_ROUTE_TARGETS_FILTER_ID)}
+            style={[styles.typeTab, browsingAllTargets && styles.typeTabActive]}
+          >
+            <TabIcon name="organizations" color={browsingAllTargets ? colors.headerText : colors.primary} size={15} />
+            <Text style={[styles.typeTabText, browsingAllTargets && styles.typeTabTextActive]}>{t("routeTargetAll")}</Text>
+          </Pressable>
+          {targetTypes.map((targetType) => {
+            const active = targetType.id === targetTypeId
+            const icon: "contacts" | "organizations" = targetType.direction === "DOCTOR" ? "contacts" : "organizations"
+            return (
+              <Pressable
+                key={targetType.id}
+                accessibilityRole="button"
+                accessibilityLabel={targetTypeLabel(targetType, locale)}
+                accessibilityState={{ selected: active }}
+                onPress={() => changeTargetType(targetType.id)}
+                style={[styles.typeTab, active && styles.typeTabActive]}
+              >
+                <TabIcon name={icon} color={active ? colors.headerText : colors.primary} size={15} />
+                <Text style={[styles.typeTabText, active && styles.typeTabTextActive]}>{targetTypeLabel(targetType, locale)}</Text>
+              </Pressable>
+            )
+          })}
+        </ScrollView>
+      ) : null}
+      <View style={styles.search}>
+        <TabIcon name="contacts" color={colors.faint} size={18} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          accessibilityLabel={t("routeTargetSearch")}
+          accessibilityHint={t("routeTargetSearchHint")}
+          placeholder={t("routeTargetSearch")}
+          placeholderTextColor={colors.faint}
+          style={styles.searchInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+      </View>
+      {error ? (
+        <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.errorCard}>
+          <Text style={styles.error}>{t(error.messageKey)}</Text>
+          {error.correlationId ? <Text style={styles.errorMeta}>{t("syncSupportCode", { code: error.correlationId })}</Text> : null}
+          {error.retryable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("routeTargetRetry")}
+              accessibilityState={{ busy: loading }}
+              disabled={loading}
+              onPress={() => void load(targetTypeId, search.trim())}
+              style={({ pressed }) => [styles.retryButton, (loading || pressed) && styles.retryButtonPressed]}
+            >
+              <TabIcon name="refresh" color={colors.primary} size={16} />
+              <Text style={styles.retryText}>{t("routeTargetRetry")}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {loading && !catalog && browseGroups.length === 0 ? (
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={t("routeTargetLoading")} style={styles.loading}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.loadingText}>{t("routeTargetLoading")}</Text>
+        </View>
       ) : null}
       <ScrollView nestedScrollEnabled style={styles.results} contentContainerStyle={[styles.resultsContent, layout.isTablet && styles.resultsContentTablet]} keyboardShouldPersistTaps="handled">
-        {catalog?.items.map((item) => {
-          const disabled = excluded.has(item.targetKey)
-          const contact = item.contact
+        {browsingAllTargets ? browseGroups.map((group) => {
+          if (group.items.length === 0 && !group.catalog.page.hasMore) return null
+          const icon: "contacts" | "organizations" = group.targetType.direction === "DOCTOR" ? "contacts" : "organizations"
+          const groupLoading = loadingMoreTargetTypeId === group.targetType.id
           return (
-            <Pressable
-              key={item.targetKey + ":" + item.customer.id}
-              accessibilityRole="button"
-              accessibilityLabel={[
-                contact?.displayName ?? item.customer.name,
-                targetMeta(item),
-                availabilityLabel(item),
-                disabled ? t("stopAlreadyAdded") : t("addStop"),
-              ].filter(Boolean).join(". ")}
-              accessibilityState={{ disabled }}
-              disabled={disabled}
-              onPress={() => select(item)}
-              style={[styles.result, layout.isTablet && styles.resultTablet, disabled && styles.disabled]}
-            >
-              <View style={[styles.resultMark, contact ? styles.contactMark : styles.organizationMark]}>
-                <TabIcon name={contact ? "contacts" : "organizations"} color={contact ? colors.holiday : colors.info} size={20} />
+            <View key={group.targetType.id} style={[styles.browseGroup, layout.isTablet && styles.browseGroupTablet]}>
+              <View style={styles.browseGroupHeading}>
+                <View style={styles.browseGroupIcon}><TabIcon name={icon} color={colors.primary} size={16} /></View>
+                <Text style={styles.browseGroupTitle}>{targetTypeLabel(group.targetType, locale)}</Text>
               </View>
-              <View style={styles.resultBody}>
-                <Text style={styles.resultName} numberOfLines={1}>{contact?.displayName ?? item.customer.name}</Text>
-                <Text style={styles.resultMeta} numberOfLines={2}>{targetMeta(item)}</Text>
-                <Text style={styles.scopeBadge}>{availabilityLabel(item)}</Text>
-                {disabled ? <Text style={styles.added}>{t("stopAlreadyAdded")}</Text> : null}
-              </View>
-              <View style={styles.actionMark}>
-                <TabIcon name={disabled ? "check" : "add"} color={disabled ? colors.successDark : colors.primary} size={20} />
-              </View>
-            </Pressable>
+              {group.items.map(renderTargetRow)}
+              {group.catalog.page.hasMore ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={groupLoading ? t("fieldLoadingMore") : t("fieldLoadMore")}
+                  accessibilityState={{ busy: groupLoading, disabled: Boolean(loadingMoreTargetTypeId) }}
+                  disabled={Boolean(loadingMoreTargetTypeId)}
+                  onPress={() => void loadMoreBrowseGroup(group)}
+                  style={[styles.loadMore, groupLoading && styles.disabled]}
+                >
+                  <Text style={styles.loadMoreText}>{groupLoading ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           )
-        })}
-        {catalog && !loading && catalog.items.length === 0 ? (
+        }) : catalog?.items.map(renderTargetRow)}
+        {showBrowseEmpty || showCategoryEmpty ? (
           <View style={[styles.empty, layout.isTablet && styles.emptyTablet]}>
             <TabIcon name="organizations" color={colors.faint} size={25} />
             <Text style={styles.emptyTitle}>{t("routeTargetEmpty")}</Text>
             <Text style={styles.emptyHint}>{t("routeTargetEmptyHint")}</Text>
           </View>
         ) : null}
-        {catalog?.page.hasMore ? (
+        {!browsingAllTargets && catalog?.page.hasMore ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}
             accessibilityState={{ busy: loadingMore, disabled: loading || loadingMore }}
             disabled={loading || loadingMore}
-            onPress={() => void load(selectedTypeId ?? undefined, search.trim(), catalog.page.number + 1, true)}
+            onPress={() => void load(targetTypeId, search.trim(), catalog.page.number + 1, true)}
             style={[styles.loadMore, layout.isTablet && styles.loadMoreTablet, (loading || loadingMore) && styles.disabled]}
           >
             <Text style={styles.loadMoreText}>{loadingMore ? t("fieldLoadingMore") : t("fieldLoadMore")}</Text>
           </Pressable>
         ) : null}
+        {renderAssignmentArea()}
       </ScrollView>
     </View>
   )
@@ -586,6 +739,11 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.68 },
   assignmentInfo: { minHeight: 44, marginTop: 10, borderRadius: 11, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, padding: 9, flexDirection: "row", alignItems: "flex-start", gap: 7 },
   assignmentInfoText: { flex: 1, color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  browseGroup: { marginTop: 8 },
+  browseGroupTablet: { flexBasis: "100%" },
+  browseGroupHeading: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 2 },
+  browseGroupIcon: { width: 25, height: 25, borderRadius: 8, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  browseGroupTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   results: { marginTop: 5 }, resultsContent: { paddingBottom: 6 }, resultsContentTablet: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 10, paddingTop: 8 }, result: { minHeight: 88, marginTop: 8, borderRadius: 13, padding: 10, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9 }, resultTablet: { flexBasis: "48%", flexGrow: 1, marginTop: 0 }, resultMark: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" }, organizationMark: { backgroundColor: colors.infoBg }, contactMark: { backgroundColor: colors.holidayBg }, resultBody: { flex: 1, minWidth: 0 }, resultName: { color: colors.text, fontSize: 12, fontWeight: "900" }, resultMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }, scopeBadge: { alignSelf: "flex-start", color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden", fontSize: 11, lineHeight: 14, fontWeight: "900", marginTop: 5 }, added: { color: colors.successDark, fontSize: 11, lineHeight: 14, fontWeight: "900", marginTop: 3 }, actionMark: { width: 26, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 28, gap: 7 }, emptyTablet: { flexBasis: "100%" }, emptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center" }, loadMore: { minHeight: 44, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreTablet: { flexBasis: "100%", marginTop: 0 }, loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, disabled: { opacity: 0.45 },
 })
