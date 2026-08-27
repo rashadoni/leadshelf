@@ -1,6 +1,6 @@
 // Провайдер синка: собирает движок из адаптеров, триггеры — старт,
 // возврат в foreground, восстановление сети, ручной pull-to-refresh.
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { AppState } from "react-native"
 import NetInfo from "@react-native-community/netinfo"
 import { router } from "expo-router"
@@ -14,23 +14,42 @@ import { tokenStore } from "../auth/token-store"
 import { wipeRevokedSession } from "../auth/revocation-wipe"
 import { stopWorkdayTracking } from "../location/workday-tracking"
 import { deleteAllEncryptedMedia } from "../media/encrypted-media-store"
+import { reportHandledSyncFailure } from "../observability"
 
-const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
+const Ctx = createContext<{
+  status: SyncStatus
+  sync: () => Promise<unknown>
+  endSession: () => Promise<void>
+} | null>(null)
 
 export function SyncProvider({ children }: { children: ReactNode }) {
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const consecutiveErrors = useRef(0)
+  const revocationWipe = useRef<Promise<void> | null>(null)
+  const endSession = useCallback(async () => {
+    revocationWipe.current ??= wipeRevokedSession({
+      deleteMedia: async () => {
+        await stopWorkdayTracking().catch(() => {})
+        await deleteAllEncryptedMedia()
+      },
+      purgeOperationalData: () => purgeLocalOperationalData(),
+      clearSession: () => tokenStore.clearSession(),
+    }).then(() => {
+      router.replace("/(auth)/login" as never)
+    })
+    await revocationWipe.current
+  }, [])
   const manager = useMemo(
     () =>
       new SyncManager({
         api: syncApi,
         store: localStore,
         isOnline: async () => (await NetInfo.fetch()).isConnected ?? true,
+        reportFailure: reportHandledSyncFailure,
       }),
     [],
   )
   const [status, setStatus] = useState<SyncStatus>(manager.getStatus())
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const consecutiveErrors = useRef(0)
-  const revocationWipe = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     const clearRetry = () => {
@@ -45,16 +64,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       // отменяют его (offline восстановится по NetInfo, docs/26 §2).
       if (next.phase === "authLost") {
         clearRetry()
-        revocationWipe.current ??= wipeRevokedSession({
-          deleteMedia: async () => {
-            await stopWorkdayTracking().catch(() => {})
-            await deleteAllEncryptedMedia()
-          },
-          purgeOperationalData: () => purgeLocalOperationalData(),
-          clearSession: () => tokenStore.clearSession(),
-        }).then(() => {
-          router.replace("/(auth)/login" as never)
-        })
+        void endSession()
       } else if (next.phase === "upgradeRequired") {
         clearRetry()
         router.replace("/upgrade-required" as never)
@@ -82,9 +92,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       netSub()
       clearRetry()
     }
-  }, [manager])
+  }, [endSession, manager])
 
-  return <Ctx.Provider value={{ status, sync: () => manager.runSync() }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ status, sync: () => manager.runSync(), endSession }}>{children}</Ctx.Provider>
 }
 
 export function useSync() {

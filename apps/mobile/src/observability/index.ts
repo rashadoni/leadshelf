@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto"
 import { captureToSentry } from "./sentry-core"
+import type { SyncFailureDiagnostic } from "../sync/ports"
 
 // Хук глобального обработчика ошибок RN -> Sentry. Gated по
 // EXPO_PUBLIC_SENTRY_DSN (Expo инлайнит EXPO_PUBLIC_* на сборке). Без DSN —
@@ -28,5 +29,30 @@ export function initErrorReporting(): void {
       context: { isFatal: !!isFatal },
     })
     previous?.(error, isFatal)
+  })
+}
+
+/**
+ * Handled sync failures are not allowed to disappear behind the generic
+ * offline warning. Send only the deliberately bounded diagnostic; the raw
+ * HTTP body and exception text never leave the device through this path.
+ */
+export function reportHandledSyncFailure(failure: SyncFailureDiagnostic): void {
+  const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN
+  if (!dsn) return
+  const error = new Error("Handled mobile sync failure")
+  error.name = "MobileSyncFailure"
+  void captureToSentry({
+    dsn,
+    eventId: Crypto.randomUUID().replace(/-/g, ""),
+    error,
+    environment: __DEV__ ? "development" : "production",
+    context: {
+      operation: failure.operation,
+      stage: failure.stage,
+      errorClass: failure.errorClass,
+      ...(failure.statusCode === null ? {} : { statusCode: failure.statusCode }),
+      ...(failure.correlationId ? { correlationId: failure.correlationId } : {}),
+    },
   })
 }

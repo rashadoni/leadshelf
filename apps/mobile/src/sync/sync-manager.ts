@@ -6,9 +6,11 @@ import type {
   LocalStore,
   PushOperation,
   SyncApi,
+  SyncFailureDiagnostic,
+  SyncFailureStage,
   SyncStatus,
 } from "./ports"
-import { AuthLostError, HttpError, UpgradeRequiredError } from "./ports-error"
+import { AuthLostError, HttpError, MobileOperationError, UpgradeRequiredError } from "./ports-error"
 
 // Реэкспорт для обратной совместимости импортов из "./sync-manager".
 export { UpgradeRequiredError } from "./ports-error"
@@ -49,6 +51,49 @@ function toPushOperation(op: PushOperation): PushOperation {
   return op
 }
 
+function failureDiagnostic(error: unknown, fallbackStage: SyncFailureStage): SyncFailureDiagnostic {
+  const mobileDiagnostic = error instanceof HttpError
+    ? error.diagnostic
+    : error instanceof MobileOperationError
+      ? error.diagnostic
+      : undefined
+  if (mobileDiagnostic) {
+    return {
+      operation: mobileDiagnostic.operation,
+      stage: mobileDiagnostic.stage,
+      errorClass: mobileDiagnostic.stage === "http"
+        ? "HTTP"
+        : mobileDiagnostic.stage === "contract" || mobileDiagnostic.stage === "response"
+          ? "CONTRACT"
+          : "NETWORK",
+      statusCode: mobileDiagnostic.statusCode,
+      correlationId: mobileDiagnostic.correlationId,
+    }
+  }
+  if (error instanceof HttpError) {
+    return {
+      operation: "shelf.sync",
+      stage: fallbackStage,
+      errorClass: "HTTP",
+      statusCode: error.status,
+      correlationId: null,
+    }
+  }
+  return {
+    operation: "shelf.sync",
+    stage: fallbackStage,
+    errorClass: "LOCAL",
+    statusCode: null,
+    correlationId: null,
+  }
+}
+
+function safeFailureLog(failure: SyncFailureDiagnostic): string {
+  const status = failure.statusCode === null ? "none" : String(failure.statusCode)
+  const correlation = failure.correlationId ?? "none"
+  return `[mobile-sync] operation=${failure.operation} stage=${failure.stage} class=${failure.errorClass} status=${status} correlation=${correlation}`
+}
+
 export class SyncManager {
   private status: SyncStatus = {
     phase: "idle",
@@ -61,6 +106,7 @@ export class SyncManager {
     oldestPendingAgeMs: null,
     lastDurationMs: null,
     error: null,
+    failure: null,
   }
   private listeners = new Set<(s: SyncStatus) => void>()
   private running = false
@@ -71,6 +117,7 @@ export class SyncManager {
       store: LocalStore
       now?: () => Date
       isOnline?: () => Promise<boolean>
+      reportFailure?: (failure: SyncFailureDiagnostic) => void
     },
   ) {}
 
@@ -113,21 +160,25 @@ export class SyncManager {
     if (this.running) return this.status
     this.running = true
     const startedAt = Date.now()
+    let failureStage: SyncFailureStage = "cursors"
     try {
       if (this.deps.isOnline && !(await this.deps.isOnline())) {
-        this.patch({ phase: "offline", error: null, lastDurationMs: Date.now() - startedAt })
+        this.patch({ phase: "offline", error: null, failure: null, lastDurationMs: Date.now() - startedAt })
         await this.refreshCounters()
         return this.status
       }
 
       // 1. PULL
-      this.patch({ phase: "pulling", error: null })
+      this.patch({ phase: "pulling", error: null, failure: null })
       const cursors = await this.deps.store.getCursors()
+      failureStage = "pull"
       const pulled = await this.deps.api.pull(cursors)
+      failureStage = "apply"
       await this.deps.store.applyPull(pulled) // локальная транзакция
 
       // 2. ACK — только после успешного apply
       this.patch({ phase: "acking" })
+      failureStage = "ack"
       await this.deps.api.ack(pulled.cursors)
       await this.deps.store.setCursors(pulled.cursors)
 
@@ -136,6 +187,7 @@ export class SyncManager {
       // push (docs/26 §2). Перманентный 4xx -> карантин; транзиентный ->
       // счётчик попыток и ретрай на следующем sync. auth/upgrade — наверх.
       this.patch({ phase: "uploadingPhotos" })
+      failureStage = "upload"
       for (const photo of await this.deps.store.pendingPhotos()) {
         try {
           const result = await this.deps.api.uploadPhoto(photo) // дедуп по clientPhotoId на сервере
@@ -179,6 +231,7 @@ export class SyncManager {
 
       // 4. PUSH outbox
       this.patch({ phase: "pushing" })
+      failureStage = "push"
       const pending = await this.deps.store.pendingOutbox(MAX_PUSH_BATCH)
       if (pending.length > 0) {
         const unuploadedPhotoIds = new Set(await this.deps.store.unuploadedPhotoIds())
@@ -205,19 +258,30 @@ export class SyncManager {
 
       // Удаляем локальный media-файл только после тройного подтверждения:
       // upload завершён, photo.submit applied, server submission пришёл pull-ом.
+      failureStage = "cleanup"
       await this.deps.store.cleanupUploadedPhotoFiles?.()
 
       const now = (this.deps.now?.() ?? new Date()).toISOString()
-      this.patch({ phase: "idle", lastSyncAt: now, error: null, lastDurationMs: Date.now() - startedAt })
+      this.patch({ phase: "idle", lastSyncAt: now, error: null, failure: null, lastDurationMs: Date.now() - startedAt })
       await this.refreshCounters()
       return this.status
     } catch (e) {
       if (e instanceof UpgradeRequiredError) {
-        this.patch({ phase: "upgradeRequired", error: null, lastDurationMs: Date.now() - startedAt })
+        this.patch({ phase: "upgradeRequired", error: null, failure: null, lastDurationMs: Date.now() - startedAt })
       } else if (e instanceof AuthLostError) {
-        this.patch({ phase: "authLost", error: null, lastDurationMs: Date.now() - startedAt })
+        this.patch({ phase: "authLost", error: null, failure: null, lastDurationMs: Date.now() - startedAt })
       } else {
-        this.patch({ phase: "error", error: e instanceof Error ? e.message : String(e), lastDurationMs: Date.now() - startedAt })
+        const failure = failureDiagnostic(e, failureStage)
+        // Release logcat and telemetry receive only this bounded diagnostic;
+        // never the raw server body, token, search term or exception message.
+        console.warn(safeFailureLog(failure))
+        this.deps.reportFailure?.(failure)
+        this.patch({
+          phase: "error",
+          error: `${failure.operation}:${failure.errorClass}`,
+          failure,
+          lastDurationMs: Date.now() - startedAt,
+        })
       }
       await this.refreshCounters().catch(() => {})
       return this.status

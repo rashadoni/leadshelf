@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { SyncManager, UpgradeRequiredError } from "./sync-manager"
-import { AuthLostError, HttpError } from "./ports-error"
+import { AuthLostError, HttpError, MobileOperationError } from "./ports-error"
 import { EMPTY_MOBILE_COMMERCIAL_SNAPSHOT } from "@leadshelf/api-contracts/mobile/v1"
 import type {
   CommercialMediaQueueRow,
@@ -566,6 +566,71 @@ describe("SyncManager", () => {
     const status = await manager.runSync()
     expect(status.phase).toBe("authLost")
     expect(status.error).toBeNull()
+  })
+
+  test("ошибка pull хранит и сообщает только безопасный код операции", async () => {
+    const rawServerText = "Bearer private-token customer@example.test"
+    const reportFailure = vi.fn()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const api = makeApi({
+      pull: async () => {
+        throw new HttpError(
+          503,
+          rawServerText,
+          { token: rawServerText },
+          {
+            operation: "shelf.sync.pull",
+            stage: "http",
+            statusCode: 503,
+            correlationId: "mobile-12345678",
+          },
+        )
+      },
+    })
+
+    const status = await new SyncManager({ api, store: makeStore(), reportFailure }).runSync()
+
+    expect(status).toMatchObject({
+      phase: "error",
+      error: "shelf.sync.pull:HTTP",
+      failure: {
+        operation: "shelf.sync.pull",
+        stage: "http",
+        errorClass: "HTTP",
+        statusCode: 503,
+        correlationId: "mobile-12345678",
+      },
+    })
+    expect(reportFailure).toHaveBeenCalledWith(status.failure)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("correlation=mobile-12345678"))
+    expect(JSON.stringify([status, reportFailure.mock.calls, warn.mock.calls])).not.toContain(rawServerText)
+    warn.mockRestore()
+  })
+
+  test("ошибка контракта pull не раскрывает текст ответа", async () => {
+    const rawServerText = "response contains private GPS and token"
+    const error = new MobileOperationError({
+      operation: "shelf.sync.pull",
+      stage: "contract",
+      statusCode: null,
+      correlationId: "mobile-abcdefgh",
+    })
+    error.message = rawServerText
+    const api = makeApi({
+      pull: async () => {
+        throw error
+      },
+    })
+    const status = await new SyncManager({ api, store: makeStore() }).runSync()
+
+    expect(status.failure).toEqual({
+      operation: "shelf.sync.pull",
+      stage: "contract",
+      errorClass: "CONTRACT",
+      statusCode: null,
+      correlationId: "mobile-abcdefgh",
+    })
+    expect(JSON.stringify(status)).not.toContain(rawServerText)
   })
 
   test("операции с исчерпанными попытками не шлются повторно", async () => {

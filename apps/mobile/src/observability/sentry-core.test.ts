@@ -63,6 +63,35 @@ describe("mobile sentry envelope + capture", () => {
     }
   })
 
+  it("keeps only the bounded fields from a handled sync diagnostic", () => {
+    const secret = "Bearer private-token customer@example.test"
+    const env = buildSentryEnvelope(DSN, {
+      eventId: "e3",
+      error: Object.assign(new Error(secret), { name: "MobileSyncFailure" }),
+      context: {
+        operation: "shelf.sync.pull",
+        stage: "http",
+        errorClass: "HTTP",
+        statusCode: 503,
+        correlationId: "mobile-12345678",
+        rawResponse: secret,
+        token: secret,
+      },
+    })
+    const event = JSON.parse(env.trim().split("\n")[2]!)
+
+    expect(event.extra).toMatchObject({
+      operation: "shelf.sync.pull",
+      stage: "http",
+      errorClass: "HTTP",
+      statusCode: 503,
+      correlationId: "mobile-12345678",
+    })
+    expect(env).not.toContain(secret)
+    expect(event.extra).not.toHaveProperty("rawResponse")
+    expect(event.extra).not.toHaveProperty("token")
+  })
+
   it("no-ops without a DSN and posts when set", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
     expect(await captureToSentry({ dsn: "", eventId: "x", error: new Error("y"), fetchImpl })).toBe(false)

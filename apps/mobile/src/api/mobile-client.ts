@@ -2,7 +2,14 @@
 // directly; LeadDrive Field authenticates once against MTM and reaches shelf
 // execution only through the LeadDrive Field BFF.
 
-import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
+import {
+  AuthLostError,
+  HttpError,
+  MobileOperationError,
+  type MobileFailureDiagnostic,
+  type MobileOperation,
+  UpgradeRequiredError,
+} from "../sync/ports-error"
 import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
 import {
   MOBILE_PROTOCOL_VERSION,
@@ -16,6 +23,7 @@ import {
 import { File } from "expo-file-system"
 import { fetch } from "expo/fetch"
 import * as FileSystem from "expo-file-system/legacy"
+import * as Crypto from "expo-crypto"
 import { Platform } from "react-native"
 import {
   IS_LEADDRIVE_FIELD,
@@ -174,39 +182,132 @@ export class AccountSwitchBlockedError extends Error {
   }
 }
 
+type DiagnosticRequestOptions = {
+  operation: MobileOperation
+  correlationId?: string
+}
+
+type MobileRequestInit = RequestInit & {
+  retryOn401?: boolean
+  diagnostic?: DiagnosticRequestOptions
+}
+
+const CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/
+
+function newCorrelationId(): string {
+  // 80 random bits keep the support code short enough for a phone screen
+  // while remaining safely unique for incident lookup.
+  return `m-${Crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`
+}
+
+function safeCorrelationId(value: string | null | undefined, fallback: string): string {
+  const candidate = value?.trim()
+  return candidate && CORRELATION_ID.test(candidate) ? candidate : fallback
+}
+
+function requestDiagnostic(
+  options: DiagnosticRequestOptions | undefined,
+): { diagnostic: MobileFailureDiagnostic | null; correlationId: string | null } {
+  if (!options) return { diagnostic: null, correlationId: null }
+  const correlationId = options.correlationId && CORRELATION_ID.test(options.correlationId)
+    ? options.correlationId
+    : newCorrelationId()
+  return {
+    diagnostic: {
+      operation: options.operation,
+      stage: "network",
+      statusCode: null,
+      correlationId,
+    },
+    correlationId,
+  }
+}
+
+function failedOperation(
+  error: unknown,
+  fallback: { operation: MobileOperation; correlationId: string; stage: MobileFailureDiagnostic["stage"] },
+): Error {
+  if (
+    error instanceof AuthLostError ||
+    error instanceof UpgradeRequiredError ||
+    error instanceof HttpError ||
+    error instanceof MobileOperationError
+  ) {
+    return error
+  }
+  return new MobileOperationError({
+    operation: fallback.operation,
+    correlationId: fallback.correlationId,
+    stage: fallback.stage,
+    statusCode: null,
+  })
+}
+
 async function request<T>(
   path: string,
-  init: RequestInit & { retryOn401?: boolean } = {},
+  init: MobileRequestInit = {},
 ): Promise<T> {
-  const { retryOn401 = true, ...rest } = init
+  const { retryOn401 = true, diagnostic: diagnosticOptions, ...rest } = init
+  const requestContext = requestDiagnostic(diagnosticOptions)
   const [access, deviceId] = await Promise.all([
     tokenStore.getAccess(),
     tokenStore.getDeviceId(),
   ])
-  const res = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers: {
-      ...(rest.headers as Record<string, string>),
-      // Протокол на не-JSON путях (multipart upload, media) едет заголовком.
-      "x-leadshelf-protocol": String(PROTOCOL_VERSION),
-      "Accept-Language": getLocale(),
-      ...(deviceId ? { "x-field-device-id": deviceId } : {}),
-      "x-field-device-platform": Platform.OS,
-      ...(access ? { Authorization: `Bearer ${access}` } : {}),
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers: {
+        ...(rest.headers as Record<string, string>),
+        // Протокол на не-JSON путях (multipart upload, media) едет заголовком.
+        "x-leadshelf-protocol": String(PROTOCOL_VERSION),
+        "Accept-Language": getLocale(),
+        ...(deviceId ? { "x-field-device-id": deviceId } : {}),
+        "x-field-device-platform": Platform.OS,
+        ...(requestContext.correlationId ? { "x-correlation-id": requestContext.correlationId } : {}),
+        ...(access ? { Authorization: `Bearer ${access}` } : {}),
+      },
+    })
+  } catch (error) {
+    if (requestContext.diagnostic) throw new MobileOperationError(requestContext.diagnostic)
+    throw error
+  }
+  const correlationId = requestContext.correlationId
+    ? safeCorrelationId(res.headers.get("x-correlation-id"), requestContext.correlationId)
+    : null
+  const responseDiagnostic = requestContext.diagnostic && correlationId
+    ? { ...requestContext.diagnostic, correlationId }
+    : null
   if (res.status === 426) throw new UpgradeRequiredError()
   if (res.status === 401 && retryOn401) {
-    if (await refreshTokens()) return request<T>(path, { ...init, retryOn401: false })
+    if (await refreshTokens()) {
+      return request<T>(path, {
+        ...init,
+        retryOn401: false,
+        ...(diagnosticOptions && correlationId ? { diagnostic: { ...diagnosticOptions, correlationId } } : {}),
+      })
+    }
     throw new AuthLostError()
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const message = (body as { message?: string; error?: string }).message ??
       (body as { error?: string }).error
-    throw new HttpError(res.status, message, body)
+    throw new HttpError(
+      res.status,
+      message,
+      body,
+      responseDiagnostic ? { ...responseDiagnostic, stage: "http", statusCode: res.status } : undefined,
+    )
   }
-  return (await res.json()) as T
+  try {
+    return (await res.json()) as T
+  } catch (error) {
+    if (responseDiagnostic) {
+      throw new MobileOperationError({ ...responseDiagnostic, stage: "response", statusCode: res.status })
+    }
+    throw error
+  }
 }
 
 async function uploadMultipartFile<T>(
@@ -633,8 +734,16 @@ export const fieldApi = {
     })
     if (input.targetTypeId) query.set("targetTypeId", input.targetTypeId)
     if (input.search) query.set("search", input.search)
-    return request<unknown>(`/api/v1/mtm/mobile/routes/targets?${query.toString()}`)
-      .then(parseFieldRouteTargets)
+    const correlationId = newCorrelationId()
+    return request<unknown>(`/api/v1/mtm/mobile/routes/targets?${query.toString()}`, {
+      diagnostic: { operation: "route.targets.load", correlationId },
+    }).then((body) => {
+      try {
+        return parseFieldRouteTargets(body)
+      } catch (error) {
+        throw failedOperation(error, { operation: "route.targets.load", correlationId, stage: "contract" })
+      }
+    })
   },
   contact: (id: string) =>
     request<unknown>(`/api/v1/mtm/contacts/${encodeURIComponent(id)}`)
@@ -718,11 +827,21 @@ export const fieldApi = {
 }
 
 export const syncApi: SyncApi = {
-  pull: (cursors) =>
-    request<PullResponse>(
-      shelfBffPath("pull"),
-      json({ protocolVersion: PROTOCOL_VERSION, cursors }),
-    ).then((body) => mobileSyncPullResponseSchema.parse(body)),
+  pull: async (cursors) => {
+    const correlationId = newCorrelationId()
+    try {
+      const body = await request<PullResponse>(
+        shelfBffPath("pull"),
+        {
+          ...json({ protocolVersion: PROTOCOL_VERSION, cursors }),
+          diagnostic: { operation: "shelf.sync.pull", correlationId },
+        },
+      )
+      return mobileSyncPullResponseSchema.parse(body)
+    } catch (error) {
+      throw failedOperation(error, { operation: "shelf.sync.pull", correlationId, stage: "contract" })
+    }
+  },
   push: async (operations: PushOperation[]) => {
     const results: PushResult[] = []
     const shelfOperations: PushOperation[] = []

@@ -7,6 +7,7 @@ import { colors, radii } from "../theme"
 export function SyncBar({ showRetry = true, compact = false }: { showRetry?: boolean; compact?: boolean }) {
   const { status, sync } = useSync()
   const queued = status.pendingOps + status.pendingPhotos
+  const supportCode = status.failure?.correlationId ?? null
   const running = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
   const canRetry =
     status.phase !== "authLost" &&
@@ -54,6 +55,7 @@ export function SyncBar({ showRetry = true, compact = false }: { showRetry?: boo
         {status.conflictOps > 0 ? ` · ${status.conflictOps} ${t("syncConflicts")}` : ""}
         {status.rejectedOps > 0 ? ` · ${status.rejectedOps} ${t("syncRejected")}` : ""}
         {status.quarantinedPhotos > 0 ? ` · ${status.quarantinedPhotos} ${t("photosStuck")}` : ""}
+        {supportCode ? ` · ${t("syncSupportCode", { code: supportCode })}` : ""}
       </Text>
       {showRetry && canRetry ? (
         <Pressable

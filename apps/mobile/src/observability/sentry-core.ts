@@ -37,8 +37,8 @@ const SAFE_METADATA = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/
 const SAFE_ERROR_TYPE = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/
 const SAFE_CONTEXT_KEYS = new Set([
   "attempt", "component", "correlationId", "deviceId", "isFatal",
-  "operation", "organizationId", "route", "runtime", "source",
-  "statusCode", "taskId", "opId",
+  "errorClass", "operation", "organizationId", "route", "runtime",
+  "source", "stage", "statusCode", "taskId", "opId",
 ])
 
 function safeMetadata(value: string | null | undefined): string | undefined {

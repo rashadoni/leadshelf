@@ -21,6 +21,7 @@ import { useSync } from "../../../src/sync/sync-context"
 import { BrandMark } from "../../../src/components/BrandMark"
 import { TabIcon, type TabIconName } from "../../../src/components/TabIcon"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { SyncBar } from "../../../src/components/SyncBar"
 import { colors, radii } from "../../../src/theme"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { IS_LEADDRIVE_FIELD, mobileVariant } from "../../../src/config/mobile-variant"
@@ -197,6 +198,8 @@ export default function TodayTab() {
           <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
           <Text style={styles.headerTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
         </View>
+
+        {shelf.status.phase === "error" ? <SyncBar /> : null}
 
         {field.phase === "stale" || field.phase === "error" ? (
           <View style={[styles.notice, field.phase === "error" && styles.noticeError]}>

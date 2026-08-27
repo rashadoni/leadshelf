@@ -134,6 +134,28 @@ export type SyncPhase =
   | "authLost"
   | "upgradeRequired"
 
+export type SyncFailureStage =
+  | "cursors"
+  | "pull"
+  | "apply"
+  | "ack"
+  | "upload"
+  | "push"
+  | "cleanup"
+  | "network"
+  | "http"
+  | "response"
+  | "contract"
+
+/** Safe-to-log metadata for a handled sync failure. Never carries raw errors. */
+export type SyncFailureDiagnostic = {
+  operation: string
+  stage: SyncFailureStage
+  errorClass: "HTTP" | "NETWORK" | "CONTRACT" | "LOCAL"
+  statusCode: number | null
+  correlationId: string | null
+}
+
 export interface SyncStatus {
   phase: SyncPhase
   lastSyncAt: string | null
@@ -145,4 +167,5 @@ export interface SyncStatus {
   oldestPendingAgeMs: number | null
   lastDurationMs: number | null
   error: string | null
+  failure: SyncFailureDiagnostic | null
 }

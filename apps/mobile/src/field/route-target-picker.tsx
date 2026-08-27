@@ -12,8 +12,10 @@ import { formatLongCalendarDate } from "../i18n/date-format"
 import { colors, radii } from "../theme"
 import { useResponsiveLayout } from "../layout/responsive"
 import { routeTargetKey } from "./route-target"
+import { routeTargetLoadFailure, type RouteTargetLoadFailure } from "./route-target-error"
 import { contactTypeLabel, objectTypeLabel } from "./labels"
 import { TabIcon } from "../components/TabIcon"
+import { useSync } from "../sync/sync-context"
 
 export { routeTargetKey } from "./route-target"
 
@@ -57,20 +59,21 @@ export function RouteTargetPicker({
 }) {
   const locale = useLocale()
   const layout = useResponsiveLayout()
+  const { endSession } = useSync()
   const [targetTypeId, setTargetTypeId] = useState<string | null>(null)
   const [targetTypes, setTargetTypes] = useState<FieldRouteTargetType[]>([])
   const [catalog, setCatalog] = useState<FieldRouteTargetCatalogData | null>(null)
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<RouteTargetLoadFailure | null>(null)
   const sequence = useRef(0)
 
   const load = useCallback(async (typeId: string | undefined, query: string, page = 1, append = false) => {
     const request = ++sequence.current
     if (append) setLoadingMore(true)
     else setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const next = await fieldApi.routeTargets({
         agentId,
@@ -89,15 +92,21 @@ export function RouteTargetPicker({
           items: [...current.items, ...next.items.filter((item) => !existing.has(item.targetKey + ":" + item.customer.id))],
         }
       })
-    } catch {
-      if (request === sequence.current) setError(true)
+    } catch (reason) {
+      if (request !== sequence.current) return
+      const failure = routeTargetLoadFailure(reason)
+      if (failure.kind === "session") {
+        await endSession().catch(() => {})
+        return
+      }
+      setError(failure)
     } finally {
       if (request === sequence.current) {
         setLoading(false)
         setLoadingMore(false)
       }
     }
-  }, [agentId, date])
+  }, [agentId, date, endSession])
 
   useEffect(() => {
     const id = setTimeout(() => void load(targetTypeId ?? undefined, search.trim()), 300)
@@ -174,19 +183,22 @@ export function RouteTargetPicker({
         />
       </View>
       {error ? (
-        <View accessibilityLiveRegion="polite" style={styles.errorCard}>
-          <Text style={styles.error}>{t("routeTargetLoadError")}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("routeTargetRetry")}
-            accessibilityState={{ busy: loading }}
-            disabled={loading}
-            onPress={() => void load(targetTypeId ?? selectedTypeId ?? undefined, search.trim())}
-            style={({ pressed }) => [styles.retryButton, (loading || pressed) && styles.retryButtonPressed]}
-          >
-            <TabIcon name="refresh" color={colors.primary} size={16} />
-            <Text style={styles.retryText}>{t("routeTargetRetry")}</Text>
-          </Pressable>
+        <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.errorCard}>
+          <Text style={styles.error}>{t(error.messageKey)}</Text>
+          {error.correlationId ? <Text style={styles.errorMeta}>{t("syncSupportCode", { code: error.correlationId })}</Text> : null}
+          {error.retryable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("routeTargetRetry")}
+              accessibilityState={{ busy: loading }}
+              disabled={loading}
+              onPress={() => void load(targetTypeId ?? selectedTypeId ?? undefined, search.trim())}
+              style={({ pressed }) => [styles.retryButton, (loading || pressed) && styles.retryButtonPressed]}
+            >
+              <TabIcon name="refresh" color={colors.primary} size={16} />
+              <Text style={styles.retryText}>{t("routeTargetRetry")}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       {loading && !catalog ? (
@@ -258,7 +270,7 @@ const styles = StyleSheet.create({
   rootTablet: { padding: 16 },
   header: { flexDirection: "row", alignItems: "center", gap: 10 }, headerBody: { flex: 1, minWidth: 0 }, title: { color: colors.text, fontSize: 16, fontWeight: "900" }, subtitle: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }, close: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" },
   typeScroll: { marginTop: 13, marginHorizontal: -2 }, typeTabs: { gap: 7, paddingHorizontal: 2 }, typeTab: { minHeight: 44, maxWidth: 150, borderRadius: 11, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 11 }, typeTabActive: { backgroundColor: colors.primary }, typeTabText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, typeTabTextActive: { color: colors.headerText },
-  search: { minHeight: 46, marginTop: 10, borderRadius: 11, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 12 }, errorCard: { marginTop: 9, padding: 10, borderRadius: 11, backgroundColor: colors.missedBg, borderWidth: 1, borderColor: colors.missedBorder }, error: { color: colors.missed, fontSize: 11, lineHeight: 15, fontWeight: "800" }, retryButton: { minHeight: 44, alignSelf: "flex-start", marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.card }, retryButtonPressed: { opacity: 0.55 }, retryText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, loading: { minHeight: 64, marginTop: 12, alignItems: "center", justifyContent: "center", gap: 8 }, loadingText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  search: { minHeight: 46, marginTop: 10, borderRadius: 11, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 7 }, searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 12 }, errorCard: { marginTop: 9, padding: 10, borderRadius: 11, backgroundColor: colors.missedBg, borderWidth: 1, borderColor: colors.missedBorder }, error: { color: colors.missed, fontSize: 11, lineHeight: 15, fontWeight: "800" }, errorMeta: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4 }, retryButton: { minHeight: 44, alignSelf: "flex-start", marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.card }, retryButtonPressed: { opacity: 0.55 }, retryText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, loading: { minHeight: 64, marginTop: 12, alignItems: "center", justifyContent: "center", gap: 8 }, loadingText: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   results: { marginTop: 5 }, resultsContent: { paddingBottom: 6 }, resultsContentTablet: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 10, paddingTop: 8 }, result: { minHeight: 88, marginTop: 8, borderRadius: 13, padding: 10, backgroundColor: colors.bg, flexDirection: "row", alignItems: "center", gap: 9 }, resultTablet: { flexBasis: "48%", flexGrow: 1, marginTop: 0 }, resultMark: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" }, organizationMark: { backgroundColor: colors.infoBg }, contactMark: { backgroundColor: colors.holidayBg }, resultBody: { flex: 1, minWidth: 0 }, resultName: { color: colors.text, fontSize: 12, fontWeight: "900" }, resultMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }, scopeBadge: { alignSelf: "flex-start", color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden", fontSize: 11, lineHeight: 14, fontWeight: "900", marginTop: 5 }, added: { color: colors.successDark, fontSize: 11, lineHeight: 14, fontWeight: "900", marginTop: 3 }, actionMark: { width: 26, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingHorizontal: 22, paddingVertical: 28, gap: 7 }, emptyTablet: { flexBasis: "100%" }, emptyTitle: { color: colors.text, fontSize: 12, fontWeight: "900", textAlign: "center" }, emptyHint: { color: colors.muted, fontSize: 11, lineHeight: 16, textAlign: "center" }, loadMore: { minHeight: 44, marginTop: 10, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, loadMoreTablet: { flexBasis: "100%", marginTop: 0 }, loadMoreText: { color: colors.primary, fontSize: 11, fontWeight: "900" }, disabled: { opacity: 0.45 },
 })
