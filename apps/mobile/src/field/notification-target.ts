@@ -86,11 +86,12 @@ export function notificationDestination(notification: FieldNotification): string
 }
 
 /**
- * A notification is always worth opening. Known semantic targets keep their
- * direct workspace navigation; notifications without a verified target open
- * a read-only detail instead of silently doing nothing after being marked read.
+ * Always open the notification itself first. The detail screen owns the
+ * explicit continuation to a verified route, visit, task, customer or thread.
+ * This gives every Inbox tap the same visible result and prevents a direct
+ * workspace jump from looking like a missed tap when the linked record is
+ * unavailable or still outside the cached week.
  */
 export function notificationOpenDestination(notification: FieldNotification): string {
-  return notificationDestination(notification)
-    ?? "/(app)/notifications/" + encodeURIComponent(notification.id)
+  return "/(app)/notifications/" + encodeURIComponent(notification.id)
 }

@@ -20,7 +20,7 @@ describe("field notification navigation", () => {
     const item = notification({ target: { kind: "ROUTE", id: "route-1" } })
     expect(notificationTarget(item)).toEqual({ kind: "ROUTE", id: "route-1" })
     expect(notificationDestination(item)).toBe("/(app)/routes/route-1")
-    expect(notificationOpenDestination(item)).toBe("/(app)/routes/route-1")
+    expect(notificationOpenDestination(item)).toBe("/(app)/notifications/notification-1")
   })
 
   it("keeps existing metadata producers navigable during the API rollout", () => {
@@ -43,15 +43,19 @@ describe("field notification navigation", () => {
     expect(notificationDestination(notification({ metadata: { routeId: "route-2", routeDate: "2026-02-30" } }))).toBe("/(app)/routes/route-2")
   })
 
-  it("keeps every verified semantic target on its specific workspace", () => {
-    expect(notificationOpenDestination(notification({ target: { kind: "ROUTE", id: "route-1" } }))).toBe("/(app)/routes/route-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "VISIT", id: "visit-1" } }))).toBe("/(app)/field-visits/visit-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "TASK", id: "task-1" } }))).toBe("/(app)/field-tasks/task-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "MESSAGE_THREAD", id: "thread-1" } }))).toBe("/(app)/messages/thread-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "CUSTOMER", id: "customer-1" } }))).toBe("/(app)/organizations/customer-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "CONTACT", id: "contact-1" } }))).toBe("/(app)/contacts/contact-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "CUSTOMER_REQUEST", id: "request-1" } }))).toBe("/(app)/customer-requests?requestId=request-1")
-    expect(notificationOpenDestination(notification({ target: { kind: "HRM_REQUEST", id: "hrm-1" } }))).toBe("/(app)/hrm?requestId=hrm-1")
+  it("opens the notification detail before any linked workspace", () => {
+    for (const target of [
+      { kind: "ROUTE", id: "route-1" },
+      { kind: "VISIT", id: "visit-1" },
+      { kind: "TASK", id: "task-1" },
+      { kind: "MESSAGE_THREAD", id: "thread-1" },
+      { kind: "CUSTOMER", id: "customer-1" },
+      { kind: "CONTACT", id: "contact-1" },
+      { kind: "CUSTOMER_REQUEST", id: "request-1" },
+      { kind: "HRM_REQUEST", id: "hrm-1" },
+    ] as const) {
+      expect(notificationOpenDestination(notification({ target }))).toBe("/(app)/notifications/notification-1")
+    }
   })
 
   it("does not invent a target from notification text", () => {
