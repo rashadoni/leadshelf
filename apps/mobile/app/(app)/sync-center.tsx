@@ -59,13 +59,13 @@ function kindKey(kind: string): MessageKey {
   return "syncKindOther"
 }
 
-function kindLabel(kind: string, locale: "az" | "ru"): string {
-  if (kind === "field.message.send") return locale === "az" ? "Mesajın göndərilməsi" : "Отправка сообщения"
-  if (kind === "field.message.receipt") return locale === "az" ? "Mesajın təsdiqi" : "Подтверждение сообщения"
-  if (kind === "field.document.upload") return locale === "az" ? "Sənədin göndərilməsi" : "Отправка документа"
-  if (kind === "field.document.state") return locale === "az" ? "Sənəd statusu" : "Статус документа"
-  if (kind === "field.hrm.create") return locale === "az" ? "HRM müraciəti" : "HRM-заявка"
-  if (kind === "field.hrm.cancel") return locale === "az" ? "HRM müraciətinin ləğvi" : "Отмена HRM-заявки"
+function kindLabel(kind: string): string {
+  if (kind === "field.message.send") return t("syncKindMessageSend")
+  if (kind === "field.message.receipt") return t("syncKindMessageReceipt")
+  if (kind === "field.document.upload") return t("syncKindDocumentUpload")
+  if (kind === "field.document.state") return t("syncKindDocumentState")
+  if (kind === "field.hrm.create") return t("syncKindHrmCreate")
+  if (kind === "field.hrm.cancel") return t("syncKindHrmCancel")
   return t(kindKey(kind))
 }
 
@@ -440,7 +440,7 @@ export default function SyncCenterScreen() {
           const error = rowError(row, field.week?.timezone ?? "UTC")
           const context = rowContext(row)
           const statusLabel = row.status === "conflict" ? t("syncCenterConflict") : t("syncCenterRejected")
-          const actionHint = `${kindLabel(row.kind, locale)} · ${statusLabel}`
+          const actionHint = `${kindLabel(row.kind)} · ${statusLabel}`
           const rowBusy = busyId === row.clientOpId
           const actionBusy = (action: RecoveryAction) => rowBusy && busyAction === action
           const actionsDisabled = busyId !== null || syncBusy
@@ -475,7 +475,7 @@ export default function SyncCenterScreen() {
               <View style={styles.cardTop}>
                 {photoUri ? <View accessible accessibilityRole="image" accessibilityLabel={t("syncCenterEvidenceReady")}><EncryptedMediaImage uri={photoUri} style={styles.preview} /></View> : <View accessible={false} style={styles.kindMark}><TabIcon name="refresh" color={colors.warning} size={25} /></View>}
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{kindLabel(row.kind, locale)}</Text>
+                  <Text style={styles.cardTitle}>{kindLabel(row.kind)}</Text>
                   {context ? <Text style={styles.cardContext} numberOfLines={2}>{context}</Text> : null}
                   <View accessible accessibilityRole="text" accessibilityLabel={`${statusLabel}. ${formatShortDateTime(row.clientCreatedAt, locale)}`} style={styles.metaRow}>
                     <CommercialPill label={statusLabel} tone="danger" />
