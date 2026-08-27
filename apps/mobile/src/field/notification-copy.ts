@@ -46,6 +46,21 @@ export function fieldNotificationCopy(notification: FieldNotification): FieldNot
           ? t("notificationRouteUpdatedBodyWithDate", { date })
           : t("notificationRouteUpdatedBody"),
       }
+    case "mtm.visit.assigned":
+      return {
+        title: t("notificationVisitAssignedTitle"),
+        body: t("notificationVisitAssignedBody"),
+      }
+    case "mtm.visit.unassigned":
+      return {
+        title: t("notificationVisitUnassignedTitle"),
+        body: t("notificationVisitUnassignedBody"),
+      }
+    case "mtm.visit.cancelled":
+      return {
+        title: t("notificationVisitCancelledTitle"),
+        body: t("notificationVisitCancelledBody"),
+      }
     default:
       return { title: notification.title, body: notification.body }
   }

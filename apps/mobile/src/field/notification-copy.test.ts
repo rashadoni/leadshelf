@@ -37,6 +37,19 @@ describe("field notification copy", () => {
     })
   })
 
+  it("localises semantic visit-change notifications instead of server fallback copy", () => {
+    setLocale("az")
+    expect(fieldNotificationCopy(notification({ metadata: { event: "mtm.visit.assigned" } }))).toEqual({
+      title: t("notificationVisitAssignedTitle"),
+      body: t("notificationVisitAssignedBody"),
+    })
+    setLocale("ru")
+    expect(fieldNotificationCopy(notification({ metadata: { event: "mtm.visit.cancelled" } }))).toEqual({
+      title: t("notificationVisitCancelledTitle"),
+      body: t("notificationVisitCancelledBody"),
+    })
+  })
+
   it("does not rewrite an arbitrary notification body", () => {
     const item = notification({ title: "Manager note", body: "Please call the client." })
     expect(fieldNotificationCopy(item)).toEqual({ title: item.title, body: item.body })
