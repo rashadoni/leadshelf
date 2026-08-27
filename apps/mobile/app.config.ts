@@ -49,6 +49,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         }
         return plugin
       })
+      .concat("@maplibre/maplibre-react-native")
     : expo.plugins
 
   return {

@@ -9,11 +9,17 @@ import { formatShortDateTime } from "../../../src/i18n/date-format"
 import { HttpError } from "../../../src/sync/ports-error"
 import { cardShadow, colors, radii } from "../../../src/theme"
 import { agentRoleLabel } from "../../../src/field/labels"
-import { managerLiveMapUrl } from "../../../src/field/manager-location-map"
 import { safeFieldBack } from "../../../src/navigation/safe-back"
 import { FieldScreenChrome } from "../../../src/components/FieldScreenChrome"
+import { ManagerTeamMap } from "../../../src/components/ManagerTeamMap"
 import { useResponsiveLayout } from "../../../src/layout/responsive"
 import { useField } from "../../../src/field/field-context"
+import {
+  managerLiveMapUrl,
+  managerTeamMapPoint,
+  managerTeamMapViewport,
+  type ManagerTeamMapPoint,
+} from "../../../src/field/manager-location-map"
 
 const freshnessKeys: Record<FieldManagerGpsFreshness, MessageKey> = {
   ONLINE: "managerFreshness_ONLINE",
@@ -36,6 +42,11 @@ function freshnessColor(freshness: FieldManagerGpsFreshness): { background: stri
   if (freshness === "DELAYED") return { background: colors.warningBg, foreground: colors.warning }
   if (freshness === "STALE") return { background: colors.draftBg, foreground: colors.draft }
   return { background: colors.infoBg, foreground: colors.info }
+}
+
+function mapPointStateKey(point: ManagerTeamMapPoint): MessageKey {
+  if (point.evidence === "LIVE") return "managerMapLiveShort"
+  return point.freshness === "DELAYED" ? "managerMapDelayedShort" : "managerMapStaleShort"
 }
 
 async function openLiveMap(url: string, onUnavailable: () => void) {
@@ -63,6 +74,8 @@ export default function ManagerLocationsScreen() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const [mapOpen, setMapOpen] = useState(true)
+  const [selectedMapAgentId, setSelectedMapAgentId] = useState<string | null>(null)
   const sequence = useRef(0)
 
   const load = useCallback(async (
@@ -113,6 +126,23 @@ export default function ManagerLocationsScreen() {
     () => data?.locations.filter((agent) => agent.freshness === "ONLINE").length ?? 0,
     [data],
   )
+  const mapPoints = useMemo(
+    () => (data?.locations ?? [])
+      .map(managerTeamMapPoint)
+      .filter((point): point is ManagerTeamMapPoint => point !== null),
+    [data],
+  )
+  const mapViewport = useMemo(() => managerTeamMapViewport(mapPoints), [mapPoints])
+  const selectedMapPoint = useMemo(
+    () => mapPoints.find((point) => point.agentId === selectedMapAgentId) ?? null,
+    [mapPoints, selectedMapAgentId],
+  )
+
+  useEffect(() => {
+    if (selectedMapAgentId && !mapPoints.some((point) => point.agentId === selectedMapAgentId)) {
+      setSelectedMapAgentId(null)
+    }
+  }, [mapPoints, selectedMapAgentId])
   const hasPendingSearch = loadedSearch !== search.trim() || loadedFreshness !== freshnessFilter
   const summaryValue = loadedFreshness ? data?.page.total ?? 0 : liveCount
   const summaryLabel = loadedFreshness ? t(freshnessKeys[loadedFreshness]) : t("managerPageLocationSummary")
@@ -205,6 +235,50 @@ export default function ManagerLocationsScreen() {
               </View>
             </View>
             <Text style={styles.pageInfo}>{t("managerLoadedOfTotal", { loaded: data.locations.length, total: data.page.total })}</Text>
+            <View style={styles.mapSection}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("managerTeamMapTitle")}
+                accessibilityHint={t(mapOpen ? "workMoreHide" : "workMoreShow")}
+                accessibilityState={{ expanded: mapOpen }}
+                onPress={() => setMapOpen((value) => !value)}
+                style={({ pressed }) => [styles.mapHeading, pressed && styles.pressed]}
+              >
+                <View style={styles.mapHeadingIcon}><TabIcon name="location" color={colors.primary} size={20} /></View>
+                <View style={styles.mapHeadingBody}>
+                  <Text style={styles.mapHeadingTitle}>{t("managerTeamMapTitle")}</Text>
+                  <Text style={styles.mapHeadingHint}>{t("managerTeamMapHint")}</Text>
+                </View>
+                <View style={[styles.mapChevron, mapOpen && styles.mapChevronOpen]}><TabIcon name="chevronDown" color={colors.muted} size={20} /></View>
+              </Pressable>
+              {mapOpen ? (
+                <View style={styles.mapBody}>
+                  {mapViewport ? (
+                    <>
+                      <ManagerTeamMap
+                        points={mapPoints}
+                        viewport={mapViewport}
+                        selectedAgentId={selectedMapAgentId}
+                        onSelect={setSelectedMapAgentId}
+                        accessibilityLabel={t("managerTeamMapAccessibility")}
+                        liveLabel={t("managerMapLiveShort")}
+                        delayedLabel={t("managerMapDelayedShort")}
+                        staleLabel={t("managerMapStaleShort")}
+                      />
+                      {selectedMapPoint ? (
+                        <View accessible accessibilityRole="summary" accessibilityLabel={`${selectedMapPoint.name}. ${t(mapPointStateKey(selectedMapPoint))}`} style={styles.mapSelection}>
+                          <View style={[styles.mapSelectionDot, { backgroundColor: freshnessColor(selectedMapPoint.freshness).foreground }]} />
+                          <Text style={styles.mapSelectionName}>{selectedMapPoint.name}</Text>
+                          <Text style={styles.mapSelectionState}>{t(mapPointStateKey(selectedMapPoint))}</Text>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : (
+                    <View style={styles.mapEmpty}><TabIcon name="location" color={colors.info} size={24} /><Text style={styles.mapEmptyText}>{t("managerTeamMapEmpty")}</Text></View>
+                  )}
+                </View>
+              ) : null}
+            </View>
             {loadedFreshness === null && liveCount === 0 && data.locations.length > 0 ? <View style={styles.notice}><Text style={styles.noticeText}>{t("managerNoLiveLocations")}</Text></View> : null}
             {data.locations.length === 0 ? (
               <View style={styles.state}><View style={styles.stateIcon}><TabIcon name="location" color={colors.primary} size={25} /></View><Text style={styles.stateTitle}>{emptyTitle}</Text></View>
@@ -314,6 +388,21 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.successDark, fontSize: 11, fontWeight: "900", marginTop: 1 },
   summaryTime: { color: colors.successDark, fontSize: 11, lineHeight: 16, marginTop: 3, fontWeight: "700" },
   pageInfo: { marginHorizontal: 16, marginTop: 7, color: colors.muted, fontSize: 11, fontWeight: "800" },
+  mapSection: { marginHorizontal: 14, marginTop: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden", ...cardShadow },
+  mapHeading: { minHeight: 72, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  mapHeadingIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  mapHeadingBody: { flex: 1, minWidth: 0 },
+  mapHeadingTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  mapHeadingHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 3, fontWeight: "700" },
+  mapChevron: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.surfaceMuted, alignItems: "center", justifyContent: "center" },
+  mapChevronOpen: { transform: [{ rotate: "180deg" }] },
+  mapBody: { borderTopWidth: 1, borderTopColor: colors.border, padding: 10 },
+  mapSelection: { minHeight: 44, marginTop: 8, borderRadius: radii.inner, backgroundColor: colors.surfaceMuted, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 8 },
+  mapSelectionDot: { width: 9, height: 9, borderRadius: 5 },
+  mapSelectionName: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "900" },
+  mapSelectionState: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  mapEmpty: { minHeight: 160, borderRadius: radii.inner, backgroundColor: colors.infoBg, alignItems: "center", justifyContent: "center", padding: 20, gap: 9 },
+  mapEmptyText: { maxWidth: 280, color: colors.info, fontSize: 12, lineHeight: 17, fontWeight: "800", textAlign: "center" },
   notice: { marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder, padding: 11 },
   noticeText: { color: colors.info, fontSize: 11, lineHeight: 16, fontWeight: "800" },
   list: { paddingTop: 1 },

@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@leadshelf/api-contracts": "workspace:*",
+    "@maplibre/maplibre-react-native": "11.3.7",
     "@react-native-community/netinfo": "12.0.1",
     "expo": "57.0.4",
     "expo-camera": "~57.0.1",

@@ -30,7 +30,16 @@ describe("manager live map URL", () => {
       name: "Aysel",
       freshness: "ONLINE",
       hasLiveLocation: true,
-      liveLocation: { latitude: 40.4093, longitude: 49.8671, recordedAt: "2026-08-27T10:00:00Z", accuracy: 8 },
+      liveLocation: {
+        latitude: 40.4093,
+        longitude: 49.8671,
+        recordedAt: "2026-08-27T10:00:00Z",
+        accuracy: 8,
+        speed: null,
+        heading: null,
+        battery: null,
+        isMoving: false,
+      },
       lastKnownLocation: null,
     })).toMatchObject({ agentId: "agent-live", evidence: "LIVE", latitude: 40.4093, longitude: 49.8671 })
 
@@ -40,7 +49,16 @@ describe("manager live map URL", () => {
       freshness: "STALE",
       hasLiveLocation: false,
       liveLocation: null,
-      lastKnownLocation: { latitude: 40.401, longitude: 49.86, recordedAt: "2026-08-26T10:00:00Z", accuracy: null },
+      lastKnownLocation: {
+        latitude: 40.401,
+        longitude: 49.86,
+        recordedAt: "2026-08-26T10:00:00Z",
+        accuracy: null,
+        speed: null,
+        heading: null,
+        battery: null,
+        isMoving: false,
+      },
     })).toMatchObject({ agentId: "agent-stale", evidence: "LAST_KNOWN", freshness: "STALE" })
 
     expect(managerTeamMapPoint({
