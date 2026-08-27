@@ -1,6 +1,9 @@
 # Прод-образ web + одноразовый migrate-target. Контекст сборки — корень репо.
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
-RUN corepack enable
+RUN apk add --no-cache --upgrade \
+      libcrypto3=3.5.8-r0 \
+      libssl3=3.5.8-r0 \
+    && corepack enable
 WORKDIR /app
 
 FROM base AS builder
@@ -37,7 +40,7 @@ WORKDIR /app/packages/db
 ENTRYPOINT ["pnpm", "exec", "tsx", "prisma/media-backfill.ts"]
 
 # --- рантайм ---
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # Сервер запускается напрямую через node. npm/corepack в runtime не нужны и
@@ -96,7 +99,7 @@ RUN apk add --no-cache build-base nasm \
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.
 # Runtime начинается с чистого образа, чтобы build-only pnpm/corepack caches из
 # builder не попадали в production SBOM и не расширяли поверхность атаки.
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS worker
+FROM base AS worker
 WORKDIR /app
 ENV NODE_ENV=production
 # TSX остаётся локальной runtime-зависимостью, package-manager CLI не нужен.
