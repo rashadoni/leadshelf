@@ -61,28 +61,17 @@ export default function HrmScreen() {
   const [busy, setBusy] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const formBaseline = useRef<HrmRequestDraft | null>(null)
-  const copy = locale === "az" ? {
-    eyebrow: "İŞ MƏRKƏZİ", title: "Qrafik və müraciətlər", hint: "İş günləri, məzuniyyət, yoxluq və vaxt düzəlişi bir ekranda.",
-    schedule: "Qrafik", requests: "Müraciətlər", newRequest: "Yeni müraciət", working: "İş günü", dayOff: "İstirahət",
-    hasRequest: "Müraciət var", selectedDay: "Seçilmiş gün", nearbyDays: "Yaxın günlər", noDays: "Qrafik hələ yüklənməyib", noRequests: "Hələ müraciət yoxdur",
-    noRequestsHint: "Yeni müraciət internet olmadan da telefonda saxlanacaq.", leave: "Məzuniyyət", absence: "Yoxluq", correction: "Vaxt düzəlişi",
-    period: "Tarixlər", from: "Başlanğıc", to: "Son", workday: "Düzəldiləcək iş günü", time: "Düzgün vaxt",
-    reason: "Səbəb", reasonPlaceholder: "Qısa izah yazın…", submit: "Müraciəti saxla", cancel: "Bağla", cancelRequest: "Müraciəti ləğv et",
-    required: "Tarixləri, səbəbi və düzəliş üçün iş gününü düzgün seçin.", queued: "Müraciət telefonda saxlanıldı və göndərmə növbəsinə əlavə edildi.",
-    refreshError: "Qrafik yenilənmədi — telefondakı nüsxə göstərilir.", decision: "Qərar", pending: "Baxılır", approved: "Təsdiqlənib", rejected: "Rədd edilib", cancelled: "Ləğv edilib", sync: "Növbədə",
-    discardTitle: "Saxlanmamış müraciəti silmək?", discardBody: "Seçilmiş tarixlər, vaxtlar və səbəb yadda saxlanmayacaq.", discardConfirm: "Qaralamanı sil", noCorrectionDays: "Düzəliş üçün uyğun iş günü yoxdur.",
-    requestPolicyLoading: "Müraciət qaydaları yüklənir…", newRequestUnavailable: "Yeni müraciətlər sizin rolunuz üçün əlçatan deyil.", requestTypeUnavailable: "Bu müraciət növü sizin rolunuz üçün əlçatan deyil.", cancelUnavailable: "Gözləyən müraciətləri ləğv etmək üçün icazəniz yoxdur.", openedFromNotification: "Bildirişdən açılan müraciət",
-  } : {
-    eyebrow: "РАБОЧИЙ ЦЕНТР", title: "График и заявки", hint: "Рабочие дни, отпуск, отсутствие и корректировка времени в одном экране.",
-    schedule: "График", requests: "Мои заявки", newRequest: "Новая заявка", working: "Рабочий день", dayOff: "Выходной",
-    hasRequest: "Есть заявка", selectedDay: "Выбранный день", nearbyDays: "Ближайшие дни", noDays: "График пока не загружен", noRequests: "Заявок пока нет",
-    noRequestsHint: "Новая заявка сохранится на телефоне даже без интернета.", leave: "Отпуск", absence: "Отсутствие", correction: "Корректировка времени",
-    period: "Даты", from: "Начало", to: "Конец", workday: "Какой рабочий день исправить", time: "Правильное время",
-    reason: "Причина", reasonPlaceholder: "Коротко объясните причину…", submit: "Сохранить заявку", cancel: "Закрыть", cancelRequest: "Отменить заявку",
-    required: "Проверьте даты, причину и рабочий день для корректировки.", queued: "Заявка сохранена на телефоне и добавлена в очередь отправки.",
-    refreshError: "График не обновился — показана копия с телефона.", decision: "Решение", pending: "На рассмотрении", approved: "Одобрено", rejected: "Отклонено", cancelled: "Отменено", sync: "В очереди",
-    discardTitle: "Отменить несохранённую заявку?", discardBody: "Выбранные даты, время и причина не сохранятся.", discardConfirm: "Удалить черновик", noCorrectionDays: "Нет рабочего дня, доступного для корректировки.",
-    requestPolicyLoading: "Загружаем правила для заявок…", newRequestUnavailable: "Новые заявки недоступны для вашей роли.", requestTypeUnavailable: "Этот тип заявки недоступен для вашей роли.", cancelUnavailable: "У вас нет права отменять ожидающие заявки.", openedFromNotification: "Заявка из уведомления",
+  const copy = {
+    eyebrow: t("hrmEyebrow"), title: t("hrmTitle"), hint: t("hrmHint"),
+    schedule: t("hrmSchedule"), requests: t("hrmRequests"), newRequest: t("hrmNewRequest"), working: t("hrmWorking"), dayOff: t("hrmDayOff"),
+    hasRequest: t("hrmHasRequest"), selectedDay: t("hrmSelectedDay"), nearbyDays: t("hrmNearbyDays"), noDays: t("hrmNoDays"), noRequests: t("hrmNoRequests"),
+    noRequestsHint: t("hrmNoRequestsHint"), leave: t("hrmLeave"), absence: t("hrmAbsence"), correction: t("hrmCorrection"),
+    period: t("hrmPeriod"), from: t("hrmFrom"), to: t("hrmTo"), workday: t("hrmWorkday"), time: t("hrmTime"),
+    reason: t("hrmReason"), reasonPlaceholder: t("hrmReasonPlaceholder"), submit: t("hrmSubmit"), cancel: t("hrmCancel"), cancelRequest: t("hrmCancelRequest"),
+    required: t("hrmRequired"), queued: t("hrmQueued"),
+    refreshError: t("hrmRefreshError"), decision: t("hrmDecision"), pending: t("hrmPending"), approved: t("hrmApproved"), rejected: t("hrmRejected"), cancelled: t("hrmCancelled"), sync: t("hrmSync"),
+    discardTitle: t("hrmDiscardTitle"), discardBody: t("hrmDiscardBody"), discardConfirm: t("hrmDiscardConfirm"), noCorrectionDays: t("hrmNoCorrectionDays"),
+    requestPolicyLoading: t("hrmRequestPolicyLoading"), newRequestUnavailable: t("hrmNewRequestUnavailable"), requestTypeUnavailable: t("hrmRequestTypeUnavailable"), cancelUnavailable: t("hrmCancelUnavailable"), openedFromNotification: t("hrmOpenedFromNotification"),
   }
 
   const tenantTimeZone = data?.timezone ?? "UTC"

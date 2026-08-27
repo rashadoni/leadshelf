@@ -46,22 +46,14 @@ export default function MessageThreadScreen() {
   const markedMessage = useRef<string | null>(null)
   const scroll = useRef<ScrollView | null>(null)
   const stickToLatest = useRef(true)
-  const copy = locale === "az" ? {
-    messages: "MESAJLAR", loading: "Dialoq yüklənir…", offline: "Dialoq yenilənmədi — telefondakı nüsxə göstərilir.",
-    readonly: "Bu elan yalnız oxumaq üçündür.", message: "Mesaj", placeholder: "Mesaj yazın…", attach: "Fayl", send: "Göndər",
-    ack: "Oxudum, təsdiq edirəm", acked: "Təsdiqləndi", queued: "Növbədə", file: "Fayl",
-    sent: "Göndərildi", read: "Oxunub",
-    download: "Yüklə", open: "Aç", downloadError: "Faylı açmaq alınmadı", empty: "Bu dialoqda hələ mesaj yoxdur.",
-    unavailable: "Dialoq telefonda tapılmadı.", retry: "Yenidən cəhd et",
-    discardTitle: "Cavabı ləğv edək?", discardBody: "Yazdığınız mətn və seçilmiş fayl silinəcək.", discardConfirm: "Ləğv et",
-  } : {
-    messages: "СООБЩЕНИЯ", loading: "Загружаем диалог…", offline: "Диалог не обновился — показана копия с телефона.",
-    readonly: "Это объявление доступно только для чтения.", message: "Сообщение", placeholder: "Напишите сообщение…", attach: "Файл", send: "Отправить",
-    ack: "Прочитал(а), подтверждаю", acked: "Подтверждено", queued: "В очереди", file: "Файл",
-    sent: "Отправлено", read: "Прочитано",
-    download: "Скачать", open: "Открыть", downloadError: "Не удалось открыть файл", empty: "В этом диалоге пока нет сообщений.",
-    unavailable: "Диалог не найден на телефоне.", retry: "Повторить",
-    discardTitle: "Отменить ответ?", discardBody: "Набранный текст и выбранный файл будут удалены.", discardConfirm: "Отменить",
+  const copy = {
+    messages: t("messageThreadEyebrow"), loading: t("messageThreadLoading"), offline: t("messageThreadOffline"),
+    readonly: t("messageThreadReadonly"), message: t("messageThreadMessage"), placeholder: t("messageThreadPlaceholder"), attach: t("messageThreadAttach"), send: t("messageThreadSend"),
+    ack: t("messageThreadAcknowledge"), acked: t("messageThreadAcknowledged"), queued: t("messageThreadQueued"), file: t("messageThreadFile"),
+    sent: t("messageThreadSent"), read: t("messageThreadRead"),
+    download: t("messageThreadDownload"), open: t("messageThreadOpen"), downloadError: t("messageThreadDownloadError"), empty: t("messageThreadEmpty"),
+    unavailable: t("messageThreadUnavailable"), retry: t("messageThreadRetry"),
+    discardTitle: t("messageThreadDiscardTitle"), discardBody: t("messageThreadDiscardBody"), discardConfirm: t("messageThreadDiscardConfirm"),
   }
 
   const load = useCallback(async (showWarning = false) => {

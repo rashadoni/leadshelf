@@ -41,26 +41,16 @@ export default function DocumentsScreen() {
   const [picking, setPicking] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [warning, setWarning] = useState<Warning | null>(null)
-  const copy = locale === "az" ? {
-    eyebrow: "İŞ MƏRKƏZİ", title: "Sənədlər", hint: "Tapşırıq faylları, vizit materialları və ofisdən göndərilən sənədlər.",
-    add: "Fayl əlavə et", all: "Hamısı", required: "Vacib", offline: "Telefonda", empty: "Bu bölmədə sənəd yoxdur",
-    emptyHint: "Filtri dəyişin və ya yeni fayl əlavə edin.", requiredBadge: "Mütləq", unread: "Yeni", downloaded: "Telefonda",
-    queued: "Növbədə", failed: "Diqqət lazımdır", expired: "Müddəti bitib", download: "Yüklə", open: "Aç", cloudOff: "Bulud diski istifadə edilmir",
-    uploadTitle: "Faylı hara bağlayaq?", general: "Ümumi sənəd", visit: "Aktiv vizit", task: "Tapşırıq",
-    choose: "Fayl seç", cancel: "Ləğv et", saved: "Fayl saxlanıldı", savedHint: "Göndərmə növbəsinə əlavə edildi.",
-    refreshError: "Sənədlər yenilənmədi — telefondakı nüsxə göstərilir.", noScope: "Əvvəlcə faylın kontekstini seçin.",
-    taskSearch: "Tapşırığı axtar", taskSearchEmpty: "Uyğun açıq tapşırıq yoxdur",
-    uploadUnavailable: "Bu hesab üçün fayl əlavə etmək icazəli deyil.", downloadUnavailable: "Bu sənədi telefona endirmək icazəli deyil.", uploadLimit: "Maksimum ölçü: {size}",
-  } : {
-    eyebrow: "РАБОЧИЙ ЦЕНТР", title: "Документы", hint: "Файлы задач, материалы визитов и документы, назначенные офисом.",
-    add: "Добавить файл", all: "Все", required: "Обязательные", offline: "На телефоне", empty: "Здесь пока нет документов",
-    emptyHint: "Смените фильтр или добавьте новый файл.", requiredBadge: "Обязательный", unread: "Новый", downloaded: "На телефоне",
-    queued: "В очереди", failed: "Нужно внимание", expired: "Срок истёк", download: "Скачать", open: "Открыть", cloudOff: "Облачный диск не используется",
-    uploadTitle: "К чему привязать файл?", general: "Общий документ", visit: "Активный визит", task: "Задача",
-    choose: "Выбрать файл", cancel: "Отмена", saved: "Файл сохранён", savedHint: "Он добавлен в очередь на отправку.",
-    refreshError: "Документы не обновились — показана копия с телефона.", noScope: "Сначала выберите контекст файла.",
-    taskSearch: "Найти задачу", taskSearchEmpty: "Подходящих открытых задач нет",
-    uploadUnavailable: "Для этой учётной записи добавление файлов недоступно.", downloadUnavailable: "Скачать этот документ на телефон нельзя.", uploadLimit: "Максимальный размер: {size}",
+  const copy = {
+    eyebrow: t("documentsEyebrow"), title: t("documentsTitle"), hint: t("documentsHint"),
+    add: t("documentsAdd"), all: t("documentsAll"), required: t("documentsRequired"), offline: t("documentsOffline"), empty: t("documentsEmpty"),
+    emptyHint: t("documentsEmptyHint"), requiredBadge: t("documentsRequiredBadge"), unread: t("documentsUnread"), downloaded: t("documentsDownloaded"),
+    queued: t("documentsQueued"), failed: t("documentsFailed"), expired: t("documentsExpired"), download: t("documentsDownload"), open: t("documentsOpen"), cloudOff: t("documentsCloudOff"),
+    uploadTitle: t("documentsUploadTitle"), general: t("documentsGeneral"), visit: t("documentsVisit"), task: t("documentsTask"),
+    choose: t("documentsChoose"), cancel: t("documentsCancel"), saved: t("documentsSaved"), savedHint: t("documentsSavedHint"),
+    refreshError: t("documentsRefreshError"), noScope: t("documentsNoScope"),
+    taskSearch: t("documentsTaskSearch"), taskSearchEmpty: t("documentsTaskSearchEmpty"),
+    uploadUnavailable: t("documentsUploadUnavailable"), downloadUnavailable: t("documentsDownloadUnavailable"), uploadLimit: t("documentsUploadLimit"),
   }
   const canUpload = data.capabilities.upload
   const uploadLimitText = copy.uploadLimit.replace("{size}", formatFileSize(data.capabilities.maxUploadBytes, locale))
