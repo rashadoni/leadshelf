@@ -248,7 +248,6 @@ export function RouteTargetPicker({
       })
       const target = assignedOrganizationTarget(refreshed.items, candidate.id)
       setTargetTypes(refreshed.targetTypes)
-      setCatalog(refreshed)
       if (!target) {
         setAssignmentCandidate(null)
         setAssignmentResults((current) => current.filter((item) => item.id !== candidate.id))
@@ -256,6 +255,7 @@ export function RouteTargetPicker({
         return
       }
       select(target)
+      void load(selectedTypeId ?? undefined, search.trim())
       setAssignmentOpen(false)
       setAssignmentSearch("")
       setAssignmentResults([])
