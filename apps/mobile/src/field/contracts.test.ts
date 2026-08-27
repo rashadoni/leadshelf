@@ -928,6 +928,9 @@ describe("LeadDrive field contracts", () => {
       pageSummary: { recordedDays: 2, workedSeconds: 20700 },
       agents: [{ attendance: { activeDays: 1, completedDays: 1 } }],
     })
+    expect(attendance.schedulePolicy).toBeUndefined()
+    expect(attendance.schedulePageSummary).toBeUndefined()
+    expect(attendance.agents[0]?.schedule).toBeUndefined()
 
     expect(() => parseFieldManagerAttendance({
       ...fixture,
@@ -936,6 +939,158 @@ describe("LeadDrive field contracts", () => {
         pageSummary: { ...fixture.data.pageSummary, recordedDays: 3 },
       },
     })).toThrow(FieldContractError)
+  })
+
+  it("accepts the additive schedule-aware manager attendance contract without inferring statuses", () => {
+    const completedWorkday = {
+      id: "workday-completed",
+      date: "2026-08-01",
+      status: "COMPLETED",
+      startedAt: "2026-08-01T05:00:00.000Z",
+      pausedAt: null,
+      completedAt: "2026-08-01T13:00:00.000Z",
+      totalPausedSeconds: 0,
+      workedSeconds: 28800,
+    }
+    const emptyMetrics = {
+      lateBySeconds: null,
+      earlyBySeconds: null,
+      absenceOverdueSeconds: null,
+      unclosedBySeconds: null,
+    }
+    const expected = (date: string) => ({
+      isWorkingDay: true,
+      timezone: "Asia/Baku",
+      startAt: `${date}T05:00:00.000Z`,
+      lateAfter: `${date}T05:10:00.000Z`,
+      absenceAfter: `${date}T06:00:00.000Z`,
+      earlyBefore: `${date}T13:45:00.000Z`,
+      endAt: `${date}T14:00:00.000Z`,
+      unclosedAfter: `${date}T14:30:00.000Z`,
+      dst: {
+        start: { kind: "EXACT", shiftedMinutes: 0 },
+        end: { kind: "EXACT", shiftedMinutes: 0 },
+      },
+      resolutionIssue: null,
+    })
+    const calendar = (date: string) => ({
+      date,
+      kind: "WORKING_DAY",
+      isWorkingDay: true,
+      routePlanningAllowed: true,
+      name: null,
+      movedToDate: null,
+      source: "WEEKDAY_DEFAULT",
+      overrideId: null,
+    })
+    const scheduleSummary = {
+      scheduledDays: 2,
+      onTimeDays: 1,
+      lateDays: 0,
+      absentDays: 1,
+      unclosedDays: 0,
+      earlyFinishDays: 0,
+      excusedDays: 0,
+      futureDays: 0,
+      awaitingStartDays: 0,
+      unresolvedDays: 0,
+      dataConflictDays: 0,
+    }
+    const fixture = {
+      success: true,
+      data: {
+        scope: "TEAM_OR_REGION",
+        timezone: "Asia/Baku",
+        from: "2026-08-01",
+        to: "2026-08-02",
+        generatedAt: "2026-08-02T07:00:00.000Z",
+        page: { number: 1, limit: 25, total: 1, hasMore: false },
+        coverage: "RECORDED_WORKDAYS_ONLY",
+        pageSummary: {
+          agentsLoaded: 1,
+          recordedDays: 1,
+          activeDays: 0,
+          completedDays: 1,
+          workedSeconds: 28800,
+        },
+        schedulePolicy: {
+          enabled: true,
+          startTime: "09:00",
+          endTime: "18:00",
+          graceMinutes: 10,
+          absenceAfterMinutes: 60,
+          unclosedAfterMinutes: 30,
+          earlyFinishToleranceMinutes: 15,
+        },
+        scheduleCoverage: {
+          mode: "SCHEDULE_AWARE",
+          calendar: "WEEKDAY_WEEKEND_WITH_EFFECTIVE_OVERRIDES",
+          precedence: ["AGENT_OVERRIDE", "TEAM_OVERRIDE", "ORGANIZATION_OVERRIDE", "WEEKDAY_WEEKEND_DEFAULT"],
+          approvedExceptions: ["LEAVE", "ABSENCE"],
+          futureDaysClassified: false,
+          todayAbsenceRule: "AT_OR_AFTER_ABSENCE_THRESHOLD",
+        },
+        schedulePageSummary: scheduleSummary,
+        agents: [{
+          id: "agent-1",
+          name: "Schedule agent",
+          role: "AGENT",
+          teamId: "team-1",
+          attendance: {
+            recordedDays: 1,
+            activeDays: 0,
+            completedDays: 1,
+            workedSeconds: 28800,
+            days: [completedWorkday],
+          },
+          schedule: {
+            summary: scheduleSummary,
+            days: [
+              {
+                date: "2026-08-01",
+                calendar: calendar("2026-08-01"),
+                expected: expected("2026-08-01"),
+                facts: { workday: completedWorkday, approvedExceptions: [] },
+                statuses: ["ON_TIME", "CLOSED"],
+                metrics: emptyMetrics,
+              },
+              {
+                date: "2026-08-02",
+                calendar: calendar("2026-08-02"),
+                expected: expected("2026-08-02"),
+                facts: { workday: null, approvedExceptions: [] },
+                statuses: ["ABSENT"],
+                metrics: { ...emptyMetrics, absenceOverdueSeconds: 3600 },
+              },
+            ],
+          },
+        }],
+      },
+    }
+
+    const attendance = parseFieldManagerAttendance(fixture)
+    expect(attendance.schedulePolicy).toMatchObject({ enabled: true, startTime: "09:00", endTime: "18:00" })
+    expect(attendance.scheduleCoverage?.futureDaysClassified).toBe(false)
+    expect(attendance.schedulePageSummary).toEqual(scheduleSummary)
+    expect(attendance.agents[0]?.schedule?.days.map((day) => day.statuses)).toEqual([
+      ["ON_TIME", "CLOSED"],
+      ["ABSENT"],
+    ])
+
+    expect(() => parseFieldManagerAttendance({
+      ...fixture,
+      data: { ...fixture.data, scheduleCoverage: undefined },
+    })).toThrow(FieldContractError)
+
+    const mismatchedSummary = structuredClone(fixture)
+    mismatchedSummary.data.schedulePageSummary.absentDays = 0
+    expect(() => parseFieldManagerAttendance(mismatchedSummary)).toThrow(FieldContractError)
+
+    const missingDate = structuredClone(fixture)
+    missingDate.data.agents[0].schedule.days.pop()
+    missingDate.data.agents[0].schedule.summary = { ...scheduleSummary, scheduledDays: 1, absentDays: 0 }
+    missingDate.data.schedulePageSummary = { ...scheduleSummary, scheduledDays: 1, absentDays: 0 }
+    expect(() => parseFieldManagerAttendance(missingDate)).toThrow(FieldContractError)
   })
 
   it("rejects invalid workday transitions and location coordinates at the boundary", () => {

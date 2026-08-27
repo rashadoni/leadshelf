@@ -768,6 +768,115 @@ export interface FieldManagerAttendanceDay {
   workedSeconds: number
 }
 
+export type FieldManagerAttendanceScheduleStatus =
+  | "FUTURE"
+  | "EXCUSED"
+  | "NOT_SCHEDULED"
+  | "AWAITING_START"
+  | "ON_TIME"
+  | "LATE"
+  | "ABSENT"
+  | "OPEN"
+  | "CLOSED"
+  | "UNCLOSED"
+  | "EARLY_FINISH"
+  | "SCHEDULE_UNRESOLVED"
+  | "DATA_CONFLICT"
+
+export type FieldManagerAttendanceCalendarSource =
+  | "WEEKDAY_DEFAULT"
+  | "WEEKEND_DEFAULT"
+  | "ORGANIZATION_OVERRIDE"
+  | "TEAM_OVERRIDE"
+  | "AGENT_OVERRIDE"
+
+export interface FieldManagerAttendanceSchedulePolicy {
+  enabled: true
+  startTime: string
+  endTime: string
+  graceMinutes: number
+  absenceAfterMinutes: number
+  unclosedAfterMinutes: number
+  earlyFinishToleranceMinutes: number
+}
+
+export interface FieldManagerAttendanceScheduleCoverage {
+  mode: "SCHEDULE_AWARE"
+  calendar: "WEEKDAY_WEEKEND_WITH_EFFECTIVE_OVERRIDES"
+  precedence: [
+    "AGENT_OVERRIDE",
+    "TEAM_OVERRIDE",
+    "ORGANIZATION_OVERRIDE",
+    "WEEKDAY_WEEKEND_DEFAULT",
+  ]
+  approvedExceptions: ["LEAVE", "ABSENCE"]
+  futureDaysClassified: false
+  todayAbsenceRule: "AT_OR_AFTER_ABSENCE_THRESHOLD"
+}
+
+export interface FieldManagerAttendanceScheduleSummary {
+  scheduledDays: number
+  onTimeDays: number
+  lateDays: number
+  absentDays: number
+  unclosedDays: number
+  earlyFinishDays: number
+  excusedDays: number
+  futureDays: number
+  awaitingStartDays: number
+  unresolvedDays: number
+  dataConflictDays: number
+}
+
+export type FieldManagerAttendanceDstResolution =
+  | { kind: "EXACT"; shiftedMinutes: 0 }
+  | { kind: "AMBIGUOUS_EARLIER"; shiftedMinutes: 0 }
+  | { kind: "SHIFTED_FORWARD"; shiftedMinutes: number }
+
+export interface FieldManagerAttendanceScheduleDay {
+  date: string
+  calendar: {
+    date: string
+    kind: FieldCalendarKind
+    isWorkingDay: boolean
+    routePlanningAllowed: boolean
+    name: string | null
+    movedToDate: string | null
+    source: FieldManagerAttendanceCalendarSource
+    overrideId: string | null
+  }
+  expected: {
+    isWorkingDay: boolean
+    timezone: string
+    startAt: string | null
+    lateAfter: string | null
+    absenceAfter: string | null
+    earlyBefore: string | null
+    endAt: string | null
+    unclosedAfter: string | null
+    dst: {
+      start: FieldManagerAttendanceDstResolution | null
+      end: FieldManagerAttendanceDstResolution | null
+    }
+    resolutionIssue: "TIMEZONE_RESOLUTION_FAILED" | "NON_POSITIVE_DST_WINDOW" | null
+  }
+  facts: {
+    workday: FieldManagerAttendanceDay | null
+    approvedExceptions: Array<{
+      id: string
+      type: "LEAVE" | "ABSENCE"
+      status: "APPROVED"
+    }>
+  }
+  statuses: FieldManagerAttendanceScheduleStatus[]
+  metrics: {
+    lateBySeconds: number | null
+    earlyBySeconds: number | null
+    absenceOverdueSeconds: number | null
+    unclosedBySeconds: number | null
+  }
+}
+
 export interface FieldManagerAttendanceAgent {
   id: string
   name: string
@@ -779,6 +888,11 @@ export interface FieldManagerAttendanceAgent {
     completedDays: number
     workedSeconds: number
     days: FieldManagerAttendanceDay[]
+  }
+  /** Present only when the tenant explicitly enables schedule-aware attendance. */
+  schedule?: {
+    summary: FieldManagerAttendanceScheduleSummary
+    days: FieldManagerAttendanceScheduleDay[]
   }
 }
 
@@ -801,6 +915,10 @@ export interface FieldManagerAttendanceData {
   coverage: "RECORDED_WORKDAYS_ONLY"
   pageSummary: FieldManagerAttendancePageSummary
   agents: FieldManagerAttendanceAgent[]
+  /** Additive v2 fields. All three are present together or all are absent. */
+  schedulePolicy?: FieldManagerAttendanceSchedulePolicy
+  scheduleCoverage?: FieldManagerAttendanceScheduleCoverage
+  schedulePageSummary?: FieldManagerAttendanceScheduleSummary
 }
 
 export interface FieldManagerRouteDetailPoint {
@@ -2396,7 +2514,351 @@ function managerAttendanceDay(value: unknown): FieldManagerAttendanceDay | null 
   }
 }
 
-function managerAttendanceAgent(value: unknown): FieldManagerAttendanceAgent | null {
+const managerAttendanceScheduleStatuses = new Set<FieldManagerAttendanceScheduleStatus>([
+  "FUTURE",
+  "EXCUSED",
+  "NOT_SCHEDULED",
+  "AWAITING_START",
+  "ON_TIME",
+  "LATE",
+  "ABSENT",
+  "OPEN",
+  "CLOSED",
+  "UNCLOSED",
+  "EARLY_FINISH",
+  "SCHEDULE_UNRESOLVED",
+  "DATA_CONFLICT",
+])
+const managerAttendanceCalendarKinds = new Set<FieldCalendarKind>([
+  "WORKING_DAY",
+  "WEEKEND",
+  "PUBLIC_HOLIDAY",
+  "COMPANY_HOLIDAY",
+  "EXCEPTION_WORKDAY",
+  "MOVED_WORKDAY",
+  "MOVED_DAY_OFF",
+])
+const managerAttendanceCalendarSources = new Set<FieldManagerAttendanceCalendarSource>([
+  "WEEKDAY_DEFAULT",
+  "WEEKEND_DEFAULT",
+  "ORGANIZATION_OVERRIDE",
+  "TEAM_OVERRIDE",
+  "AGENT_OVERRIDE",
+])
+const managerAttendanceSingletonStatuses = new Set<FieldManagerAttendanceScheduleStatus>([
+  "FUTURE",
+  "EXCUSED",
+  "NOT_SCHEDULED",
+  "AWAITING_START",
+  "ABSENT",
+  "SCHEDULE_UNRESOLVED",
+  "DATA_CONFLICT",
+])
+const managerAttendanceSummaryKeys = [
+  "scheduledDays",
+  "onTimeDays",
+  "lateDays",
+  "absentDays",
+  "unclosedDays",
+  "earlyFinishDays",
+  "excusedDays",
+  "futureDays",
+  "awaitingStartDays",
+  "unresolvedDays",
+  "dataConflictDays",
+] as const satisfies readonly (keyof FieldManagerAttendanceScheduleSummary)[]
+
+function timestampOrNull(value: unknown): value is string | null {
+  return value === null || timestamp(value)
+}
+
+function nonNegativeIntegerOrNull(value: unknown): value is number | null {
+  return value === null || nonNegativeInteger(value)
+}
+
+function attendanceSchedulePolicy(value: unknown): FieldManagerAttendanceSchedulePolicy | null {
+  const policy = record(value)
+  const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/
+  if (
+    !policy ||
+    policy.enabled !== true ||
+    typeof policy.startTime !== "string" ||
+    !time.test(policy.startTime) ||
+    typeof policy.endTime !== "string" ||
+    !time.test(policy.endTime) ||
+    !nonNegativeInteger(policy.graceMinutes) ||
+    policy.graceMinutes > 240 ||
+    !nonNegativeInteger(policy.absenceAfterMinutes) ||
+    policy.absenceAfterMinutes > 720 ||
+    !nonNegativeInteger(policy.unclosedAfterMinutes) ||
+    policy.unclosedAfterMinutes > 720 ||
+    !nonNegativeInteger(policy.earlyFinishToleranceMinutes) ||
+    policy.earlyFinishToleranceMinutes > 720
+  ) return null
+
+  const minutes = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5))
+  const interval = minutes(policy.endTime) - minutes(policy.startTime)
+  if (
+    interval <= 0 ||
+    policy.graceMinutes > policy.absenceAfterMinutes ||
+    policy.absenceAfterMinutes > interval ||
+    policy.earlyFinishToleranceMinutes > interval
+  ) return null
+
+  return {
+    enabled: true,
+    startTime: policy.startTime,
+    endTime: policy.endTime,
+    graceMinutes: policy.graceMinutes,
+    absenceAfterMinutes: policy.absenceAfterMinutes,
+    unclosedAfterMinutes: policy.unclosedAfterMinutes,
+    earlyFinishToleranceMinutes: policy.earlyFinishToleranceMinutes,
+  }
+}
+
+function attendanceScheduleCoverage(value: unknown): FieldManagerAttendanceScheduleCoverage | null {
+  const coverage = record(value)
+  if (
+    !coverage ||
+    coverage.mode !== "SCHEDULE_AWARE" ||
+    coverage.calendar !== "WEEKDAY_WEEKEND_WITH_EFFECTIVE_OVERRIDES" ||
+    !Array.isArray(coverage.precedence) ||
+    coverage.precedence.length !== 4 ||
+    coverage.precedence[0] !== "AGENT_OVERRIDE" ||
+    coverage.precedence[1] !== "TEAM_OVERRIDE" ||
+    coverage.precedence[2] !== "ORGANIZATION_OVERRIDE" ||
+    coverage.precedence[3] !== "WEEKDAY_WEEKEND_DEFAULT" ||
+    !Array.isArray(coverage.approvedExceptions) ||
+    coverage.approvedExceptions.length !== 2 ||
+    coverage.approvedExceptions[0] !== "LEAVE" ||
+    coverage.approvedExceptions[1] !== "ABSENCE" ||
+    coverage.futureDaysClassified !== false ||
+    coverage.todayAbsenceRule !== "AT_OR_AFTER_ABSENCE_THRESHOLD"
+  ) return null
+
+  return {
+    mode: "SCHEDULE_AWARE",
+    calendar: "WEEKDAY_WEEKEND_WITH_EFFECTIVE_OVERRIDES",
+    precedence: ["AGENT_OVERRIDE", "TEAM_OVERRIDE", "ORGANIZATION_OVERRIDE", "WEEKDAY_WEEKEND_DEFAULT"],
+    approvedExceptions: ["LEAVE", "ABSENCE"],
+    futureDaysClassified: false,
+    todayAbsenceRule: "AT_OR_AFTER_ABSENCE_THRESHOLD",
+  }
+}
+
+function attendanceDstResolution(value: unknown): FieldManagerAttendanceDstResolution | null {
+  const resolution = record(value)
+  if (!resolution || !nonNegativeInteger(resolution.shiftedMinutes)) return null
+  if ((resolution.kind === "EXACT" || resolution.kind === "AMBIGUOUS_EARLIER") && resolution.shiftedMinutes === 0) {
+    return { kind: resolution.kind, shiftedMinutes: 0 }
+  }
+  if (resolution.kind === "SHIFTED_FORWARD" && resolution.shiftedMinutes > 0) {
+    return { kind: "SHIFTED_FORWARD", shiftedMinutes: resolution.shiftedMinutes }
+  }
+  return null
+}
+
+function attendanceScheduleSummary(value: unknown): FieldManagerAttendanceScheduleSummary | null {
+  const summary = record(value)
+  if (!summary || managerAttendanceSummaryKeys.some((key) => !nonNegativeInteger(summary[key]))) return null
+  return {
+    scheduledDays: summary.scheduledDays as number,
+    onTimeDays: summary.onTimeDays as number,
+    lateDays: summary.lateDays as number,
+    absentDays: summary.absentDays as number,
+    unclosedDays: summary.unclosedDays as number,
+    earlyFinishDays: summary.earlyFinishDays as number,
+    excusedDays: summary.excusedDays as number,
+    futureDays: summary.futureDays as number,
+    awaitingStartDays: summary.awaitingStartDays as number,
+    unresolvedDays: summary.unresolvedDays as number,
+    dataConflictDays: summary.dataConflictDays as number,
+  }
+}
+
+function summarizeAttendanceScheduleDays(
+  days: readonly FieldManagerAttendanceScheduleDay[],
+): FieldManagerAttendanceScheduleSummary {
+  const summary: FieldManagerAttendanceScheduleSummary = {
+    scheduledDays: 0,
+    onTimeDays: 0,
+    lateDays: 0,
+    absentDays: 0,
+    unclosedDays: 0,
+    earlyFinishDays: 0,
+    excusedDays: 0,
+    futureDays: 0,
+    awaitingStartDays: 0,
+    unresolvedDays: 0,
+    dataConflictDays: 0,
+  }
+  for (const day of days) {
+    if (day.expected.isWorkingDay) summary.scheduledDays += 1
+    if (day.statuses.includes("ON_TIME")) summary.onTimeDays += 1
+    if (day.statuses.includes("LATE")) summary.lateDays += 1
+    if (day.statuses.includes("ABSENT")) summary.absentDays += 1
+    if (day.statuses.includes("UNCLOSED")) summary.unclosedDays += 1
+    if (day.statuses.includes("EARLY_FINISH")) summary.earlyFinishDays += 1
+    if (day.statuses.includes("EXCUSED")) summary.excusedDays += 1
+    if (day.statuses.includes("FUTURE")) summary.futureDays += 1
+    if (day.statuses.includes("AWAITING_START")) summary.awaitingStartDays += 1
+    if (day.statuses.includes("SCHEDULE_UNRESOLVED")) summary.unresolvedDays += 1
+    if (day.statuses.includes("DATA_CONFLICT")) summary.dataConflictDays += 1
+  }
+  return summary
+}
+
+function attendanceScheduleSummariesMatch(
+  left: FieldManagerAttendanceScheduleSummary,
+  right: FieldManagerAttendanceScheduleSummary,
+): boolean {
+  return managerAttendanceSummaryKeys.every((key) => left[key] === right[key])
+}
+
+function validAttendanceScheduleStatuses(statuses: FieldManagerAttendanceScheduleStatus[]): boolean {
+  if (statuses.length === 1) return managerAttendanceSingletonStatuses.has(statuses[0])
+  if (statuses.length < 2 || statuses.length > 3) return false
+  const punctuality = Number(statuses.includes("ON_TIME")) + Number(statuses.includes("LATE"))
+  const lifecycle = Number(statuses.includes("OPEN")) + Number(statuses.includes("CLOSED")) + Number(statuses.includes("UNCLOSED"))
+  const allowed = new Set<FieldManagerAttendanceScheduleStatus>([
+    "ON_TIME", "LATE", "OPEN", "CLOSED", "UNCLOSED", "EARLY_FINISH",
+  ])
+  return punctuality === 1 && lifecycle === 1 && statuses.every((status) => allowed.has(status)) &&
+    (!statuses.includes("EARLY_FINISH") || statuses.includes("CLOSED"))
+}
+
+function managerAttendanceScheduleDay(
+  value: unknown,
+  timezone: string,
+): FieldManagerAttendanceScheduleDay | null {
+  const day = record(value)
+  const calendar = record(day?.calendar)
+  const expected = record(day?.expected)
+  const dst = record(expected?.dst)
+  const facts = record(day?.facts)
+  const metrics = record(day?.metrics)
+  if (
+    !day ||
+    !dateKey(day.date) ||
+    !calendar ||
+    calendar.date !== day.date ||
+    !string(calendar.kind) ||
+    !managerAttendanceCalendarKinds.has(calendar.kind as FieldCalendarKind) ||
+    !boolean(calendar.isWorkingDay) ||
+    !boolean(calendar.routePlanningAllowed) ||
+    !(calendar.name === null || typeof calendar.name === "string") ||
+    !(calendar.movedToDate === null || dateKey(calendar.movedToDate)) ||
+    !string(calendar.source) ||
+    !managerAttendanceCalendarSources.has(calendar.source as FieldManagerAttendanceCalendarSource) ||
+    !(calendar.overrideId === null || string(calendar.overrideId)) ||
+    !expected ||
+    !boolean(expected.isWorkingDay) ||
+    expected.isWorkingDay !== calendar.isWorkingDay ||
+    expected.timezone !== timezone ||
+    !timestampOrNull(expected.startAt) ||
+    !timestampOrNull(expected.lateAfter) ||
+    !timestampOrNull(expected.absenceAfter) ||
+    !timestampOrNull(expected.earlyBefore) ||
+    !timestampOrNull(expected.endAt) ||
+    !timestampOrNull(expected.unclosedAfter) ||
+    !dst ||
+    !(expected.resolutionIssue === null || expected.resolutionIssue === "TIMEZONE_RESOLUTION_FAILED" || expected.resolutionIssue === "NON_POSITIVE_DST_WINDOW") ||
+    !facts ||
+    !Array.isArray(facts.approvedExceptions) ||
+    !Array.isArray(day.statuses) ||
+    !metrics ||
+    !nonNegativeIntegerOrNull(metrics.lateBySeconds) ||
+    !nonNegativeIntegerOrNull(metrics.earlyBySeconds) ||
+    !nonNegativeIntegerOrNull(metrics.absenceOverdueSeconds) ||
+    !nonNegativeIntegerOrNull(metrics.unclosedBySeconds)
+  ) return null
+
+  const startDst = dst.start === null ? null : attendanceDstResolution(dst.start)
+  const endDst = dst.end === null ? null : attendanceDstResolution(dst.end)
+  if ((dst.start !== null && !startDst) || (dst.end !== null && !endDst)) return null
+
+  const workday = facts.workday === null ? null : managerAttendanceDay(facts.workday)
+  if ((facts.workday !== null && !workday) || (workday && workday.date !== day.date)) return null
+
+  const exceptions = facts.approvedExceptions.map((value) => {
+    const exception = record(value)
+    return exception && string(exception.id) &&
+      (exception.type === "LEAVE" || exception.type === "ABSENCE") &&
+      exception.status === "APPROVED"
+      ? { id: exception.id, type: exception.type, status: "APPROVED" as const }
+      : null
+  })
+  if (exceptions.some((exception) => exception == null)) return null
+
+  const statuses = day.statuses.map((status) => string(status) && managerAttendanceScheduleStatuses.has(status as FieldManagerAttendanceScheduleStatus)
+    ? status as FieldManagerAttendanceScheduleStatus
+    : null)
+  if (
+    statuses.some((status) => status == null) ||
+    new Set(statuses).size !== statuses.length ||
+    !validAttendanceScheduleStatuses(statuses as FieldManagerAttendanceScheduleStatus[])
+  ) return null
+  const parsedStatuses = statuses as FieldManagerAttendanceScheduleStatus[]
+  if (
+    (metrics.lateBySeconds !== null) !== parsedStatuses.includes("LATE") ||
+    (metrics.earlyBySeconds !== null) !== parsedStatuses.includes("EARLY_FINISH") ||
+    (metrics.absenceOverdueSeconds !== null) !== parsedStatuses.includes("ABSENT") ||
+    (metrics.unclosedBySeconds !== null) !== parsedStatuses.includes("UNCLOSED")
+  ) return null
+
+  return {
+    date: day.date,
+    calendar: {
+      date: day.date,
+      kind: calendar.kind as FieldCalendarKind,
+      isWorkingDay: calendar.isWorkingDay,
+      routePlanningAllowed: calendar.routePlanningAllowed,
+      name: calendar.name as string | null,
+      movedToDate: calendar.movedToDate as string | null,
+      source: calendar.source as FieldManagerAttendanceCalendarSource,
+      overrideId: calendar.overrideId as string | null,
+    },
+    expected: {
+      isWorkingDay: expected.isWorkingDay,
+      timezone,
+      startAt: expected.startAt as string | null,
+      lateAfter: expected.lateAfter as string | null,
+      absenceAfter: expected.absenceAfter as string | null,
+      earlyBefore: expected.earlyBefore as string | null,
+      endAt: expected.endAt as string | null,
+      unclosedAfter: expected.unclosedAfter as string | null,
+      dst: { start: startDst, end: endDst },
+      resolutionIssue: expected.resolutionIssue as FieldManagerAttendanceScheduleDay["expected"]["resolutionIssue"],
+    },
+    facts: {
+      workday,
+      approvedExceptions: exceptions as FieldManagerAttendanceScheduleDay["facts"]["approvedExceptions"],
+    },
+    statuses: parsedStatuses,
+    metrics: {
+      lateBySeconds: metrics.lateBySeconds,
+      earlyBySeconds: metrics.earlyBySeconds,
+      absenceOverdueSeconds: metrics.absenceOverdueSeconds,
+      unclosedBySeconds: metrics.unclosedBySeconds,
+    },
+  }
+}
+
+function managerAttendanceSchedule(
+  value: unknown,
+  timezone: string,
+): FieldManagerAttendanceAgent["schedule"] | null {
+  const schedule = record(value)
+  if (!schedule || !Array.isArray(schedule.days)) return null
+  const summary = attendanceScheduleSummary(schedule.summary)
+  const days = schedule.days.map((day) => managerAttendanceScheduleDay(day, timezone))
+  if (!summary || days.some((day) => day == null)) return null
+  const parsedDays = days as FieldManagerAttendanceScheduleDay[]
+  if (!attendanceScheduleSummariesMatch(summary, summarizeAttendanceScheduleDays(parsedDays))) return null
+  return { summary, days: parsedDays }
+}
+
+function managerAttendanceAgent(value: unknown, timezone: string): FieldManagerAttendanceAgent | null {
   const agent = record(value)
   const attendance = record(agent?.attendance)
   if (
@@ -2428,6 +2890,8 @@ function managerAttendanceAgent(value: unknown): FieldManagerAttendanceAgent | n
   ) {
     return null
   }
+  const schedule = agent.schedule === undefined ? undefined : managerAttendanceSchedule(agent.schedule, timezone)
+  if (agent.schedule !== undefined && !schedule) return null
   return {
     id: agent.id,
     name: agent.name,
@@ -2440,6 +2904,7 @@ function managerAttendanceAgent(value: unknown): FieldManagerAttendanceAgent | n
       workedSeconds: attendance.workedSeconds,
       days: parsedDays,
     },
+    ...(schedule ? { schedule } : {}),
   }
 }
 
@@ -2492,13 +2957,52 @@ export function parseFieldManagerAttendance(value: unknown): FieldManagerAttenda
   }
   const from = data.from
   const to = data.to
-  const agents = data.agents.map(managerAttendanceAgent)
+  const timezone = data.timezone
+  const hasSchedulePolicy = data.schedulePolicy !== undefined
+  const hasScheduleCoverage = data.scheduleCoverage !== undefined
+  const hasSchedulePageSummary = data.schedulePageSummary !== undefined
+  const hasScheduleContract = hasSchedulePolicy && hasScheduleCoverage && hasSchedulePageSummary
+  if ((Number(hasSchedulePolicy) + Number(hasScheduleCoverage) + Number(hasSchedulePageSummary)) !== (hasScheduleContract ? 3 : 0)) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+  const schedulePolicy = hasScheduleContract ? attendanceSchedulePolicy(data.schedulePolicy) : undefined
+  const scheduleCoverage = hasScheduleContract ? attendanceScheduleCoverage(data.scheduleCoverage) : undefined
+  const schedulePageSummary = hasScheduleContract ? attendanceScheduleSummary(data.schedulePageSummary) : undefined
+  if (hasScheduleContract && (!schedulePolicy || !scheduleCoverage || !schedulePageSummary)) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+
+  const agents = data.agents.map((agent) => managerAttendanceAgent(agent, timezone))
   if (agents.some((agent) => agent == null)) {
     throw new FieldContractError("mobile manager attendance")
   }
   const parsedAgents = agents as FieldManagerAttendanceAgent[]
   if (parsedAgents.some((agent) => agent.attendance.days.some((day) => day.date < from || day.date > to))) {
     throw new FieldContractError("mobile manager attendance")
+  }
+  const scheduleAgents = parsedAgents.filter((agent) => agent.schedule != null)
+  if ((hasScheduleContract && scheduleAgents.length !== parsedAgents.length) || (!hasScheduleContract && scheduleAgents.length > 0)) {
+    throw new FieldContractError("mobile manager attendance")
+  }
+  if (hasScheduleContract && schedulePageSummary) {
+    const expectedDays = Math.round(
+      (Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86_400_000,
+    ) + 1
+    for (const agent of scheduleAgents) {
+      const days = agent.schedule?.days ?? []
+      const uniqueDates = new Set(days.map((day) => day.date))
+      if (
+        days.length !== expectedDays ||
+        uniqueDates.size !== days.length ||
+        days.some((day) => day.date < from || day.date > to)
+      ) {
+        throw new FieldContractError("mobile manager attendance")
+      }
+    }
+    const flattenedDays = scheduleAgents.flatMap((agent) => agent.schedule?.days ?? [])
+    if (!attendanceScheduleSummariesMatch(schedulePageSummary, summarizeAttendanceScheduleDays(flattenedDays))) {
+      throw new FieldContractError("mobile manager attendance")
+    }
   }
   const page = managerListPage(data.page, parsedAgents.length)
   const pageSummary = managerAttendancePageSummary(data.pageSummary, parsedAgents)
@@ -2507,7 +3011,7 @@ export function parseFieldManagerAttendance(value: unknown): FieldManagerAttenda
   }
   return {
     scope: data.scope,
-    timezone: data.timezone,
+    timezone,
     from,
     to,
     generatedAt: data.generatedAt,
@@ -2515,6 +3019,9 @@ export function parseFieldManagerAttendance(value: unknown): FieldManagerAttenda
     coverage: "RECORDED_WORKDAYS_ONLY",
     pageSummary,
     agents: parsedAgents,
+    ...(schedulePolicy && scheduleCoverage && schedulePageSummary
+      ? { schedulePolicy, scheduleCoverage, schedulePageSummary }
+      : {}),
   }
 }
 

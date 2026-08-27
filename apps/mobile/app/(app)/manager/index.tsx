@@ -188,6 +188,12 @@ export default function ManagerHomeScreen() {
     ? approvals.data.counts.hrm + approvals.data.counts.routeChanges + approvals.data.counts.customers + approvals.data.counts.contactChanges
     : 0
   const attendanceSummary = attendance.data?.pageSummary
+  const attendanceScheduleSummary = attendance.data?.schedulePageSummary
+  const attendanceScheduleIssues = attendanceScheduleSummary
+    ? attendanceScheduleSummary.lateDays + attendanceScheduleSummary.absentDays +
+      attendanceScheduleSummary.unclosedDays + attendanceScheduleSummary.earlyFinishDays +
+      attendanceScheduleSummary.unresolvedDays + attendanceScheduleSummary.dataConflictDays
+    : 0
   const calendar = formatCalendarDay(selectedDate, locale)
   const scope = team.data?.scope ?? locations.data?.scope ?? planning.data?.scope ?? approvals.data?.scope ?? attendance.data?.scope ?? null
   const attentionItems: ManagerAttention[] = [
@@ -351,15 +357,20 @@ export default function ManagerHomeScreen() {
                 title={t("managerAttendanceCardTitle")}
                 hint={t("managerAttendanceCardHint")}
                 icon="today"
-                value={String(attendanceSummary?.recordedDays ?? 0)}
-                detail={attendanceSummary
-                  ? t("managerAttendancePageSummary", {
+                value={String(attendanceScheduleSummary?.scheduledDays ?? attendanceSummary?.recordedDays ?? 0)}
+                detail={attendanceScheduleSummary
+                  ? t("managerAttendanceSchedulePageSummary", {
+                    scheduled: attendanceScheduleSummary.scheduledDays,
+                    onTime: attendanceScheduleSummary.onTimeDays,
+                    issues: attendanceScheduleIssues,
+                  })
+                  : attendanceSummary ? t("managerAttendancePageSummary", {
                     agents: attendanceSummary.agentsLoaded,
                     days: attendanceSummary.recordedDays,
                     time: compactWorkedTime(attendanceSummary.workedSeconds),
                   })
                   : t("managerAttendanceCardHint")}
-                tone="info"
+                tone={attendanceScheduleSummary ? attendanceScheduleIssues > 0 ? "warning" : "success" : "info"}
                 loading={loading}
                 error={attendance.error}
                 href="/(app)/manager/attendance"

@@ -8,9 +8,16 @@ import type {
   FieldManagerAttendanceAgent,
   FieldManagerAttendanceData,
   FieldManagerAttendanceDay,
+  FieldManagerAttendanceScheduleDay,
+  FieldManagerAttendanceScheduleSummary,
 } from "../../../src/field/contracts"
 import { useField } from "../../../src/field/field-context"
-import { agentRoleLabel, workdayStatusLabel } from "../../../src/field/labels"
+import { agentRoleLabel, hrmRequestTypeLabel, workdayStatusLabel } from "../../../src/field/labels"
+import {
+  MANAGER_ATTENDANCE_PRIMARY_SUMMARY,
+  managerAttendanceStatusPresentation,
+  type ManagerAttendanceTone,
+} from "../../../src/field/manager-attendance-presentation"
 import { shiftDateKey } from "../../../src/field/week-status"
 import { t, useLocale } from "../../../src/i18n"
 import { formatCalendarDay, formatTime } from "../../../src/i18n/date-format"
@@ -38,6 +45,138 @@ function workdayTone(status: FieldManagerAttendanceDay["status"]): { background:
   if (status === "COMPLETED") return { background: colors.successBg, color: colors.successDark }
   if (status === "PAUSED") return { background: colors.warningBg, color: colors.warning }
   return { background: colors.infoBg, color: colors.info }
+}
+
+function scheduleTone(tone: ManagerAttendanceTone): { background: string; border: string; color: string } {
+  if (tone === "success") return { background: colors.successBg, border: colors.successBorder, color: colors.successDark }
+  if (tone === "warning") return { background: colors.warningBg, border: colors.warningBorder, color: colors.warning }
+  if (tone === "danger") return { background: colors.dangerBg, border: colors.dangerBorder, color: colors.danger }
+  if (tone === "info") return { background: colors.infoBg, border: colors.infoBorder, color: colors.info }
+  return { background: colors.surfaceMuted, border: colors.border, color: colors.muted }
+}
+
+function ScheduleSummaryGrid({ summary }: { summary: FieldManagerAttendanceScheduleSummary }) {
+  return (
+    <View style={styles.scheduleStats}>
+      {MANAGER_ATTENDANCE_PRIMARY_SUMMARY.map((item) => {
+        const tone = scheduleTone(item.tone)
+        const label = t(item.labelKey)
+        return (
+          <View
+            key={item.field}
+            accessible
+            accessibilityRole="summary"
+            accessibilityLabel={`${label}: ${summary[item.field]}`}
+            style={[styles.scheduleStat, { backgroundColor: tone.background, borderColor: tone.border }]}
+          >
+            <View style={styles.scheduleStatTop}>
+              <TabIcon name={item.icon} color={tone.color} size={15} />
+              <Text style={[styles.scheduleStatValue, { color: tone.color }]}>{summary[item.field]}</Text>
+            </View>
+            <Text numberOfLines={2} style={styles.scheduleStatLabel}>{label}</Text>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+function ScheduleSecondaryStates({ summary }: { summary: FieldManagerAttendanceScheduleSummary }) {
+  const items = [
+    { count: summary.awaitingStartDays, label: t("managerAttendanceAwaitingStartShort"), icon: "info" as const },
+    { count: summary.futureDays, label: t("managerAttendanceFutureShort"), icon: "week" as const },
+    { count: summary.unresolvedDays, label: t("managerAttendanceUnresolvedShort"), icon: "alert" as const },
+    { count: summary.dataConflictDays, label: t("managerAttendanceDataConflictShort"), icon: "alert" as const },
+  ].filter((item) => item.count > 0)
+  if (items.length === 0) return null
+  return (
+    <View style={styles.secondaryStates}>
+      <Text style={styles.secondaryStatesTitle}>{t("managerAttendanceOtherStates")}</Text>
+      <View style={styles.secondaryStateList}>
+        {items.map((item) => (
+          <View key={item.label} accessible accessibilityRole="summary" accessibilityLabel={`${item.label}: ${item.count}`} style={styles.secondaryState}>
+            <TabIcon name={item.icon} color={colors.muted} size={14} />
+            <Text style={styles.secondaryStateText}>{item.label}: {item.count}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function ScheduleStatusBadge({ status }: { status: FieldManagerAttendanceScheduleDay["statuses"][number] }) {
+  const presentation = managerAttendanceStatusPresentation(status)
+  const tone = scheduleTone(presentation.tone)
+  const label = t(presentation.labelKey)
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={label}
+      style={[styles.scheduleStatus, { backgroundColor: tone.background, borderColor: tone.border }]}
+    >
+      <TabIcon name={presentation.icon} color={tone.color} size={14} />
+      <Text style={[styles.scheduleStatusText, { color: tone.color }]}>{label}</Text>
+    </View>
+  )
+}
+
+function ScheduleAttendanceDay({ day, timezone, first }: {
+  day: FieldManagerAttendanceScheduleDay
+  timezone: string
+  first: boolean
+}) {
+  const locale = useLocale()
+  const calendar = formatCalendarDay(day.date, locale)
+  const workday = day.facts.workday
+  const shiftedDst = [day.expected.dst.start, day.expected.dst.end]
+    .find((resolution) => resolution?.kind === "SHIFTED_FORWARD")
+  const ambiguousDst = [day.expected.dst.start, day.expected.dst.end]
+    .some((resolution) => resolution?.kind === "AMBIGUOUS_EARLIER")
+  return (
+    <View style={[styles.dayRow, !first && styles.dayRowBorder]}>
+      <View style={styles.dayDateBlock}>
+        <View style={styles.dayDate}>
+          <Text style={styles.dayWeekday}>{calendar.weekday}</Text>
+          <Text style={styles.dayDateText}>{calendar.date}</Text>
+        </View>
+        <View style={styles.scheduleStatuses}>
+          {day.statuses.map((status) => <ScheduleStatusBadge key={status} status={status} />)}
+        </View>
+      </View>
+      <View style={styles.scheduleDayFacts}>
+        {day.expected.startAt && day.expected.endAt ? (
+          <Text style={styles.schedulePlan}>{t("managerAttendanceExpectedHours", {
+            start: formatTime(day.expected.startAt, timezone),
+            end: formatTime(day.expected.endAt, timezone),
+          })}</Text>
+        ) : null}
+        {day.calendar.name ? <Text style={styles.dayFact}>{t("managerAttendanceCalendarReason", { name: day.calendar.name })}</Text> : null}
+        {day.statuses.includes("NOT_SCHEDULED") ? <Text style={styles.dayFact}>{t("managerAttendanceNotScheduledHint")}</Text> : null}
+        {day.statuses.includes("FUTURE") ? <Text style={styles.dayFact}>{t("managerAttendanceFutureHint")}</Text> : null}
+        {day.statuses.includes("AWAITING_START") ? <Text style={styles.dayFact}>{t("managerAttendanceAwaitingStartHint")}</Text> : null}
+        {day.statuses.includes("SCHEDULE_UNRESOLVED") ? <Text style={styles.dayWarning}>{t("managerAttendanceUnresolvedHint")}</Text> : null}
+        {day.statuses.includes("DATA_CONFLICT") ? <Text style={styles.dayWarning}>{t("managerAttendanceDataConflictHint")}</Text> : null}
+        {day.facts.approvedExceptions.map((exception) => (
+          <Text key={exception.id} style={styles.dayFact}>{t("managerAttendanceApprovedException", { type: hrmRequestTypeLabel(exception.type) })}</Text>
+        ))}
+        {workday ? (
+          <>
+            <Text style={styles.dayFact}>{t("managerAttendanceStartAt", { time: formatTime(workday.startedAt, timezone) })}</Text>
+            {workday.pausedAt ? <Text style={styles.dayFact}>{t("managerAttendancePausedAt", { time: formatTime(workday.pausedAt, timezone) })}</Text> : null}
+            {workday.completedAt ? <Text style={styles.dayFact}>{t("managerAttendanceCompletedAt", { time: formatTime(workday.completedAt, timezone) })}</Text> : null}
+            <Text style={styles.dayWorked}>{t("managerWorkedTime", { time: compactWorkedTime(workday.workedSeconds) })}</Text>
+          </>
+        ) : null}
+        {day.metrics.lateBySeconds != null ? <Text style={styles.dayWarning}>{t("managerAttendanceLateBy", { time: compactWorkedTime(day.metrics.lateBySeconds) })}</Text> : null}
+        {day.metrics.earlyBySeconds != null ? <Text style={styles.dayWarning}>{t("managerAttendanceEarlyBy", { time: compactWorkedTime(day.metrics.earlyBySeconds) })}</Text> : null}
+        {day.metrics.absenceOverdueSeconds != null ? <Text style={styles.dayDanger}>{t("managerAttendanceAbsenceOverdue", { time: compactWorkedTime(day.metrics.absenceOverdueSeconds) })}</Text> : null}
+        {day.metrics.unclosedBySeconds != null ? <Text style={styles.dayDanger}>{t("managerAttendanceUnclosedBy", { time: compactWorkedTime(day.metrics.unclosedBySeconds) })}</Text> : null}
+        {shiftedDst?.kind === "SHIFTED_FORWARD" ? <Text style={styles.dayWarning}>{t("managerAttendanceDstShifted", { minutes: shiftedDst.shiftedMinutes })}</Text> : null}
+        {ambiguousDst ? <Text style={styles.dayWarning}>{t("managerAttendanceDstAmbiguous")}</Text> : null}
+      </View>
+    </View>
+  )
 }
 
 /**
@@ -71,6 +210,10 @@ function AttendanceAgentCard({
 }) {
   const locale = useLocale()
   const attendance = agent.attendance
+  const schedule = agent.schedule
+  const hasDays = schedule ? schedule.days.length > 0 : attendance.recordedDays > 0
+  const badgeValue = schedule?.summary.scheduledDays ?? attendance.recordedDays
+  const badgeLabel = schedule ? t("managerAttendanceScheduledShort") : t("managerAttendanceRecordedShort")
   return (
     <View style={[styles.agentCard, tablet && styles.agentCardTablet]}>
       <View style={styles.agentTop}>
@@ -79,19 +222,26 @@ function AttendanceAgentCard({
           <Text style={styles.agentName} numberOfLines={1}>{agent.name}</Text>
           <Text style={styles.agentRole}>{agentRoleLabel(agent.role)}</Text>
         </View>
-        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceRecordedOnly")}: ${attendance.recordedDays}`} style={styles.recordBadge}>
-          <Text style={styles.recordBadgeValue}>{attendance.recordedDays}</Text>
-          <Text numberOfLines={2} style={styles.recordBadgeText}>{t("managerAttendanceRecordedShort")}</Text>
+        <View accessible accessibilityRole="summary" accessibilityLabel={`${badgeLabel}: ${badgeValue}`} style={styles.recordBadge}>
+          <Text style={styles.recordBadgeValue}>{badgeValue}</Text>
+          <Text numberOfLines={2} style={styles.recordBadgeText}>{badgeLabel}</Text>
         </View>
       </View>
 
-      <View style={styles.agentStats}>
-        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerWorkingNow")}: ${attendance.activeDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.info }]}>{attendance.activeDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceActiveShort")}</Text></View>
-        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerCompleted")}: ${attendance.completedDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.successDark }]}>{attendance.completedDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceCompletedShort")}</Text></View>
-        <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceWorked")}: ${compactWorkedTime(attendance.workedSeconds)}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.primary }]}>{compactWorkedTime(attendance.workedSeconds)}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceWorkedShort")}</Text></View>
-      </View>
+      {schedule ? (
+        <>
+          <ScheduleSummaryGrid summary={schedule.summary} />
+          <ScheduleSecondaryStates summary={schedule.summary} />
+        </>
+      ) : (
+        <View style={styles.agentStats}>
+          <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerWorkingNow")}: ${attendance.activeDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.info }]}>{attendance.activeDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceActiveShort")}</Text></View>
+          <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerCompleted")}: ${attendance.completedDays}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.successDark }]}>{attendance.completedDays}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceCompletedShort")}</Text></View>
+          <View accessible accessibilityRole="summary" accessibilityLabel={`${t("managerAttendanceWorked")}: ${compactWorkedTime(attendance.workedSeconds)}`} style={styles.agentStat}><Text style={[styles.agentStatValue, { color: colors.primary }]}>{compactWorkedTime(attendance.workedSeconds)}</Text><Text numberOfLines={2} style={styles.agentStatLabel}>{t("managerAttendanceWorkedShort")}</Text></View>
+        </View>
+      )}
 
-      {attendance.recordedDays === 0 ? (
+      {!hasDays ? (
         <Text style={styles.noRecords}>{t("managerAttendanceNoRecords")}</Text>
       ) : (
         <>
@@ -107,7 +257,9 @@ function AttendanceAgentCard({
           </Pressable>
           {expanded ? (
             <View style={styles.daysList}>
-              {attendance.days.map((day, index) => {
+              {schedule ? schedule.days.map((day, index) => (
+                <ScheduleAttendanceDay key={day.date} day={day} timezone={timezone} first={index === 0} />
+              )) : attendance.days.map((day, index) => {
                 const calendar = formatCalendarDay(day.date, locale)
                 const tone = workdayTone(day.status)
                 return (
@@ -295,14 +447,39 @@ export default function ManagerAttendanceScreen() {
               <Text style={styles.scopeText}>{attendance.scope === "ORGANIZATION" ? t("managerScopeOrganization") : t("managerScopeTeam")}</Text>
               {error ? <Text style={styles.staleText}>{t("managerAttendanceStale")}</Text> : null}
             </View>
-            <View style={styles.recordedOnlyCard}>
-              <View style={styles.recordedOnlyIcon}><TabIcon name="info" color={colors.info} size={19} /></View>
-              <View style={styles.recordedOnlyBody}>
-                <Text style={styles.recordedOnlyTitle}>{t("managerAttendanceRecordedOnly")}</Text>
-                <Text style={styles.recordedOnlyText}>{t("managerAttendanceRecordedOnlyHint")}</Text>
-                <Text style={styles.timezone}>{t("managerAttendanceTimezone", { timezone: attendance.timezone })}</Text>
+            {attendance.schedulePolicy ? (
+              <View style={styles.schedulePolicyCard}>
+                <View style={styles.recordedOnlyIcon}><TabIcon name="week" color={colors.info} size={19} /></View>
+                <View style={styles.recordedOnlyBody}>
+                  <Text style={styles.recordedOnlyTitle}>{t("managerAttendanceScheduleTitle")}</Text>
+                  <Text style={styles.recordedOnlyText}>{t("managerAttendanceScheduleHint")}</Text>
+                  <Text style={styles.policyTime}>{t("managerAttendancePolicyTime", {
+                    start: attendance.schedulePolicy.startTime,
+                    end: attendance.schedulePolicy.endTime,
+                  })}</Text>
+                  <Text style={styles.policyRule}>{t("managerAttendancePolicyStartRules", {
+                    grace: attendance.schedulePolicy.graceMinutes,
+                    absence: attendance.schedulePolicy.absenceAfterMinutes,
+                  })}</Text>
+                  <Text style={styles.policyRule}>{t("managerAttendancePolicyEndRules", {
+                    unclosed: attendance.schedulePolicy.unclosedAfterMinutes,
+                    early: attendance.schedulePolicy.earlyFinishToleranceMinutes,
+                  })}</Text>
+                  {attendance.scheduleCoverage ? <Text style={styles.coverageText}>{t("managerAttendanceCoverageHint")}</Text> : null}
+                  <Text style={styles.noScore}>{t("managerAttendanceNoScore")}</Text>
+                  <Text style={styles.timezone}>{t("managerAttendanceTimezone", { timezone: attendance.timezone })}</Text>
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={styles.recordedOnlyCard}>
+                <View style={styles.recordedOnlyIcon}><TabIcon name="info" color={colors.info} size={19} /></View>
+                <View style={styles.recordedOnlyBody}>
+                  <Text style={styles.recordedOnlyTitle}>{t("managerAttendanceRecordedOnly")}</Text>
+                  <Text style={styles.recordedOnlyText}>{t("managerAttendanceRecordedOnlyHint")}</Text>
+                  <Text style={styles.timezone}>{t("managerAttendanceTimezone", { timezone: attendance.timezone })}</Text>
+                </View>
+              </View>
+            )}
             <View style={styles.searchBox}>
               <TabIcon name="search" color={colors.faint} size={20} />
               <TextInput
@@ -324,12 +501,23 @@ export default function ManagerAttendanceScreen() {
             </View>
             <Text style={styles.pageInfo}>{t("managerLoadedOfTotal", { loaded: attendance.agents.length, total: attendance.page.total })}</Text>
             <View style={styles.pageSummary}>
-              <Text style={styles.pageSummaryTitle}>{t("managerAttendancePageFact")}</Text>
+              <Text style={styles.pageSummaryTitle}>{attendance.schedulePageSummary ? t("managerAttendanceSchedulePageFact") : t("managerAttendancePageFact")}</Text>
+              {attendance.schedulePageSummary ? <Text style={styles.pageSummaryText}>{t("managerAttendanceSchedulePageSummary", {
+                scheduled: attendance.schedulePageSummary.scheduledDays,
+                onTime: attendance.schedulePageSummary.onTimeDays,
+                issues: attendance.schedulePageSummary.lateDays + attendance.schedulePageSummary.absentDays + attendance.schedulePageSummary.unclosedDays + attendance.schedulePageSummary.earlyFinishDays + attendance.schedulePageSummary.unresolvedDays + attendance.schedulePageSummary.dataConflictDays,
+              })}</Text> : null}
               <Text style={styles.pageSummaryText}>{t("managerAttendancePageSummary", {
                 agents: attendance.pageSummary.agentsLoaded,
                 days: attendance.pageSummary.recordedDays,
                 time: compactWorkedTime(attendance.pageSummary.workedSeconds),
               })}</Text>
+              {attendance.schedulePageSummary ? (
+                <>
+                  <ScheduleSummaryGrid summary={attendance.schedulePageSummary} />
+                  <ScheduleSecondaryStates summary={attendance.schedulePageSummary} />
+                </>
+              ) : null}
             </View>
 
             {attendance.agents.length === 0 ? (
@@ -397,10 +585,15 @@ const styles = StyleSheet.create({
   scopeText: { flex: 1, color: colors.primary, fontSize: 11, fontWeight: "900" },
   staleText: { maxWidth: "42%", color: colors.warning, fontSize: 11, fontWeight: "800", textAlign: "right" },
   recordedOnlyCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 10, padding: 12, borderRadius: radii.inner, backgroundColor: colors.infoBg, borderWidth: 1, borderColor: colors.infoBorder },
+  schedulePolicyCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginHorizontal: 14, marginTop: 10, padding: 12, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow },
   recordedOnlyIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.cardOverlay, alignItems: "center", justifyContent: "center" },
   recordedOnlyBody: { flex: 1, minWidth: 0 },
   recordedOnlyTitle: { color: colors.info, fontSize: 12, fontWeight: "900" },
   recordedOnlyText: { color: colors.info, fontSize: 12, lineHeight: 17, marginTop: 2, fontWeight: "700" },
+  policyTime: { color: colors.text, fontSize: 13, lineHeight: 18, marginTop: 8, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  policyRule: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 2, fontWeight: "800" },
+  coverageText: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 7, fontWeight: "800" },
+  noScore: { color: colors.info, fontSize: 11, lineHeight: 16, marginTop: 7, fontWeight: "800" },
   timezone: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4, fontWeight: "800" },
   searchBox: { minHeight: 48, marginHorizontal: 14, marginTop: 10, borderRadius: radii.inner, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 13 },
   searchInput: { flex: 1, minHeight: 46, color: colors.text, fontSize: 12 },
@@ -424,6 +617,16 @@ const styles = StyleSheet.create({
   agentStat: { flex: 1, alignItems: "center", paddingHorizontal: 2 },
   agentStatValue: { color: colors.text, fontSize: 15, lineHeight: 18, fontWeight: "900", fontVariant: ["tabular-nums"] },
   agentStatLabel: { color: colors.muted, fontSize: 11, lineHeight: 14, marginTop: 2, textAlign: "center", fontWeight: "800" },
+  scheduleStats: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  scheduleStat: { width: "31.5%", minHeight: 64, borderRadius: radii.inner, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 8, justifyContent: "space-between" },
+  scheduleStatTop: { flexDirection: "row", alignItems: "center", gap: 5 },
+  scheduleStatValue: { fontSize: 16, lineHeight: 19, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  scheduleStatLabel: { color: colors.text, fontSize: 10, lineHeight: 13, marginTop: 4, fontWeight: "800" },
+  secondaryStates: { marginTop: 9, paddingTop: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  secondaryStatesTitle: { color: colors.muted, fontSize: 10, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.5 },
+  secondaryStateList: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  secondaryState: { minHeight: 30, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 5 },
+  secondaryStateText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
   noRecords: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 12, fontWeight: "800" },
   daysToggle: { minHeight: 44, marginTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   daysToggleText: { color: colors.primary, fontSize: 12, fontWeight: "900" },
@@ -431,13 +634,21 @@ const styles = StyleSheet.create({
   dayRow: { paddingVertical: 9 },
   dayRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   dayTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  dayDateBlock: { gap: 8 },
   dayDate: { flex: 1, minWidth: 0 },
   dayWeekday: { color: colors.text, fontSize: 12, fontWeight: "900" },
   dayDateText: { color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: 2 },
   dayStatus: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 6 },
   dayStatusText: { fontSize: 11, fontWeight: "900" },
+  scheduleStatuses: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+  scheduleStatus: { minHeight: 30, borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", gap: 5 },
+  scheduleStatusText: { fontSize: 10, fontWeight: "900" },
+  scheduleDayFacts: { gap: 5, marginTop: 8 },
+  schedulePlan: { color: colors.text, fontSize: 11, lineHeight: 16, fontWeight: "900", fontVariant: ["tabular-nums"] },
   dayFacts: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 7 },
-  dayFact: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  dayFact: { color: colors.muted, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  dayWarning: { color: colors.warning, fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  dayDanger: { color: colors.danger, fontSize: 11, lineHeight: 16, fontWeight: "900" },
   dayWorked: { color: colors.primary, fontSize: 12, fontWeight: "900" },
   empty: { minHeight: 112, marginHorizontal: 14, marginTop: 10, borderRadius: radii.card, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", gap: 9, paddingHorizontal: 18, ...cardShadow },
   emptyText: { color: colors.muted, fontSize: 12, fontWeight: "800", textAlign: "center" },
