@@ -31,6 +31,8 @@ import { t, useLocale, type MessageKey } from "../../src/i18n"
 import { useSync } from "../../src/sync/sync-context"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
+import { useField } from "../../src/field/field-context"
+import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
 
 function kindKey(kind: string): MessageKey {
   if (kind === "field.route.create") return "syncKindRouteCreate"
@@ -91,9 +93,18 @@ function rowPhoto(row: FieldSyncRecoveryRow): string | null {
   return row.kind === "field.visit.photo" ? string(row.payload.fileUri) : null
 }
 
+function isWorkforceRow(row: FieldSyncRecoveryRow): boolean {
+  return row.kind === "field.workday.event" || row.kind === "field.hrm.create" || row.kind === "field.hrm.cancel"
+}
+
+function workforceRecoveryPath(row: FieldSyncRecoveryRow): "/workday" | "/hrm" {
+  return row.kind === "field.workday.event" ? "/workday" : "/hrm"
+}
+
 export default function SyncCenterScreen() {
   const locale = useLocale()
-  const { status, sync } = useSync()
+  const field = useField()
+  const { status, sync, syncWorkforce, workforceStatus } = useSync()
   const [rows, setRows] = useState<FieldSyncRecoveryRow[]>(listFieldSyncRecoveryQueue)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -105,10 +116,18 @@ export default function SyncCenterScreen() {
   }, [reload, status.lastSyncAt, status.phase])
 
   const syncBusy = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(status.phase)
+  const workforceBusy = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(workforceStatus.phase)
+  const workforceActive = IS_LEADDRIVE_FIELD && field.workforceEnabled
+  const workforceAttention = workforceStatus.conflictOps + workforceStatus.rejectedOps
 
   async function flush() {
     reload()
     await sync().catch(() => {})
+    reload()
+  }
+
+  async function flushWorkforce() {
+    await syncWorkforce().catch(() => {})
     reload()
   }
 
@@ -206,9 +225,34 @@ export default function SyncCenterScreen() {
           <CommercialEmpty glyph="✓" title={t("syncCenterEmpty")} hint={t("syncCenterEmptyHint")} />
         )}
 
+        {workforceActive ? (
+          <View style={styles.workforceCard}>
+            <View style={styles.workforceTop}>
+              <View style={styles.workforceMark}><Text style={styles.workforceMarkText}>◷</Text></View>
+              <View style={styles.workforceBody}>
+                <Text style={styles.workforceTitle}>{t("syncCenterWorkforceTitle")}</Text>
+                <Text style={styles.workforceHint}>{t("syncCenterWorkforceHint")}</Text>
+              </View>
+            </View>
+            <View style={styles.workforceMeta}>
+              <CommercialPill label={t("syncCenterWorkforcePending", { count: workforceStatus.pendingOps })} tone={workforceStatus.pendingOps > 0 ? "warning" : "success"} />
+              {workforceAttention > 0 ? <CommercialPill label={t("syncCenterWorkforceAttention", { count: workforceAttention })} tone="danger" /> : null}
+            </View>
+            {workforceStatus.error ? <View style={styles.error}><Text style={styles.errorText} numberOfLines={3}>{workforceStatus.error}</Text></View> : null}
+            <Text style={styles.workforceSaved}>{t("syncCenterWorkforceSaved")}</Text>
+            <CommercialButton
+              label={t("syncCenterWorkforceRetry")}
+              tone="secondary"
+              disabled={workforceBusy || workforceStatus.phase === "authLost" || workforceStatus.phase === "upgradeRequired"}
+              onPress={() => void flushWorkforce()}
+            />
+          </View>
+        ) : null}
+
         {rows.length > 0 ? <View style={styles.list}>{rows.map((row) => {
           const photoUri = rowPhoto(row)
           const error = rowError(row)
+          const workforceRecovery = workforceActive && isWorkforceRow(row)
           return (
             <View key={row.clientOpId} style={styles.card}>
               <View style={styles.cardTop}>
@@ -224,9 +268,20 @@ export default function SyncCenterScreen() {
               </View>
               {row.evidence ? <View style={styles.evidence}><Text style={styles.evidenceText}>⌾ {t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")}</Text></View> : null}
               {error ? <View style={styles.error}><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
+              {workforceRecovery ? <Text style={styles.workforceSaved}>{t("syncCenterWorkforceSaved")}</Text> : null}
               <Text style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
               <View style={styles.actions}>
-                <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View>
+                {workforceRecovery ? (
+                  <View style={styles.action}>
+                    <CommercialButton
+                      label={row.kind === "field.workday.event" ? t("syncCenterOpenWorkday") : t("syncCenterOpenHrm")}
+                      tone="secondary"
+                      onPress={() => router.push(workforceRecoveryPath(row) as never)}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.action}><CommercialButton label={busyId === row.clientOpId ? "…" : t("syncCenterRetry")} disabled={busyId !== null || syncBusy} onPress={() => void retry(row)} /></View>
+                )}
                 {row.canContinueWithoutEvidence ? <View style={styles.action}><CommercialButton label={t("syncCenterWithoutPhoto")} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutPhoto(row)} /></View> : null}
                 {row.canDetachAttachment ? <View style={styles.action}><CommercialButton label={locale === "az" ? "Faylsız" : "Без файла"} tone="secondary" disabled={busyId !== null || syncBusy} onPress={() => confirmWithoutAttachment(row)} /></View> : null}
               </View>
@@ -253,6 +308,15 @@ const styles = StyleSheet.create({
   summaryBody: { flex: 1, minWidth: 0 },
   summaryTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   summaryHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  workforceCard: { ...commercialCardStyle, marginHorizontal: 14, marginTop: 12, borderWidth: 1, borderColor: colors.primarySoft },
+  workforceTop: { flexDirection: "row", alignItems: "center", gap: 11 },
+  workforceMark: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  workforceMarkText: { color: colors.primary, fontSize: 21, fontWeight: "900" },
+  workforceBody: { flex: 1, minWidth: 0 },
+  workforceTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  workforceHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  workforceMeta: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 12 },
+  workforceSaved: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 10, marginBottom: 12 },
   list: { paddingHorizontal: 14, marginTop: 12, gap: 11 },
   card: { ...commercialCardStyle, borderWidth: 1, borderColor: colors.dangerBorder },
   cardTop: { flexDirection: "row", gap: 11 },
