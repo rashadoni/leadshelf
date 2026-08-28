@@ -16,6 +16,7 @@ import {
   readFieldCache,
   readFieldMessages,
   setWorkforceStreamManifest,
+  subscribeFieldCache,
   writeFieldCache,
 } from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
@@ -358,6 +359,11 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     writeFieldCache(WORKDAY_KEY, next)
     setActivityPhase("stale")
   }, [])
+
+  useEffect(() => subscribeFieldCache<FieldWorkdayData>(WORKDAY_KEY, (next) => {
+    setWorkday(next)
+    setActivityPhase("stale")
+  }), [])
 
   const applyLocalLocations = useCallback((next: FieldLocationHistoryData) => {
     setLocations(next)

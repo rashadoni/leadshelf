@@ -134,8 +134,13 @@ import type {
   FieldMessage,
   FieldMessagesData,
   FieldMessageThreadData,
+  FieldWorkdayAction,
   FieldWorkdayData,
 } from "../field/contracts"
+import {
+  lockCachedWorkdayActionsUntilRefresh,
+  workdayActionsAfterOutboxResult,
+} from "../field/workday-recovery"
 import {
   FIELD_COMMITMENTS_CACHE_KEY,
   projectFieldCommitments,
@@ -153,6 +158,8 @@ import { bootstrapEncryptedMediaStorage } from "../media/encrypted-media-store"
 
 let db!: SQLite.SQLiteDatabase
 let initPromise: Promise<void> | null = null
+type FieldCacheListener = (value: unknown) => void
+const fieldCacheListeners = new Map<string, Set<FieldCacheListener>>()
 export const COMMERCIAL_CACHE_KEY = "shelf.commercial.snapshot.v1"
 
 const DATABASE_KEY_OPTIONS: SecureStore.SecureStoreOptions = {
@@ -570,6 +577,25 @@ export function writeFieldCache(key: string, value: unknown): void {
      ON CONFLICT(k) DO UPDATE SET json=excluded.json, updatedAt=excluded.updatedAt`,
     [key, JSON.stringify(value), new Date().toISOString()],
   )
+  for (const listener of [...(fieldCacheListeners.get(key) ?? [])]) {
+    try {
+      listener(value)
+    } catch {
+      // A view subscriber must never interrupt a durable cache write.
+    }
+  }
+}
+
+/** Keeps an already-mounted Field view coherent with durable outbox effects. */
+export function subscribeFieldCache<T>(key: string, listener: (value: T) => void): () => void {
+  const listeners = fieldCacheListeners.get(key) ?? new Set<FieldCacheListener>()
+  const callback: FieldCacheListener = (value) => listener(value as T)
+  listeners.add(callback)
+  fieldCacheListeners.set(key, listeners)
+  return () => {
+    listeners.delete(callback)
+    if (listeners.size === 0) fieldCacheListeners.delete(key)
+  }
 }
 
 export function readFieldCache<T>(key: string): { value: T; updatedAt: string } | null {
@@ -2167,13 +2193,22 @@ function applyOutboxResultSideEffects(
       const serverWorkday = unknownRecord(detailRecord?.workday)
       const serverEvent = unknownRecord(detailRecord?.event)
       const currentWorkday = unknownRecord(cached.value.workday)
+      const currentActiveWorkday = unknownRecord(cached.value.activeWorkday)
+      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
       const base = serverWorkday ?? currentWorkday
-      if (!base) return
+      if (!base) {
+        if (syncState) {
+          // A rejected background START can have no local workday or server
+          // payload. Lock its top-level START surface just like a disclosed
+          // conflict until activity has fetched canonical state.
+          writeFieldCache("field.workday.current", lockCachedWorkdayActionsUntilRefresh(cached.value))
+        }
+        return
+      }
       const currentEvents = Array.isArray(currentWorkday?.events) ? currentWorkday.events : []
       const events = serverEvent && !currentEvents.some((value) => unknownRecord(value)?.id === serverEvent.id)
         ? [...currentEvents.filter((value) => unknownRecord(value)?.clientEventId !== clientOpId), serverEvent]
         : currentEvents
-      const syncState = status === "conflict" ? "CONFLICT" : status === "rejected" ? "REJECTED" : null
       const nextWorkday: Record<string, unknown> = {
         ...(currentWorkday ?? {}),
         ...base,
@@ -2182,14 +2217,23 @@ function applyOutboxResultSideEffects(
       if (syncState) nextWorkday.syncState = syncState
       else delete nextWorkday.syncState
       const workdayStatus = String(nextWorkday.status ?? "")
-      nextWorkday.availableActions = workdayStatus === "STARTED"
-        ? ["PAUSE", "FINISH"]
-        : workdayStatus === "PAUSED"
-          ? ["RESUME", "FINISH"]
-          : []
+      const inferredActions: FieldWorkdayAction[] = (
+        workdayStatus === "STARTED"
+          ? ["PAUSE", "FINISH"]
+          : workdayStatus === "PAUSED"
+            ? ["RESUME", "FINISH"]
+            : []
+      )
+      // A conflict payload may describe the current server state, but its
+      // recovery actions are informational. Do not enable an optimistic next
+      // transition until the canonical activity endpoint has refreshed it.
+      nextWorkday.availableActions = workdayActionsAfterOutboxResult(status, inferredActions)
       writeFieldCache("field.workday.current", {
         ...cached.value,
         workday: nextWorkday,
+        activeWorkday: syncState && currentActiveWorkday?.id === nextWorkday.id
+          ? { ...currentActiveWorkday, availableActions: [] }
+          : cached.value.activeWorkday,
         availableActions: nextWorkday.availableActions,
       })
     } catch {

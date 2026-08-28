@@ -19,10 +19,12 @@ import {
   enqueueFieldLocation,
   enqueueFieldWorkdayEvent,
   fieldOutboxResult,
+  readFieldCache,
 } from "../../src/db/local-store"
 import type {
   FieldLocationHistoryData,
   FieldWorkdayAction,
+  FieldWorkdayData,
   FieldWorkdayStatus,
 } from "../../src/field/contracts"
 import { useField } from "../../src/field/field-context"
@@ -31,6 +33,10 @@ import {
   applyOptimisticWorkdayAction,
   emptyFieldWorkdayData,
 } from "../../src/field/workday-state"
+import {
+  lockWorkdayActionsUntilRefresh,
+  workdayRecoveryDetail,
+} from "../../src/field/workday-recovery"
 import { t, type MessageKey, useLocale } from "../../src/i18n"
 import { formatTime } from "../../src/i18n/date-format"
 import { getCurrentDeviceLocation } from "../../src/location/device-location"
@@ -68,6 +74,20 @@ const eventKeys: Record<FieldWorkdayAction, MessageKey> = {
   PAUSE: "workdayEvent_PAUSE",
   RESUME: "workdayEvent_RESUME",
   FINISH: "workdayEvent_FINISH",
+}
+
+function workdayConflictMessage(detail: unknown): string {
+  const recovery = workdayRecoveryDetail(detail)
+  if (!recovery.serverStatus) return t("workdayActionConflict")
+  const actions = recovery.allowedActions === null
+    ? t("workdayActionConflictActionsUnknown")
+    : recovery.allowedActions.length === 0
+      ? t("workdayActionConflictNoActions")
+      : recovery.allowedActions.map((action) => t(actionKeys[action])).join(", ")
+  return t("workdayActionConflictState", {
+    status: t(statusKeys[recovery.serverStatus]),
+    actions,
+  })
 }
 
 const trackingKeys: Record<WorkdayTrackingState["mode"], MessageKey> = {
@@ -344,7 +364,16 @@ export default function WorkdayScreen() {
       await syncWorkforce()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
-        Alert.alert(t("workdayActionConflict"))
+        // markOutbox has already reconciled the cache with any disclosed
+        // server workday. Lock the live context as well before this alert can
+        // be dismissed, then let the canonical activity refresh re-enable the
+        // real next action.
+        const reconciled = readFieldCache<FieldWorkdayData>("field.workday.current")?.value ?? nextWorkday
+        field.applyLocalWorkday(lockWorkdayActionsUntilRefresh(reconciled))
+        Alert.alert(t("workdayActionConflictTitle"), workdayConflictMessage(result.detail), [
+          { text: t("cancel"), style: "cancel" },
+          { text: t("workdayOpenSyncCenter"), onPress: () => router.push("/(app)/sync-center" as never) },
+        ])
       } else if (result?.status !== "applied") {
         setFeedback("workdayQueueSaved")
       }

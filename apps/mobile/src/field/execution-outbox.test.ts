@@ -99,6 +99,50 @@ describe("field execution outbox", () => {
     })
   })
 
+  it("preserves the LeadDrive workday recovery contract in the durable result", async () => {
+    const operation: FieldExecutionPushOperation = {
+      clientOpId: "field-workday-pause-conflict-1",
+      clientCreatedAt: "2026-07-15T06:30:00.000Z",
+      kind: "field.workday.event",
+      payload: parseFieldWorkdayEventPayload({
+        action: "PAUSE",
+        workdayId: "mobile-workday-1",
+        occurredAt: "2026-07-15T06:30:00.000Z",
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        note: null,
+      }),
+    }
+
+    const [result] = await sendFieldExecutionOperations([operation], {
+      push: vi.fn().mockResolvedValue({
+        success: true,
+        results: [{
+          operationId: operation.clientOpId,
+          status: "conflict",
+          error: "Only a running workday can be paused",
+          serverData: {
+            code: "MTM_WORKDAY_NOT_RUNNING",
+            workday: { id: "mobile-workday-1", status: "PAUSED" },
+            allowedActions: ["RESUME", "FINISH"],
+          },
+        }],
+      }),
+    })
+
+    expect(result).toEqual({
+      clientOpId: operation.clientOpId,
+      status: "conflict",
+      detail: {
+        code: "MTM_WORKDAY_NOT_RUNNING",
+        workday: { id: "mobile-workday-1", status: "PAUSED" },
+        allowedActions: ["RESUME", "FINISH"],
+        error: "Only a running workday can be paused",
+      },
+    })
+  })
+
   it("maps task create, versioned update and comment to the LeadDrive sync protocol", () => {
     const create: FieldExecutionPushOperation = {
       clientOpId: "field-task-create-1",

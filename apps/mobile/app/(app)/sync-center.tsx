@@ -32,7 +32,22 @@ import { useSync } from "../../src/sync/sync-context"
 import { colors, radii } from "../../src/theme"
 import { EncryptedMediaImage } from "../../src/components/EncryptedMediaImage"
 import { useField } from "../../src/field/field-context"
+import type { FieldWorkdayAction, FieldWorkdayStatus } from "../../src/field/contracts"
+import { workdayRecoveryDetail } from "../../src/field/workday-recovery"
 import { IS_LEADDRIVE_FIELD } from "../../src/config/mobile-variant"
+
+const workdayStatusKeys: Record<FieldWorkdayStatus, MessageKey> = {
+  STARTED: "workdayStatus_STARTED",
+  PAUSED: "workdayStatus_PAUSED",
+  COMPLETED: "workdayStatus_COMPLETED",
+}
+
+const workdayActionKeys: Record<FieldWorkdayAction, MessageKey> = {
+  START: "workdayStart",
+  PAUSE: "workdayPause",
+  RESUME: "workdayResume",
+  FINISH: "workdayFinish",
+}
 
 function kindKey(kind: string): MessageKey {
   if (kind === "field.route.create") return "syncKindRouteCreate"
@@ -99,6 +114,31 @@ function isWorkforceRow(row: FieldSyncRecoveryRow): boolean {
 
 function workforceRecoveryPath(row: FieldSyncRecoveryRow): "/workday" | "/hrm" {
   return row.kind === "field.workday.event" ? "/workday" : "/hrm"
+}
+
+function WorkdayRecoveryFact({ detail }: { detail: unknown }) {
+  const recovery = workdayRecoveryDetail(detail)
+  if (!recovery.serverStatus) return null
+  return (
+    <View style={styles.workdayRecovery} accessibilityRole="alert" accessibilityLiveRegion="polite">
+      <Text style={styles.workdayRecoveryLabel}>{t("syncCenterWorkforceServerState")}</Text>
+      <Text style={styles.workdayRecoveryState}>{t(workdayStatusKeys[recovery.serverStatus])}</Text>
+      {recovery.allowedActions === null ? (
+        <Text style={styles.workdayRecoveryHint}>{t("syncCenterWorkforceActionsUnknown")}</Text>
+      ) : recovery.allowedActions.length === 0 ? (
+        <Text style={styles.workdayRecoveryHint}>{t("syncCenterWorkforceNoActions")}</Text>
+      ) : (
+        <>
+          <Text style={styles.workdayRecoveryLabel}>{t("syncCenterWorkforceAllowedActions")}</Text>
+          <View style={styles.workdayRecoveryActions}>
+            {recovery.allowedActions.map((action) => (
+              <CommercialPill key={action} label={t(workdayActionKeys[action])} tone="warning" />
+            ))}
+          </View>
+        </>
+      )}
+    </View>
+  )
 }
 
 export default function SyncCenterScreen() {
@@ -268,6 +308,7 @@ export default function SyncCenterScreen() {
               </View>
               {row.evidence ? <View style={styles.evidence}><Text style={styles.evidenceText}>⌾ {t(row.evidence.status === "applied" ? "syncCenterEvidenceUploaded" : "syncCenterEvidenceReady")}</Text></View> : null}
               {error ? <View style={styles.error}><Text style={styles.errorText} numberOfLines={4}>{error}</Text></View> : null}
+              {workforceRecovery && row.kind === "field.workday.event" ? <WorkdayRecoveryFact detail={row.detail} /> : null}
               {workforceRecovery ? <Text style={styles.workforceSaved}>{t("syncCenterWorkforceSaved")}</Text> : null}
               <Text style={styles.attempts}>{t("syncCenterAttempts", { count: row.attempts })}</Text>
               <View style={styles.actions}>
@@ -317,6 +358,11 @@ const styles = StyleSheet.create({
   workforceHint: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   workforceMeta: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 12 },
   workforceSaved: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 10, marginBottom: 12 },
+  workdayRecovery: { marginTop: 10, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warning },
+  workdayRecoveryLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
+  workdayRecoveryState: { color: colors.text, fontSize: 13, fontWeight: "900", marginTop: 3 },
+  workdayRecoveryHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 6 },
+  workdayRecoveryActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 7 },
   list: { paddingHorizontal: 14, marginTop: 12, gap: 11 },
   card: { ...commercialCardStyle, borderWidth: 1, borderColor: colors.dangerBorder },
   cardTop: { flexDirection: "row", gap: 11 },
