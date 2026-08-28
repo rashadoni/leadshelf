@@ -44,6 +44,22 @@ function offsetAt(instant: Date, timeZone: string): number | null {
   return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - instant.getTime()
 }
 
+export function dateKeyInTimezone(instant: Date, timeZone: string): string {
+  if (!Number.isFinite(instant.getTime())) return ""
+  const parts = zonedParts(instant, timeZone)
+  if (!parts) return instant.toISOString().slice(0, 10)
+  return [parts.year, parts.month, parts.day]
+    .map((value, index) => String(value).padStart(index === 0 ? 4 : 2, "0"))
+    .join("-")
+}
+
+export function isChronologicalRouteTimeRange(startAt: string | null, endAt: string | null): boolean {
+  if (!startAt || !endAt) return false
+  const start = Date.parse(startAt)
+  const end = Date.parse(endAt)
+  return Number.isFinite(start) && Number.isFinite(end) && end > start
+}
+
 export function isValidRouteTime(value: string): boolean {
   return value === "" || TIME_PATTERN.test(value)
 }
@@ -67,24 +83,31 @@ export function routePlannedTime(dateKey: string, time: string, timeZone: string
   const hour = Number(match[1])
   const minute = Number(match[2])
   const wallClockUtc = Date.UTC(year, month - 1, day, hour, minute, 0)
-  const firstOffset = offsetAt(new Date(wallClockUtc), timeZone)
-  if (firstOffset == null) return new Date(wallClockUtc).toISOString()
-  let instant = new Date(wallClockUtc - firstOffset)
-  const correctedOffset = offsetAt(instant, timeZone)
-  if (correctedOffset != null && correctedOffset !== firstOffset) {
-    instant = new Date(wallClockUtc - correctedOffset)
+  const probeHours = [-36, -12, 0, 12, 36]
+  const offsets = new Set<number>()
+  for (const probeHour of probeHours) {
+    const offset = offsetAt(new Date(wallClockUtc + probeHour * 60 * 60 * 1000), timeZone)
+    if (offset != null) offsets.add(offset)
   }
+  if (offsets.size === 0) return new Date(wallClockUtc).toISOString()
 
-  const confirmed = zonedParts(instant, timeZone)
-  if (
-    !confirmed ||
-    confirmed.year !== year ||
-    confirmed.month !== month ||
-    confirmed.day !== day ||
-    confirmed.hour !== hour ||
-    confirmed.minute !== minute
-  ) return null
-  return instant.toISOString()
+  const candidates = [...offsets]
+    .map((offset) => new Date(wallClockUtc - offset))
+    .filter((instant) => {
+      const confirmed = zonedParts(instant, timeZone)
+      return Boolean(
+        confirmed &&
+        confirmed.year === year &&
+        confirmed.month === month &&
+        confirmed.day === day &&
+        confirmed.hour === hour &&
+        confirmed.minute === minute,
+      )
+    })
+
+  // A nonexistent wall time has no candidate; an autumn DST overlap has two.
+  // Both require explicit recovery instead of silently changing attendance facts.
+  return candidates.length === 1 ? candidates[0]!.toISOString() : null
 }
 
 export function shiftDateKey(dateKey: string, days: number): string {

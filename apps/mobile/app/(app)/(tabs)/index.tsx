@@ -147,7 +147,8 @@ export default function TodayTab() {
         {workforceEnabled ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={nextWorkdayAction ? t(workdayActionKeys[nextWorkdayAction]) : t("workdayTitle")}
+            accessibilityLabel={`${t(workdayStatusKeys[workdayStatus])}. ${t("workdayOpen")}`}
+            accessibilityHint={nextWorkdayAction ? `${t("workdayNextAction")}: ${t(workdayActionKeys[nextWorkdayAction])}` : undefined}
             onPress={() => router.push("/(app)/workday" as never)}
             style={({ pressed }) => [styles.workdayCard, workdayActive && styles.workdayCardActive, pressed && styles.pressed]}
           >
@@ -157,10 +158,10 @@ export default function TodayTab() {
             <View style={styles.workdayBody}>
               <Text style={styles.workdayEyebrow}>{t("workforceTitle").toUpperCase()}</Text>
               <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
-              <Text style={styles.workdayHint}>{t("workforceWorkdayHint")}</Text>
+              <Text style={styles.workdayHint}>{nextWorkdayAction ? `${t("workdayNextAction")}: ${t(workdayActionKeys[nextWorkdayAction])}` : t("workforceWorkdayHint")}</Text>
             </View>
             <View style={styles.workdayActionPill}>
-              <Text style={styles.workdayAction}>{nextWorkdayAction ? t(workdayActionKeys[nextWorkdayAction]) : "→"}</Text>
+              <Text style={styles.workdayAction}>{t("workdayOpen")}</Text>
             </View>
           </Pressable>
         ) : null}

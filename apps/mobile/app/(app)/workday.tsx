@@ -508,6 +508,8 @@ export default function WorkdayScreen() {
                 <Pressable
                   key={action}
                   accessibilityRole="button"
+                  accessibilityLabel={t(actionKeys[action])}
+                  accessibilityState={{ disabled: busyAction !== null }}
                   disabled={busyAction !== null}
                   onPress={() => pressAction(action)}
                   style={({ pressed }) => [
