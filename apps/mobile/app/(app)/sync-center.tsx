@@ -69,8 +69,8 @@ function kindLabel(kind: string, locale: "az" | "ru"): string {
   if (kind === "field.message.receipt") return locale === "az" ? "Mesajın təsdiqi" : "Подтверждение сообщения"
   if (kind === "field.document.upload") return locale === "az" ? "Sənədin göndərilməsi" : "Отправка документа"
   if (kind === "field.document.state") return locale === "az" ? "Sənəd statusu" : "Статус документа"
-  if (kind === "field.hrm.create") return locale === "az" ? "HRM müraciəti" : "HRM-заявка"
-  if (kind === "field.hrm.cancel") return locale === "az" ? "HRM müraciətinin ləğvi" : "Отмена HRM-заявки"
+  if (kind === "field.hrm.create") return locale === "az" ? "İş vaxtı üzrə müraciət" : "Заявка по рабочему времени"
+  if (kind === "field.hrm.cancel") return locale === "az" ? "İş vaxtı üzrə müraciətin ləğvi" : "Отмена заявки по рабочему времени"
   return t(kindKey(kind))
 }
 
