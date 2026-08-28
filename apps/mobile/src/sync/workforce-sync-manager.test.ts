@@ -1,17 +1,21 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { LocalStore, OutboxRow, WorkforcePushOperation } from "./ports"
 import { WorkforceSyncManager, combineSyncStatuses, emptyWorkforceSyncStatus } from "./workforce-sync-manager"
 
-function workday(clientOpId: string, clientCreatedAt: string): OutboxRow {
+function workday(
+  clientOpId: string,
+  clientCreatedAt: string,
+  action: "START" | "PAUSE" | "RESUME" | "FINISH" = "START",
+): OutboxRow {
   return {
     clientOpId,
     clientCreatedAt,
     kind: "field.workday.event",
     payload: {
-      action: "START",
+      action,
       workdayId: "mobile-workday-1",
       workDate: "2026-08-28",
-      occurredAt: "2026-08-28T09:00:00.000Z",
+      occurredAt: clientCreatedAt,
       latitude: null,
       longitude: null,
       accuracy: null,
@@ -53,7 +57,7 @@ function makeStore(outbox: OutboxRow[]): LocalStore {
         .sort((left, right) => {
           const leftPriority = left.kind === "field.workday.event" ? 0 : 1
           const rightPriority = right.kind === "field.workday.event" ? 0 : 1
-          return leftPriority - rightPriority
+          return leftPriority - rightPriority || String(left.clientCreatedAt).localeCompare(String(right.clientCreatedAt))
         })
     },
     async outboxDiagnosticsForPipeline(pipeline) {
@@ -134,6 +138,98 @@ describe("WorkforceSyncManager", () => {
 
     expect(status.phase).toBe("error")
     expect(queued[0]).toMatchObject({ status: "pending", attempts: 1 })
+  })
+
+  it("does not consume or attempt durable Workforce operations while offline", async () => {
+    const queued = [workday("workday-offline", "2026-08-28T09:00:00.000Z")]
+    const push = vi.fn()
+    const manager = new WorkforceSyncManager({
+      store: makeStore(queued),
+      api: { push },
+      isOnline: async () => false,
+    })
+
+    const status = await manager.runSync()
+
+    expect(status).toMatchObject({ phase: "offline", pendingOps: 1 })
+    expect(push).not.toHaveBeenCalled()
+    expect(queued[0]).toMatchObject({ status: "pending", attempts: 0 })
+  })
+
+  it("replays the same ordered event ids after a lost 503 response and process restart", async () => {
+    const queued = [
+      workday("event-finish", "2026-08-28T18:00:00.000Z", "FINISH"),
+      workday("event-pause", "2026-08-28T12:00:00.000Z", "PAUSE"),
+      workday("event-start", "2026-08-28T09:00:00.000Z", "START"),
+      workday("event-resume", "2026-08-28T12:30:00.000Z", "RESUME"),
+    ]
+    const firstAttempt: string[][] = []
+    const firstProcess = new WorkforceSyncManager({
+      store: makeStore(queued),
+      api: {
+        async push(operations) {
+          firstAttempt.push(operations.map((operation) => operation.clientOpId))
+          throw new Error("HTTP 503 after response was lost")
+        },
+      },
+    })
+
+    expect(await firstProcess.runSync()).toMatchObject({ phase: "error", pendingOps: 4 })
+    expect(queued.every((row) => row.status === "pending" && row.attempts === 1)).toBe(true)
+
+    const replay: string[][] = []
+    const restartedProcess = new WorkforceSyncManager({
+      store: makeStore(queued),
+      api: {
+        async push(operations) {
+          replay.push(operations.map((operation) => operation.clientOpId))
+          return operations.map((operation) => ({ clientOpId: operation.clientOpId, status: "applied" as const }))
+        },
+      },
+    })
+    const status = await restartedProcess.runSync()
+
+    const expectedOrder = ["event-start", "event-pause", "event-resume", "event-finish"]
+    expect(firstAttempt).toEqual([expectedOrder])
+    expect(replay).toEqual([expectedOrder])
+    expect(status).toMatchObject({ phase: "idle", pendingOps: 0 })
+    expect(queued.every((row) => row.status === "applied" && row.attempts === 2)).toBe(true)
+  })
+
+  it("keeps a two-device winner and conflict independently recoverable", async () => {
+    const queued = [
+      workday("device-a-start", "2026-08-28T09:00:00.000Z"),
+      workday("device-b-start", "2026-08-28T09:00:01.000Z"),
+    ]
+    const manager = new WorkforceSyncManager({
+      store: makeStore(queued),
+      api: {
+        async push() {
+          return [
+            { clientOpId: "device-a-start", status: "applied" as const },
+            {
+              clientOpId: "device-b-start",
+              status: "conflict" as const,
+              detail: {
+                code: "WORKDAY_ALREADY_ACTIVE",
+                serverState: { status: "STARTED" },
+                allowedActions: ["PAUSE", "FINISH"],
+              },
+            },
+          ]
+        },
+      },
+    })
+
+    const status = await manager.runSync()
+
+    expect(status).toMatchObject({ phase: "idle", pendingOps: 0, conflictOps: 1 })
+    expect(queued[0]).toMatchObject({ clientOpId: "device-a-start", status: "applied" })
+    expect(queued[1]).toMatchObject({
+      clientOpId: "device-b-start",
+      status: "conflict",
+      detail: { code: "WORKDAY_ALREADY_ACTIVE", allowedActions: ["PAUSE", "FINISH"] },
+    })
   })
 
   it("preserves conflict outcomes for explicit recovery instead of retrying blindly", async () => {
