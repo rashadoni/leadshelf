@@ -183,7 +183,7 @@ function LocationTrail({ data }: { data: FieldLocationHistoryData }) {
 export default function WorkdayScreen() {
   useLocale()
   const field = useField()
-  const { sync, status: syncStatus } = useSync()
+  const { syncWorkforce, workforceStatus } = useSync()
   const workforceEnabled = field.workforceEnabled
   const routesEnabled = field.routesEnabled
   const [busyAction, setBusyAction] = useState<FieldWorkdayAction | null>(null)
@@ -261,9 +261,7 @@ export default function WorkdayScreen() {
   async function refresh() {
     setRefreshing(true)
     try {
-      // H4: `sync` selects the independent Workforce lane for an HRM-only
-      // tenant, so work-time delivery no longer depends on route resources.
-      await sync()
+      await syncWorkforce()
       await field.refreshActivity()
     } finally {
       setRefreshing(false)
@@ -343,14 +341,17 @@ export default function WorkdayScreen() {
         setTracking(stoppedWorkdayTrackingState())
       }
 
-      await sync()
+      await syncWorkforce()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
         Alert.alert(t("workdayActionConflict"))
       } else if (result?.status !== "applied") {
         setFeedback("workdayQueueSaved")
       }
-      await field.refreshActivity()
+      // The optimistic workday is already durable locally and the dedicated
+      // Workforce push above has completed. Route location refresh is useful
+      // enrichment in Both mode, but must not hold the action confirmation.
+      void field.refreshActivity().catch(() => {})
     } catch (error) {
       if (queuedClientOpId) setFeedback("workdayQueueSaved")
       Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
@@ -470,7 +471,7 @@ export default function WorkdayScreen() {
               <View style={[styles.statusDot, { backgroundColor: statusDot }]} />
               <Text style={styles.statusText}>{t(statusKeys[displayStatus])}</Text>
             </View>
-            {(workday?.syncState === "PENDING" || syncStatus.pendingOps > 0) ? (
+            {(workday?.syncState === "PENDING" || workforceStatus.pendingOps > 0) ? (
               <View style={styles.pendingPill}><Text style={styles.pendingText}>{t("workdayPending")}</Text></View>
             ) : null}
           </View>

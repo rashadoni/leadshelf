@@ -32,7 +32,7 @@ function dateTime(date: string, time: string): string | null {
 export default function HrmScreen() {
   const locale = useLocale()
   const field = useField()
-  const { sync } = useSync()
+  const { syncWorkforce } = useSync()
   const workforceEnabled = field.workforceEnabled
   const [data, setData] = useState<FieldHrmData | null>(readFieldHrm)
   const [mode, setMode] = useState<HrmMode>("schedule")
@@ -129,7 +129,7 @@ export default function HrmScreen() {
       setReason("")
       setWarning(null)
       Alert.alert(copy.title, copy.queued)
-      void sync().then(() => load(false)).catch(() => {})
+      void syncWorkforce().then(() => load(false)).catch(() => {})
     } catch (cause) {
       setWarning(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -141,7 +141,7 @@ export default function HrmScreen() {
     if (!workforceEnabled) return
     enqueueFieldHrmCancel(request.id)
     setData(readFieldHrm())
-    void sync().then(() => load(false)).catch(() => {})
+    void syncWorkforce().then(() => load(false)).catch(() => {})
   }
 
   if (!workforceEnabled) {

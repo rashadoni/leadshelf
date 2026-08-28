@@ -160,6 +160,14 @@ export class WorkforceSyncManager {
       await this.deps.store.recordWorkforceSyncAttempt?.(attemptedAt)
       this.patch({ phase: "pushing", error: null })
       const pending = await this.pending()
+      const exhausted = pending.filter((operation) => operation.attempts >= MAX_ATTEMPTS)
+      for (const operation of exhausted) {
+        await this.deps.store.markOutbox(operation.clientOpId, "rejected", {
+          code: "WORKFORCE_RETRY_EXHAUSTED",
+          error: `Workforce delivery failed after ${MAX_ATTEMPTS} attempts`,
+          recoverable: true,
+        })
+      }
       const sendable = pending.filter((operation) => operation.attempts < MAX_ATTEMPTS)
       if (sendable.length > 0) {
         await this.deps.store.bumpOutboxAttempts(sendable.map((operation) => operation.clientOpId))

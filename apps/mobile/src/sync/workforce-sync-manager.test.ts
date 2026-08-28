@@ -66,9 +66,12 @@ function makeStore(outbox: OutboxRow[]): LocalStore {
         oldestPendingAt: pending[0]?.clientCreatedAt ?? null,
       }
     },
-    async markOutbox(clientOpId, status) {
+    async markOutbox(clientOpId, status, detail) {
       const row = outbox.find((candidate) => candidate.clientOpId === clientOpId)
-      if (row) row.status = status
+      if (row) {
+        row.status = status
+        ;(row as OutboxRow & { detail?: unknown }).detail = detail
+      }
     },
     async bumpOutboxAttempts(ids) {
       for (const row of outbox) if (ids.includes(row.clientOpId)) row.attempts += 1
@@ -152,5 +155,27 @@ describe("WorkforceSyncManager", () => {
 
     expect(status).toMatchObject({ phase: "idle", conflictOps: 1 })
     expect(queued[0]?.status).toBe("conflict")
+  })
+
+  it("moves an exhausted Workforce operation into explicit recovery", async () => {
+    const exhausted = workday("workday-exhausted", "2026-08-28T09:00:00.000Z")
+    exhausted.attempts = 8
+    const manager = new WorkforceSyncManager({
+      store: makeStore([exhausted]),
+      api: {
+        async push() {
+          throw new Error("exhausted operations must not be retried")
+        },
+      },
+    })
+
+    const status = await manager.runSync()
+
+    expect(status).toMatchObject({ phase: "idle", pendingOps: 0, rejectedOps: 1 })
+    expect(exhausted).toMatchObject({
+      status: "rejected",
+      attempts: 8,
+      detail: { code: "WORKFORCE_RETRY_EXHAUSTED", recoverable: true },
+    })
   })
 })
