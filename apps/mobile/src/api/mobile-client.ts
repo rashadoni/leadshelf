@@ -3,7 +3,13 @@
 // execution only through the LeadDrive Field BFF.
 
 import { AuthLostError, HttpError, UpgradeRequiredError } from "../sync/ports-error"
-import type { PullResponse, PushOperation, PushResult, SyncApi } from "../sync/ports"
+import type {
+  PullResponse,
+  PushOperation,
+  PushResult,
+  SyncApi,
+  WorkforceSyncApi,
+} from "../sync/ports"
 import {
   MOBILE_PROTOCOL_VERSION,
   mobileCommercialMediaUploadResponseSchema,
@@ -605,13 +611,7 @@ export const syncApi: SyncApi = {
     let fieldExecutionOperations: FieldExecutionPushOperation[] = []
     const flushFieldExecution = async () => {
       if (fieldExecutionOperations.length === 0) return
-      const deviceId = await tokenStore.getDeviceId()
-      results.push(...await sendFieldExecutionOperations(fieldExecutionOperations, {
-        push: (fieldOperations: FieldServerOperation[]) => request<FieldServerPushResponse>(
-          "/api/v1/mtm/mobile/sync/push",
-          json({ clientId: deviceId ?? "unknown-device", operations: fieldOperations }),
-        ),
-      }))
+      results.push(...await pushFieldExecutionOperations(fieldExecutionOperations))
       fieldExecutionOperations = []
     }
 
@@ -725,5 +725,33 @@ export const syncApi: SyncApi = {
   },
   cleanupCommercialMedia: async (media) => {
     await FileSystem.deleteAsync(media.fileUri, { idempotent: true }).catch(() => {})
+  },
+}
+
+/**
+ * Legacy Field execution endpoint remains the authority for operationId
+ * idempotency. Keeping this transport separate from `shelfBffPath` means the
+ * Workforce pipeline never waits for Shelf pull/ack/media work.
+ */
+async function pushFieldExecutionOperations(operations: FieldExecutionPushOperation[]) {
+  const deviceId = await tokenStore.getDeviceId()
+  return sendFieldExecutionOperations(operations, {
+    push: (fieldOperations: FieldServerOperation[]) => request<FieldServerPushResponse>(
+      "/api/v1/mtm/mobile/sync/push",
+      json({ clientId: deviceId ?? "unknown-device", operations: fieldOperations }),
+    ),
+  })
+}
+
+/**
+ * H4 LeadDrive-only Workforce lane. Direct LeadShelf keeps its frozen combined
+ * sync contract (including the legacy `workday.event` conversion above).
+ */
+export const workforceSyncApi: WorkforceSyncApi = {
+  async push(operations) {
+    if (!IS_LEADDRIVE_FIELD) {
+      throw new Error("Workforce sync is unavailable in the LeadShelf variant")
+    }
+    return pushFieldExecutionOperations(operations)
   },
 }

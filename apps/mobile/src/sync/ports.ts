@@ -18,6 +18,7 @@ import type { FieldRoutePushOperation } from "../field/route-outbox"
 import type {
   FieldDocumentUploadPushOperation,
   FieldExecutionPushOperation,
+  FieldExecutionPushResult,
   FieldLocationPushOperation,
   FieldVisitPhotoPushOperation,
 } from "../field/execution-outbox"
@@ -30,6 +31,31 @@ export type VisitRow = MobileVisitRow
 export type PullResponse = MobileSyncPullResponse
 export type PushOperation = MobilePushOperation | FieldRoutePushOperation | FieldExecutionPushOperation | FieldVisitPhotoPushOperation | FieldLocationPushOperation | FieldDocumentUploadPushOperation
 export type PushResult = MobilePushResult
+
+/**
+ * Independent outbox lanes.  Workforce must never be selected by the shared
+ * Shelf/route pipeline: that pipeline starts with a Shelf pull and can be
+ * unavailable while time events still need delivery.
+ */
+export type OutboxPipeline = "all" | "workforce" | "non-workforce"
+
+export type WorkforcePushOperation = Extract<
+  FieldExecutionPushOperation,
+  { kind: "field.workday.event" | "field.hrm.create" | "field.hrm.cancel" }
+>
+
+export interface WorkforceSyncApi {
+  push(operations: WorkforcePushOperation[]): Promise<FieldExecutionPushResult[]>
+}
+
+/** Persisted only on-device; `cursor` is server-authoritative when supplied by bootstrap. */
+export interface WorkforceStreamState {
+  cursor: string | null
+  configVersion: string | null
+  lastAttemptAt: string | null
+  lastSuccessAt: string | null
+  lastError: string | null
+}
 
 export type SyncCursors = {
   tasks: string | null
@@ -97,8 +123,15 @@ export interface LocalStore {
   setCursors(c: SyncCursors): Promise<void>
   pendingOutbox(limit?: number): Promise<OutboxRow[]>
   outboxDiagnostics(): Promise<OutboxDiagnostics>
+  /** Optional while old in-memory test stores and pre-H4 adapters coexist. */
+  pendingOutboxForPipeline?(pipeline: OutboxPipeline, limit?: number): Promise<OutboxRow[]>
+  outboxDiagnosticsForPipeline?(pipeline: OutboxPipeline): Promise<OutboxDiagnostics>
   markOutbox(clientOpId: string, status: OutboxRow["status"], detail?: unknown): Promise<void>
   bumpOutboxAttempts(clientOpIds: string[]): Promise<void>
+  getWorkforceStreamState?(): Promise<WorkforceStreamState>
+  recordWorkforceSyncAttempt?(at: string): Promise<void>
+  recordWorkforceSyncSuccess?(at: string): Promise<void>
+  recordWorkforceSyncFailure?(at: string, error: string): Promise<void>
   pendingPhotos(): Promise<PhotoQueueRow[]>
   unuploadedPhotoIds(): Promise<string[]>
   markPhotoUploaded(clientPhotoId: string, result: MobilePhotoUploadResponse): Promise<void>

@@ -11,7 +11,13 @@ import { router } from "expo-router"
 import { fieldApi } from "../api/mobile-client"
 import { tokenStore } from "../auth/token-store"
 import { IS_LEADDRIVE_FIELD } from "../config/mobile-variant"
-import { cacheFieldMessages, readFieldCache, readFieldMessages, writeFieldCache } from "../db/local-store"
+import {
+  cacheFieldMessages,
+  readFieldCache,
+  readFieldMessages,
+  setWorkforceStreamManifest,
+  writeFieldCache,
+} from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
 import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
@@ -102,6 +108,15 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     bootstrapRef.current = next
     setBootstrap(next)
     writeFieldCache(BOOTSTRAP_KEY, next)
+    // Only a strictly validated LeadDrive manifest may update the independent
+    // Workforce cursor/config marker. A failed bootstrap keeps the last safe
+    // state rather than broadening any capability or deleting local work.
+    if (IS_LEADDRIVE_FIELD) {
+      setWorkforceStreamManifest({
+        cursor: next.modules.workforce.cursor,
+        configVersion: next.modules.workforce.configVersion,
+      })
+    }
   }, [])
 
   const refreshBootstrap = useCallback(async (): Promise<FieldMobileBootstrapData | null> => {

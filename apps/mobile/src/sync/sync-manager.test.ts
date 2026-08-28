@@ -172,6 +172,61 @@ function makeApi(over: Partial<SyncApi> = {}): SyncApi & { pushed: string[] } {
 }
 
 describe("SyncManager", () => {
+  test("non-workforce lane never selects durable Workforce operations", async () => {
+    const store = makeStore()
+    store.outbox.push(
+      {
+        clientOpId: "workday-keep-for-workforce",
+        kind: "field.workday.event",
+        payload: {
+          action: "START",
+          workdayId: "mobile-workday-1",
+          occurredAt: "2026-08-28T09:00:00.000Z",
+          latitude: null,
+          longitude: null,
+          accuracy: null,
+          note: null,
+        },
+        status: "pending",
+        attempts: 0,
+      } as OutboxRow,
+      {
+        clientOpId: "route-lane-operation",
+        kind: "task.comment",
+        payload: { taskId: "task-1", body: "route lane stays shared" },
+        status: "pending",
+        attempts: 0,
+      } as OutboxRow,
+    )
+    const pendingForPipeline = vi.fn(async (pipeline: "all" | "workforce" | "non-workforce") => {
+      expect(pipeline).toBe("non-workforce")
+      return store.outbox.filter((operation) => operation.kind !== "field.workday.event")
+    })
+    const diagnosticsForPipeline = vi.fn(async () => ({
+      pendingOps: 1,
+      conflictOps: 0,
+      rejectedOps: 0,
+      oldestPendingAt: null,
+    }))
+    const api = makeApi()
+    const manager = new SyncManager({
+      api,
+      store: {
+        ...store,
+        pendingOutboxForPipeline: pendingForPipeline,
+        outboxDiagnosticsForPipeline: diagnosticsForPipeline,
+      },
+      outboxPipeline: "non-workforce",
+    })
+
+    await manager.runSync()
+
+    expect(pendingForPipeline).toHaveBeenCalledWith("non-workforce", 50)
+    expect(diagnosticsForPipeline).toHaveBeenCalledWith("non-workforce")
+    expect(api.pushed).toEqual(["route-lane-operation"])
+    expect(store.outbox.find((operation) => operation.clientOpId === "workday-keep-for-workforce")?.status).toBe("pending")
+  })
+
   test("порядок фаз: pull -> apply -> ack -> photos -> push; ack после apply", async () => {
     const store = makeStore()
     const api = makeApi()

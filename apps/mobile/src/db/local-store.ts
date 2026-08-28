@@ -34,6 +34,8 @@ import {
 import { orderCreateRequestSchema, type OrderCreateRequest } from "@leadshelf/api-contracts/orders/v1"
 import type {
   LocalStore,
+  OutboxDiagnostics,
+  OutboxPipeline,
   OutboxRow,
   PhotoQueueRow,
   PullResponse,
@@ -42,6 +44,7 @@ import type {
   StoreRow,
   TaskRow,
   VisitRow,
+  WorkforceStreamState,
 } from "../sync/ports"
 import type { MobilePhotoUploadResponse, MobileShelfComparisonResult } from "@leadshelf/api-contracts/mobile/v1"
 import { OPEN_TASK_STATUSES } from "../tasks/status"
@@ -709,6 +712,165 @@ export function cacheFieldHrm(next: FieldHrmData): FieldHrmData {
   return merged
 }
 
+const WORKFORCE_OUTBOX_KINDS = [
+  "field.workday.event",
+  "field.hrm.create",
+  "field.hrm.cancel",
+] as const
+const WORKFORCE_STREAM_CACHE_KEY = "field.sync.stream.workforce"
+
+type OutboxDbRow = {
+  clientOpId: string
+  kind: string
+  payload: string
+  clientCreatedAt: string | null
+  status: string
+  attempts: number
+}
+
+const outboxPayloadParsers: Record<string, (value: unknown) => unknown> = {
+  "task.status": (value) => mobileTaskStatusPayloadSchema.parse(value),
+  "photo.submit": (value) => mobilePhotoSubmitPayloadSchema.parse(value),
+  "visit.checkin": (value) => mobileVisitCheckInPayloadSchema.parse(value),
+  "visit.checkout": (value) => mobileVisitCheckOutPayloadSchema.parse(value),
+  "location.update": (value) => mobileLocationUpdatePayloadSchema.parse(value),
+  "field.route.create": parseFieldRouteCreatePayload,
+  "field.route.update": parseFieldRouteUpdatePayload,
+  "field.route.publish": parseFieldRoutePublishPayload,
+  "field.route.change-request": parseFieldRouteChangeRequestPayload,
+  "field.visit.checkin": parseFieldVisitCheckInPayload,
+  "field.visit.action": parseFieldVisitActionPayload,
+  "field.visit.update": parseFieldVisitUpdatePayload,
+  "field.visit.photo": parseFieldVisitPhotoPayload,
+  "field.workday.event": parseFieldWorkdayEventPayload,
+  "field.location": parseFieldLocationPayload,
+  "field.task.create": parseFieldTaskCreatePayload,
+  "field.task.update": parseFieldTaskUpdatePayload,
+  "field.task.event": parseFieldTaskEventPayload,
+  "field.commitment.create": parseFieldCommitmentCreatePayload,
+  "field.commitment.fulfill": parseFieldCommitmentFulfillPayload,
+  "field.message.send": parseFieldMessageCreatePayload,
+  "field.message.receipt": parseFieldMessageReceiptPayload,
+  "field.document.upload": parseFieldDocumentUploadPayload,
+  "field.document.state": parseFieldDocumentStatePayload,
+  "field.hrm.create": parseFieldHrmRequestCreatePayload,
+  "field.hrm.cancel": parseFieldHrmRequestCancelPayload,
+  "order.create": (value) => orderCreateRequestSchema.parse(value),
+  "promotion.enroll": (value) => mobilePromotionEnrollPayloadSchema.parse(value),
+  "promotion.submit": (value) => mobilePromotionSubmitPayloadSchema.parse(value),
+  "inventory.record": (value) => mobilePromoInventoryRecordPayloadSchema.parse(value),
+  "return.create": (value) => mobileSalesReturnCreatePayloadSchema.parse(value),
+  "reward.claim": (value) => mobileRewardClaimPayloadSchema.parse(value),
+  "proof.exception": (value) => mobileProofExceptionPayloadSchema.parse(value),
+}
+
+function parseOutboxRow(row: OutboxDbRow): OutboxRow {
+  const parser = outboxPayloadParsers[row.kind] ?? ((value: unknown) => mobileTaskCommentPayloadSchema.parse(value))
+  const kind = outboxPayloadParsers[row.kind] ? row.kind : "task.comment"
+  return {
+    clientOpId: row.clientOpId,
+    kind,
+    payload: parser(JSON.parse(row.payload) as unknown),
+    clientCreatedAt: row.clientCreatedAt ?? undefined,
+    status: "pending",
+    attempts: row.attempts,
+  } as OutboxRow
+}
+
+function outboxPipelineFilter(pipeline: OutboxPipeline): { sql: string; params: string[] } {
+  if (pipeline === "workforce") {
+    return { sql: " AND kind IN (?,?,?)", params: [...WORKFORCE_OUTBOX_KINDS] }
+  }
+  if (pipeline === "non-workforce") {
+    return { sql: " AND kind NOT IN (?,?,?)", params: [...WORKFORCE_OUTBOX_KINDS] }
+  }
+  return { sql: "", params: [] }
+}
+
+function readPendingOutboxForPipeline(pipeline: OutboxPipeline, limit: number): OutboxRow[] {
+  const filter = outboxPipelineFilter(pipeline)
+  const priority = pipeline === "workforce"
+    ? "CASE kind WHEN 'field.workday.event' THEN 0 ELSE 1 END, "
+    : ""
+  return db.getAllSync<OutboxDbRow>(
+    `SELECT clientOpId, kind, payload, clientCreatedAt, status, attempts FROM outbox_ops
+     WHERE (status='pending'
+        OR (status='rejected' AND kind='photo.submit' AND detail='\"photo_not_uploaded_yet\"'))
+       AND NOT EXISTS (
+         SELECT 1 FROM commercial_media_queue media
+         WHERE media.clientOpId=outbox_ops.clientOpId AND media.uploaded=0
+       )${filter.sql}
+     ORDER BY ${priority}clientCreatedAt, rowid LIMIT ?`,
+    [...filter.params, limit],
+  ).map(parseOutboxRow)
+}
+
+function readOutboxDiagnosticsForPipeline(pipeline: OutboxPipeline): OutboxDiagnostics {
+  const filter = outboxPipelineFilter(pipeline)
+  const row = db.getFirstSync<{
+    pendingOps: number | null
+    conflictOps: number | null
+    rejectedOps: number | null
+    oldestPendingAt: string | null
+  }>(`SELECT
+      SUM(CASE WHEN status='pending' OR (status='rejected' AND kind='photo.submit' AND detail='\"photo_not_uploaded_yet\"') THEN 1 ELSE 0 END) AS pendingOps,
+      SUM(CASE WHEN status='conflict' THEN 1 ELSE 0 END) AS conflictOps,
+      SUM(CASE WHEN status='rejected' AND (kind!='photo.submit' OR COALESCE(detail,'')!='\"photo_not_uploaded_yet\"') THEN 1 ELSE 0 END) AS rejectedOps,
+      MIN(CASE WHEN status='pending' OR (status='rejected' AND kind='photo.submit' AND detail='\"photo_not_uploaded_yet\"') THEN clientCreatedAt ELSE NULL END) AS oldestPendingAt
+      FROM outbox_ops WHERE 1=1${filter.sql}`,
+    filter.params,
+  )
+  return {
+    pendingOps: row?.pendingOps ?? 0,
+    conflictOps: row?.conflictOps ?? 0,
+    rejectedOps: row?.rejectedOps ?? 0,
+    oldestPendingAt: row?.oldestPendingAt ?? null,
+  }
+}
+
+export function getWorkforceStreamState(): WorkforceStreamState {
+  return readFieldCache<WorkforceStreamState>(WORKFORCE_STREAM_CACHE_KEY)?.value ?? {
+    cursor: null,
+    configVersion: null,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    lastError: null,
+  }
+}
+
+function writeWorkforceStreamState(patch: Partial<WorkforceStreamState>): void {
+  writeFieldCache(WORKFORCE_STREAM_CACHE_KEY, { ...getWorkforceStreamState(), ...patch })
+}
+
+/** A validated bootstrap is the only source allowed to advance this cursor. */
+export function setWorkforceStreamManifest(input: {
+  cursor?: string | null
+  configVersion: string | null
+}): void {
+  const previous = getWorkforceStreamState()
+  // A pre-cursor manifest must not accidentally rewind a known checkpoint.
+  // A config version change is different: its former cursor is no longer safe.
+  writeWorkforceStreamState({
+    cursor: input.cursor === undefined
+      ? (input.configVersion === previous.configVersion ? previous.cursor : null)
+      : input.cursor,
+    configVersion: input.configVersion,
+  })
+}
+
+function recordWorkforceSyncAttempt(at: string): void {
+  writeWorkforceStreamState({ lastAttemptAt: at })
+}
+
+function recordWorkforceSyncSuccess(at: string): void {
+  writeWorkforceStreamState({ lastSuccessAt: at, lastError: null })
+}
+
+function recordWorkforceSyncFailure(at: string, error: string): void {
+  // Retain the last successful cursor; this only records the failed attempt.
+  writeWorkforceStreamState({ lastAttemptAt: at, lastError: error.slice(0, 1_000) })
+}
+
 export const localStore: LocalStore = {
   async applyPull(data: PullResponse) {
     db.withTransactionSync(() => {
@@ -1236,6 +1398,10 @@ export const localStore: LocalStore = {
       })
   },
 
+  async pendingOutboxForPipeline(pipeline, limit = 100) {
+    return readPendingOutboxForPipeline(pipeline, limit)
+  },
+
   async outboxDiagnostics() {
     const row = db.getFirstSync<{
       pendingOps: number | null
@@ -1254,6 +1420,26 @@ export const localStore: LocalStore = {
       rejectedOps: row?.rejectedOps ?? 0,
       oldestPendingAt: row?.oldestPendingAt ?? null,
     }
+  },
+
+  async outboxDiagnosticsForPipeline(pipeline) {
+    return readOutboxDiagnosticsForPipeline(pipeline)
+  },
+
+  async getWorkforceStreamState() {
+    return getWorkforceStreamState()
+  },
+
+  async recordWorkforceSyncAttempt(at) {
+    recordWorkforceSyncAttempt(at)
+  },
+
+  async recordWorkforceSyncSuccess(at) {
+    recordWorkforceSyncSuccess(at)
+  },
+
+  async recordWorkforceSyncFailure(at, error) {
+    recordWorkforceSyncFailure(at, error)
   },
 
   async markOutbox(clientOpId, status, detail) {

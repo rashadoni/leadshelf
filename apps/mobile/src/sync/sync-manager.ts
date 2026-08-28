@@ -4,11 +4,13 @@
 
 import type {
   LocalStore,
+  OutboxPipeline,
   PushOperation,
   SyncApi,
   SyncStatus,
 } from "./ports"
 import { AuthLostError, HttpError, UpgradeRequiredError } from "./ports-error"
+import { isWorkforcePushOperation } from "./workforce-sync-manager"
 
 // Реэкспорт для обратной совместимости импортов из "./sync-manager".
 export { UpgradeRequiredError } from "./ports-error"
@@ -71,6 +73,8 @@ export class SyncManager {
       store: LocalStore
       now?: () => Date
       isOnline?: () => Promise<boolean>
+      /** LeadDrive Field uses this to keep Workforce out of Shelf sync. */
+      outboxPipeline?: OutboxPipeline
     },
   ) {}
 
@@ -86,7 +90,9 @@ export class SyncManager {
 
   private async refreshCounters() {
     const [outbox, photos, commercialMedia, quarantined] = await Promise.all([
-      this.deps.store.outboxDiagnostics(),
+      this.deps.store.outboxDiagnosticsForPipeline
+        ? this.deps.store.outboxDiagnosticsForPipeline(this.deps.outboxPipeline ?? "all")
+        : this.deps.store.outboxDiagnostics(),
       this.deps.store.pendingPhotos(),
       this.deps.store.pendingCommercialMedia(),
       this.deps.store.quarantinedPhotoCount(),
@@ -179,7 +185,12 @@ export class SyncManager {
 
       // 4. PUSH outbox
       this.patch({ phase: "pushing" })
-      const pending = await this.deps.store.pendingOutbox(MAX_PUSH_BATCH)
+      const rawPending = this.deps.store.pendingOutboxForPipeline
+        ? await this.deps.store.pendingOutboxForPipeline(this.deps.outboxPipeline ?? "all", MAX_PUSH_BATCH)
+        : await this.deps.store.pendingOutbox(MAX_PUSH_BATCH)
+      const pending = this.deps.outboxPipeline === "non-workforce"
+        ? rawPending.filter((operation) => !isWorkforcePushOperation(operation))
+        : rawPending
       if (pending.length > 0) {
         const unuploadedPhotoIds = new Set(await this.deps.store.unuploadedPhotoIds())
         const sendable = pending.filter(

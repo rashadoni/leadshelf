@@ -261,7 +261,9 @@ export default function WorkdayScreen() {
   async function refresh() {
     setRefreshing(true)
     try {
-      if (routesEnabled) await sync()
+      // H4: `sync` selects the independent Workforce lane for an HRM-only
+      // tenant, so work-time delivery no longer depends on route resources.
+      await sync()
       await field.refreshActivity()
     } finally {
       setRefreshing(false)
@@ -341,7 +343,7 @@ export default function WorkdayScreen() {
         setTracking(stoppedWorkdayTrackingState())
       }
 
-      if (routesEnabled) await sync()
+      await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
         Alert.alert(t("workdayActionConflict"))

@@ -1,15 +1,20 @@
-// Провайдер синка: собирает движок из адаптеров, триггеры — старт,
-// возврат в foreground, восстановление сети, ручной pull-to-refresh.
+// Sync provider: LeadShelf keeps one frozen combined pipeline. LeadDrive Field
+// splits the independent Workforce outbox from the Shelf/route pipeline so a
+// Shelf pull failure cannot hold up durable work-time delivery.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { AppState } from "react-native"
 import NetInfo from "@react-native-community/netinfo"
 import { router } from "expo-router"
 import { SyncManager } from "./sync-manager"
+import {
+  WorkforceSyncManager,
+  combineSyncStatuses,
+  emptyWorkforceSyncStatus,
+} from "./workforce-sync-manager"
 import { nextBackoffMs } from "./backoff"
 import type { SyncStatus } from "./ports"
-import { syncApi } from "../api/mobile-client"
-import { localStore } from "../db/local-store"
-import { purgeLocalOperationalData } from "../db/local-store"
+import { syncApi, workforceSyncApi } from "../api/mobile-client"
+import { localStore, purgeLocalOperationalData } from "../db/local-store"
 import { tokenStore } from "../auth/token-store"
 import { wipeRevokedSession } from "../auth/revocation-wipe"
 import { stopWorkdayTracking } from "../location/workday-tracking"
@@ -17,87 +22,176 @@ import { deleteAllEncryptedMedia } from "../media/encrypted-media-store"
 import { useField } from "../field/field-context"
 import { IS_LEADDRIVE_FIELD } from "../config/mobile-variant"
 
-const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
+type SyncContextValue = {
+  /** Aggregate for pre-H4 consumers; use per-lane states for recovery detail. */
+  status: SyncStatus
+  sharedStatus: SyncStatus
+  workforceStatus: SyncStatus
+  sync: () => Promise<SyncStatus>
+  syncWorkforce: () => Promise<SyncStatus>
+}
+
+const Ctx = createContext<SyncContextValue | null>(null)
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const field = useField()
-  const manager = useMemo(
-    () =>
-      new SyncManager({
-        api: syncApi,
-        store: localStore,
-        isOnline: async () => (await NetInfo.fetch()).isConnected ?? true,
-      }),
+  const sharedManager = useMemo(
+    () => new SyncManager({
+      api: syncApi,
+      store: localStore,
+      isOnline: async () => (await NetInfo.fetch()).isConnected ?? true,
+      // LeadDrive must never let the Shelf manager select Workforce rows,
+      // including rows left durable after a capability is later disabled.
+      outboxPipeline: IS_LEADDRIVE_FIELD ? "non-workforce" : "all",
+    }),
     [],
   )
-  const [status, setStatus] = useState<SyncStatus>(manager.getStatus())
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const consecutiveErrors = useRef(0)
+  const workforceManager = useMemo(
+    () => new WorkforceSyncManager({
+      api: workforceSyncApi,
+      store: localStore,
+      isOnline: async () => (await NetInfo.fetch()).isConnected ?? true,
+    }),
+    [],
+  )
+  const [sharedStatus, setSharedStatus] = useState<SyncStatus>(sharedManager.getStatus())
+  const [workforceStatus, setWorkforceStatus] = useState<SyncStatus>(workforceManager.getStatus())
+  const sharedRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const workforceRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sharedConsecutiveErrors = useRef(0)
+  const workforceConsecutiveErrors = useRef(0)
   const revocationWipe = useRef<Promise<void> | null>(null)
-  // H2 keeps the existing shared sync engine intact. It is only a Route/Shelf
-  // engine for an HRM-only tenant: work-time operations stay durably queued
-  // instead of being pushed through an unrelated resource pipeline. H4 will
-  // add the dedicated Workforce transport that drains that queue.
-  const sharedRouteSyncEnabled = !IS_LEADDRIVE_FIELD || field.routesEnabled
 
-  const sync = useCallback(() => (
-    sharedRouteSyncEnabled ? manager.runSync() : Promise.resolve(manager.getStatus())
-  ), [manager, sharedRouteSyncEnabled])
+  // Direct LeadShelf remains exactly on its legacy combined pipeline. In
+  // LeadDrive the validated manifest decides whether each lane may start.
+  const sharedRouteSyncEnabled = !IS_LEADDRIVE_FIELD || field.routesEnabled
+  const workforceSyncEnabled = IS_LEADDRIVE_FIELD && field.workforceEnabled
+  const status = useMemo(() => combineSyncStatuses([
+    ...(sharedRouteSyncEnabled ? [sharedStatus] : []),
+    ...(workforceSyncEnabled ? [workforceStatus] : []),
+  ]), [sharedRouteSyncEnabled, sharedStatus, workforceSyncEnabled, workforceStatus])
+
+  const handleTerminalStatus = useCallback((next: SyncStatus) => {
+    if (next.phase === "authLost") {
+      revocationWipe.current ??= wipeRevokedSession({
+        deleteMedia: async () => {
+          await stopWorkdayTracking().catch(() => {})
+          await deleteAllEncryptedMedia()
+        },
+        purgeOperationalData: () => purgeLocalOperationalData(),
+        clearSession: () => tokenStore.clearSession(),
+      }).then(() => {
+        router.replace("/(auth)/login" as never)
+      })
+    } else if (next.phase === "upgradeRequired") {
+      router.replace("/upgrade-required" as never)
+    }
+  }, [])
+
+  const sync = useCallback(async (): Promise<SyncStatus> => {
+    const runs: Array<Promise<SyncStatus>> = []
+    if (sharedRouteSyncEnabled) runs.push(sharedManager.runSync())
+    if (workforceSyncEnabled) runs.push(workforceManager.runSync())
+    return combineSyncStatuses(await Promise.all(runs))
+  }, [sharedManager, sharedRouteSyncEnabled, workforceManager, workforceSyncEnabled])
+
+  const syncWorkforce = useCallback((): Promise<SyncStatus> => (
+    workforceSyncEnabled
+      ? workforceManager.runSync()
+      : Promise.resolve(emptyWorkforceSyncStatus())
+  ), [workforceManager, workforceSyncEnabled])
 
   useEffect(() => {
-    if (!sharedRouteSyncEnabled) return
+    if (!sharedRouteSyncEnabled) {
+      setSharedStatus(emptyWorkforceSyncStatus())
+      return
+    }
     const clearRetry = () => {
-      if (retryTimer.current) {
-        clearTimeout(retryTimer.current)
-        retryTimer.current = null
+      if (sharedRetryTimer.current) {
+        clearTimeout(sharedRetryTimer.current)
+        sharedRetryTimer.current = null
       }
     }
-    const unsub = manager.subscribe((next) => {
-      setStatus(next)
-      // Backoff-ретрай только после реальной ошибки; успех/offline/upgrade
-      // отменяют его (offline восстановится по NetInfo, docs/26 §2).
-      if (next.phase === "authLost") {
+    const unsubscribe = sharedManager.subscribe((next) => {
+      setSharedStatus(next)
+      handleTerminalStatus(next)
+      if (next.phase === "authLost" || next.phase === "upgradeRequired" || next.phase === "offline") {
         clearRetry()
-        revocationWipe.current ??= wipeRevokedSession({
-          deleteMedia: async () => {
-            await stopWorkdayTracking().catch(() => {})
-            await deleteAllEncryptedMedia()
-          },
-          purgeOperationalData: () => purgeLocalOperationalData(),
-          clearSession: () => tokenStore.clearSession(),
-        }).then(() => {
-          router.replace("/(auth)/login" as never)
-        })
-      } else if (next.phase === "upgradeRequired") {
-        clearRetry()
-        router.replace("/upgrade-required" as never)
       } else if (next.phase === "error") {
-        consecutiveErrors.current += 1
+        sharedConsecutiveErrors.current += 1
         clearRetry()
-        retryTimer.current = setTimeout(() => void manager.runSync(), nextBackoffMs(consecutiveErrors.current))
+        sharedRetryTimer.current = setTimeout(
+          () => void sharedManager.runSync(),
+          nextBackoffMs(sharedConsecutiveErrors.current),
+        )
       } else if (next.phase === "idle") {
-        consecutiveErrors.current = 0
-        clearRetry()
-      } else if (next.phase === "offline") {
+        sharedConsecutiveErrors.current = 0
         clearRetry()
       }
     })
-    void manager.runSync()
-    const appSub = AppState.addEventListener("change", (s) => {
-      if (s === "active") void manager.runSync()
+    void sharedManager.runSync()
+    const appSub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void sharedManager.runSync()
     })
-    const netSub = NetInfo.addEventListener((s) => {
-      if (s.isConnected) void manager.runSync()
+    const netSub = NetInfo.addEventListener((next) => {
+      if (next.isConnected) void sharedManager.runSync()
     })
     return () => {
-      unsub()
+      unsubscribe()
       appSub.remove()
       netSub()
       clearRetry()
     }
-  }, [manager, sharedRouteSyncEnabled])
+  }, [handleTerminalStatus, sharedManager, sharedRouteSyncEnabled])
 
-  return <Ctx.Provider value={{ status, sync }}>{children}</Ctx.Provider>
+  useEffect(() => {
+    if (!workforceSyncEnabled) {
+      setWorkforceStatus(emptyWorkforceSyncStatus())
+      return
+    }
+    const clearRetry = () => {
+      if (workforceRetryTimer.current) {
+        clearTimeout(workforceRetryTimer.current)
+        workforceRetryTimer.current = null
+      }
+    }
+    const unsubscribe = workforceManager.subscribe((next) => {
+      setWorkforceStatus(next)
+      handleTerminalStatus(next)
+      if (next.phase === "authLost" || next.phase === "upgradeRequired" || next.phase === "offline") {
+        clearRetry()
+      } else if (next.phase === "error") {
+        workforceConsecutiveErrors.current += 1
+        clearRetry()
+        workforceRetryTimer.current = setTimeout(
+          () => void workforceManager.runSync(),
+          nextBackoffMs(workforceConsecutiveErrors.current),
+        )
+      } else if (next.phase === "idle") {
+        workforceConsecutiveErrors.current = 0
+        clearRetry()
+      }
+    })
+    void workforceManager.runSync()
+    const appSub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void workforceManager.runSync()
+    })
+    const netSub = NetInfo.addEventListener((next) => {
+      if (next.isConnected) void workforceManager.runSync()
+    })
+    return () => {
+      unsubscribe()
+      appSub.remove()
+      netSub()
+      clearRetry()
+    }
+  }, [handleTerminalStatus, workforceManager, workforceSyncEnabled])
+
+  return (
+    <Ctx.Provider value={{ status, sharedStatus, workforceStatus, sync, syncWorkforce }}>
+      {children}
+    </Ctx.Provider>
+  )
 }
 
 export function useSync() {
