@@ -18,7 +18,8 @@ RUN go mod init leadshelf/caddy-build \
         github.com/caddyserver/caddy/v2/cmd/caddy
 
 FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
-RUN apk add --no-cache ca-certificates libcap mailcap \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates libcap mailcap \
     && mkdir -p /config/caddy /data/caddy /etc/caddy /srv \
     && chmod 1777 /config/caddy /data/caddy
 COPY --from=builder /go/bin/caddy /usr/bin/caddy
