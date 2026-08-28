@@ -42,7 +42,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Сервер запускается напрямую через node. npm/corepack в runtime не нужны и
 # только расширяют поверхность атаки (включая transitive CLI-зависимости).
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
     && addgroup -S app \
     && adduser -S app -G app
@@ -102,7 +103,8 @@ ENV NODE_ENV=production
 # TSX остаётся локальной runtime-зависимостью, package-manager CLI не нужен.
 # /app/.data создаётся до mount, чтобы новый named volume наследовал owner.
 COPY --from=ffmpeg-builder /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
     && addgroup -S app \
     && adduser -S app -G app \
