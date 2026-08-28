@@ -17,6 +17,7 @@ describe("variant-capable field mobile auth wiring", () => {
     expect(client).toContain('"/api/v1/mobile/workday"')
     expect(client).toContain('"/api/v1/mobile/locations"')
     expect(client).toContain("/api/v1/mtm/mobile/auth")
+    expect(client).toContain("/api/v1/mtm/mobile/bootstrap")
     expect(client).toContain('shelfBffPath("pull")')
     expect(client).toContain('shelfBffPath("push")')
     expect(variant).toContain("/api/v1/mtm/mobile/shelf/sync/pull")

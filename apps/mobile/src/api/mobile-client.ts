@@ -49,6 +49,7 @@ import {
 } from "../field/execution-outbox"
 import {
   parseFieldProfile,
+  parseFieldMobileBootstrap,
   parseFieldCommitments,
   parseFieldAgentTasks,
   parseFieldPersonalKpi,
@@ -66,6 +67,7 @@ import {
   parseFieldOrganizations,
   parseFieldWeek,
   parseFieldWorkday,
+  legacyFieldMobileBootstrap,
   parseFieldVisitWorkspace,
   type CreateFieldCustomerRequest,
   type FieldContactDetailData,
@@ -73,6 +75,7 @@ import {
   type FieldCustomerRequest,
   type FieldCustomerRequestsData,
   type FieldProfileData,
+  type FieldMobileBootstrapData,
   type FieldCommitmentsData,
   type FieldAgentTasksData,
   type FieldPersonalKpiData,
@@ -328,6 +331,20 @@ export const fieldApi = {
     const body = await request<{ success?: boolean }>("/api/v1/mtm/mobile/ping", json({}))
     if (body.success !== true) throw new Error("Invalid mobile heartbeat response")
   },
+  bootstrap: async (): Promise<FieldMobileBootstrapData> => {
+    // LeadShelf's direct mobile protocol predates the LeadDrive capability
+    // manifest and keeps its established combined field behaviour.
+    if (!IS_LEADDRIVE_FIELD) return legacyFieldMobileBootstrap()
+    try {
+      return await request<unknown>("/api/v1/mtm/mobile/bootstrap").then(parseFieldMobileBootstrap)
+    } catch (error) {
+      // A staged APK upgrade can meet a still-supported server from before H1.
+      // Only that explicit absence gets the legacy combined manifest; a 401/403
+      // or malformed/failed new response remains fail-closed.
+      if (error instanceof HttpError && error.status === 404) return legacyFieldMobileBootstrap()
+      throw error
+    }
+  },
   profile: () => request<unknown>("/api/v1/mtm/mobile/profile").then(parseFieldProfile),
   week: (start?: string) =>
     request<unknown>(`/api/v1/mtm/mobile/week${start ? `?start=${encodeURIComponent(start)}` : ""}`)
@@ -530,6 +547,7 @@ export const fieldApi = {
       .then(parseFieldCustomerRequest),
 } satisfies {
   heartbeat(): Promise<void>
+  bootstrap(): Promise<FieldMobileBootstrapData>
   profile(): Promise<FieldProfileData>
   week(start?: string): Promise<FieldWeekData>
   agentTasks(query?: string): Promise<FieldAgentTasksData>

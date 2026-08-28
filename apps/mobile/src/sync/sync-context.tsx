@@ -1,6 +1,6 @@
 // Провайдер синка: собирает движок из адаптеров, триггеры — старт,
 // возврат в foreground, восстановление сети, ручной pull-to-refresh.
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { AppState } from "react-native"
 import NetInfo from "@react-native-community/netinfo"
 import { router } from "expo-router"
@@ -14,10 +14,13 @@ import { tokenStore } from "../auth/token-store"
 import { wipeRevokedSession } from "../auth/revocation-wipe"
 import { stopWorkdayTracking } from "../location/workday-tracking"
 import { deleteAllEncryptedMedia } from "../media/encrypted-media-store"
+import { useField } from "../field/field-context"
+import { IS_LEADDRIVE_FIELD } from "../config/mobile-variant"
 
 const Ctx = createContext<{ status: SyncStatus; sync: () => Promise<unknown> } | null>(null)
 
 export function SyncProvider({ children }: { children: ReactNode }) {
+  const field = useField()
   const manager = useMemo(
     () =>
       new SyncManager({
@@ -31,8 +34,18 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const consecutiveErrors = useRef(0)
   const revocationWipe = useRef<Promise<void> | null>(null)
+  // H2 keeps the existing shared sync engine intact. It is only a Route/Shelf
+  // engine for an HRM-only tenant: work-time operations stay durably queued
+  // instead of being pushed through an unrelated resource pipeline. H4 will
+  // add the dedicated Workforce transport that drains that queue.
+  const sharedRouteSyncEnabled = !IS_LEADDRIVE_FIELD || field.routesEnabled
+
+  const sync = useCallback(() => (
+    sharedRouteSyncEnabled ? manager.runSync() : Promise.resolve(manager.getStatus())
+  ), [manager, sharedRouteSyncEnabled])
 
   useEffect(() => {
+    if (!sharedRouteSyncEnabled) return
     const clearRetry = () => {
       if (retryTimer.current) {
         clearTimeout(retryTimer.current)
@@ -82,9 +95,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       netSub()
       clearRetry()
     }
-  }, [manager])
+  }, [manager, sharedRouteSyncEnabled])
 
-  return <Ctx.Provider value={{ status, sync: () => manager.runSync() }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ status, sync }}>{children}</Ctx.Provider>
 }
 
 export function useSync() {

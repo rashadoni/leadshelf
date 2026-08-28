@@ -47,6 +47,48 @@ export interface FieldProfileData {
   }
 }
 
+/**
+ * The LeadDrive bootstrap is deliberately a small, additive manifest.  It
+ * tells the shared APK which independent product areas the signed-in tenant
+ * has enabled before the app asks for their data.  Existing endpoint payloads
+ * remain unchanged; this contract only governs new-client discovery.
+ */
+export interface FieldMobileModuleManifest {
+  enabled: boolean
+  capabilityId: "workforce-hrm" | "route-field"
+  configVersion: string | null
+  cursor?: string | null
+}
+
+export interface FieldMobileModules {
+  workforce: FieldMobileModuleManifest
+  routes: FieldMobileModuleManifest
+}
+
+export interface FieldMobileBootstrapData {
+  tenant: { id: string; name: string; slug: string }
+  principal: { id: string; name: string; email: string | null; role: string }
+  capabilities: string[]
+  permissions: string[]
+  modules: FieldMobileModules
+  timezone: string
+  policies: {
+    photoWatermark: boolean
+    canPlanOwnRoutes: boolean
+    workforce: { enabled: boolean; configVersion: string | null }
+  }
+  routeTargetTypes: unknown[]
+  sync: { horizon: string; scopeVersion: string | null; configVersion: string | null }
+  workday: {
+    id: string
+    workDate: string
+    status: FieldWorkdayStatus
+    startedAt: string
+    pausedAt: string | null
+    completedAt: string | null
+  } | null
+}
+
 export interface FieldRoutePoint {
   id: string
   customerId: string
@@ -909,6 +951,10 @@ function timestamp(value: unknown): value is string {
   return string(value) && !Number.isNaN(new Date(value).getTime())
 }
 
+function nullableString(value: unknown): boolean {
+  return value === null || string(value)
+}
+
 const visitActionKeys = new Set<FieldVisitActionKey>([
   "PHOTO",
   "PRESENTATION",
@@ -1065,6 +1111,91 @@ export function parseFieldProfile(value: unknown): FieldProfileData {
     throw new FieldContractError("mobile profile")
   }
   return data as unknown as FieldProfileData
+}
+
+function validMobileModule(value: unknown, capabilityId: FieldMobileModuleManifest["capabilityId"]): boolean {
+  const module = record(value)
+  return Boolean(
+    module &&
+      boolean(module.enabled) &&
+      module.capabilityId === capabilityId &&
+      nullableString(module.configVersion) &&
+      (module.cursor === undefined || nullableString(module.cursor)),
+  )
+}
+
+function validBootstrapWorkday(value: unknown): boolean {
+  if (value == null) return true
+  const workday = record(value)
+  return Boolean(
+    workday &&
+      string(workday.id) &&
+      timestamp(workday.workDate) &&
+      string(workday.status) &&
+      workdayStatuses.has(workday.status as FieldWorkdayStatus) &&
+      timestamp(workday.startedAt) &&
+      nullableTimestamp(workday.pausedAt) &&
+      nullableTimestamp(workday.completedAt),
+  )
+}
+
+/** Parse the H1 manifest strictly so a malformed capability response never opens a product area. */
+export function parseFieldMobileBootstrap(value: unknown): FieldMobileBootstrapData {
+  const data = validEnvelope(value)
+  const tenant = record(data?.tenant)
+  const principal = record(data?.principal)
+  const modules = record(data?.modules)
+  const policies = record(data?.policies)
+  const workforcePolicy = record(policies?.workforce)
+  const sync = record(data?.sync)
+  if (
+    !data ||
+    !tenant || !string(tenant.id) || !string(tenant.name) || !string(tenant.slug) ||
+    !principal || !string(principal.id) || !string(principal.name) ||
+      (principal.email != null && !string(principal.email)) || !string(principal.role) ||
+    !Array.isArray(data.capabilities) || !data.capabilities.every(string) ||
+    !Array.isArray(data.permissions) || !data.permissions.every(string) ||
+    !modules ||
+      !validMobileModule(modules.workforce, "workforce-hrm") ||
+      !validMobileModule(modules.routes, "route-field") ||
+    !string(data.timezone) ||
+    !policies || !boolean(policies.photoWatermark) || !boolean(policies.canPlanOwnRoutes) ||
+    !workforcePolicy || !boolean(workforcePolicy.enabled) || !nullableString(workforcePolicy.configVersion) ||
+    workforcePolicy.enabled !== record(modules.workforce)?.enabled ||
+    !Array.isArray(data.routeTargetTypes) ||
+    !sync || !string(sync.horizon) || !nullableString(sync.scopeVersion) || !nullableString(sync.configVersion) ||
+    !validBootstrapWorkday(data.workday)
+  ) {
+    throw new FieldContractError("mobile bootstrap")
+  }
+  return data as unknown as FieldMobileBootstrapData
+}
+
+/**
+ * Pre-H1 LeadDrive servers did not expose a manifest. A new APK may still
+ * reach one during a staged rollout, so preserve the established combined
+ * Field behaviour only for an explicit 404 compatibility fallback.
+ */
+export function legacyFieldMobileBootstrap(): FieldMobileBootstrapData {
+  return {
+    tenant: { id: "legacy", name: "", slug: "legacy" },
+    principal: { id: "legacy", name: "", email: null, role: "AGENT" },
+    capabilities: [],
+    permissions: [],
+    modules: {
+      workforce: { enabled: true, capabilityId: "workforce-hrm", configVersion: null, cursor: null },
+      routes: { enabled: true, capabilityId: "route-field", configVersion: null },
+    },
+    timezone: "UTC",
+    policies: {
+      photoWatermark: false,
+      canPlanOwnRoutes: false,
+      workforce: { enabled: true, configVersion: null },
+    },
+    routeTargetTypes: [],
+    sync: { horizon: "LEGACY", scopeVersion: null, configVersion: null },
+    workday: null,
+  }
 }
 
 function validWeekRoute(value: unknown): boolean {

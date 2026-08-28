@@ -17,16 +17,21 @@ import { FIELD_AGENT_TASKS_CACHE_KEY } from "./task-cache"
 import type {
   FieldAgentTasksData,
   FieldLocationHistoryData,
+  FieldMobileBootstrapData,
   FieldNotificationsData,
   FieldMessagesData,
   FieldProfileData,
   FieldWeekData,
   FieldWorkdayData,
 } from "./contracts"
+import { fieldModuleRefreshPlan } from "./module-refresh-plan"
 
 type FieldPhase = "loading" | "ready" | "refreshing" | "stale" | "error"
 
 type FieldContextValue = {
+  bootstrap: FieldMobileBootstrapData | null
+  workforceEnabled: boolean
+  routesEnabled: boolean
   profile: FieldProfileData | null
   week: FieldWeekData | null
   notifications: FieldNotificationsData
@@ -53,6 +58,7 @@ type FieldContextValue = {
 }
 
 const PROFILE_KEY = "field.profile"
+const BOOTSTRAP_KEY = "field.bootstrap"
 const CURRENT_WEEK_KEY = "field.week.current"
 const NOTIFICATIONS_KEY = "field.notifications"
 const WORKDAY_KEY = "field.workday.current"
@@ -64,6 +70,9 @@ function weekKey(start: string): string {
 }
 
 export function FieldProvider({ children }: { children: ReactNode }) {
+  const [bootstrap, setBootstrap] = useState<FieldMobileBootstrapData | null>(
+    () => readFieldCache<FieldMobileBootstrapData>(BOOTSTRAP_KEY)?.value ?? null,
+  )
   const [profile, setProfile] = useState<FieldProfileData | null>(null)
   const [week, setWeek] = useState<FieldWeekData | null>(null)
   const [notifications, setNotifications] = useState<FieldNotificationsData>({ items: [], unread: 0 })
@@ -80,6 +89,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
   const requestedWeek = useRef<string | null>(null)
   const requestSequence = useRef(0)
+  const bootstrapRef = useRef<FieldMobileBootstrapData | null>(bootstrap)
 
   const loseSession = useCallback(async () => {
     await stopWorkdayTracking().catch(() => {})
@@ -87,7 +97,29 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     router.replace("/(auth)/login" as never)
   }, [])
 
+  const rememberBootstrap = useCallback((next: FieldMobileBootstrapData) => {
+    bootstrapRef.current = next
+    setBootstrap(next)
+    writeFieldCache(BOOTSTRAP_KEY, next)
+  }, [])
+
+  const refreshBootstrap = useCallback(async (): Promise<FieldMobileBootstrapData | null> => {
+    try {
+      const next = await fieldApi.bootstrap()
+      rememberBootstrap(next)
+      return next
+    } catch (reason) {
+      if (reason instanceof AuthLostError) await loseSession()
+      return null
+    }
+  }, [loseSession, rememberBootstrap])
+
   const loadWeek = useCallback(async (start: string) => {
+    if (!fieldModuleRefreshPlan(bootstrapRef.current?.modules ?? null).week) {
+      setWeek(null)
+      setPhase("ready")
+      return
+    }
     requestedWeek.current = start
     const sequence = ++requestSequence.current
     const cached = readFieldCache<FieldWeekData>(weekKey(start))
@@ -118,54 +150,76 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     }
   }, [loseSession])
 
-  const refreshActivity = useCallback(async (date?: string) => {
-    const workdayCache = readFieldCache<FieldWorkdayData>(WORKDAY_KEY)
-    const locationsCache = readFieldCache<FieldLocationHistoryData>(LOCATIONS_KEY)
+  const refreshActivity = useCallback(async (
+    date?: string,
+    manifest: FieldMobileBootstrapData | null = bootstrapRef.current,
+  ) => {
+    const plan = fieldModuleRefreshPlan(manifest?.modules ?? null)
+    const workdayCache = plan.workday ? readFieldCache<FieldWorkdayData>(WORKDAY_KEY) : null
+    const locationsCache = plan.locations ? readFieldCache<FieldLocationHistoryData>(LOCATIONS_KEY) : null
     if (workdayCache) setWorkday(workdayCache.value)
+    else if (!plan.workday) setWorkday(null)
     if (locationsCache) setLocations(locationsCache.value)
+    else if (!plan.locations) setLocations(null)
+
+    if (!plan.workday && !plan.locations) {
+      setActivityError(null)
+      setActivityPhase("ready")
+      return
+    }
+
     setActivityPhase(workdayCache || locationsCache ? "refreshing" : "loading")
     setActivityError(null)
-
     const [workdayResult, locationResult] = await Promise.allSettled([
-      fieldApi.workday(date),
-      fieldApi.locations(date),
+      plan.workday
+        ? fieldApi.workday(date)
+        : Promise.resolve<FieldWorkdayData | null>(null),
+      plan.locations
+        ? fieldApi.locations(date)
+        : Promise.resolve<FieldLocationHistoryData | null>(null),
     ])
-    const authLost = [workdayResult, locationResult].some(
+    const requestedResults = [
+      ...(plan.workday ? [workdayResult] : []),
+      ...(plan.locations ? [locationResult] : []),
+    ]
+    const authLost = requestedResults.some(
       (result) => result.status === "rejected" && result.reason instanceof AuthLostError,
     )
     if (authLost) {
       await loseSession()
       return
     }
+
     let updated = false
-    if (workdayResult.status === "fulfilled") {
+    if (plan.workday && workdayResult.status === "fulfilled" && workdayResult.value) {
       setWorkday(workdayResult.value)
       writeFieldCache(WORKDAY_KEY, workdayResult.value)
       updated = true
     }
-    if (locationResult.status === "fulfilled") {
+    if (plan.locations && locationResult.status === "fulfilled" && locationResult.value) {
       setLocations(locationResult.value)
       writeFieldCache(LOCATIONS_KEY, locationResult.value)
       updated = true
     }
     if (updated) {
-      setActivityPhase(
-        workdayResult.status === "fulfilled" && locationResult.status === "fulfilled"
-          ? "ready"
-          : "stale",
-      )
+      setActivityPhase(requestedResults.every((result) => result.status === "fulfilled") ? "ready" : "stale")
       return
     }
-    const reason = workdayResult.status === "rejected"
-      ? workdayResult.reason
-      : locationResult.status === "rejected"
-        ? locationResult.reason
-        : null
+    const rejected = requestedResults.find((result) => result.status === "rejected")
+    const reason = rejected?.status === "rejected" ? rejected.reason : null
     setActivityError(reason instanceof Error ? reason.message : String(reason ?? "Field activity unavailable"))
     setActivityPhase(workdayCache || locationsCache ? "stale" : "error")
   }, [loseSession])
 
-  const refreshAgentTasks = useCallback(async () => {
+  const refreshAgentTasks = useCallback(async (
+    manifest: FieldMobileBootstrapData | null = bootstrapRef.current,
+  ) => {
+    if (!fieldModuleRefreshPlan(manifest?.modules ?? null).agentTasks) {
+      setAgentTasks(null)
+      setTaskError(null)
+      setTaskPhase("ready")
+      return
+    }
     const cached = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
     if (cached) setAgentTasks(cached.value)
     setTaskPhase(cached ? "refreshing" : "loading")
@@ -189,16 +243,34 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     const sequence = ++requestSequence.current
     setPhase((current) => current === "loading" ? "loading" : "refreshing")
     setError(null)
+    const manifest = await refreshBootstrap()
+    if (sequence !== requestSequence.current) return
+    if (!manifest) {
+      setError("Field capability manifest unavailable")
+      setPhase(profile || week ? "stale" : "error")
+      return
+    }
+
+    const plan = fieldModuleRefreshPlan(manifest.modules)
+    if (!plan.week) setWeek(null)
     const start = requestedWeek.current ?? undefined
-    const [profileResult, weekResult, notificationsResult, messagesResult] = await Promise.allSettled([
+    const [profileResult, notificationsResult, messagesResult, weekResult] = await Promise.allSettled([
       fieldApi.profile(),
-      fieldApi.week(start),
       fieldApi.notifications(),
       fieldApi.messages(),
+      plan.week
+        ? fieldApi.week(start)
+        : Promise.resolve<FieldWeekData | null>(null),
     ])
     if (sequence !== requestSequence.current) return
 
-    const authLost = [profileResult, weekResult, notificationsResult, messagesResult].some(
+    const requestedResults = [
+      profileResult,
+      notificationsResult,
+      messagesResult,
+      ...(plan.week ? [weekResult] : []),
+    ]
+    const authLost = requestedResults.some(
       (result) => result.status === "rejected" && result.reason instanceof AuthLostError,
     )
     if (authLost) {
@@ -212,7 +284,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
       writeFieldCache(PROFILE_KEY, profileResult.value)
       updated = true
     }
-    if (weekResult.status === "fulfilled") {
+    if (plan.week && weekResult.status === "fulfilled" && weekResult.value) {
       setWeek(weekResult.value)
       requestedWeek.current = weekResult.value.weekStart
       writeFieldCache(CURRENT_WEEK_KEY, weekResult.value)
@@ -231,27 +303,19 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     if (updated) {
       setLastUpdatedAt(new Date().toISOString())
       setPhase(
-        profileResult.status === "fulfilled" &&
-        weekResult.status === "fulfilled" &&
-        notificationsResult.status === "fulfilled" &&
-        messagesResult.status === "fulfilled"
-          ? "ready"
-          : "stale",
+        requestedResults.every((result) => result.status === "fulfilled") ? "ready" : "stale",
       )
     } else {
-      const firstError = profileResult.status === "rejected"
-        ? profileResult.reason
-        : weekResult.status === "rejected"
-          ? weekResult.reason
-          : notificationsResult.status === "rejected"
-            ? notificationsResult.reason
-            : messagesResult.status === "rejected"
-              ? messagesResult.reason
-            : null
+      const failed = requestedResults.find((result) => result.status === "rejected")
+      const firstError = failed?.status === "rejected" ? failed.reason : null
       setError(firstError instanceof Error ? firstError.message : String(firstError ?? "Field data unavailable"))
       setPhase(profile || week ? "stale" : "error")
     }
-  }, [loseSession, profile, week])
+    await Promise.all([
+      refreshActivity(undefined, manifest),
+      refreshAgentTasks(manifest),
+    ])
+  }, [loseSession, profile, refreshActivity, refreshAgentTasks, refreshBootstrap, week])
 
   const markAllNotificationsRead = useCallback(async () => {
     if (notifications.unread === 0) return
@@ -292,6 +356,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    const bootstrapCache = readFieldCache<FieldMobileBootstrapData>(BOOTSTRAP_KEY)
     const profileCache = readFieldCache<FieldProfileData>(PROFILE_KEY)
     const weekCache = readFieldCache<FieldWeekData>(CURRENT_WEEK_KEY)
     const notificationsCache = readFieldCache<FieldNotificationsData>(NOTIFICATIONS_KEY)
@@ -299,6 +364,10 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     const locationsCache = readFieldCache<FieldLocationHistoryData>(LOCATIONS_KEY)
     const agentTasksCache = readFieldCache<FieldAgentTasksData>(FIELD_AGENT_TASKS_CACHE_KEY)
     const messagesCache = readFieldMessages()
+    if (bootstrapCache) {
+      bootstrapRef.current = bootstrapCache.value
+      setBootstrap(bootstrapCache.value)
+    }
     if (profileCache) setProfile(profileCache.value)
     if (weekCache) {
       setWeek(weekCache.value)
@@ -309,23 +378,26 @@ export function FieldProvider({ children }: { children: ReactNode }) {
     if (locationsCache) setLocations(locationsCache.value)
     if (agentTasksCache) setAgentTasks(agentTasksCache.value)
     setMessages(messagesCache)
-    const cachedAt = [profileCache?.updatedAt, weekCache?.updatedAt, notificationsCache?.updatedAt]
+    const cachedAt = [bootstrapCache?.updatedAt, profileCache?.updatedAt, weekCache?.updatedAt, notificationsCache?.updatedAt]
       .filter((value): value is string => Boolean(value))
       .sort()
       .at(-1) ?? null
     setLastUpdatedAt(cachedAt)
-    if (profileCache || weekCache || notificationsCache) setPhase("stale")
+    if (profileCache || weekCache || notificationsCache || bootstrapCache) setPhase("stale")
     if (workdayCache || locationsCache) setActivityPhase("stale")
     if (agentTasksCache) setTaskPhase("stale")
     void refresh()
-    void refreshActivity()
-    void refreshAgentTasks()
   // Initial cache hydration and refresh belong to this provider lifecycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const modulePlan = fieldModuleRefreshPlan(bootstrap?.modules ?? null)
+
   return (
     <Ctx.Provider value={{
+      bootstrap,
+      workforceEnabled: modulePlan.workforce,
+      routesEnabled: modulePlan.routes,
       profile,
       week,
       notifications,

@@ -16,6 +16,7 @@ import {
   parseFieldOrganizations,
   parseFieldPersonalKpi,
   parseFieldLocationHistory,
+  parseFieldMobileBootstrap,
   parseFieldProfile,
   parseFieldVisitWorkspace,
   parseFieldWeek,
@@ -41,6 +42,61 @@ function day(date: string) {
 }
 
 describe("LeadDrive field contracts", () => {
+  it("accepts independent Workforce and Route module flags from bootstrap", () => {
+    const bootstrap = parseFieldMobileBootstrap({
+      success: true,
+      data: {
+        tenant: { id: "org-1", name: "Demo", slug: "demo" },
+        principal: { id: "agent-1", name: "Farid", email: null, role: "AGENT" },
+        capabilities: ["FIELD_EXECUTE"],
+        permissions: ["WORKTIME_SELF_READ"],
+        modules: {
+          workforce: { enabled: true, capabilityId: "workforce-hrm", configVersion: null, cursor: null },
+          routes: { enabled: false, capabilityId: "route-field", configVersion: null },
+        },
+        timezone: "Asia/Baku",
+        policies: {
+          photoWatermark: false,
+          canPlanOwnRoutes: false,
+          workforce: { enabled: true, configVersion: null },
+        },
+        routeTargetTypes: [],
+        sync: { horizon: "ACTIVE_FIELD_SCOPE", scopeVersion: null, configVersion: null },
+        workday: null,
+      },
+    })
+
+    expect(bootstrap.modules).toMatchObject({
+      workforce: { enabled: true, capabilityId: "workforce-hrm" },
+      routes: { enabled: false, capabilityId: "route-field" },
+    })
+  })
+
+  it("rejects a bootstrap that could expose Workforce without its matching policy", () => {
+    expect(() => parseFieldMobileBootstrap({
+      success: true,
+      data: {
+        tenant: { id: "org-1", name: "Demo", slug: "demo" },
+        principal: { id: "agent-1", name: "Farid", email: null, role: "AGENT" },
+        capabilities: [],
+        permissions: [],
+        modules: {
+          workforce: { enabled: true, capabilityId: "workforce-hrm", configVersion: null, cursor: null },
+          routes: { enabled: false, capabilityId: "route-field", configVersion: null },
+        },
+        timezone: "Asia/Baku",
+        policies: {
+          photoWatermark: false,
+          canPlanOwnRoutes: false,
+          workforce: { enabled: false, configVersion: null },
+        },
+        routeTargetTypes: [],
+        sync: { horizon: "ACTIVE_FIELD_SCOPE", scopeVersion: null, configVersion: null },
+        workday: null,
+      },
+    })).toThrow(FieldContractError)
+  })
+
   it("accepts immutable commitment promise-vs-fact rows", () => {
     const data = parseFieldCommitments({
       success: true,
