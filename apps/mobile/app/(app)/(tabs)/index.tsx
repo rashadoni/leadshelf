@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { countOpenTasks, listVisits } from "../../../src/db/local-store"
 import { useField } from "../../../src/field/field-context"
 import { routeStatusMeta, type RouteStatusTone } from "../../../src/field/week-status"
-import type { FieldWorkdayStatus } from "../../../src/field/contracts"
+import type { FieldWorkdayAction, FieldWorkdayStatus } from "../../../src/field/contracts"
 import { formatLongDate } from "../../../src/i18n/date-format"
 import { t, useLocale, type MessageKey } from "../../../src/i18n"
 import { useSync } from "../../../src/sync/sync-context"
@@ -40,11 +40,20 @@ const workdayStatusKeys: Record<DisplayWorkdayStatus, MessageKey> = {
   COMPLETED: "workdayStatus_COMPLETED",
 }
 
+const workdayActionKeys: Record<FieldWorkdayAction, MessageKey> = {
+  START: "workdayStart",
+  PAUSE: "workdayPause",
+  RESUME: "workdayResume",
+  FINISH: "workdayFinish",
+}
+
 export default function TodayTab() {
   const locale = useLocale()
   const field = useField()
   const shelf = useSync()
   const layout = useResponsiveLayout()
+  const workforceEnabled = field.workforceEnabled
+  const routesEnabled = field.routesEnabled
   const [localOpenTasks, setLocalOpenTasks] = useState(0)
   const [localVisits, setLocalVisits] = useState(0)
 
@@ -60,10 +69,10 @@ export default function TodayTab() {
   )
   const summary = field.profile?.todaySummary
   const shelfRunning = !["idle", "offline", "error", "authLost", "upgradeRequired"].includes(shelf.status.phase)
-  const refreshing = field.phase === "refreshing" || shelfRunning
+  const refreshing = field.phase === "refreshing" || (routesEnabled && shelfRunning)
 
   async function onRefresh() {
-    await Promise.all([field.refresh(), shelf.sync()])
+    await Promise.all([field.refresh(), ...(routesEnabled ? [shelf.sync()] : [])])
     reloadLocal()
   }
 
@@ -71,7 +80,10 @@ export default function TodayTab() {
   const visitedPoints = summary?.routeVisited ?? today?.routes.reduce((sum, route) => sum + route.visitedPoints, 0) ?? 0
   const progress = routePoints > 0 ? Math.min(100, Math.round((visitedPoints / routePoints) * 100)) : 0
   const workdayStatus: DisplayWorkdayStatus = field.workday?.workday?.status ?? "NOT_STARTED"
-  const workdayActive = workdayStatus === "STARTED"
+  const workdayActive = workdayStatus === "STARTED" || workdayStatus === "PAUSED"
+  const nextWorkdayAction = field.workday?.availableActions[0] ?? (
+    workdayStatus === "NOT_STARTED" ? "START" : null
+  )
   const metrics = [
     { value: String(summary?.visits ?? localVisits), label: t("statVisitsToday") },
     { value: String(summary?.tasksCompleted ?? 0), label: t("statDoneTasks") },
@@ -79,19 +91,27 @@ export default function TodayTab() {
     { value: String(shelf.status.pendingOps + shelf.status.pendingPhotos), label: t("statPendingSync") },
   ]
 
-  const actions: Array<[string, string, TabIconName]> = IS_LEADDRIVE_FIELD
-    ? [
+  const actions: Array<[string, string, TabIconName]> = []
+  if (IS_LEADDRIVE_FIELD) {
+    if (workforceEnabled) {
+      actions.push([t("workforceRequestsTitle"), "/(app)/hrm", "week"])
+    }
+    if (routesEnabled) {
+      actions.push(
         [t("tabRoute"), "/(app)/routes", "route"],
         [t("agentTasksTitle"), "/(app)/field-tasks", "tasks"],
         [t("moduleOrganizations"), "/(app)/organizations", "organizations"],
         [t("moduleContacts"), "/(app)/contacts", "contacts"],
-      ]
-    : [
-        [t("tabRoute"), "/(app)/routes", "route"],
-        [t("tabTasks"), "/(app)/(tabs)/tasks", "tasks"],
-        [t("tabPlanograms"), "/(app)/(tabs)/planograms", "planograms"],
-        [t("tabOrders"), "/(app)/(tabs)/orders", "orders"],
-      ]
+      )
+    }
+  } else {
+    actions.push(
+      [t("tabRoute"), "/(app)/routes", "route"],
+      [t("tabTasks"), "/(app)/(tabs)/tasks", "tasks"],
+      [t("tabPlanograms"), "/(app)/(tabs)/planograms", "planograms"],
+      [t("tabOrders"), "/(app)/(tabs)/orders", "orders"],
+    )
+  }
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -107,7 +127,7 @@ export default function TodayTab() {
           </View>
           <View style={styles.heroCopy}>
             <Text style={styles.eyebrow}>{t("tabToday").toUpperCase()}</Text>
-            <Text style={styles.heroTitle}>{field.profile?.agent.name ?? t("appName")}</Text>
+            <Text style={styles.heroTitle}>{field.profile?.agent.name || field.bootstrap?.principal.name || t("appName")}</Text>
             <Text style={styles.heroDate}>{formatLongDate(new Date(), locale)}</Text>
           </View>
         </View>
@@ -124,20 +144,29 @@ export default function TodayTab() {
           </View>
         ) : null}
 
-        {IS_LEADDRIVE_FIELD ? (
-          <Pressable onPress={() => router.push("/(app)/workday" as never)} style={styles.workdayCard}>
+        {workforceEnabled ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={nextWorkdayAction ? t(workdayActionKeys[nextWorkdayAction]) : t("workdayTitle")}
+            onPress={() => router.push("/(app)/workday" as never)}
+            style={({ pressed }) => [styles.workdayCard, workdayActive && styles.workdayCardActive, pressed && styles.pressed]}
+          >
             <View style={[styles.workdayIcon, workdayActive && styles.workdayIconActive]}>
-              <Text style={styles.workdayIconText}>⌖</Text>
+              <Text style={styles.workdayIconText}>◷</Text>
             </View>
             <View style={styles.workdayBody}>
+              <Text style={styles.workdayEyebrow}>{t("workforceTitle").toUpperCase()}</Text>
               <Text style={styles.workdayTitle}>{t(workdayStatusKeys[workdayStatus])}</Text>
-              <Text style={styles.workdayHint}>{workdayActive ? t("workdaySubtitle") : t("workdayTrackingHintStopped")}</Text>
+              <Text style={styles.workdayHint}>{t("workforceWorkdayHint")}</Text>
             </View>
-            <Text style={styles.workdayAction}>{workdayStatus === "NOT_STARTED" ? t("workdayStart") : "→"}</Text>
+            <View style={styles.workdayActionPill}>
+              <Text style={styles.workdayAction}>{nextWorkdayAction ? t(workdayActionKeys[nextWorkdayAction]) : "→"}</Text>
+            </View>
           </Pressable>
         ) : null}
 
         <View style={layout.isTablet ? styles.tabletColumns : undefined}>
+          {routesEnabled ? (
           <View style={layout.isTablet ? styles.tabletPrimary : undefined}>
         <View style={[styles.overview, layout.isTablet && styles.tabletSection]}>
           <View style={styles.overviewHeader}>
@@ -193,6 +222,7 @@ export default function TodayTab() {
           </Pressable>
         </View>
           </View>
+          ) : null}
           <View style={layout.isTablet ? styles.tabletSecondary : undefined}>
         <View style={[styles.sectionHeader, layout.isTablet && styles.tabletSectionHeader]}>
           <Text style={styles.sectionTitle}>{t("quickActions")}</Text>
@@ -237,14 +267,17 @@ const styles = StyleSheet.create({
   noticeMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
   noticeAction: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.card },
   noticeActionText: { color: colors.primary, fontSize: 12, fontWeight: "800" },
-  workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 76, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  workdayCard: { marginHorizontal: 20, marginTop: 16, minHeight: 100, borderRadius: radii.card, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  workdayCardActive: { borderColor: colors.successBorder, backgroundColor: colors.successBg },
   workdayIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.draftBg, alignItems: "center", justifyContent: "center" },
   workdayIconActive: { backgroundColor: colors.successBg },
   workdayIconText: { color: colors.primary, fontSize: 22, fontWeight: "900" },
   workdayBody: { flex: 1, minWidth: 0 },
+  workdayEyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
   workdayTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   workdayHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  workdayAction: { maxWidth: 92, color: colors.primary, fontSize: 11, fontWeight: "900", textAlign: "right" },
+  workdayActionPill: { minHeight: 48, maxWidth: 104, borderRadius: radii.inner, backgroundColor: colors.primary, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
+  workdayAction: { color: colors.headerText, fontSize: 11, fontWeight: "900", textAlign: "center" },
   overview: { marginHorizontal: 20, marginTop: 18, backgroundColor: colors.card, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border },
   overviewHeader: { minHeight: 44, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: colors.border },
   sectionEyebrow: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1 },

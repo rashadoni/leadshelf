@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { FieldMobileModules } from "./contracts"
-import { fieldModuleRefreshPlan } from "./module-refresh-plan"
+import { fieldModuleRefreshPlan, fieldModuleUiPlan } from "./module-refresh-plan"
 
 function modules(workforce: boolean, routes: boolean): FieldMobileModules {
   return {
@@ -42,5 +42,11 @@ describe("field module refresh plan", () => {
       agentTasks: true,
       sharedRouteSync: true,
     })
+  })
+
+  it("preserves direct LeadShelf navigation while LeadDrive Field fails closed", () => {
+    expect(fieldModuleUiPlan(false, null)).toEqual({ workforce: true, routes: true })
+    expect(fieldModuleUiPlan(true, null)).toEqual({ workforce: false, routes: false })
+    expect(fieldModuleUiPlan(true, modules(true, false))).toEqual({ workforce: true, routes: false })
   })
 })

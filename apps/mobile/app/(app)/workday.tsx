@@ -184,6 +184,8 @@ export default function WorkdayScreen() {
   useLocale()
   const field = useField()
   const { sync, status: syncStatus } = useSync()
+  const workforceEnabled = field.workforceEnabled
+  const routesEnabled = field.routesEnabled
   const [busyAction, setBusyAction] = useState<FieldWorkdayAction | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [tracking, setTracking] = useState<WorkdayTrackingState>(() => stoppedWorkdayTrackingState())
@@ -192,7 +194,7 @@ export default function WorkdayScreen() {
   const [nowMs, setNowMs] = useState(Date.now())
 
   const date = field.workday?.date ?? field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
-  const timezone = field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? field.week?.timezone ?? "UTC"
+  const timezone = field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? field.week?.timezone ?? field.bootstrap?.timezone ?? "UTC"
   const intervalSeconds = field.workday?.gpsIntervalSeconds ?? field.locations?.gpsIntervalSeconds ?? 30
   const workdayData = field.workday ?? emptyFieldWorkdayData(date, timezone, intervalSeconds)
   const locationData = field.locations?.date === date
@@ -209,10 +211,14 @@ export default function WorkdayScreen() {
   }, [])
 
   useFocusEffect(useCallback(() => {
-    void field.refreshActivity()
-  }, [field.refreshActivity]))
+    if (workforceEnabled) void field.refreshActivity()
+  }, [field.refreshActivity, workforceEnabled]))
 
   const refreshTracking = useCallback(async () => {
+    if (!routesEnabled || !workforceEnabled) {
+      setTracking(stoppedWorkdayTrackingState())
+      return
+    }
     const state = await reconcileWorkdayTracking(workday?.status ?? null, intervalSeconds)
       .catch((): WorkdayTrackingState => ({
         mode: "unavailable",
@@ -221,9 +227,14 @@ export default function WorkdayScreen() {
         observedAt: new Date().toISOString(),
       }))
     setTracking(state)
-  }, [intervalSeconds, workday?.status])
+  }, [intervalSeconds, routesEnabled, workforceEnabled, workday?.status])
 
   useEffect(() => {
+    if (!routesEnabled || !workforceEnabled) {
+      void stopWorkdayTracking().catch(() => {})
+      setTracking(stoppedWorkdayTrackingState())
+      return
+    }
     if (busyAction) return
     let active = true
     void reconcileWorkdayTracking(workday?.status ?? null, intervalSeconds)
@@ -237,19 +248,20 @@ export default function WorkdayScreen() {
         })
       })
     return () => { active = false }
-  }, [busyAction, intervalSeconds, workday?.status])
+  }, [busyAction, intervalSeconds, routesEnabled, workforceEnabled, workday?.status])
 
   useEffect(() => {
+    if (!routesEnabled || !workforceEnabled) return
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active" && !busyAction && !trackingBusy) void refreshTracking()
     })
     return () => subscription.remove()
-  }, [busyAction, refreshTracking, trackingBusy])
+  }, [busyAction, refreshTracking, routesEnabled, trackingBusy, workforceEnabled])
 
   async function refresh() {
     setRefreshing(true)
     try {
-      await sync()
+      if (routesEnabled) await sync()
       await field.refreshActivity()
     } finally {
       setRefreshing(false)
@@ -257,6 +269,7 @@ export default function WorkdayScreen() {
   }
 
   async function applyAction(action: FieldWorkdayAction) {
+    if (!workforceEnabled) return
     const current = field.workday ?? emptyFieldWorkdayData(date, timezone, intervalSeconds)
     if (!current.availableActions.includes(action)) return
     let queuedClientOpId: string | null = null
@@ -264,7 +277,7 @@ export default function WorkdayScreen() {
     setFeedback(null)
     try {
       const occurredAt = new Date().toISOString()
-      const location = await getCurrentDeviceLocation().catch(() => null)
+      const location = routesEnabled ? await getCurrentDeviceLocation().catch(() => null) : null
       const workdayId = action === "START"
         ? `mobile-workday-${Crypto.randomUUID()}`
         : current.workday?.id
@@ -292,7 +305,7 @@ export default function WorkdayScreen() {
       })
       field.applyLocalWorkday(nextWorkday)
 
-      if (location) {
+      if (routesEnabled && location) {
         const payload = workdayLocationPayload({
           timestamp: Date.parse(occurredAt),
           coords: {
@@ -305,7 +318,9 @@ export default function WorkdayScreen() {
         field.applyLocalLocations(appendOptimisticFieldLocation(locationData, payload))
       }
 
-      if (action === "START" || action === "RESUME") {
+      if (!routesEnabled) {
+        setTracking(stoppedWorkdayTrackingState())
+      } else if (action === "START" || action === "RESUME") {
         try {
           const state = await startWorkdayTracking(intervalSeconds)
           setTracking(state)
@@ -326,7 +341,7 @@ export default function WorkdayScreen() {
         setTracking(stoppedWorkdayTrackingState())
       }
 
-      await sync()
+      if (routesEnabled) await sync()
       const result = fieldOutboxResult(queued.clientOpId)
       if (result?.status === "conflict" || result?.status === "rejected") {
         Alert.alert(t("workdayActionConflict"))
@@ -354,7 +369,7 @@ export default function WorkdayScreen() {
   }
 
   async function recoverTracking() {
-    if (tracking.recovery === "none" || trackingBusy) return
+    if (!routesEnabled || tracking.recovery === "none" || trackingBusy) return
     setTrackingBusy(true)
     setFeedback(null)
     try {
@@ -412,6 +427,22 @@ export default function WorkdayScreen() {
     ? null
     : trackingRecoveryKeys[tracking.recovery]
 
+  if (!workforceEnabled) {
+    return (
+      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+        <View style={styles.header}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+        </View>
+        <View style={styles.unavailableCard} accessibilityRole="alert">
+          <Text style={styles.unavailableTitle}>{t("workforceUnavailableTitle")}</Text>
+          <Text style={styles.unavailableBody}>{t("workforceUnavailableBody")}</Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <View style={styles.header}>
@@ -443,23 +474,25 @@ export default function WorkdayScreen() {
           </View>
           <Text style={styles.timerLabel}>{t("workdayWorked")}</Text>
           <Text style={styles.timer}>{formatDuration(workedSeconds)}</Text>
-          <Text style={styles.statusHint}>{t("workdaySubtitle")}</Text>
+          <Text style={styles.statusHint}>{routesEnabled ? t("workdaySubtitle") : t("workforceWorkdayHint")}</Text>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
               <Text style={styles.statValue}>{formatDuration(pausedSeconds)}</Text>
               <Text style={styles.statLabel}>{t("workdayPaused")}</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatDistance(locationData.distanceMeters)}</Text>
-              <Text style={styles.statLabel}>{t("workdayDistance")}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>{locationData.locations.length}</Text>
-              <Text style={styles.statLabel}>{t("workdayGpsShort")}</Text>
-            </View>
+            {routesEnabled ? <>
+              <View style={styles.statDivider} />
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{formatDistance(locationData.distanceMeters)}</Text>
+                <Text style={styles.statLabel}>{t("workdayDistance")}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{locationData.locations.length}</Text>
+                <Text style={styles.statLabel}>{t("workdayGpsShort")}</Text>
+              </View>
+            </> : null}
           </View>
         </View>
 
@@ -499,7 +532,7 @@ export default function WorkdayScreen() {
           <View style={styles.feedback}><Text style={styles.feedbackText}>{t(feedback)}</Text></View>
         ) : null}
 
-        <View style={styles.trackingCard}>
+        {routesEnabled ? <View style={styles.trackingCard}>
           <View style={[styles.trackingIcon, tracking.mode === "background" ? styles.trackingIconOn : tracking.mode === "denied" || tracking.mode === "services_disabled" || tracking.mode === "unavailable" ? styles.trackingIconWarn : styles.trackingIconOff]}>
             <Text style={styles.trackingIconText}>⌖</Text>
           </View>
@@ -524,8 +557,9 @@ export default function WorkdayScreen() {
               </Pressable>
             ) : null}
           </View>
-        </View>
+        </View> : null}
 
+        {routesEnabled ? <>
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>{t("workdayLocationTrail")}</Text>
@@ -534,6 +568,7 @@ export default function WorkdayScreen() {
           <Text style={styles.sectionMetric}>{formatDistance(locationData.distanceMeters)}</Text>
         </View>
         <View style={styles.card}><LocationTrail data={locationData} /></View>
+        </> : null}
 
         <View style={styles.sectionHeader}>
           <View>
@@ -550,7 +585,9 @@ export default function WorkdayScreen() {
               <View style={styles.eventBody}>
                 <Text style={styles.eventTitle}>{t(eventKeys[event.type])}</Text>
                 <Text style={styles.eventMeta}>
-                  {formatTime(event.occurredAt)} · {event.latitude == null ? t("workdayWithoutGps") : t("workdayWithGps")}
+                  {routesEnabled
+                    ? `${formatTime(event.occurredAt)} · ${event.latitude == null ? t("workdayWithoutGps") : t("workdayWithGps")}`
+                    : formatTime(event.occurredAt)}
                 </Text>
               </View>
               {event.syncState === "PENDING" ? <Text style={styles.eventPending}>{t("queued")}</Text> : null}
@@ -558,13 +595,13 @@ export default function WorkdayScreen() {
           ))}
         </View>
 
-        <View style={styles.privacyCard}>
+        {routesEnabled ? <View style={styles.privacyCard}>
           <Text style={styles.privacyIcon}>i</Text>
           <View style={styles.privacyBody}>
             <Text style={styles.privacyTitle}>{t("workdayPrivacyTitle")}</Text>
             <Text style={styles.privacyText}>{t("workdayPrivacyBody")}</Text>
           </View>
-        </View>
+        </View> : null}
       </ScrollView>
     </SafeAreaView>
   )
@@ -580,6 +617,9 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.4, marginTop: 2 },
   refreshButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", ...cardShadow },
   refreshText: { color: colors.primary, fontSize: 24, fontWeight: "800" },
+  unavailableCard: { margin: 16, borderRadius: radii.card, padding: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  unavailableTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  unavailableBody: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 7 },
   scroll: { paddingHorizontal: 14, paddingBottom: 36 },
   statusCard: { borderRadius: 26, padding: 20, borderWidth: 1, ...cardShadow },
   statusReady: { backgroundColor: colors.card, borderColor: colors.border },

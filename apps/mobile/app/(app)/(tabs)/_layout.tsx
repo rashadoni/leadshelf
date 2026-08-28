@@ -12,7 +12,7 @@ import { TABLET_RAIL_WIDTH, useResponsiveLayout } from "../../../src/layout/resp
 export default function TabsLayout() {
   useLocale() // ре-рендер подписей вкладок при смене языка в профиле
   const insets = useSafeAreaInsets()
-  const { notifications, messages } = useField()
+  const { notifications, messages, routesEnabled } = useField()
   const inboxUnread = notifications.unread + messages.unread
   const inboxBadge = inboxUnread > 99 ? "99+" : inboxUnread || undefined
   const tabBarMetrics = getBottomTabBarMetrics(insets.bottom)
@@ -67,6 +67,9 @@ export default function TabsLayout() {
         options={{
           title: t("tabWeek"),
           tabBarIcon: ({ color }) => <TabIcon name="week" color={color} />,
+          // A Workforce-only tenant must not discover a route calendar from a
+          // shared APK. Deep links remain server-gated for backwards safety.
+          href: routesEnabled ? undefined : null,
         }}
       />
       <Tabs.Screen

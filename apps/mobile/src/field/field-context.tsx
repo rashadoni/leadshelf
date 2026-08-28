@@ -10,6 +10,7 @@ import {
 import { router } from "expo-router"
 import { fieldApi } from "../api/mobile-client"
 import { tokenStore } from "../auth/token-store"
+import { IS_LEADDRIVE_FIELD } from "../config/mobile-variant"
 import { cacheFieldMessages, readFieldCache, readFieldMessages, writeFieldCache } from "../db/local-store"
 import { AuthLostError } from "../sync/ports-error"
 import { stopWorkdayTracking } from "../location/workday-tracking"
@@ -24,7 +25,7 @@ import type {
   FieldWeekData,
   FieldWorkdayData,
 } from "./contracts"
-import { fieldModuleRefreshPlan } from "./module-refresh-plan"
+import { fieldModuleRefreshPlan, fieldModuleUiPlan } from "./module-refresh-plan"
 
 type FieldPhase = "loading" | "ready" | "refreshing" | "stale" | "error"
 
@@ -391,7 +392,7 @@ export function FieldProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const modulePlan = fieldModuleRefreshPlan(bootstrap?.modules ?? null)
+  const modulePlan = fieldModuleUiPlan(IS_LEADDRIVE_FIELD, bootstrap?.modules ?? null)
 
   return (
     <Ctx.Provider value={{

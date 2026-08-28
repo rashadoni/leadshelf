@@ -23,13 +23,20 @@ export default function WorkTab() {
   const layout = useResponsiveLayout()
   const shelfOpenTasks = countOpenTasks()
   const fieldOpenTasks = field.agentTasks?.tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED").length ?? 0
+  const organizationName = field.profile?.agent.organizationName || field.bootstrap?.tenant.name || "LeadShelf"
+  const shelfConnected = field.routesEnabled && field.profile?.capabilities.shelfExecution.enabled === true
   const modules: Module[] = IS_LEADDRIVE_FIELD
     ? [
-        { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
-        { label: t("tabRoute"), hint: t("todayRoute"), icon: "route", href: "/(app)/routes" },
-        { label: t("agentTasksTitle"), hint: t("agentTasksSubtitle"), icon: "tasks", href: "/(app)/field-tasks", badge: fieldOpenTasks },
-        { label: t("moduleOrganizations"), hint: t("organizationsSearch"), icon: "organizations", href: "/(app)/organizations" },
-        { label: t("moduleContacts"), hint: t("contactsSearch"), icon: "contacts", href: "/(app)/contacts" },
+        ...(field.workforceEnabled ? [
+          { label: t("workforceTitle"), hint: t("workforceHint"), icon: "today" as const, href: "/(app)/workday" },
+          { label: t("workforceRequestsTitle"), hint: t("workforceRequestsHint"), icon: "week" as const, href: "/(app)/hrm" },
+        ] : []),
+        ...(field.routesEnabled ? [
+          { label: t("tabRoute"), hint: t("todayRoute"), icon: "route" as const, href: "/(app)/routes" },
+          { label: t("agentTasksTitle"), hint: t("agentTasksSubtitle"), icon: "tasks" as const, href: "/(app)/field-tasks", badge: fieldOpenTasks },
+          { label: t("moduleOrganizations"), hint: t("organizationsSearch"), icon: "organizations" as const, href: "/(app)/organizations" },
+          { label: t("moduleContacts"), hint: t("contactsSearch"), icon: "contacts" as const, href: "/(app)/contacts" },
+        ] : []),
       ]
     : [
         { label: t("workdayTitle"), hint: t("workdayHint"), icon: "today", href: "/(app)/workday" },
@@ -50,15 +57,15 @@ export default function WorkTab() {
 
         <View style={styles.identityCard}>
           <View style={styles.identityMark}>
-            <Text style={styles.identityInitial}>{field.profile?.agent.organizationName?.charAt(0).toUpperCase() ?? "L"}</Text>
+            <Text style={styles.identityInitial}>{organizationName.charAt(0).toUpperCase() || "L"}</Text>
           </View>
           <View style={styles.identityBody}>
             <Text style={styles.identityLabel}>{t("organization")}</Text>
-            <Text style={styles.identityName}>{field.profile?.agent.organizationName ?? "LeadShelf"}</Text>
+            <Text style={styles.identityName}>{organizationName}</Text>
           </View>
-          <View style={[styles.connection, field.profile?.capabilities.shelfExecution.enabled ? styles.connectionOn : styles.connectionOff]}>
-            <View style={[styles.connectionDot, { backgroundColor: field.profile?.capabilities.shelfExecution.enabled ? colors.success : colors.warning }]} />
-            <Text style={styles.connectionText}>{field.profile?.capabilities.shelfExecution.enabled ? t("shelfConnected") : t("shelfUnavailable")}</Text>
+          <View style={[styles.connection, (shelfConnected || field.workforceEnabled) ? styles.connectionOn : styles.connectionOff]}>
+            <View style={[styles.connectionDot, { backgroundColor: (shelfConnected || field.workforceEnabled) ? colors.success : colors.warning }]} />
+            <Text style={styles.connectionText}>{field.routesEnabled ? (shelfConnected ? t("shelfConnected") : t("shelfUnavailable")) : t("workforceTitle")}</Text>
           </View>
         </View>
 

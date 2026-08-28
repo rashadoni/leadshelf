@@ -5,7 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { fieldApi } from "../../../src/api/mobile-client"
 import { cacheFieldHrm, enqueueFieldHrmCancel, enqueueFieldHrmRequest, readFieldHrm } from "../../../src/db/local-store"
 import type { FieldHrmData, FieldHrmRequest, FieldHrmRequestType } from "../../../src/field/contracts"
-import { useLocale } from "../../../src/i18n"
+import { t, useLocale } from "../../../src/i18n"
+import { useField } from "../../../src/field/field-context"
 import { useSync } from "../../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../../src/theme"
 
@@ -30,7 +31,9 @@ function dateTime(date: string, time: string): string | null {
 
 export default function HrmScreen() {
   const locale = useLocale()
+  const field = useField()
   const { sync } = useSync()
+  const workforceEnabled = field.workforceEnabled
   const [data, setData] = useState<FieldHrmData | null>(readFieldHrm)
   const [mode, setMode] = useState<HrmMode>("schedule")
   const [formOpen, setFormOpen] = useState(false)
@@ -67,6 +70,10 @@ export default function HrmScreen() {
   const upcomingDates = useMemo(() => Array.from({ length: 21 }, (_, index) => addDays(index)), [])
   const correctionDays = useMemo(() => data?.days.filter((day) => day.workday).slice(-20).reverse() ?? [], [data?.days])
   const load = useCallback(async (showWarning = false) => {
+    if (!workforceEnabled) {
+      setData(null)
+      return
+    }
     try {
       setData(cacheFieldHrm(await fieldApi.hrm(addDays(-14), addDays(45))))
       setWarning(null)
@@ -74,9 +81,13 @@ export default function HrmScreen() {
       setData(readFieldHrm())
       if (showWarning) setWarning(copy.refreshError)
     }
-  }, [copy.refreshError])
+  }, [copy.refreshError, workforceEnabled])
 
-  useFocusEffect(useCallback(() => { setData(readFieldHrm()); void load(false) }, [load]))
+  useFocusEffect(useCallback(() => {
+    if (!workforceEnabled) return
+    setData(readFieldHrm())
+    void load(false)
+  }, [load, workforceEnabled]))
 
   async function refresh() { setRefreshing(true); await load(true); setRefreshing(false) }
 
@@ -93,6 +104,7 @@ export default function HrmScreen() {
   }
 
   async function submit() {
+    if (!workforceEnabled) return
     const normalizedReason = reason.trim()
     const requestedStartAt = type === "TIME_CORRECTION" ? dateTime(startDate, startTime) : null
     const requestedEndAt = type === "TIME_CORRECTION" ? dateTime(startDate, endTime) : null
@@ -126,9 +138,26 @@ export default function HrmScreen() {
   }
 
   function cancelRequest(request: FieldHrmRequest) {
+    if (!workforceEnabled) return
     enqueueFieldHrmCancel(request.id)
     setData(readFieldHrm())
     void sync().then(() => load(false)).catch(() => {})
+  }
+
+  if (!workforceEnabled) {
+    return (
+      <SafeAreaView style={styles.root} edges={["top"]}>
+        <View style={styles.header}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => router.back()} style={styles.back}>
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+        </View>
+        <View style={styles.unavailable} accessibilityRole="alert">
+          <Text style={styles.unavailableTitle}>{t("workforceUnavailableTitle")}</Text>
+          <Text style={styles.unavailableBody}>{t("workforceUnavailableBody")}</Text>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (
@@ -222,6 +251,7 @@ function RequestCard({ request, locale, copy, onCancel }: { request: FieldHrmReq
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg }, scroll: { paddingBottom: 36 }, header: { paddingHorizontal: 14, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }, back: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, backText: { color: colors.text, fontSize: 31, lineHeight: 32 }, headerBody: { flex: 1, minWidth: 0 }, eyebrow: { color: colors.primary, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 }, title: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 }, newButton: { minHeight: 47, borderRadius: 15, paddingHorizontal: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, newPlus: { color: colors.headerText, fontSize: 17, lineHeight: 16 }, newText: { color: colors.headerText, fontSize: 8, fontWeight: "900", marginTop: 2 }, intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
+  unavailable: { margin: 16, borderRadius: radii.card, padding: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }, unavailableTitle: { color: colors.text, fontSize: 18, fontWeight: "900" }, unavailableBody: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 7 },
   segment: { marginHorizontal: 14, marginTop: 16, borderRadius: 16, padding: 4, backgroundColor: "#E9E9EE", flexDirection: "row", gap: 4 }, segmentButton: { flex: 1, minHeight: 43, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 }, segmentSelected: { backgroundColor: colors.card, ...cardShadow }, segmentText: { color: colors.muted, fontSize: 11, fontWeight: "900" }, segmentTextSelected: { color: colors.text }, segmentCount: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.warning, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, segmentCountText: { color: colors.headerText, fontSize: 8, fontWeight: "900" },
   formCard: { marginHorizontal: 14, marginTop: 13, borderRadius: 22, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.infoBorder, ...cardShadow }, formHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, formEyebrow: { color: colors.primary, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 }, formTitle: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 3 }, close: { width: 38, height: 38, borderRadius: 13, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, closeText: { color: colors.muted, fontSize: 24, lineHeight: 25 }, types: { flexDirection: "row", gap: 7, marginTop: 13 }, typeButton: { flex: 1, minHeight: 75, borderRadius: 16, padding: 7, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, typeSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, typeGlyph: { color: colors.primary, fontSize: 18, fontWeight: "900" }, typeText: { color: colors.muted, fontSize: 8, lineHeight: 11, fontWeight: "900", textAlign: "center", marginTop: 5 }, typeTextSelected: { color: colors.headerText }, label: { color: colors.text, fontSize: 11, fontWeight: "900", marginTop: 16, marginBottom: 8 }, dateStrip: { gap: 7 }, dateChoice: { width: 58, height: 72, borderRadius: 16, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, dateChoiceSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, dateWeek: { color: colors.muted, fontSize: 8, fontWeight: "900", textTransform: "uppercase" }, dateNumber: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 2 }, dateMonth: { color: colors.muted, fontSize: 8, fontWeight: "700", marginTop: 1 }, dateTextSelected: { color: colors.headerText }, rangeLine: { minHeight: 40, marginTop: 9, borderRadius: 12, backgroundColor: colors.primarySoft, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, rangeText: { color: colors.primary, fontSize: 8, fontWeight: "900" }, rangeArrow: { color: colors.primary, fontSize: 15 }, endDates: { gap: 6, marginTop: 8 }, endDate: { minHeight: 34, borderRadius: 11, paddingHorizontal: 10, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, endDateSelected: { backgroundColor: colors.text }, endDateText: { color: colors.muted, fontSize: 8, fontWeight: "900" }, endDateTextSelected: { color: colors.headerText }, timeRow: { flexDirection: "row", alignItems: "flex-end", gap: 10 }, timeInputWrap: { flex: 1 }, timeLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", marginBottom: 5 }, timeInput: { minHeight: 46, borderRadius: 13, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, color: colors.text, fontSize: 13, fontWeight: "900", textAlign: "center" }, timeArrow: { color: colors.faint, fontSize: 18, marginBottom: 12 }, reasonInput: { minHeight: 85, borderRadius: 14, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, padding: 11, color: colors.text, fontSize: 11, lineHeight: 16 }, formActions: { flexDirection: "row", gap: 8, marginTop: 13 }, formCancel: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }, formCancelText: { color: colors.muted, fontSize: 10, fontWeight: "900" }, formSubmit: { flex: 2, minHeight: 46, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }, formSubmitText: { color: colors.headerText, fontSize: 10, fontWeight: "900" },
   warning: { marginHorizontal: 14, marginTop: 11, borderRadius: radii.inner, padding: 10, backgroundColor: colors.warningBg }, warningText: { color: colors.warning, fontSize: 9, lineHeight: 14, fontWeight: "800" }, legend: { flexDirection: "row", flexWrap: "wrap", gap: 12, paddingHorizontal: 16, marginTop: 16 }, legendItem: { flexDirection: "row", alignItems: "center", gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4 }, legendText: { color: colors.muted, fontSize: 8, fontWeight: "800" }, calendarStrip: { gap: 8, paddingHorizontal: 14, paddingTop: 11 }, dayCard: { width: 65, height: 92, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 }, dayWorking: { backgroundColor: colors.card, borderColor: colors.successBorder }, dayOff: { backgroundColor: colors.holidayBg, borderColor: colors.holidayBorder }, dayRequest: { backgroundColor: colors.warningBg, borderColor: "#F4D37A" }, dayWeek: { color: colors.muted, fontSize: 8, fontWeight: "900" }, dayNumber: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 3 }, dayMonth: { color: colors.muted, fontSize: 8, marginTop: 1 }, dayDot: { width: 7, height: 7, borderRadius: 4, marginTop: 6 }, scheduleList: { marginTop: 14 }, scheduleRow: { minHeight: 68, marginHorizontal: 14, marginTop: 8, borderRadius: 17, padding: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", gap: 10, ...cardShadow }, scheduleMark: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center" }, scheduleMarkText: { fontSize: 15, fontWeight: "900" }, scheduleBody: { flex: 1 }, scheduleDate: { color: colors.text, fontSize: 11, fontWeight: "900", textTransform: "capitalize" }, scheduleMeta: { color: colors.muted, fontSize: 9, fontWeight: "700", marginTop: 4 }, workdayPill: { borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.successBg }, workdayPillText: { color: colors.successDark, fontSize: 7, fontWeight: "900" },

@@ -18,3 +18,20 @@ export function fieldModuleRefreshPlan(modules: FieldMobileModules | null) {
     sharedRouteSync: routes,
   }
 }
+
+/**
+ * LeadShelf's direct protocol predates the capability manifest. Its existing
+ * combined Field UI must therefore remain visible while its local bootstrap
+ * fallback is resolved. LeadDrive Field has the opposite rule: without a
+ * validated manifest it exposes neither independent module.
+ */
+export function fieldModuleUiPlan(
+  isLeadDriveField: boolean,
+  modules: FieldMobileModules | null,
+) {
+  const plan = fieldModuleRefreshPlan(modules)
+  return {
+    workforce: !isLeadDriveField || plan.workforce,
+    routes: !isLeadDriveField || plan.routes,
+  }
+}
