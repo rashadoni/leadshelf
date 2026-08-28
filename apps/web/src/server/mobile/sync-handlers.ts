@@ -79,6 +79,11 @@ export async function handleMobileAck(body: unknown, session: MobileExecutionSes
   const mismatch = protocolMismatch(parsed.data.protocolVersion)
   if (mismatch) return mismatch
 
-  await ackCursors(workerDb, session.did, parsed.data.appliedCursors)
+  const appliedCursors = Object.fromEntries(
+    Object.entries(parsed.data.appliedCursors).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  )
+  await ackCursors(workerDb, session.did, appliedCursors)
   return NextResponse.json({ ok: true })
 }

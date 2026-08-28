@@ -700,7 +700,9 @@ export type MobileSyncPushResponse = z.infer<typeof mobileSyncPushResponseSchema
 
 export const mobileSyncAckRequestSchema = z.object({
   protocolVersion: mobileProtocolVersionSchema,
-  appliedCursors: z.record(z.string(), z.string()),
+  // An empty collection has no server cursor yet. Pull represents that state
+  // as null, and clients acknowledge the exact cursor map they applied.
+  appliedCursors: z.record(z.string(), z.string().nullable()),
 })
 export type MobileSyncAckRequest = z.infer<typeof mobileSyncAckRequestSchema>
 
