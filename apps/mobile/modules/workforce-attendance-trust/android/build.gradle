@@ -8,6 +8,10 @@ version = '1.0.0'
 
 android {
   namespace "expo.modules.workforceattendancetrust"
+  defaultConfig {
+    // Expo autolinking derives the local Maven artifact version from this value.
+    versionName "1.0.0"
+  }
 }
 
 dependencies {
