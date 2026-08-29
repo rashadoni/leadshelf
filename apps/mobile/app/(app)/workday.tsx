@@ -532,15 +532,16 @@ export default function WorkdayScreen() {
     // one-time proof material. Once ACTIVE, device-only actions may work
     // offline; server-side verification still rejects a revoked key on receipt.
     if (pointer.status === "PROVING" || pointer.status === "PENDING") {
+      const enrollmentPointer = pointer
       const enrollment = (await fieldApi.attendanceDeviceEnrollments())
-        .find((candidate) => candidate.id === pointer.enrollmentId)
+        .find((candidate) => candidate.id === enrollmentPointer.enrollmentId)
       if (!enrollment || enrollment.status === "REVOKED" || enrollment.status === "REPLACED") {
-        await clearAttendanceEnrollment(pointer)
+        await clearAttendanceEnrollment(enrollmentPointer)
         showAttendanceAlert("workdayAttendanceVerificationFailed")
         return null
       }
       if (enrollment.status !== "ACTIVE" && enrollment.keyVerifiedAt) {
-        await tokenStore.setWorkforceAttendanceEnrollment({ ...pointer, status: "PENDING" })
+        await tokenStore.setWorkforceAttendanceEnrollment({ ...enrollmentPointer, status: "PENDING" })
         showAttendanceAlert("workdayAttendanceApprovalPending")
         return null
       }
@@ -548,18 +549,18 @@ export default function WorkdayScreen() {
         try {
           await beginAndProveAttendanceEnrollment({
             scope,
-            pointer,
+            pointer: enrollmentPointer,
             biometricRequired: input.requirements.biometricRequired,
           })
         } catch (error) {
           if (workforceAttendanceTrustErrorCode(error) === "ERR_WORKFORCE_ATTENDANCE_REENROLL") {
-            await clearAttendanceEnrollment(pointer)
+            await clearAttendanceEnrollment(enrollmentPointer)
           }
           throw error
         }
         return null
       }
-      const activePointer: WorkforceAttendanceEnrollmentPointer = { ...pointer, status: "ACTIVE" }
+      const activePointer: WorkforceAttendanceActivePointer = { ...enrollmentPointer, status: "ACTIVE" }
       pointer = activePointer
       await tokenStore.setWorkforceAttendanceEnrollment(activePointer)
     }
