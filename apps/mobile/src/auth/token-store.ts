@@ -32,15 +32,28 @@ export type OnboardingSection = keyof typeof ONBOARDING_KEYS
  * It deliberately contains no QR, enrollment challenge, biometric result,
  * signature, PIN or private-key material.
  */
-export type WorkforceAttendanceEnrollmentPointer = {
+type WorkforceAttendanceEnrollmentPointerBase = {
   organizationId: string
   agentId: string
-  enrollmentId: string
   keyAlias: string
   biometricBound: boolean
-  /** The server controls activation; only an ACTIVE pointer may sign workdays. */
-  status: "PENDING" | "ACTIVE"
 }
+
+/**
+ * A STARTING/PROVING pointer lets the client resume an interrupted enrollment
+ * without retaining the public key, one-time challenge, signature or QR. Only
+ * ACTIVE may sign workdays; all other lifecycle states remain server-online.
+ */
+export type WorkforceAttendanceEnrollmentPointer =
+  | (WorkforceAttendanceEnrollmentPointerBase & {
+    status: "STARTING"
+    /** The active server enrollment that this new key will replace, if any. */
+    replacesEnrollmentId?: string
+  })
+  | (WorkforceAttendanceEnrollmentPointerBase & {
+    enrollmentId: string
+    status: "PROVING" | "PENDING" | "ACTIVE"
+  })
 
 function attendanceEnrollmentPointer(value: unknown): WorkforceAttendanceEnrollmentPointer | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -48,20 +61,32 @@ function attendanceEnrollmentPointer(value: unknown): WorkforceAttendanceEnrollm
   const identifier = (key: string, max = 120) => (
     typeof record[key] === "string" && /^[A-Za-z0-9._-]+$/.test(record[key]) && record[key].length <= max
   )
-  if (
-    !identifier("organizationId") ||
+  if (!identifier("organizationId") ||
     !identifier("agentId") ||
-    !identifier("enrollmentId") ||
     !identifier("keyAlias") ||
-    typeof record.biometricBound !== "boolean" ||
-    (record.status !== "PENDING" && record.status !== "ACTIVE")
-  ) return null
-  return {
+    typeof record.biometricBound !== "boolean") return null
+
+  const base = {
     organizationId: record.organizationId,
     agentId: record.agentId,
-    enrollmentId: record.enrollmentId,
     keyAlias: record.keyAlias,
     biometricBound: record.biometricBound,
+  }
+  if (record.status === "STARTING") {
+    if (record.replacesEnrollmentId != null && !identifier("replacesEnrollmentId")) return null
+    return {
+      ...base,
+      status: "STARTING",
+      ...(typeof record.replacesEnrollmentId === "string"
+        ? { replacesEnrollmentId: record.replacesEnrollmentId }
+        : {}),
+    }
+  }
+  if (!identifier("enrollmentId") ||
+    (record.status !== "PROVING" && record.status !== "PENDING" && record.status !== "ACTIVE")) return null
+  return {
+    ...base,
+    enrollmentId: record.enrollmentId,
     status: record.status,
   }
 }

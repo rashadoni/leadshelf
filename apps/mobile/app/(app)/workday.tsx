@@ -36,7 +36,10 @@ import type {
   FieldWorkdayStatus,
 } from "../../src/field/contracts"
 import { fieldApi } from "../../src/api/mobile-client"
-import { tokenStore } from "../../src/auth/token-store"
+import {
+  tokenStore,
+  type WorkforceAttendanceEnrollmentPointer,
+} from "../../src/auth/token-store"
 import { useField } from "../../src/field/field-context"
 import { parseFieldEphemeralWorkdayEventPayload } from "../../src/field/execution-outbox"
 import {
@@ -97,6 +100,15 @@ const eventKeys: Record<FieldWorkdayAction, MessageKey> = {
 }
 
 const QR_BARCODE_TYPES: BarcodeType[] = ["qr"]
+
+type QrScanSession = { action: FieldWorkdayAction; session: number }
+type WorkforceAttendanceScope = { organizationId: string; agentId: string }
+
+function workforceAttendanceTrustErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null
+  const code = (error as { code?: unknown }).code
+  return typeof code === "string" ? code : null
+}
 
 function workdayConflictMessage(detail: unknown): string {
   const recovery = workdayRecoveryDetail(detail)
@@ -235,9 +247,11 @@ export default function WorkdayScreen() {
   const [feedback, setFeedback] = useState<MessageKey | null>(null)
   const [nowMs, setNowMs] = useState(Date.now())
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
-  /** Only the action is stateful. A raw QR stays in the scan handler's local scope. */
-  const [qrScanAction, setQrScanAction] = useState<FieldWorkdayAction | null>(null)
+  /** Only the action/session is stateful. A raw QR stays handler-local. */
+  const [qrScanAction, setQrScanAction] = useState<QrScanSession | null>(null)
   const qrScanConsumed = useRef(false)
+  const qrScanSession = useRef(0)
+  const activeQrScanSession = useRef<number | null>(null)
 
   const date = field.workday?.date ?? field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
   const timezone = field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? field.week?.timezone ?? field.bootstrap?.timezone ?? "UTC"
@@ -337,31 +351,137 @@ export default function WorkdayScreen() {
         showAttendanceAlert("workdayAttendanceVerificationFailed")
         return
       }
+      const session = qrScanSession.current + 1
+      qrScanSession.current = session
       qrScanConsumed.current = false
-      setQrScanAction(action)
+      activeQrScanSession.current = session
+      setQrScanAction({ action, session })
     } catch {
       showAttendanceAlert("workdayAttendanceVerificationFailed")
     }
   }
 
   function closeQrScanner() {
-    qrScanConsumed.current = false
+    // Invalidate before unmounting. Camera callbacks can arrive after the
+    // user cancels, including one retained by a prior scanner session.
+    activeQrScanSession.current = null
+    qrScanConsumed.current = true
     setQrScanAction(null)
   }
 
   function handleQrScanned(result: BarcodeScanningResult) {
-    if (qrScanConsumed.current || !qrScanAction) return
+    if (
+      qrScanConsumed.current ||
+      !qrScanAction ||
+      activeQrScanSession.current !== qrScanAction.session
+    ) return
     // This raw token is intentionally handler-local: no state, ref, cache,
     // log, error text or durable outbox record may retain it.
-    const action = qrScanAction
+    const action = qrScanAction.action
     const qrToken = result.data.trim()
     qrScanConsumed.current = true
+    activeQrScanSession.current = null
     setQrScanAction(null)
     if (!qrToken || qrToken.length > 4_096) {
       showAttendanceAlert("workdayAttendanceVerificationFailed")
       return
     }
     void applyAction(action, qrToken)
+  }
+
+  async function clearAttendanceEnrollment(pointer: WorkforceAttendanceEnrollmentPointer): Promise<void> {
+    await tokenStore.setWorkforceAttendanceEnrollment(null)
+    await workforceAttendanceTrust.removeEnrollmentKey(pointer.keyAlias).catch(() => {})
+  }
+
+  async function createAttendanceEnrollmentPointer(input: {
+    scope: WorkforceAttendanceScope
+    biometricRequired: boolean
+    replacesEnrollmentId?: string
+  }): Promise<WorkforceAttendanceEnrollmentPointer> {
+    const keyAlias = `workforce-attendance-${Crypto.randomUUID()}`
+    const key = await workforceAttendanceTrust.createEnrollmentKey(keyAlias, input.biometricRequired)
+    if (key.biometricBound !== input.biometricRequired) {
+      await workforceAttendanceTrust.removeEnrollmentKey(keyAlias).catch(() => {})
+      throw new Error("Attendance enrollment key protection mismatch")
+    }
+    const pointer: WorkforceAttendanceEnrollmentPointer = {
+      ...input.scope,
+      keyAlias,
+      biometricBound: key.biometricBound,
+      status: "STARTING",
+      ...(input.replacesEnrollmentId ? { replacesEnrollmentId: input.replacesEnrollmentId } : {}),
+    }
+    // Persist before the first request. If its response or a subsequent proof
+    // response is lost, we can safely obtain the same public key again and ask
+    // the server to resume/rechallenge rather than losing the only private key.
+    await tokenStore.setWorkforceAttendanceEnrollment(pointer)
+    return pointer
+  }
+
+  async function beginAndProveAttendanceEnrollment(input: {
+    scope: WorkforceAttendanceScope
+    pointer: WorkforceAttendanceEnrollmentPointer
+    biometricRequired: boolean
+  }): Promise<void> {
+    const publicKeySpki = await workforceAttendanceTrust.getEnrollmentPublicKeySpki(input.pointer.keyAlias)
+    const enrollment = await fieldApi.beginAttendanceDeviceEnrollment({
+      deviceLabel: "Android Field",
+      publicKeySpki,
+      ...(input.pointer.status === "STARTING" && input.pointer.replacesEnrollmentId
+        ? { replacesEnrollmentId: input.pointer.replacesEnrollmentId }
+        : {}),
+    })
+    const proving: WorkforceAttendanceEnrollmentPointer = {
+      ...input.scope,
+      enrollmentId: enrollment.enrollment.id,
+      keyAlias: input.pointer.keyAlias,
+      biometricBound: input.pointer.biometricBound,
+      status: "PROVING",
+    }
+    // Store the server enrollment ID before the one-time proof. An ambiguous
+    // proof response is then reconciled from lifecycle rather than retried
+    // blindly or deleting the Keystore key.
+    await tokenStore.setWorkforceAttendanceEnrollment(proving)
+    const challenge = workforceDeviceEnrollmentChallenge({
+      organizationId: input.scope.organizationId,
+      agentId: input.scope.agentId,
+      enrollmentId: enrollment.enrollment.id,
+      challenge: enrollment.challenge,
+    })
+    const signature = await workforceAttendanceTrust.sign(
+      proving.keyAlias,
+      challenge,
+      input.biometricRequired,
+    )
+    const proven = await fieldApi.proveAttendanceDeviceEnrollment({
+      enrollmentId: enrollment.enrollment.id,
+      challenge: enrollment.challenge,
+      signature,
+    })
+    if (proven.enrollmentId !== enrollment.enrollment.id) {
+      throw new Error("Attendance enrollment proof mismatch")
+    }
+    await tokenStore.setWorkforceAttendanceEnrollment({ ...proving, status: "PENDING" })
+    showAttendanceAlert("workdayAttendanceApprovalPending")
+  }
+
+  async function beginReplacementAttendanceEnrollment(input: {
+    scope: WorkforceAttendanceScope
+    pointer: Extract<WorkforceAttendanceEnrollmentPointer, { status: "ACTIVE" }>
+    biometricRequired: boolean
+  }): Promise<void> {
+    await clearAttendanceEnrollment(input.pointer)
+    const replacement = await createAttendanceEnrollmentPointer({
+      scope: input.scope,
+      biometricRequired: input.biometricRequired,
+      replacesEnrollmentId: input.pointer.enrollmentId,
+    })
+    await beginAndProveAttendanceEnrollment({
+      scope: input.scope,
+      pointer: replacement,
+      biometricRequired: input.biometricRequired,
+    })
   }
 
   async function deviceAttendanceEvidence(input: {
@@ -382,76 +502,75 @@ export default function WorkdayScreen() {
       return null
     }
 
-    const scope = { organizationId: bootstrap.tenant.id, agentId: bootstrap.principal.id }
+    const scope: WorkforceAttendanceScope = { organizationId: bootstrap.tenant.id, agentId: bootstrap.principal.id }
     let pointer = await tokenStore.getWorkforceAttendanceEnrollment(scope)
     if (!pointer) {
-      const keyAlias = `workforce-attendance-${Crypto.randomUUID()}`
+      pointer = await createAttendanceEnrollmentPointer({
+        scope,
+        biometricRequired: input.requirements.biometricRequired,
+      })
+    }
+
+    if (pointer.status === "STARTING") {
       try {
-        const key = await workforceAttendanceTrust.createEnrollmentKey(keyAlias, input.requirements.biometricRequired)
-        if (key.biometricBound !== input.requirements.biometricRequired) {
-          throw new Error("Attendance enrollment key protection mismatch")
-        }
-        const enrollment = await fieldApi.beginAttendanceDeviceEnrollment({
-          deviceLabel: "Android Field",
-          publicKeySpki: key.publicKeySpki,
+        await beginAndProveAttendanceEnrollment({
+          scope,
+          pointer,
+          biometricRequired: input.requirements.biometricRequired,
         })
-        const challenge = workforceDeviceEnrollmentChallenge({
-          organizationId: scope.organizationId,
-          agentId: scope.agentId,
-          enrollmentId: enrollment.enrollment.id,
-          challenge: enrollment.challenge,
-        })
-        const signature = await workforceAttendanceTrust.sign(
-          keyAlias,
-          challenge,
-          input.requirements.biometricRequired,
-        )
-        const proven = await fieldApi.proveAttendanceDeviceEnrollment({
-          enrollmentId: enrollment.enrollment.id,
-          challenge: enrollment.challenge,
-          signature,
-        })
-        if (proven.enrollmentId !== enrollment.enrollment.id) {
-          throw new Error("Attendance enrollment proof mismatch")
-        }
-        await tokenStore.setWorkforceAttendanceEnrollment({
-          ...scope,
-          enrollmentId: enrollment.enrollment.id,
-          keyAlias,
-          biometricBound: key.biometricBound,
-          status: "PENDING",
-        })
-        showAttendanceAlert("workdayAttendanceApprovalPending")
       } catch (error) {
-        await workforceAttendanceTrust.removeEnrollmentKey(keyAlias).catch(() => {})
+        if (workforceAttendanceTrustErrorCode(error) === "ERR_WORKFORCE_ATTENDANCE_REENROLL") {
+          await clearAttendanceEnrollment(pointer)
+        }
         throw error
       }
       return null
     }
 
-    // A verified-but-unapproved pointer is checked online. Once the server
-    // explicitly marks it ACTIVE, later device-only actions may work offline;
-    // server-side verification still rejects a revoked key on receipt.
-    if (pointer.status === "PENDING") {
+    // All lifecycle states before ACTIVE are checked online. A lost begin/proof
+    // response retains this pointer and is reconciled without retaining any
+    // one-time proof material. Once ACTIVE, device-only actions may work
+    // offline; server-side verification still rejects a revoked key on receipt.
+    if (pointer.status === "PROVING" || pointer.status === "PENDING") {
       const enrollment = (await fieldApi.attendanceDeviceEnrollments())
-        .find((candidate) => candidate.id === pointer!.enrollmentId)
+        .find((candidate) => candidate.id === pointer.enrollmentId)
       if (!enrollment || enrollment.status === "REVOKED" || enrollment.status === "REPLACED") {
-        await tokenStore.setWorkforceAttendanceEnrollment(null)
-        await workforceAttendanceTrust.removeEnrollmentKey(pointer.keyAlias).catch(() => {})
+        await clearAttendanceEnrollment(pointer)
         showAttendanceAlert("workdayAttendanceVerificationFailed")
         return null
       }
-      if (enrollment.status !== "ACTIVE") {
+      if (enrollment.status !== "ACTIVE" && enrollment.keyVerifiedAt) {
         await tokenStore.setWorkforceAttendanceEnrollment({ ...pointer, status: "PENDING" })
         showAttendanceAlert("workdayAttendanceApprovalPending")
         return null
       }
-      pointer = { ...pointer, status: "ACTIVE" }
-      await tokenStore.setWorkforceAttendanceEnrollment(pointer)
+      if (enrollment.status !== "ACTIVE") {
+        try {
+          await beginAndProveAttendanceEnrollment({
+            scope,
+            pointer,
+            biometricRequired: input.requirements.biometricRequired,
+          })
+        } catch (error) {
+          if (workforceAttendanceTrustErrorCode(error) === "ERR_WORKFORCE_ATTENDANCE_REENROLL") {
+            await clearAttendanceEnrollment(pointer)
+          }
+          throw error
+        }
+        return null
+      }
+      const activePointer: WorkforceAttendanceEnrollmentPointer = { ...pointer, status: "ACTIVE" }
+      pointer = activePointer
+      await tokenStore.setWorkforceAttendanceEnrollment(activePointer)
     }
 
+    if (pointer.status !== "ACTIVE") return null
     if (input.requirements.biometricRequired && !pointer.biometricBound) {
-      showAttendanceAlert("workdayAttendanceDeviceUnsupported")
+      await beginReplacementAttendanceEnrollment({
+        scope,
+        pointer,
+        biometricRequired: true,
+      })
       return null
     }
     const challenge = workforceDeviceAttendanceChallenge({
@@ -463,13 +582,23 @@ export default function WorkdayScreen() {
       workdayId: input.workdayId,
       occurredAt: input.occurredAt,
     })
-    return {
-      enrollmentId: pointer.enrollmentId,
-      signature: await workforceAttendanceTrust.sign(
-        pointer.keyAlias,
-        challenge,
-        input.requirements.biometricRequired,
-      ),
+    try {
+      return {
+        enrollmentId: pointer.enrollmentId,
+        signature: await workforceAttendanceTrust.sign(
+          pointer.keyAlias,
+          challenge,
+          input.requirements.biometricRequired,
+        ),
+      }
+    } catch (error) {
+      if (workforceAttendanceTrustErrorCode(error) !== "ERR_WORKFORCE_ATTENDANCE_REENROLL") throw error
+      await beginReplacementAttendanceEnrollment({
+        scope,
+        pointer,
+        biometricRequired: input.requirements.biometricRequired,
+      })
+      return null
     }
   }
 

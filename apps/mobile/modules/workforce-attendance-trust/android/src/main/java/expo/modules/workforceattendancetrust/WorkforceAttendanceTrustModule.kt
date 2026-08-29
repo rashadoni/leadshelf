@@ -4,6 +4,7 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Base64
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -51,6 +52,10 @@ class WorkforceAttendanceTrustModule : Module() {
       val alias = requireAlias(keyAlias)
       val keyStore = keyStore()
       if (keyStore.containsAlias(alias)) keyStore.deleteEntry(alias)
+    }
+
+    AsyncFunction("getEnrollmentPublicKeySpki") { keyAlias: String ->
+      enrollmentPublicKeySpki(keyAlias)
     }
 
     AsyncFunction("sign") { keyAlias: String, payload: String, biometricRequired: Boolean, promise: Promise ->
@@ -109,7 +114,7 @@ class WorkforceAttendanceTrustModule : Module() {
         throw failure("ERR_WORKFORCE_ATTENDANCE_PAYLOAD", "Attendance signing payload is invalid")
       }
       val entry = keyStore().getEntry(alias, null) as? KeyStore.PrivateKeyEntry
-        ?: throw failure("ERR_WORKFORCE_ATTENDANCE_KEY_MISSING", "Attendance enrollment key is unavailable")
+        ?: throw reenrollFailure("Attendance enrollment key is unavailable")
       keyRequiresAuthentication = keyRequiresAuthentication(entry.privateKey)
       if (biometricRequired && !keyRequiresAuthentication) {
         // A non-biometric key can never be upgraded in place. This stops a
@@ -118,6 +123,9 @@ class WorkforceAttendanceTrustModule : Module() {
       }
       signature = Signature.getInstance("SHA256withECDSA")
       signature.initSign(entry.privateKey)
+    } catch (error: KeyPermanentlyInvalidatedException) {
+      promise.reject(reenrollFailure("Attendance enrollment key was invalidated", error))
+      return
     } catch (error: CodedException) {
       promise.reject(error)
       return
@@ -189,8 +197,21 @@ class WorkforceAttendanceTrustModule : Module() {
     try {
       signature.update(payload.toByteArray(Charsets.UTF_8))
       promise.resolve(Base64.encodeToString(signature.sign(), Base64.NO_WRAP))
+    } catch (error: KeyPermanentlyInvalidatedException) {
+      promise.reject(reenrollFailure("Attendance enrollment key was invalidated", error))
     } catch (error: Exception) {
       promise.reject(failure("ERR_WORKFORCE_ATTENDANCE_SIGN", "Could not sign attendance action", error))
+    }
+  }
+
+  private fun enrollmentPublicKeySpki(keyAlias: String): String {
+    return try {
+      val alias = requireAlias(keyAlias)
+      val entry = keyStore().getEntry(alias, null) as? KeyStore.PrivateKeyEntry
+        ?: throw reenrollFailure("Attendance enrollment key is unavailable")
+      Base64.encodeToString(entry.certificate.publicKey.encoded, Base64.NO_WRAP)
+    } catch (error: KeyPermanentlyInvalidatedException) {
+      throw reenrollFailure("Attendance enrollment key was invalidated", error)
     }
   }
 
@@ -199,6 +220,8 @@ class WorkforceAttendanceTrustModule : Module() {
       val keyInfo = KeyFactory.getInstance(privateKey.algorithm, "AndroidKeyStore")
         .getKeySpec(privateKey, KeyInfo::class.java)
       keyInfo.isUserAuthenticationRequired
+    } catch (error: KeyPermanentlyInvalidatedException) {
+      throw reenrollFailure("Attendance enrollment key was invalidated", error)
     } catch (error: Exception) {
       throw failure("ERR_WORKFORCE_ATTENDANCE_KEY", "Could not inspect attendance key protection", error)
     }
@@ -223,6 +246,9 @@ class WorkforceAttendanceTrustModule : Module() {
 
   private fun failure(code: String, message: String, cause: Throwable? = null): CodedException =
     CodedException(code, message, cause)
+
+  private fun reenrollFailure(message: String, cause: Throwable? = null): CodedException =
+    failure("ERR_WORKFORCE_ATTENDANCE_REENROLL", message, cause)
 
   private companion object {
     val ALIAS_PATTERN = Regex("^[A-Za-z0-9._-]{1,120}$")

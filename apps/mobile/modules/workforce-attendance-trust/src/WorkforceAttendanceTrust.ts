@@ -15,6 +15,7 @@ export type WorkforceAttendanceEnrollmentKey = {
 type NativeWorkforceAttendanceTrust = {
   getAvailability(): WorkforceAttendanceTrustAvailability
   createEnrollmentKey(keyAlias: string, biometricRequired: boolean): Promise<WorkforceAttendanceEnrollmentKey>
+  getEnrollmentPublicKeySpki(keyAlias: string): Promise<string>
   sign(keyAlias: string, payload: string, biometricRequired: boolean): Promise<string>
   removeEnrollmentKey(keyAlias: string): Promise<void>
 }
@@ -44,6 +45,12 @@ export const workforceAttendanceTrust = {
   ): Promise<WorkforceAttendanceEnrollmentKey> {
     if (!nativeModule) throw unavailable()
     return nativeModule.createEnrollmentKey(keyAlias, biometricRequired)
+  },
+
+  /** Returns only the public half of an existing non-exportable Keystore key. */
+  async getEnrollmentPublicKeySpki(keyAlias: string): Promise<string> {
+    if (!nativeModule) throw unavailable()
+    return nativeModule.getEnrollmentPublicKeySpki(keyAlias)
   },
 
   async sign(

@@ -24,9 +24,33 @@ describe("workday attendance H5 wiring", () => {
   })
 
   it("waits for manager activation before a newly enrolled device can sign", () => {
+    expect(workdaySource).toContain('status: "STARTING"')
+    expect(workdaySource).toContain('status: "PROVING"')
     expect(workdaySource).toContain('status: "PENDING"')
+    expect(workdaySource).toContain("getEnrollmentPublicKeySpki")
     expect(workdaySource).toContain("await fieldApi.attendanceDeviceEnrollments()")
     expect(workdaySource).toContain('if (enrollment.status !== "ACTIVE")')
     expect(workdaySource).toContain("workforceDeviceAttendanceChallenge")
+    expect(workdaySource).toContain("replacesEnrollmentId")
+    expect(workdaySource).toContain("ERR_WORKFORCE_ATTENDANCE_REENROLL")
+  })
+
+  it("invalidates a cancelled QR scanner session before it can receive a late callback", () => {
+    const close = workdaySource.slice(
+      workdaySource.indexOf("function closeQrScanner()"),
+      workdaySource.indexOf("function handleQrScanned"),
+    )
+    expect(close.indexOf("activeQrScanSession.current = null"))
+      .toBeLessThan(close.indexOf("setQrScanAction(null)"))
+    expect(workdaySource).toContain("activeQrScanSession.current !== qrScanAction.session")
+  })
+
+  it("maps native key invalidation to explicit re-enrollment rather than a generic sign error", () => {
+    const nativeSource = readFileSync(
+      new URL("../../modules/workforce-attendance-trust/android/src/main/java/expo/modules/workforceattendancetrust/WorkforceAttendanceTrustModule.kt", import.meta.url),
+      "utf8",
+    )
+    expect(nativeSource).toContain("KeyPermanentlyInvalidatedException")
+    expect(nativeSource).toContain("ERR_WORKFORCE_ATTENDANCE_REENROLL")
   })
 })

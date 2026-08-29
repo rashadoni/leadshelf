@@ -25,10 +25,21 @@ H5 добавляет необязательные уровни проверки
 
 ## Выбранный технический срез
 
-**Stack.** Оставляем Expo SDK 57 + dev-client/prebuild. Для настоящего
-server-verifiable подтверждения добавляется малый локальный Expo native module
-на Kotlin/Android Keystore; одного `expo-local-authentication` недостаточно,
-поскольку он возвращает только локальный результат, а не подпись действия.
+**Stack.** Оставляем Expo SDK 57 + dev-client/prebuild. Малый локальный Expo
+native module на Kotlin/Android Keystore создаёт non-exportable P-256 key и
+может получить подпись действия после системной биометрии; одного
+`expo-local-authentication` недостаточно, поскольку он возвращает только
+локальный результат, а не подпись действия.
+
+**Attestation gate.** Локальная системная биометрия ещё не является
+server-verifiable biometric assurance: без Android Key Attestation сервер не
+может отличить hardware key с нужной user-auth policy от модифицированного
+software key. Поэтому LeadDrive fail-closed отклоняет
+`biometricRequiredActions` до отдельного attestation protocol
+(server challenge, certificate-chain/key binding и проверяемые user-auth
+properties). QR и обычный device-trust остаются самостоятельными H5 уровнями.
+Физический тест BiometricPrompt допустим только как native smoke, но не как
+доказательство policy-enforced biometric attendance.
 
 **Ключ.** Модуль создаёт `EC` P-256 ключ с Android Keystore и
 `BiometricPrompt.CryptoObject(Signature)`. После успешной системной
@@ -74,10 +85,11 @@ analytics или diagnostics. При обязательном QR офлайн-о
    неизвестного/некорректного policy status. `apps/mobile/src/api/mobile-client.ts`
    отправляет proof только в independent Workforce lane.
 3. **Native boundary.** Новый `apps/mobile/modules/workforce-attendance-trust`
-   exposes only `getAvailability`, `createEnrollmentKey`, `sign` и
-   `removeEnrollmentKey`. Kotlin хранит alias и private key в Keystore;
-   TypeScript хранит только scoped enrollment ID, alias и lifecycle status для
-   UI/recovery — не public key, challenge, QR, signature или biometric result.
+   exposes only `getAvailability`, `createEnrollmentKey`,
+   `getEnrollmentPublicKeySpki`, `sign` и `removeEnrollmentKey`. Kotlin хранит
+   alias и private key в Keystore; TypeScript хранит только scoped enrollment
+   ID, alias и lifecycle status для UI/recovery — не public key, challenge, QR,
+   signature или biometric result.
    `app.json` получает только необходимое Android biometric permission/config;
    Expo Go не считается доказательством этой функции.
 4. **Workday UX.** `apps/mobile/app/(app)/workday.tsx` сначала читает manifest,
@@ -88,13 +100,17 @@ analytics или diagnostics. При обязательном QR офлайн-о
    и безопасный переход в recovery center.
    Обычный HRM UI и shelf/route sync не меняются.
 5. **Lifecycle.** Enrollment начинается с server challenge и proof владения
-   ключом; при обрыве сети после создания server resume использует только тот
-   же ещё не подтверждённый pending key, погашает старый one-time challenge и
-   выдаёт новый. После proof мобильный pointer имеет `PENDING` и не подписывает
-   workday до lifecycle `ACTIVE`; revoke/replacement очищают только
-   соответствующий Keystore alias, не удаляют Workforce history или outbox.
-   Local auth cancel/failure не создаёт mutation. Сервер остаётся источником
-   истины при rename/reinstall/transfer/revocation.
+   ключом; `STARTING` pointer сохраняется до первого POST, а `PROVING` — до
+   one-time proof. При обрыве сети server resume использует только тот же ещё
+   не подтверждённый pending key, погашает старый challenge и выдаёт новый;
+   public key получается заново только из того же Keystore alias. После proof
+   pointer имеет `PENDING` и не подписывает workday до lifecycle `ACTIVE`.
+   Revoke/replacement или invalidated biometric key очищают только
+   соответствующий alias; для invalidated ACTIVE key создаётся отдельный
+   replacement enrollment, который менеджер утверждает до замены старого.
+   Никакой transport failure сам по себе не удаляет ключ, Workforce history
+   или outbox. Сервер остаётся источником истины при
+   rename/reinstall/transfer/revocation.
 
 ## Безопасные значения по умолчанию
 
@@ -127,11 +143,13 @@ default при реализации:
   ordinary flow.
 - Native CI: Expo prebuild + release APK на GitHub Actions; Maestro получает
   отдельный H5 fixture flow, но emulator не заменяет hardware biometric proof.
-- Physical Android H6: два устройства, enrolled system biometric, QR station,
+- Physical Android H6: QR/device-trust матрица на двух устройствах, QR station,
   HRM-only и Both tenant cohorts, online/offline/restart/date-rollover и
-  two-device/revoke/replacement матрица. Evidence содержит только SHA, APK,
-  device class, capability/policy versions, machine codes и агрегированные
-  результаты — без QR tokens, GPS, PIN, biometric data или employee reasons.
+  two-device/revoke/replacement. BiometricPrompt можно проверить как native
+  smoke; policy-enforced biometric track блокирован до attestation gate.
+  Evidence содержит только SHA, APK, device class, capability/policy versions,
+  machine codes и агрегированные результаты — без QR tokens, GPS, PIN,
+  biometric data или employee reasons.
 
 Это адаптированная реализация для LeadDrive Field, не прямой перенос кода из
 LeadDrive. Server-first контракт уже добавлен в отдельной ветке LeadDrive;
