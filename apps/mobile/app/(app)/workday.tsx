@@ -38,6 +38,7 @@ import type {
 import { fieldApi } from "../../src/api/mobile-client"
 import {
   tokenStore,
+  type WorkforceAttendanceActivePointer,
   type WorkforceAttendanceEnrollmentPointer,
 } from "../../src/auth/token-store"
 import { useField } from "../../src/field/field-context"
@@ -468,7 +469,7 @@ export default function WorkdayScreen() {
 
   async function beginReplacementAttendanceEnrollment(input: {
     scope: WorkforceAttendanceScope
-    pointer: Extract<WorkforceAttendanceEnrollmentPointer, { status: "ACTIVE" }>
+    pointer: WorkforceAttendanceActivePointer
     biometricRequired: boolean
   }): Promise<void> {
     await clearAttendanceEnrollment(input.pointer)
@@ -503,13 +504,12 @@ export default function WorkdayScreen() {
     }
 
     const scope: WorkforceAttendanceScope = { organizationId: bootstrap.tenant.id, agentId: bootstrap.principal.id }
-    let pointer = await tokenStore.getWorkforceAttendanceEnrollment(scope)
-    if (!pointer) {
-      pointer = await createAttendanceEnrollmentPointer({
+    const storedPointer = await tokenStore.getWorkforceAttendanceEnrollment(scope)
+    let pointer: WorkforceAttendanceEnrollmentPointer = storedPointer ??
+      await createAttendanceEnrollmentPointer({
         scope,
         biometricRequired: input.requirements.biometricRequired,
       })
-    }
 
     if (pointer.status === "STARTING") {
       try {

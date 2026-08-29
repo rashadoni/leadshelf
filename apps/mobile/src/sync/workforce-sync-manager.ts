@@ -21,12 +21,18 @@ export const WORKFORCE_OUTBOX_KINDS = [
   "field.hrm.cancel",
 ] as const
 
+type WorkforceOutboxRow = OutboxRow & WorkforcePushOperation
+
 export function isWorkforcePushOperation(
   operation: PushOperation,
 ): operation is WorkforcePushOperation {
   return WORKFORCE_OUTBOX_KINDS.includes(
     operation.kind as typeof WORKFORCE_OUTBOX_KINDS[number],
   )
+}
+
+function isWorkforceOutboxRow(operation: OutboxRow): operation is WorkforceOutboxRow {
+  return isWorkforcePushOperation(operation)
 }
 
 export function emptyWorkforceSyncStatus(): SyncStatus {
@@ -137,11 +143,11 @@ export class WorkforceSyncManager {
     })
   }
 
-  private async pending(): Promise<OutboxRow[]> {
+  private async pending(): Promise<WorkforceOutboxRow[]> {
     const queued = this.deps.store.pendingOutboxForPipeline
       ? await this.deps.store.pendingOutboxForPipeline("workforce", MAX_PUSH_BATCH)
       : await this.deps.store.pendingOutbox(MAX_PUSH_BATCH)
-    return queued.filter(isWorkforcePushOperation)
+    return queued.filter(isWorkforceOutboxRow)
   }
 
   /** Repeated invocation while a delivery is in flight is intentionally a no-op. */

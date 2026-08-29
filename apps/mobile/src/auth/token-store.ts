@@ -44,6 +44,11 @@ type WorkforceAttendanceEnrollmentPointerBase = {
  * without retaining the public key, one-time challenge, signature or QR. Only
  * ACTIVE may sign workdays; all other lifecycle states remain server-online.
  */
+export type WorkforceAttendanceActivePointer = WorkforceAttendanceEnrollmentPointerBase & {
+  enrollmentId: string
+  status: "ACTIVE"
+}
+
 export type WorkforceAttendanceEnrollmentPointer =
   | (WorkforceAttendanceEnrollmentPointerBase & {
     status: "STARTING"
@@ -52,43 +57,55 @@ export type WorkforceAttendanceEnrollmentPointer =
   })
   | (WorkforceAttendanceEnrollmentPointerBase & {
     enrollmentId: string
-    status: "PROVING" | "PENDING" | "ACTIVE"
+    status: "PROVING"
   })
+  | (WorkforceAttendanceEnrollmentPointerBase & {
+    enrollmentId: string
+    status: "PENDING"
+  })
+  | WorkforceAttendanceActivePointer
 
 function attendanceEnrollmentPointer(value: unknown): WorkforceAttendanceEnrollmentPointer | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
   const record = value as Record<string, unknown>
-  const identifier = (key: string, max = 120) => (
-    typeof record[key] === "string" && /^[A-Za-z0-9._-]+$/.test(record[key]) && record[key].length <= max
+  const identifier = (candidate: unknown, max = 120): candidate is string => (
+    typeof candidate === "string" && /^[A-Za-z0-9._-]+$/.test(candidate) && candidate.length <= max
   )
-  if (!identifier("organizationId") ||
-    !identifier("agentId") ||
-    !identifier("keyAlias") ||
+  const organizationId = record.organizationId
+  const agentId = record.agentId
+  const keyAlias = record.keyAlias
+  if (!identifier(organizationId) ||
+    !identifier(agentId) ||
+    !identifier(keyAlias) ||
     typeof record.biometricBound !== "boolean") return null
 
   const base = {
-    organizationId: record.organizationId,
-    agentId: record.agentId,
-    keyAlias: record.keyAlias,
+    organizationId,
+    agentId,
+    keyAlias,
     biometricBound: record.biometricBound,
   }
   if (record.status === "STARTING") {
-    if (record.replacesEnrollmentId != null && !identifier("replacesEnrollmentId")) return null
+    const replacesEnrollmentId = record.replacesEnrollmentId
+    if (replacesEnrollmentId != null && !identifier(replacesEnrollmentId)) return null
     return {
       ...base,
       status: "STARTING",
-      ...(typeof record.replacesEnrollmentId === "string"
-        ? { replacesEnrollmentId: record.replacesEnrollmentId }
+      ...(typeof replacesEnrollmentId === "string"
+        ? { replacesEnrollmentId }
         : {}),
     }
   }
-  if (!identifier("enrollmentId") ||
-    (record.status !== "PROVING" && record.status !== "PENDING" && record.status !== "ACTIVE")) return null
-  return {
-    ...base,
-    enrollmentId: record.enrollmentId,
-    status: record.status,
+  const enrollmentId = record.enrollmentId
+  if (!identifier(enrollmentId)) return null
+  if (record.status === "PROVING" || record.status === "PENDING" || record.status === "ACTIVE") {
+    return {
+      ...base,
+      enrollmentId,
+      status: record.status,
+    }
   }
+  return null
 }
 
 async function get(key: string): Promise<string | null> {
