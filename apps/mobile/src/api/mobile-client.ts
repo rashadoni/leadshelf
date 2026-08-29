@@ -43,10 +43,13 @@ import {
   isFieldLocationPushOperation,
   isFieldVisitPhotoPushOperation,
   sendFieldExecutionOperations,
+  sendFieldEphemeralWorkdayOperation,
   sendFieldDocumentUploadOperation,
   sendFieldLocationOperation,
   sendFieldVisitPhotoOperation,
   type FieldExecutionPushOperation,
+  type FieldExecutionPushResult,
+  type FieldEphemeralWorkdayOperation,
   type FieldDocumentUploadPayload,
   type FieldLocationPayload,
   type FieldServerOperation,
@@ -245,6 +248,161 @@ function json(body: unknown): RequestInit {
   }
 }
 
+export type FieldAttendanceEnrollment = {
+  id: string
+  deviceLabel: string
+  publicKeyFingerprint: string
+  status: "PENDING"
+  createdAt: string
+}
+
+export type FieldAttendanceEnrollmentStart = {
+  enrollment: FieldAttendanceEnrollment
+  /** One-time opaque value: callers must sign it and must not persist it. */
+  challenge: string
+  expiresAt: string
+}
+
+export type FieldAttendanceEnrollmentProof = {
+  enrollmentId: string
+  status: "PENDING_MANAGER_APPROVAL"
+}
+
+/** Audit-safe lifecycle data; no public key or proof material is returned. */
+export type FieldAttendanceEnrollmentLifecycle = {
+  id: string
+  deviceLabel: string
+  publicKeyFingerprint: string
+  status: "PENDING" | "ACTIVE" | "REVOKED" | "REPLACED"
+  keyVerifiedAt: string | null
+  approvedAt: string | null
+  revokedAt: string | null
+  replacesEnrollmentId: string | null
+  createdAt: string
+}
+
+function apiRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function apiString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+function attendanceEnrollment(value: unknown): FieldAttendanceEnrollment {
+  const enrollment = apiRecord(value)
+  if (
+    !enrollment ||
+    !apiString(enrollment.id) ||
+    !apiString(enrollment.deviceLabel) ||
+    !apiString(enrollment.publicKeyFingerprint) ||
+    enrollment.status !== "PENDING" ||
+    !apiString(enrollment.createdAt) ||
+    Number.isNaN(new Date(enrollment.createdAt).getTime())
+  ) throw new Error("Invalid attendance device enrollment response")
+  return {
+    id: enrollment.id,
+    deviceLabel: enrollment.deviceLabel,
+    publicKeyFingerprint: enrollment.publicKeyFingerprint,
+    status: "PENDING",
+    createdAt: enrollment.createdAt,
+  }
+}
+
+function attendanceEnrollmentStart(value: unknown): FieldAttendanceEnrollmentStart {
+  const body = apiRecord(value)
+  const data = apiRecord(body?.data)
+  if (
+    body?.success !== true ||
+    !data ||
+    !apiString(data.challenge) ||
+    !apiString(data.expiresAt) ||
+    Number.isNaN(new Date(data.expiresAt).getTime())
+  ) throw new Error("Invalid attendance device enrollment response")
+  return {
+    enrollment: attendanceEnrollment(data.enrollment),
+    challenge: data.challenge,
+    expiresAt: data.expiresAt,
+  }
+}
+
+function attendanceEnrollmentProof(value: unknown): FieldAttendanceEnrollmentProof {
+  const body = apiRecord(value)
+  const data = apiRecord(body?.data)
+  const enrollment = apiRecord(data?.enrollment)
+  if (
+    body?.success !== true ||
+    !enrollment ||
+    !apiString(enrollment.enrollmentId) ||
+    enrollment.status !== "PENDING_MANAGER_APPROVAL"
+  ) throw new Error("Invalid attendance device proof response")
+  return { enrollmentId: enrollment.enrollmentId, status: "PENDING_MANAGER_APPROVAL" }
+}
+
+function nullableApiTimestamp(value: unknown): value is string | null {
+  return value === null || (apiString(value) && !Number.isNaN(new Date(value).getTime()))
+}
+
+function nullableApiIdentifier(value: unknown): value is string | null {
+  return value === null || apiString(value)
+}
+
+function attendanceEnrollmentLifecycleStatus(
+  value: unknown,
+): value is FieldAttendanceEnrollmentLifecycle["status"] {
+  return value === "PENDING" || value === "ACTIVE" || value === "REVOKED" || value === "REPLACED"
+}
+
+function attendanceEnrollmentLifecycle(value: unknown): FieldAttendanceEnrollmentLifecycle {
+  const enrollment = apiRecord(value)
+  const status = enrollment?.status
+  const keyVerifiedAt = enrollment?.keyVerifiedAt
+  const approvedAt = enrollment?.approvedAt
+  const revokedAt = enrollment?.revokedAt
+  const replacesEnrollmentId = enrollment?.replacesEnrollmentId
+  if (
+    !enrollment ||
+    !apiString(enrollment.id) ||
+    !apiString(enrollment.deviceLabel) ||
+    !apiString(enrollment.publicKeyFingerprint) ||
+    !attendanceEnrollmentLifecycleStatus(status) ||
+    !nullableApiTimestamp(keyVerifiedAt) ||
+    !nullableApiTimestamp(approvedAt) ||
+    !nullableApiTimestamp(revokedAt) ||
+    !nullableApiIdentifier(replacesEnrollmentId) ||
+    !apiString(enrollment.createdAt) ||
+    Number.isNaN(new Date(enrollment.createdAt).getTime())
+  ) throw new Error("Invalid attendance device enrollment lifecycle response")
+  return {
+    id: enrollment.id,
+    deviceLabel: enrollment.deviceLabel,
+    publicKeyFingerprint: enrollment.publicKeyFingerprint,
+    status,
+    keyVerifiedAt,
+    approvedAt,
+    revokedAt,
+    replacesEnrollmentId,
+    createdAt: enrollment.createdAt,
+  }
+}
+
+function attendanceEnrollmentLifecycles(value: unknown): FieldAttendanceEnrollmentLifecycle[] {
+  const body = apiRecord(value)
+  const data = apiRecord(body?.data)
+  if (body?.success !== true || !data || !Array.isArray(data.enrollments)) {
+    throw new Error("Invalid attendance device enrollment lifecycle response")
+  }
+  return data.enrollments.map(attendanceEnrollmentLifecycle)
+}
+
+function requireLeadDriveFieldAttendance(): void {
+  if (!IS_LEADDRIVE_FIELD) {
+    throw new Error("Workforce attendance trust is unavailable in the LeadShelf variant")
+  }
+}
+
 type LeadShelfLoginInput = {
   orgSlug: string
   employeeCode: string
@@ -390,6 +548,48 @@ export const fieldApi = {
   locations: (date?: string) =>
     request<unknown>(locationsPath(date))
       .then(parseFieldLocationHistory),
+  beginAttendanceDeviceEnrollment: async (input: {
+    deviceLabel: string
+    publicKeySpki: string
+    replacesEnrollmentId?: string
+  }): Promise<FieldAttendanceEnrollmentStart> => {
+    requireLeadDriveFieldAttendance()
+    return request<unknown>(
+      "/api/v1/mtm/mobile/attendance/devices/enrollments",
+      json(input),
+    ).then(attendanceEnrollmentStart)
+  },
+  proveAttendanceDeviceEnrollment: async (input: {
+    enrollmentId: string
+    challenge: string
+    signature: string
+  }): Promise<FieldAttendanceEnrollmentProof> => {
+    requireLeadDriveFieldAttendance()
+    return request<unknown>(
+      `/api/v1/mtm/mobile/attendance/devices/enrollments/${encodeURIComponent(input.enrollmentId)}/proof`,
+      json({ challenge: input.challenge, signature: input.signature }),
+    ).then(attendanceEnrollmentProof)
+  },
+  attendanceDeviceEnrollments: async (): Promise<FieldAttendanceEnrollmentLifecycle[]> => {
+    requireLeadDriveFieldAttendance()
+    return request<unknown>(
+      "/api/v1/mtm/mobile/attendance/devices/enrollments",
+    ).then(attendanceEnrollmentLifecycles)
+  },
+  pushEphemeralWorkday: async (
+    operation: FieldEphemeralWorkdayOperation,
+  ): Promise<FieldExecutionPushResult> => {
+    requireLeadDriveFieldAttendance()
+    return sendFieldEphemeralWorkdayOperation(operation, {
+      push: async (fieldOperations) => {
+        const deviceId = await tokenStore.getDeviceId()
+        return request<FieldServerPushResponse>(
+          "/api/v1/mtm/mobile/sync/push",
+          json({ clientId: deviceId ?? "unknown-device", operations: fieldOperations }),
+        )
+      },
+    })
+  },
   uploadLocation: async (input: FieldLocationPayload) => {
     const body = await request<{ success?: boolean; data?: { location?: unknown } }>(
       locationsPath(),
@@ -566,6 +766,18 @@ export const fieldApi = {
   hrm(start?: string, end?: string): Promise<FieldHrmData>
   workday(date?: string): Promise<FieldWorkdayData>
   locations(date?: string): Promise<FieldLocationHistoryData>
+  beginAttendanceDeviceEnrollment(input: {
+    deviceLabel: string
+    publicKeySpki: string
+    replacesEnrollmentId?: string
+  }): Promise<FieldAttendanceEnrollmentStart>
+  proveAttendanceDeviceEnrollment(input: {
+    enrollmentId: string
+    challenge: string
+    signature: string
+  }): Promise<FieldAttendanceEnrollmentProof>
+  attendanceDeviceEnrollments(): Promise<FieldAttendanceEnrollmentLifecycle[]>
+  pushEphemeralWorkday(operation: FieldEphemeralWorkdayOperation): Promise<FieldExecutionPushResult>
   uploadLocation(input: FieldLocationPayload): Promise<Record<string, unknown>>
   visitWorkspace(id: string): Promise<FieldVisitWorkspaceData>
   uploadVisitPhoto(input: FieldVisitPhotoPayload): Promise<Record<string, unknown>>

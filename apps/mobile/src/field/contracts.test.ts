@@ -72,6 +72,59 @@ describe("LeadDrive field contracts", () => {
     })
   })
 
+  it("accepts a matched active H5 attendance manifest and rejects a partial one", () => {
+    const attendance = {
+      qrEnabled: true,
+      deviceTrustEnabled: true,
+      status: "ACTIVE",
+      enforcementVersion: 1,
+      configVersion: "policy-1:4:7af23c",
+      qrRequiredActions: ["START"],
+      deviceTrustRequiredActions: ["START", "FINISH"],
+      biometricRequiredActions: ["START"],
+    }
+    const data = {
+      tenant: { id: "org-1", name: "Demo", slug: "demo" },
+      principal: { id: "agent-1", name: "Farid", email: null, role: "AGENT" },
+      capabilities: ["FIELD_EXECUTE"],
+      permissions: ["WORKTIME_SELF_READ"],
+      modules: {
+        workforce: {
+          enabled: true,
+          capabilityId: "workforce-hrm",
+          configVersion: null,
+          cursor: null,
+          attendance,
+        },
+        routes: { enabled: false, capabilityId: "route-field", configVersion: null },
+      },
+      timezone: "Asia/Baku",
+      policies: {
+        photoWatermark: false,
+        canPlanOwnRoutes: false,
+        workforce: { enabled: true, configVersion: null, attendance },
+      },
+      routeTargetTypes: [],
+      sync: { horizon: "ACTIVE_FIELD_SCOPE", scopeVersion: null, configVersion: null },
+      workday: null,
+    }
+
+    expect(parseFieldMobileBootstrap({ success: true, data }).policies.workforce.attendance).toEqual(attendance)
+    expect(() => parseFieldMobileBootstrap({
+      success: true,
+      data: {
+        ...data,
+        policies: {
+          ...data.policies,
+          workforce: {
+            ...data.policies.workforce,
+            attendance: { ...attendance, qrRequiredActions: ["FINISH"] },
+          },
+        },
+      },
+    })).toThrow(FieldContractError)
+  })
+
   it("rejects a bootstrap that could expose Workforce without its matching policy", () => {
     expect(() => parseFieldMobileBootstrap({
       success: true,

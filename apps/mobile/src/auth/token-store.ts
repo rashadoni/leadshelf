@@ -14,6 +14,7 @@ const KEYS = {
   lastEmail: "field.lastEmail",
   lastEmployeeCode: "field.lastEmployeeCode",
   legacyLastEmployeeCode: "ls.lastEmployeeCode",
+  workforceAttendanceEnrollment: "field.workforceAttendanceEnrollment",
 } as const
 
 const ONBOARDING_KEYS = {
@@ -25,6 +26,45 @@ const ONBOARDING_KEYS = {
 } as const
 
 export type OnboardingSection = keyof typeof ONBOARDING_KEYS
+
+/**
+ * This is only a local pointer to a non-exportable Android Keystore key.
+ * It deliberately contains no QR, enrollment challenge, biometric result,
+ * signature, PIN or private-key material.
+ */
+export type WorkforceAttendanceEnrollmentPointer = {
+  organizationId: string
+  agentId: string
+  enrollmentId: string
+  keyAlias: string
+  biometricBound: boolean
+  /** The server controls activation; only an ACTIVE pointer may sign workdays. */
+  status: "PENDING" | "ACTIVE"
+}
+
+function attendanceEnrollmentPointer(value: unknown): WorkforceAttendanceEnrollmentPointer | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const identifier = (key: string, max = 120) => (
+    typeof record[key] === "string" && /^[A-Za-z0-9._-]+$/.test(record[key]) && record[key].length <= max
+  )
+  if (
+    !identifier("organizationId") ||
+    !identifier("agentId") ||
+    !identifier("enrollmentId") ||
+    !identifier("keyAlias") ||
+    typeof record.biometricBound !== "boolean" ||
+    (record.status !== "PENDING" && record.status !== "ACTIVE")
+  ) return null
+  return {
+    organizationId: record.organizationId,
+    agentId: record.agentId,
+    enrollmentId: record.enrollmentId,
+    keyAlias: record.keyAlias,
+    biometricBound: record.biometricBound,
+    status: record.status,
+  }
+}
 
 async function get(key: string): Promise<string | null> {
   return SecureStore.getItemAsync(key)
@@ -70,6 +110,27 @@ export const tokenStore = {
   setOrgSlug: (v: string) => set(KEYS.orgSlug, v),
   setUserName: (v: string) => set(KEYS.userName, v),
   setLocale: (v: string) => set(KEYS.locale, v),
+  async getWorkforceAttendanceEnrollment(input: { organizationId: string; agentId: string }) {
+    const raw = await get(KEYS.workforceAttendanceEnrollment)
+    if (!raw) return null
+    try {
+      const pointer = attendanceEnrollmentPointer(JSON.parse(raw))
+      return pointer?.organizationId === input.organizationId && pointer.agentId === input.agentId
+        ? pointer
+        : null
+    } catch {
+      return null
+    }
+  },
+  async setWorkforceAttendanceEnrollment(pointer: WorkforceAttendanceEnrollmentPointer | null) {
+    if (!pointer) {
+      await set(KEYS.workforceAttendanceEnrollment, null)
+      return
+    }
+    const safe = attendanceEnrollmentPointer(pointer)
+    if (!safe) throw new Error("Invalid workforce attendance enrollment pointer")
+    await set(KEYS.workforceAttendanceEnrollment, JSON.stringify(safe))
+  },
   async clearSession() {
     await set(KEYS.access, null)
     await set(KEYS.refresh, null)

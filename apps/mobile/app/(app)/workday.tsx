@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
   AppState,
   Linking,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,12 +14,19 @@ import {
 } from "react-native"
 import { router, useFocusEffect } from "expo-router"
 import * as Crypto from "expo-crypto"
+import {
+  CameraView,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+  type BarcodeType,
+} from "expo-camera"
 import Svg, { Circle, Path } from "react-native-svg"
 import { SafeAreaView } from "react-native-safe-area-context"
 import {
   enqueueFieldLocation,
   enqueueFieldWorkdayEvent,
   fieldOutboxResult,
+  newFieldWorkdayClientOperationId,
   readFieldCache,
 } from "../../src/db/local-store"
 import type {
@@ -27,7 +35,18 @@ import type {
   FieldWorkdayData,
   FieldWorkdayStatus,
 } from "../../src/field/contracts"
+import { fieldApi } from "../../src/api/mobile-client"
+import { tokenStore } from "../../src/auth/token-store"
 import { useField } from "../../src/field/field-context"
+import { parseFieldEphemeralWorkdayEventPayload } from "../../src/field/execution-outbox"
+import {
+  FieldAttendanceContractError,
+  fieldAttendanceRequirementsForAction,
+  workforceDeviceAttendanceChallenge,
+  workforceDeviceEnrollmentChallenge,
+  type FieldAttendanceRequirements,
+  type FieldDeviceAttendanceEvidence,
+} from "../../src/field/workforce-attendance"
 import {
   appendOptimisticFieldLocation,
   applyOptimisticWorkdayAction,
@@ -52,6 +71,7 @@ import {
 } from "../../src/location/workday-tracking"
 import { useSync } from "../../src/sync/sync-context"
 import { colors, cardShadow, radii } from "../../src/theme"
+import { workforceAttendanceTrust } from "../../modules/workforce-attendance-trust"
 
 type DisplayStatus = FieldWorkdayStatus | "NOT_STARTED"
 
@@ -75,6 +95,8 @@ const eventKeys: Record<FieldWorkdayAction, MessageKey> = {
   RESUME: "workdayEvent_RESUME",
   FINISH: "workdayEvent_FINISH",
 }
+
+const QR_BARCODE_TYPES: BarcodeType[] = ["qr"]
 
 function workdayConflictMessage(detail: unknown): string {
   const recovery = workdayRecoveryDetail(detail)
@@ -212,6 +234,10 @@ export default function WorkdayScreen() {
   const [trackingBusy, setTrackingBusy] = useState(false)
   const [feedback, setFeedback] = useState<MessageKey | null>(null)
   const [nowMs, setNowMs] = useState(Date.now())
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+  /** Only the action is stateful. A raw QR stays in the scan handler's local scope. */
+  const [qrScanAction, setQrScanAction] = useState<FieldWorkdayAction | null>(null)
+  const qrScanConsumed = useRef(false)
 
   const date = field.workday?.date ?? field.profile?.todaySummary.date ?? field.week?.today ?? new Date().toISOString().slice(0, 10)
   const timezone = field.workday?.timezone ?? field.profile?.todaySummary.timezone ?? field.week?.timezone ?? field.bootstrap?.timezone ?? "UTC"
@@ -224,6 +250,7 @@ export default function WorkdayScreen() {
   const displayStatus: DisplayStatus = workday?.status ?? "NOT_STARTED"
   const workedSeconds = currentWorkedSeconds(workday, nowMs)
   const pausedSeconds = currentPausedSeconds(workday, nowMs)
+  const attendanceManifest = field.bootstrap?.modules.workforce.attendance
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1_000)
@@ -288,22 +315,244 @@ export default function WorkdayScreen() {
     }
   }
 
-  async function applyAction(action: FieldWorkdayAction) {
+  function attendanceRequirements(action: FieldWorkdayAction): FieldAttendanceRequirements | null {
+    try {
+      return fieldAttendanceRequirementsForAction(attendanceManifest, action)
+    } catch (error) {
+      if (!(error instanceof FieldAttendanceContractError)) throw error
+      return null
+    }
+  }
+
+  function showAttendanceAlert(message: MessageKey) {
+    Alert.alert(t("workdayAttendancePolicyBlockedTitle"), t(message))
+  }
+
+  async function openQrScanner(action: FieldWorkdayAction) {
+    try {
+      const permission = cameraPermission?.granted
+        ? cameraPermission
+        : await requestCameraPermission()
+      if (!permission.granted) {
+        showAttendanceAlert("workdayAttendanceVerificationFailed")
+        return
+      }
+      qrScanConsumed.current = false
+      setQrScanAction(action)
+    } catch {
+      showAttendanceAlert("workdayAttendanceVerificationFailed")
+    }
+  }
+
+  function closeQrScanner() {
+    qrScanConsumed.current = false
+    setQrScanAction(null)
+  }
+
+  function handleQrScanned(result: BarcodeScanningResult) {
+    if (qrScanConsumed.current || !qrScanAction) return
+    // This raw token is intentionally handler-local: no state, ref, cache,
+    // log, error text or durable outbox record may retain it.
+    const action = qrScanAction
+    const qrToken = result.data.trim()
+    qrScanConsumed.current = true
+    setQrScanAction(null)
+    if (!qrToken || qrToken.length > 4_096) {
+      showAttendanceAlert("workdayAttendanceVerificationFailed")
+      return
+    }
+    void applyAction(action, qrToken)
+  }
+
+  async function deviceAttendanceEvidence(input: {
+    action: FieldWorkdayAction
+    workdayId: string
+    clientOpId: string
+    occurredAt: string
+    requirements: FieldAttendanceRequirements
+  }): Promise<FieldDeviceAttendanceEvidence | null> {
+    const bootstrap = field.bootstrap
+    if (!bootstrap) {
+      showAttendanceAlert("workdayAttendancePolicyBlockedBody")
+      return null
+    }
+    const availability = workforceAttendanceTrust.getAvailability()
+    if (!availability.available || (input.requirements.biometricRequired && !availability.biometricStrongAvailable)) {
+      showAttendanceAlert("workdayAttendanceDeviceUnsupported")
+      return null
+    }
+
+    const scope = { organizationId: bootstrap.tenant.id, agentId: bootstrap.principal.id }
+    let pointer = await tokenStore.getWorkforceAttendanceEnrollment(scope)
+    if (!pointer) {
+      const keyAlias = `workforce-attendance-${Crypto.randomUUID()}`
+      try {
+        const key = await workforceAttendanceTrust.createEnrollmentKey(keyAlias, input.requirements.biometricRequired)
+        if (key.biometricBound !== input.requirements.biometricRequired) {
+          throw new Error("Attendance enrollment key protection mismatch")
+        }
+        const enrollment = await fieldApi.beginAttendanceDeviceEnrollment({
+          deviceLabel: "Android Field",
+          publicKeySpki: key.publicKeySpki,
+        })
+        const challenge = workforceDeviceEnrollmentChallenge({
+          organizationId: scope.organizationId,
+          agentId: scope.agentId,
+          enrollmentId: enrollment.enrollment.id,
+          challenge: enrollment.challenge,
+        })
+        const signature = await workforceAttendanceTrust.sign(
+          keyAlias,
+          challenge,
+          input.requirements.biometricRequired,
+        )
+        const proven = await fieldApi.proveAttendanceDeviceEnrollment({
+          enrollmentId: enrollment.enrollment.id,
+          challenge: enrollment.challenge,
+          signature,
+        })
+        if (proven.enrollmentId !== enrollment.enrollment.id) {
+          throw new Error("Attendance enrollment proof mismatch")
+        }
+        await tokenStore.setWorkforceAttendanceEnrollment({
+          ...scope,
+          enrollmentId: enrollment.enrollment.id,
+          keyAlias,
+          biometricBound: key.biometricBound,
+          status: "PENDING",
+        })
+        showAttendanceAlert("workdayAttendanceApprovalPending")
+      } catch (error) {
+        await workforceAttendanceTrust.removeEnrollmentKey(keyAlias).catch(() => {})
+        throw error
+      }
+      return null
+    }
+
+    // A verified-but-unapproved pointer is checked online. Once the server
+    // explicitly marks it ACTIVE, later device-only actions may work offline;
+    // server-side verification still rejects a revoked key on receipt.
+    if (pointer.status === "PENDING") {
+      const enrollment = (await fieldApi.attendanceDeviceEnrollments())
+        .find((candidate) => candidate.id === pointer!.enrollmentId)
+      if (!enrollment || enrollment.status === "REVOKED" || enrollment.status === "REPLACED") {
+        await tokenStore.setWorkforceAttendanceEnrollment(null)
+        await workforceAttendanceTrust.removeEnrollmentKey(pointer.keyAlias).catch(() => {})
+        showAttendanceAlert("workdayAttendanceVerificationFailed")
+        return null
+      }
+      if (enrollment.status !== "ACTIVE") {
+        await tokenStore.setWorkforceAttendanceEnrollment({ ...pointer, status: "PENDING" })
+        showAttendanceAlert("workdayAttendanceApprovalPending")
+        return null
+      }
+      pointer = { ...pointer, status: "ACTIVE" }
+      await tokenStore.setWorkforceAttendanceEnrollment(pointer)
+    }
+
+    if (input.requirements.biometricRequired && !pointer.biometricBound) {
+      showAttendanceAlert("workdayAttendanceDeviceUnsupported")
+      return null
+    }
+    const challenge = workforceDeviceAttendanceChallenge({
+      organizationId: scope.organizationId,
+      agentId: scope.agentId,
+      enrollmentId: pointer.enrollmentId,
+      clientEventId: input.clientOpId,
+      action: input.action,
+      workdayId: input.workdayId,
+      occurredAt: input.occurredAt,
+    })
+    return {
+      enrollmentId: pointer.enrollmentId,
+      signature: await workforceAttendanceTrust.sign(
+        pointer.keyAlias,
+        challenge,
+        input.requirements.biometricRequired,
+      ),
+    }
+  }
+
+  async function applyAcceptedAction(input: {
+    action: FieldWorkdayAction
+    occurredAt: string
+    location: Awaited<ReturnType<typeof getCurrentDeviceLocation>> | null
+  }) {
+    if (routesEnabled && input.location) {
+      const payload = workdayLocationPayload({
+        timestamp: Date.parse(input.occurredAt),
+        coords: {
+          latitude: input.location.latitude,
+          longitude: input.location.longitude,
+          accuracy: input.location.accuracyM,
+        },
+      })
+      enqueueFieldLocation(payload)
+      field.applyLocalLocations(appendOptimisticFieldLocation(locationData, payload))
+    }
+
+    if (!routesEnabled) {
+      setTracking(stoppedWorkdayTrackingState())
+    } else if (input.action === "START" || input.action === "RESUME") {
+      try {
+        const state = await startWorkdayTracking(intervalSeconds)
+        setTracking(state)
+        if (state.mode === "denied" || state.mode === "services_disabled" || state.mode === "unavailable") {
+          setFeedback("workdayTrackingPermissionNeeded")
+        }
+      } catch {
+        setTracking({
+          mode: "unavailable",
+          issue: "tracking_start_failed",
+          recovery: "retry_tracking",
+          observedAt: new Date().toISOString(),
+        })
+        setFeedback("workdayTrackingPermissionNeeded")
+      }
+    } else {
+      await stopWorkdayTracking().catch(() => {})
+      setTracking(stoppedWorkdayTrackingState())
+    }
+  }
+
+  async function applyAction(action: FieldWorkdayAction, qrToken?: string) {
     if (!workforceEnabled) return
     const current = field.workday ?? emptyFieldWorkdayData(date, timezone, intervalSeconds)
     if (!current.availableActions.includes(action)) return
+    const requirements = attendanceRequirements(action)
+    if (!requirements || requirements.blocked) {
+      showAttendanceAlert("workdayAttendancePolicyBlockedBody")
+      return
+    }
+    if (requirements.qrRequired && !qrToken) {
+      showAttendanceAlert("workdayAttendanceOnlineRequired")
+      return
+    }
+    if (!requirements.qrRequired && qrToken) {
+      showAttendanceAlert("workdayAttendanceVerificationFailed")
+      return
+    }
+
     let queuedClientOpId: string | null = null
     setBusyAction(action)
     setFeedback(null)
     try {
       const occurredAt = new Date().toISOString()
-      const location = routesEnabled ? await getCurrentDeviceLocation().catch(() => null) : null
       const workdayId = action === "START"
         ? `mobile-workday-${Crypto.randomUUID()}`
         : current.workday?.id
       if (!workdayId) throw new Error("Workday id is missing")
+      const clientOpId = newFieldWorkdayClientOperationId()
+      const locationPromise = routesEnabled
+        ? getCurrentDeviceLocation().catch(() => null)
+        : Promise.resolve(null)
+      const devicePromise = requirements.deviceTrustRequired
+        ? deviceAttendanceEvidence({ action, workdayId, clientOpId, occurredAt, requirements })
+        : Promise.resolve<FieldDeviceAttendanceEvidence | null>(null)
+      const [location, device] = await Promise.all([locationPromise, devicePromise])
+      if (requirements.deviceTrustRequired && !device) return
 
-      const queued = enqueueFieldWorkdayEvent({
+      const eventPayload = {
         action,
         workdayId,
         workDate: date,
@@ -312,7 +561,47 @@ export default function WorkdayScreen() {
         longitude: location?.longitude ?? null,
         accuracy: location?.accuracyM ?? null,
         note: null,
-      })
+      }
+
+      if (requirements.requiresEphemeralQrSubmission) {
+        const result = await fieldApi.pushEphemeralWorkday({
+          clientOpId,
+          clientCreatedAt: occurredAt,
+          kind: "field.workday.event",
+          payload: parseFieldEphemeralWorkdayEventPayload({
+            ...eventPayload,
+            attendance: {
+              qrToken: qrToken!,
+              ...(device ? { device } : {}),
+            },
+          }),
+        })
+        if (result.status !== "applied") {
+          // QR is one-shot. Never enqueue, replay or show token-derived error
+          // details; the next attempt must scan a fresh current code.
+          await field.refreshActivity().catch(() => {})
+          showAttendanceAlert("workdayAttendanceVerificationFailed")
+          return
+        }
+        const nextWorkday = applyOptimisticWorkdayAction(current, action, {
+          workdayId,
+          clientEventId: clientOpId,
+          occurredAt,
+          latitude: location?.latitude ?? null,
+          longitude: location?.longitude ?? null,
+          accuracy: location?.accuracyM ?? null,
+          note: null,
+        })
+        field.applyLocalWorkday(nextWorkday)
+        await applyAcceptedAction({ action, occurredAt, location })
+        void field.refreshActivity().catch(() => {})
+        return
+      }
+
+      const queued = enqueueFieldWorkdayEvent({
+        ...eventPayload,
+        ...(device ? { attendance: { device } } : {}),
+      }, clientOpId)
       queuedClientOpId = queued.clientOpId
       const nextWorkday = applyOptimisticWorkdayAction(current, action, {
         workdayId,
@@ -324,42 +613,7 @@ export default function WorkdayScreen() {
         note: null,
       })
       field.applyLocalWorkday(nextWorkday)
-
-      if (routesEnabled && location) {
-        const payload = workdayLocationPayload({
-          timestamp: Date.parse(occurredAt),
-          coords: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            accuracy: location.accuracyM,
-          },
-        })
-        enqueueFieldLocation(payload)
-        field.applyLocalLocations(appendOptimisticFieldLocation(locationData, payload))
-      }
-
-      if (!routesEnabled) {
-        setTracking(stoppedWorkdayTrackingState())
-      } else if (action === "START" || action === "RESUME") {
-        try {
-          const state = await startWorkdayTracking(intervalSeconds)
-          setTracking(state)
-          if (state.mode === "denied" || state.mode === "services_disabled" || state.mode === "unavailable") {
-            setFeedback("workdayTrackingPermissionNeeded")
-          }
-        } catch {
-          setTracking({
-            mode: "unavailable",
-            issue: "tracking_start_failed",
-            recovery: "retry_tracking",
-            observedAt: new Date().toISOString(),
-          })
-          setFeedback("workdayTrackingPermissionNeeded")
-        }
-      } else {
-        await stopWorkdayTracking().catch(() => {})
-        setTracking(stoppedWorkdayTrackingState())
-      }
+      await applyAcceptedAction({ action, occurredAt, location })
 
       await syncWorkforce()
       const result = fieldOutboxResult(queued.clientOpId)
@@ -383,20 +637,40 @@ export default function WorkdayScreen() {
       void field.refreshActivity().catch(() => {})
     } catch (error) {
       if (queuedClientOpId) setFeedback("workdayQueueSaved")
-      Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      if (requirements.qrRequired || requirements.deviceTrustRequired) {
+        await field.refreshActivity().catch(() => {})
+        showAttendanceAlert(requirements.qrRequired
+          ? "workdayAttendanceOnlineRequired"
+          : "workdayAttendanceVerificationFailed")
+      } else {
+        Alert.alert(t("fieldDataError"), error instanceof Error ? error.message : String(error))
+      }
     } finally {
       setBusyAction(null)
     }
   }
 
+  function beginAction(action: FieldWorkdayAction) {
+    const requirements = attendanceRequirements(action)
+    if (!requirements || requirements.blocked) {
+      showAttendanceAlert("workdayAttendancePolicyBlockedBody")
+      return
+    }
+    if (requirements.qrRequired) {
+      void openQrScanner(action)
+      return
+    }
+    void applyAction(action)
+  }
+
   function pressAction(action: FieldWorkdayAction) {
     if (action !== "FINISH") {
-      void applyAction(action)
+      beginAction(action)
       return
     }
     Alert.alert(t("workdayFinishTitle"), t("workdayFinishBody"), [
       { text: t("cancel"), style: "cancel" },
-      { text: t("workdayFinish"), style: "destructive", onPress: () => void applyAction("FINISH") },
+      { text: t("workdayFinish"), style: "destructive", onPress: () => beginAction("FINISH") },
     ])
   }
 
@@ -637,6 +911,53 @@ export default function WorkdayScreen() {
           </View>
         </View> : null}
       </ScrollView>
+
+      <Modal
+        visible={qrScanAction !== null}
+        animationType="slide"
+        onRequestClose={closeQrScanner}
+      >
+        <SafeAreaView style={styles.qrScannerRoot} edges={["top", "bottom"]}>
+          <View style={styles.qrScannerHeader}>
+            <View style={styles.qrScannerHeaderBody}>
+              <Text style={styles.qrScannerTitle}>{t("workdayAttendanceQrTitle")}</Text>
+              <Text style={styles.qrScannerHint}>{t("workdayAttendanceQrHint")}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("workdayAttendanceQrCancel")}
+              onPress={closeQrScanner}
+              style={({ pressed }) => [styles.qrScannerClose, pressed && styles.pressed]}
+            >
+              <Text style={styles.qrScannerCloseText}>×</Text>
+            </Pressable>
+          </View>
+          {cameraPermission?.granted ? (
+            <CameraView
+              style={styles.qrScannerCamera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: QR_BARCODE_TYPES }}
+              onBarcodeScanned={handleQrScanned}
+            >
+              <View pointerEvents="none" style={styles.qrScannerOverlay}>
+                <View style={styles.qrScannerFrame} />
+              </View>
+            </CameraView>
+          ) : (
+            <View style={styles.qrScannerUnavailable}>
+              <Text style={styles.qrScannerUnavailableText}>{t("workdayAttendanceVerificationFailed")}</Text>
+            </View>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("workdayAttendanceQrCancel")}
+            onPress={closeQrScanner}
+            style={({ pressed }) => [styles.qrScannerCancel, pressed && styles.pressed]}
+          >
+            <Text style={styles.qrScannerCancelText}>{t("workdayAttendanceQrCancel")}</Text>
+          </Pressable>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -685,6 +1006,20 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   feedback: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
   feedbackText: { color: colors.info, fontSize: 11, lineHeight: 17, fontWeight: "700" },
+  qrScannerRoot: { flex: 1, backgroundColor: colors.bg },
+  qrScannerHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 16, backgroundColor: colors.card },
+  qrScannerHeaderBody: { flex: 1 },
+  qrScannerTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
+  qrScannerHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
+  qrScannerClose: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  qrScannerCloseText: { color: colors.primary, fontSize: 28, fontWeight: "400", lineHeight: 30 },
+  qrScannerCamera: { flex: 1, margin: 16, overflow: "hidden", borderRadius: 26, backgroundColor: colors.text },
+  qrScannerOverlay: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.16)" },
+  qrScannerFrame: { width: "68%", aspectRatio: 1, borderRadius: 22, borderColor: colors.headerText, borderWidth: 3, backgroundColor: "transparent" },
+  qrScannerUnavailable: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28 },
+  qrScannerUnavailableText: { color: colors.muted, fontSize: 13, lineHeight: 20, textAlign: "center" },
+  qrScannerCancel: { minHeight: 52, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  qrScannerCancelText: { color: colors.primary, fontSize: 13, fontWeight: "900" },
   trackingCard: { flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card, borderRadius: radii.card, padding: 15, marginTop: 14, ...cardShadow },
   trackingIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   trackingIconOn: { backgroundColor: colors.successBg },

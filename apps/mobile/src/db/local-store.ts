@@ -3604,11 +3604,22 @@ export function enqueueFieldHrmCancel(requestId: string): { clientOpId: string }
   return { clientOpId }
 }
 
+/**
+ * A device signature binds to this id before an offline event is persisted.
+ * QR actions use the separate ephemeral lane and never call this function.
+ */
+export function newFieldWorkdayClientOperationId(): string {
+  return `field-workday-${Crypto.randomUUID()}`
+}
+
 export function enqueueFieldWorkdayEvent(
   input: FieldWorkdayEventPayload,
+  clientOpId = newFieldWorkdayClientOperationId(),
 ): { clientOpId: string } {
   const payload = parseFieldWorkdayEventPayload(input)
-  const clientOpId = `field-workday-${Crypto.randomUUID()}`
+  if (!/^field-workday-[A-Za-z0-9-]{8,}$/.test(clientOpId) || clientOpId.length > 100) {
+    throw new Error("Invalid field workday client operation id")
+  }
   db.runSync(
     "INSERT INTO outbox_ops (clientOpId, kind, payload, clientCreatedAt) VALUES (?,?,?,?)",
     [clientOpId, "field.workday.event", JSON.stringify(payload), payload.occurredAt],

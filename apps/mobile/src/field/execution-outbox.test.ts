@@ -4,6 +4,7 @@ import {
   parseFieldCommitmentFulfillPayload,
   parseFieldDocumentStatePayload,
   parseFieldDocumentUploadPayload,
+  parseFieldEphemeralWorkdayEventPayload,
   parseFieldHrmRequestCancelPayload,
   parseFieldHrmRequestCreatePayload,
   parseFieldLocationPayload,
@@ -20,6 +21,8 @@ import {
   sendFieldDocumentUploadOperation,
   sendFieldVisitPhotoOperation,
   sendFieldExecutionOperations,
+  sendFieldEphemeralWorkdayOperation,
+  toFieldEphemeralWorkdayServerOperation,
   toFieldServerOperation,
   type FieldExecutionPushOperation,
 } from "./execution-outbox"
@@ -97,6 +100,66 @@ describe("field execution outbox", () => {
       entity: "workdays",
       data: { workdayId: "mobile-workday-1", action: "PAUSE" },
     })
+  })
+
+  it("persists only device attendance proofs and never a raw QR token", () => {
+    const device = {
+      enrollmentId: "device-enrollment-1",
+      signature: "MEUCIQDjLdtUxrh1Sx8rTXUOmF7mnLUffedFz8L9xJoQfVHxuAIgG1qg3bzpTxl9db0dlQf5P5s=",
+    }
+    const operation: FieldExecutionPushOperation = {
+      clientOpId: "field-workday-device-proof-1",
+      clientCreatedAt: "2026-08-29T08:00:00.000Z",
+      kind: "field.workday.event",
+      payload: parseFieldWorkdayEventPayload({
+        action: "START",
+        workdayId: "mobile-workday-1",
+        occurredAt: "2026-08-29T08:00:00.000Z",
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        note: null,
+        attendance: { device },
+      }),
+    }
+
+    expect(toFieldServerOperation(operation)).toMatchObject({
+      entity: "workdays",
+      data: { attendance: { device } },
+    })
+    expect(() => parseFieldWorkdayEventPayload({
+      ...operation.payload,
+      attendance: { qrToken: "wa1.short-lived" },
+    })).toThrow("Invalid durable workforce attendance evidence")
+  })
+
+  it("uses a separate non-persistent lane for a QR workday proof", async () => {
+    const operation = {
+      clientOpId: "field-workday-qr-1",
+      clientCreatedAt: "2026-08-29T08:00:00.000Z",
+      kind: "field.workday.event" as const,
+      payload: parseFieldEphemeralWorkdayEventPayload({
+        action: "START",
+        workdayId: "mobile-workday-qr-1",
+        occurredAt: "2026-08-29T08:00:00.000Z",
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        note: null,
+        attendance: { qrToken: "wa1.short-lived" },
+      }),
+    }
+    expect(toFieldEphemeralWorkdayServerOperation(operation)).toMatchObject({
+      operationId: "field-workday-qr-1",
+      entity: "workdays",
+      data: { id: "mobile-workday-qr-1", attendance: { qrToken: "wa1.short-lived" } },
+    })
+    await expect(sendFieldEphemeralWorkdayOperation(operation, {
+      push: vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ operationId: "field-workday-qr-1", status: "ok" }],
+      }),
+    })).resolves.toMatchObject({ clientOpId: "field-workday-qr-1", status: "applied" })
   })
 
   it("preserves the LeadDrive workday recovery contract in the durable result", async () => {

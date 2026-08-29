@@ -1,4 +1,11 @@
 import { HttpError } from "../sync/ports-error"
+import {
+  parseFieldDurableWorkdayAttendanceEvidence,
+  parseFieldTransientWorkdayAttendanceEvidence,
+  type FieldAttendanceAction,
+  type FieldDurableWorkdayAttendanceEvidence,
+  type FieldWorkdayAttendanceEvidence,
+} from "./workforce-attendance"
 
 export type FieldVisitOutcome = "SUCCESSFUL" | "PARTIAL" | "NO_CONTACT" | "RESCHEDULE"
 export type FieldVisitPotential = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"
@@ -56,7 +63,7 @@ export type FieldVisitPhotoPayload = {
   takenAt: string
 }
 
-export type FieldWorkdayAction = "START" | "PAUSE" | "RESUME" | "FINISH"
+export type FieldWorkdayAction = FieldAttendanceAction
 
 export type FieldWorkdayEventPayload = {
   action: FieldWorkdayAction
@@ -67,6 +74,23 @@ export type FieldWorkdayEventPayload = {
   longitude: number | null
   accuracy: number | null
   note: string | null
+  /** Device signatures may be queued; QR tokens are explicitly not durable. */
+  attendance?: FieldDurableWorkdayAttendanceEvidence
+}
+
+/**
+ * This shape is intentionally not part of FieldExecutionPushOperation: it is
+ * sent once over the immediate lane and must never be persisted in SQLite.
+ */
+export type FieldEphemeralWorkdayEventPayload = Omit<FieldWorkdayEventPayload, "attendance"> & {
+  attendance: FieldWorkdayAttendanceEvidence
+}
+
+export type FieldEphemeralWorkdayOperation = {
+  clientOpId: string
+  clientCreatedAt?: string
+  kind: "field.workday.event"
+  payload: FieldEphemeralWorkdayEventPayload
 }
 
 export type FieldLocationPayload = {
@@ -382,7 +406,25 @@ export function parseFieldWorkdayEventPayload(value: unknown): FieldWorkdayEvent
     !(payload.accuracy == null || (finite(payload.accuracy) && payload.accuracy >= 0)) ||
     !(payload.note == null || (typeof payload.note === "string" && payload.note.length <= 500))
   ) throw new Error("Invalid field workday event payload")
+  if (payload.attendance !== undefined) {
+    return {
+      ...payload,
+      attendance: parseFieldDurableWorkdayAttendanceEvidence(payload.attendance),
+    } as unknown as FieldWorkdayEventPayload
+  }
   return payload as unknown as FieldWorkdayEventPayload
+}
+
+export function parseFieldEphemeralWorkdayEventPayload(value: unknown): FieldEphemeralWorkdayEventPayload {
+  const payload = record(value)
+  if (!payload || payload.attendance === undefined) {
+    throw new Error("Invalid ephemeral field workday event payload")
+  }
+  const { attendance, ...base } = payload
+  return {
+    ...parseFieldWorkdayEventPayload(base),
+    attendance: parseFieldTransientWorkdayAttendanceEvidence(attendance),
+  }
 }
 
 export function parseFieldLocationPayload(value: unknown): FieldLocationPayload {
@@ -806,6 +848,25 @@ export function toFieldServerOperation(operation: FieldExecutionPushOperation): 
   }
 }
 
+/** Maps transient QR/device evidence without making it an outbox operation. */
+export function toFieldEphemeralWorkdayServerOperation(
+  operation: FieldEphemeralWorkdayOperation,
+): FieldServerOperation {
+  const clientTimestamp = operation.clientCreatedAt
+    ? new Date(operation.clientCreatedAt).getTime()
+    : Date.now()
+  const { workdayId, ...payload } = operation.payload
+  return {
+    operationId: operation.clientOpId,
+    op: "create",
+    entity: "workdays",
+    clientTimestamp,
+    data: operation.payload.action === "START"
+      ? { ...payload, id: workdayId }
+      : { ...payload, workdayId },
+  }
+}
+
 function retryableServerError(message: string): boolean {
   return /internal|retry|recheck|temporar|unavailable/i.test(message)
 }
@@ -838,6 +899,32 @@ export async function sendFieldExecutionOperations(
       detail,
     }
   })
+}
+
+/**
+ * Sends a one-off QR-bearing workday request. It deliberately has no retry or
+ * persistence path: a later retry must scan a fresh QR rather than replaying
+ * a token that may have expired or already been consumed.
+ */
+export async function sendFieldEphemeralWorkdayOperation(
+  operation: FieldEphemeralWorkdayOperation,
+  api: FieldExecutionApi,
+): Promise<FieldExecutionPushResult> {
+  const response = await api.push([toFieldEphemeralWorkdayServerOperation(operation)])
+  const result = response.results.find((item) => item.operationId === operation.clientOpId)
+  if (!result) throw new HttpError(503, "Field execution result missing")
+  if (result.status === "error" && retryableServerError(result.error ?? "")) {
+    throw new HttpError(503, result.error ?? "Field execution retry required", result)
+  }
+  return {
+    clientOpId: operation.clientOpId,
+    status: result.status === "ok" ? "applied" : result.status === "conflict" ? "conflict" : "rejected",
+    detail: {
+      ...(record(result.serverData) ?? {}),
+      ...(result.serverId ? { serverId: result.serverId } : {}),
+      ...(result.error ? { error: result.error } : {}),
+    },
+  }
 }
 
 export async function sendFieldVisitPhotoOperation(

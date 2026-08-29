@@ -1,3 +1,10 @@
+import {
+  equalFieldWorkforceAttendanceManifests,
+  isFieldWorkforceAttendanceManifest,
+  type FieldAttendanceAction,
+  type FieldWorkforceAttendanceManifest,
+} from "./workforce-attendance"
+
 export type FieldRouteStatus =
   | "DRAFT"
   | "PLANNED"
@@ -58,6 +65,8 @@ export interface FieldMobileModuleManifest {
   capabilityId: "workforce-hrm" | "route-field"
   configVersion: string | null
   cursor?: string | null
+  /** Optional only for staged compatibility with pre-H5 LeadDrive servers. */
+  attendance?: FieldWorkforceAttendanceManifest
 }
 
 export interface FieldMobileModules {
@@ -75,7 +84,12 @@ export interface FieldMobileBootstrapData {
   policies: {
     photoWatermark: boolean
     canPlanOwnRoutes: boolean
-    workforce: { enabled: boolean; configVersion: string | null }
+    workforce: {
+      enabled: boolean
+      configVersion: string | null
+      /** Optional only for staged compatibility with pre-H5 LeadDrive servers. */
+      attendance?: FieldWorkforceAttendanceManifest
+    }
   }
   routeTargetTypes: unknown[]
   sync: { horizon: string; scopeVersion: string | null; configVersion: string | null }
@@ -508,7 +522,7 @@ export interface FieldWeekData {
 }
 
 export type FieldWorkdayStatus = "STARTED" | "PAUSED" | "COMPLETED"
-export type FieldWorkdayAction = "START" | "PAUSE" | "RESUME" | "FINISH"
+export type FieldWorkdayAction = FieldAttendanceAction
 
 export interface FieldWorkdayEvent {
   id: string
@@ -1124,6 +1138,28 @@ function validMobileModule(value: unknown, capabilityId: FieldMobileModuleManife
   )
 }
 
+function validBootstrapAttendanceManifest(
+  workforceModule: unknown,
+  workforcePolicy: unknown,
+): boolean {
+  const module = record(workforceModule)
+  const policy = record(workforcePolicy)
+  const moduleAttendance = module?.attendance
+  const policyAttendance = policy?.attendance
+
+  // H5 is additive. A new APK can still consume an older, manifest-only H1
+  // bootstrap, but a partially delivered H5 manifest must never be trusted.
+  if (moduleAttendance === undefined && policyAttendance === undefined) return true
+  if (
+    !isFieldWorkforceAttendanceManifest(moduleAttendance) ||
+    !isFieldWorkforceAttendanceManifest(policyAttendance) ||
+    !equalFieldWorkforceAttendanceManifests(moduleAttendance, policyAttendance)
+  ) return false
+
+  return moduleAttendance.status !== "ACTIVE" ||
+    (module?.enabled === true && policy?.enabled === true)
+}
+
 function validBootstrapWorkday(value: unknown): boolean {
   if (value == null) return true
   const workday = record(value)
@@ -1162,6 +1198,7 @@ export function parseFieldMobileBootstrap(value: unknown): FieldMobileBootstrapD
     !policies || !boolean(policies.photoWatermark) || !boolean(policies.canPlanOwnRoutes) ||
     !workforcePolicy || !boolean(workforcePolicy.enabled) || !nullableString(workforcePolicy.configVersion) ||
     workforcePolicy.enabled !== record(modules.workforce)?.enabled ||
+    !validBootstrapAttendanceManifest(modules.workforce, workforcePolicy) ||
     !Array.isArray(data.routeTargetTypes) ||
     !sync || !string(sync.horizon) || !nullableString(sync.scopeVersion) || !nullableString(sync.configVersion) ||
     !validBootstrapWorkday(data.workday)
