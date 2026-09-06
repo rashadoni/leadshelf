@@ -1,5 +1,15 @@
 # AGENTS.md - LeadShelf operating rules
 
+## Порядок доставки — `docs/DELIVERY-ARCHITECTURE.md`
+
+Этот документ главнее всего остального в том, что касается пути изменения до
+пользователей, и действует одинаково для Claude, Codex и любых будущих сессий.
+Коротко: в `main` только через PR; каждый PR разбирает агент, который его не
+писал (`agent-review` — единственная обязательная проверка, своё же ревью не
+считается); выкладка — как построена в этом репозитории; перед мержем того, что
+увидит пользователь, владельцу показывают короткий список человеческим языком и
+ждут «давай».
+
 This repository is the starting context for `leadshelf`, a standalone shelf,
 planogram, store-layout, mobile execution, and shelf analytics product.
 
