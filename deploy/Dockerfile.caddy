@@ -2,10 +2,15 @@
 # with Go 1.26.3 and contained curl; neither is needed by this runtime.
 FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS builder
 ARG CADDY_VERSION=v2.11.4
-ARG GRPC_VERSION=v1.82.1
-ARG X_CRYPTO_VERSION=v0.53.0
-ARG X_NET_VERSION=v0.56.0
-ARG X_TEXT_VERSION=v0.39.0
+# Эти четыре пина связаны: `go get` с явными версиями падает, если пин НИЖЕ
+# того, что требует любой модуль в графе. Проверять по go.mod, а не на глаз:
+# grpc@1.83.2 требует net>=0.58.0 и text>=0.41.0, crypto@0.56.0 требует
+# net>=0.57.0 и text>=0.41.0, net@0.58.0 требует text>=0.41.0. Поэтому net и
+# text поднимаются вместе с grpc/crypto, даже когда своих advisories у них нет.
+ARG GRPC_VERSION=v1.83.2
+ARG X_CRYPTO_VERSION=v0.56.0
+ARG X_NET_VERSION=v0.58.0
+ARG X_TEXT_VERSION=v0.41.0
 ENV CGO_ENABLED=0
 WORKDIR /build
 RUN go mod init leadshelf/caddy-build \

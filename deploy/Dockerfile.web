@@ -5,6 +5,10 @@ WORKDIR /app
 
 FROM base AS builder
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# patches/ обязателен рядом с лок-файлом: pnpm читает patchedDependencies
+# на install, и без каталога `pnpm install --frozen-lockfile` падает ещё
+# до COPY . . — то есть ломается сборка прод-образа, а не тесты.
+COPY patches/ patches/
 COPY apps/web/package.json apps/web/
 COPY packages/db/package.json packages/db/
 COPY packages/core/package.json packages/core/
