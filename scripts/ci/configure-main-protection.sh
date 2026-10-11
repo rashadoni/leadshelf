@@ -97,8 +97,10 @@
 #     Once this is written, a pull request whose required job is red — or never
 #     starts — cannot be merged by anyone, administrators included. BOTH WERE
 #     RED on `main` on 2026-09-09: `ci` on the production dependency audit, the
-#     scan on the web image. Written in that state, this protection lets
-#     through only a pull request that makes both green.
+#     scan on the web image. On the pull request that brought this change (#1,
+#     2026-10-11) both were red again, on the same two steps. Written in that
+#     state, this protection lets through only a pull request that makes both
+#     green.
 #   - use the file from `origin/main` after a `git fetch`, not a local `main`
 #     and not another branch. Every branch and worktree cut before this change
 #     was merged carries the old file, whatever its date. The old file is the
