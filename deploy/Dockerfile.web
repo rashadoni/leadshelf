@@ -101,6 +101,15 @@ RUN apk add --no-cache build-base nasm \
     && make install \
     && /opt/ffmpeg/bin/ffmpeg -version
 
+# Прод-состав воркера: из сборочного дерева убираются devDependencies.
+# Иначе в рантайм-образ уезжает vitest со своими vite и tinypool, и grype
+# справедливо считает их уязвимостями прод-образа — тестовый прогонщик в
+# проде не нужен. tsx и dotenv ради этого переведены в dependencies: воркер и
+# vision действительно стартуют ими и читают .env.
+FROM builder AS worker-deps
+RUN pnpm prune --prod \
+    && node -e "require.resolve('@prisma/client'); require.resolve('tsx/package.json')"
+
 # --- фоновые worker-задачи ---
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.
 # Runtime начинается с чистого образа, чтобы build-only pnpm/corepack caches из
@@ -118,6 +127,6 @@ RUN apk upgrade --no-cache \
     && adduser -S app -G app \
     && mkdir -p /app/.data \
     && chown app:app /app/.data
-COPY --from=builder --chown=app:app /app /app
+COPY --from=worker-deps --chown=app:app /app /app
 USER app
 CMD ["node", "services/worker/node_modules/tsx/dist/cli.mjs", "services/worker/src/import-queue-runner.ts"]

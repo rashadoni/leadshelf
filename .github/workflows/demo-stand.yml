@@ -69,6 +69,24 @@ jobs:
           }
           echo "вход и демо-каталог на месте"
 
+      - name: Фоновые сервисы живы, а не перезапускаются по кругу
+        run: |
+          set -euo pipefail
+          # healthcheck воркеров — `kill -0 1`, он проходит и у контейнера,
+          # который только что перезапустился после падения. Поэтому смотрим
+          # счётчик рестартов: из прод-образа выкинуты devDependencies, и
+          # нехватку чего-нибудь нужного видно именно так.
+          sleep 20
+          for s in vision worker-import worker-notifications worker-proof-analysis; do
+            cid=$(docker compose -f deploy/docker-compose.demo.yml ps -q "$s")
+            [ -n "$cid" ] || { echo "$s не запущен"; exit 1; }
+            restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
+            running=$(docker inspect -f '{{.State.Running}}' "$cid")
+            echo "$s: running=$running restarts=$restarts"
+            [ "$running" = "true" ] || { docker logs --tail 40 "$cid"; exit 1; }
+            [ "$restarts" = "0" ] || { docker logs --tail 40 "$cid"; exit 1; }
+          done
+
       - name: Логи стенда, если что-то упало
         if: failure()
         run: scripts/demo.sh logs --no-follow || true

@@ -31,13 +31,13 @@
     "@leadshelf/db": "workspace:*",
     "@prisma/client": "^6.19.3",
     "csv-parse": "^7.0.2",
+    "dotenv": "^16.4.0",
     "exceljs": "4.4.0",
-    "iconv-lite": "^0.6.3"
+    "iconv-lite": "^0.6.3",
+    "tsx": "^4.19.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
-    "dotenv": "^16.4.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
   }

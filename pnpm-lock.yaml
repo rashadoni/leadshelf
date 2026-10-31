@@ -315,6 +315,9 @@ importers:
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.5
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -322,9 +325,6 @@ importers:
       '@types/node':
         specifier: ^20.17.0
         version: 20.19.43
-      tsx:
-        specifier: ^4.19.0
-        version: 4.22.5
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
@@ -352,22 +352,22 @@ importers:
       csv-parse:
         specifier: ^7.0.2
         version: 7.0.3
+      dotenv:
+        specifier: ^16.4.0
+        version: 16.6.1
       exceljs:
         specifier: 4.4.0
         version: 4.4.0
       iconv-lite:
         specifier: ^0.6.3
         version: 0.6.3
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.5
     devDependencies:
       '@types/node':
         specifier: ^20.17.0
         version: 20.19.43
-      dotenv:
-        specifier: ^16.4.0
-        version: 16.6.1
-      tsx:
-        specifier: ^4.19.0
-        version: 4.22.5
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
