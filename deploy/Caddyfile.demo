@@ -1,0 +1,22 @@
+# Публичный вход демо-стенда. Домен и пара для входа приходят из окружения
+# (deploy/.env.demo), файл одинаков для любого домена.
+#
+# basic_auth стоит до reverse_proxy намеренно: стенд живёт на публичном адресе
+# с общеизвестным демо-паролем из seed-demo.ts, и без этой двери его нашли бы
+# поисковые боты. Пара генерируется заново на каждый `demo.sh up --domain`.
+{
+	admin off
+}
+
+{$LEADSHELF_DEMO_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+
+	basic_auth {
+		{$LEADSHELF_DEMO_AUTH_USER} {$LEADSHELF_DEMO_AUTH_HASH}
+	}
+
+	reverse_proxy web:3000
+}

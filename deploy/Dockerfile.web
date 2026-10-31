@@ -1,5 +1,9 @@
 # Прод-образ web + одноразовый migrate-target. Контекст сборки — корень репо.
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
+#
+# Базовый node пришпилен по digest и равен 22.23.4-alpine. Предыдущий пин
+# (22.23.2) нёс CVE-2026-111497 — critical и уже в списке эксплуатируемых;
+# grype в джобе security рубил на нём сборку web-образа.
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
 RUN corepack enable
 WORKDIR /app
 
@@ -41,7 +45,7 @@ WORKDIR /app/packages/db
 ENTRYPOINT ["pnpm", "exec", "tsx", "prisma/media-backfill.ts"]
 
 # --- рантайм ---
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runner
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # Сервер запускается напрямую через node. npm/corepack в runtime не нужны и
@@ -63,7 +67,7 @@ CMD ["node", "apps/web/server.js"]
 # upstream-patched source at an immutable commit and copy only the executable
 # into the worker runtime. Network/device inputs are unnecessary: proof videos
 # are always read from a tenant-scoped local temporary file.
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS ffmpeg-builder
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS ffmpeg-builder
 ARG FFMPEG_COMMIT=f944afd04097178b7e3c0d6c7f4e524a9e8f6063
 ARG FFMPEG_ARCHIVE_SHA256=8af9d494814124d2ad6eb2324f2d955e06a183242daee4d4c7e24df6d3b4ea0e
 RUN apk add --no-cache build-base nasm \
@@ -97,11 +101,43 @@ RUN apk add --no-cache build-base nasm \
     && make install \
     && /opt/ffmpeg/bin/ffmpeg -version
 
+# Прод-состав воркера: из сборочного дерева убирается тестовый прогонщик.
+# Иначе в рантайм-образ уезжает vitest со своими vite и tinypool, и grype
+# справедливо считает их уязвимостями прод-образа.
+#
+# Точечно, а не `pnpm prune --prod`: prune сносит весь modules-каталог целиком
+# и ставит заново, а вместе с ним исчезает сгенерированный Prisma-клиент —
+# своего output у схемы нет, и в pnpm он оказывается внутри самого пакета
+# в виртуальном сторе, а не в корневом node_modules/.prisma. Вернуть его
+# нечем: prisma CLI лежит в devDependencies. Чистый prod-состав станет
+# возможен, когда у генератора появится output внутри packages/db.
+#
+# tsx и dotenv при этом переведены в dependencies воркера и vision: процессы
+# действительно стартуют через tsx и читают окружение, в dev они стояли неверно.
+#
+# Проверки в конце — ровно то, чем стартует контейнер, и клиент, без которого
+# он упал бы на первом запросе: если чистка задела лишнее, сборка падает здесь,
+# а не в рантайме. Повисшие симлинки на удалённые пакеты безвредны: grype
+# читает файлы, а не ссылки.
+FROM builder AS worker-deps
+RUN set -eu; \
+    rm -rf node_modules/.pnpm/vitest@* \
+           node_modules/.pnpm/vite@* \
+           node_modules/.pnpm/vite-node@* \
+           node_modules/.pnpm/tinypool@* \
+           node_modules/.pnpm/@vitest+*; \
+    test -f services/worker/node_modules/tsx/dist/cli.mjs \
+      || { echo "после чистки нет tsx воркера"; exit 1; }; \
+    test -f services/vision/node_modules/tsx/dist/cli.mjs \
+      || { echo "после чистки нет tsx vision"; exit 1; }; \
+    node -e "const {PrismaClient} = require('/app/services/worker/node_modules/@prisma/client'); if (typeof PrismaClient !== 'function') process.exit(1)" \
+      || { echo "Prisma-клиент не сгенерирован или не читается из воркера"; exit 1; }
+
 # --- фоновые worker-задачи ---
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.
 # Runtime начинается с чистого образа, чтобы build-only pnpm/corepack caches из
 # builder не попадали в production SBOM и не расширяли поверхность атаки.
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS worker
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS worker
 WORKDIR /app
 ENV NODE_ENV=production
 # TSX остаётся локальной runtime-зависимостью, package-manager CLI не нужен.
@@ -114,6 +150,6 @@ RUN apk upgrade --no-cache \
     && adduser -S app -G app \
     && mkdir -p /app/.data \
     && chown app:app /app/.data
-COPY --from=builder --chown=app:app /app /app
+COPY --from=worker-deps --chown=app:app /app /app
 USER app
 CMD ["node", "services/worker/node_modules/tsx/dist/cli.mjs", "services/worker/src/import-queue-runner.ts"]

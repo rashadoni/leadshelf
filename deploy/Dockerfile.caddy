@@ -1,16 +1,22 @@
-# Caddy 2.11.4 rebuilt on patched Go. The upstream 2.11.4 image was built
-# with Go 1.26.3 and contained curl; neither is needed by this runtime.
-FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS builder
-ARG CADDY_VERSION=v2.11.4
-# Эти четыре пина связаны: `go get` с явными версиями падает, если пин НИЖЕ
-# того, что требует любой модуль в графе. Проверять по go.mod, а не на глаз:
-# grpc@1.83.2 требует net>=0.58.0 и text>=0.41.0, crypto@0.56.0 требует
-# net>=0.57.0 и text>=0.41.0, net@0.58.0 требует text>=0.41.0. Поэтому net и
-# text поднимаются вместе с grpc/crypto, даже когда своих advisories у них нет.
+# Caddy 2.11.7 rebuilt on patched Go. The upstream image carries curl, which
+# this runtime does not need. Go поднят до 1.26.10: в 1.26.6 стандартная
+# библиотека несла семь high-уязвимостей (GO-2026-6605, GO-2026-6613,
+# CVE-2026-78660, CVE-2026-94439 и другие), и grype рубил на них образ.
+FROM golang:1.26.10-alpine@sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308 AS builder
+ARG CADDY_VERSION=v2.11.7
+# Эти пины связаны: `go get` с явными версиями падает, если пин НИЖЕ того,
+# что требует любой модуль в графе. Проверять по go.mod, а не на глаз:
+# grpc@1.83.2 требует net>=0.58.0 и text>=0.41.0, а net@0.62.0 требует
+# crypto>=0.58.0 — на этом сборка и падала, когда net подняли, а crypto нет.
+# Поэтому crypto и text едут следом за net, даже когда своих advisories у них
+# нет. У net причина своя: GO-2026-6610 чинится с 0.60.0, берём 0.62.0.
 ARG GRPC_VERSION=v1.83.2
-ARG X_CRYPTO_VERSION=v0.56.0
-ARG X_NET_VERSION=v0.58.0
-ARG X_TEXT_VERSION=v0.41.0
+ARG X_CRYPTO_VERSION=v0.58.0
+ARG X_NET_VERSION=v0.62.0
+ARG X_TEXT_VERSION=v0.43.0
+# go-jose: подделка подписи JWS (GHSA-mgcc-cww5-fp2q). В графе caddy только
+# линия v4, её и пиним.
+ARG GO_JOSE_VERSION=v4.1.7
 ENV CGO_ENABLED=0
 WORKDIR /build
 RUN go mod init leadshelf/caddy-build \
@@ -19,6 +25,7 @@ RUN go mod init leadshelf/caddy-build \
         golang.org/x/crypto@${X_CRYPTO_VERSION} \
         golang.org/x/net@${X_NET_VERSION} \
         golang.org/x/text@${X_TEXT_VERSION} \
+        github.com/go-jose/go-jose/v4@${GO_JOSE_VERSION} \
     && go build -trimpath -ldflags="-s -w" -o /go/bin/caddy \
         github.com/caddyserver/caddy/v2/cmd/caddy
 
