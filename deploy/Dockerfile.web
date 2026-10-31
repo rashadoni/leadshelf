@@ -101,14 +101,32 @@ RUN apk add --no-cache build-base nasm \
     && make install \
     && /opt/ffmpeg/bin/ffmpeg -version
 
-# Прод-состав воркера: из сборочного дерева убираются devDependencies.
+# Прод-состав воркера: из сборочного дерева убирается тестовый прогонщик.
 # Иначе в рантайм-образ уезжает vitest со своими vite и tinypool, и grype
-# справедливо считает их уязвимостями прод-образа — тестовый прогонщик в
-# проде не нужен. tsx и dotenv ради этого переведены в dependencies: воркер и
-# vision действительно стартуют ими и читают .env.
+# справедливо считает их уязвимостями прод-образа.
+#
+# Точечно, а не `pnpm prune --prod`: prune сносит весь modules-каталог целиком
+# и ставит заново, а вместе с ним исчезает сгенерированный Prisma-клиент —
+# генератор пишет в node_modules/.prisma, своего output у схемы нет, и вернуть
+# клиент нечем, prisma CLI сам лежит в devDependencies. Чистый prod-состав
+# станет возможен, когда у генератора появится output внутри packages/db.
+#
+# tsx и dotenv при этом переведены в dependencies воркера и vision: процессы
+# действительно стартуют через tsx и читают окружение, в dev они стояли неверно.
+#
+# Проверки в конце — ровно то, чем стартует контейнер, и клиент, без которого
+# он упал бы на первом запросе: если чистка задела лишнее, сборка падает здесь,
+# а не в рантайме. Повисшие симлинки на удалённые пакеты безвредны: grype
+# читает файлы, а не ссылки.
 FROM builder AS worker-deps
-RUN pnpm prune --prod \
-    && node -e "require.resolve('@prisma/client'); require.resolve('tsx/package.json')"
+RUN rm -rf node_modules/.pnpm/vitest@* \
+           node_modules/.pnpm/vite@* \
+           node_modules/.pnpm/vite-node@* \
+           node_modules/.pnpm/tinypool@* \
+           node_modules/.pnpm/@vitest+* \
+    && test -f services/worker/node_modules/tsx/dist/cli.mjs \
+    && test -f services/vision/node_modules/tsx/dist/cli.mjs \
+    && test -d node_modules/.prisma/client
 
 # --- фоновые worker-задачи ---
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.
