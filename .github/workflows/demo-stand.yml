@@ -1,0 +1,79 @@
+name: Demo stand
+
+# Стенд из docs/DEMO-STAND.md — это то, на чём продукт показывают клиенту.
+# Ломается он незаметно: миграция, переменная окружения, новый сервис в
+# compose — и `scripts/demo.sh up` перестаёт доходить до рабочего экрана.
+# Узнавать об этом надо здесь, а не за полчаса до встречи.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  demo-stand:
+    name: Стенд поднимается одной командой
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # --no-workers: фоновые сервисы собираются из target `worker`, а он
+      # собирает ffmpeg из исходников — это ещё минут восемь. Тот же образ уже
+      # собирает и сканирует джоба `security` в CI, здесь проверяется другое:
+      # что стенд доходит до экрана, на который смотрит клиент.
+      - name: scripts/demo.sh up
+        run: scripts/demo.sh up --no-workers
+
+      - name: Хранилище и база действительно готовы
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:8080/api/ready > /tmp/ready.json
+          cat /tmp/ready.json
+          node -e '
+            const r = require("/tmp/ready.json");
+            const bad = Object.entries(r.checks).filter(([, c]) => c.status !== "up");
+            if (r.status !== "ready" || bad.length) {
+              console.error("стенд не готов:", JSON.stringify(r));
+              process.exit(1);
+            }
+          '
+
+      - name: Демо-пользователь входит и видит свои товары
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/login.json -D /tmp/login.headers -w '%{http_code}' \
+            -X POST http://127.0.0.1:8080/api/auth/login \
+            -H 'content-type: application/json' \
+            -d '{"organizationSlug":"demo","email":"admin@leadshelf.com","password":"demo1234"}')
+          if [ "$code" != "200" ]; then
+            echo "вход не прошёл: HTTP $code"; cat /tmp/login.json; exit 1
+          fi
+
+          # Кука входа помечена Secure (в образе NODE_ENV=production). Браузер
+          # на localhost такую куку принимает — localhost считается защищённым
+          # origin, — а curl по http её не отправит, поэтому значение берём из
+          # Set-Cookie и передаём заголовком вручную.
+          access=$(grep -i '^set-cookie: ls_access=' /tmp/login.headers | head -1 | sed 's/^[^=]*=//; s/;.*//')
+          [ -n "$access" ] || { echo "сервер не выдал куку ls_access"; cat /tmp/login.headers; exit 1; }
+
+          code=$(curl -s -o /tmp/products.json -w '%{http_code}' \
+            -H "Cookie: ls_access=$access" \
+            'http://127.0.0.1:8080/api/v1/catalog/products?limit=5')
+          if [ "$code" != "200" ]; then
+            echo "каталог не отдался: HTTP $code"; cat /tmp/products.json; exit 1
+          fi
+          grep -q 'OTC-001' /tmp/products.json || {
+            echo "в каталоге нет демо-товаров из сида"; head -c 2000 /tmp/products.json; exit 1
+          }
+          echo "вход и демо-каталог на месте"
+
+      - name: Логи стенда, если что-то упало
+        if: failure()
+        run: scripts/demo.sh logs --no-follow || true
+
+      - name: scripts/demo.sh down
+        if: always()
+        run: scripts/demo.sh down

@@ -1,0 +1,212 @@
+# Демо-стенд LeadShelf. Поднимается скриптом `scripts/demo.sh`, руками этот
+# файл дёргать не нужно — он рассчитывает на сгенерированный deploy/.env.demo.
+#
+# Чем отличается от docker-compose.prod.yml и почему именно так:
+#  - контекст сборки — корень репозитория, а не ./app: стенд разворачивают из
+#    обычного клона, без раскладки /opt/leadshelf/prod;
+#  - LEADSHELF_RUNTIME_PROFILE=demo — демо-копия в интерфейсе и синтетические
+#    картинки товаров; на клиентском проде это значение запрещено;
+#  - своё имя проекта и свои тома: `docker compose down -v` на стенде физически
+#    не может задеть leadshelf-prod_*;
+#  - web наружу не публикуется, только loopback. Домен и TLS включает профиль
+#    `public` вместе с caddy — до тех пор стенд виден лишь на самой машине.
+name: leadshelf-demo
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: runner
+    env_file: .env.demo
+    environment:
+      LEADSHELF_RUNTIME_PROFILE: demo
+    ports:
+      # Только loopback. В публичном режиме наружу смотрит caddy, а не web.
+      - "127.0.0.1:${LEADSHELF_DEMO_PORT:-8080}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Публичный вход. Поднимается только с профилем `public`, то есть при
+  # `demo.sh up --domain <host>`: Caddy сам берёт сертификат Let's Encrypt,
+  # поэтому домен должен уже указывать A-записью на эту машину.
+  caddy:
+    profiles: ["public"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.demo:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      LEADSHELF_DEMO_DOMAIN: ${LEADSHELF_DEMO_DOMAIN:-}
+      # Пара для basic_auth перед стендом: demo.sh генерирует её заново на
+      # каждый публичный запуск и печатает владельцу. Пустой хеш означал бы
+      # дверь без замка, поэтому обе переменные обязательны.
+      LEADSHELF_DEMO_AUTH_USER: ${LEADSHELF_DEMO_AUTH_USER:-}
+      LEADSHELF_DEMO_AUTH_HASH: ${LEADSHELF_DEMO_AUTH_HASH:-}
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  vision:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: worker
+    command: ["node", "services/vision/node_modules/tsx/dist/cli.mjs", "services/vision/src/server.ts"]
+    env_file: .env.demo
+    expose:
+      - "4010"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4010/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  worker-import:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: worker
+    command: ["node", "services/worker/node_modules/tsx/dist/cli.mjs", "services/worker/src/import-queue-runner.ts"]
+    env_file: .env.demo
+    volumes:
+      - workerdata:/app/.data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: &worker-healthcheck
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  worker-notifications:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: worker
+    command: ["node", "services/worker/node_modules/tsx/dist/cli.mjs", "services/worker/src/notification-delivery-runner.ts"]
+    env_file: .env.demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *worker-healthcheck
+    restart: unless-stopped
+
+  worker-proof-analysis:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: worker
+    command: ["node", "services/worker/node_modules/tsx/dist/cli.mjs", "services/worker/src/proof-analysis-runner.ts"]
+    env_file: .env.demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *worker-healthcheck
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: migrate
+    env_file: .env.demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+
+  seed-demo:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: seed-demo
+    env_file: .env.demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+
+  media-backfill:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      target: media-backfill
+    env_file: .env.demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+
+  # Бакет создаёт отдельный одноразовый шаг, а не приложение: media-backfill
+  # кладёт объекты напрямую через PutObject и на отсутствующем бакете падает,
+  # а /api/ready по HeadBucket сразу отдал бы storage=down.
+  storage-init:
+    profiles: ["tools"]
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mc alias set demo http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "demo/$$S3_BUCKET"
+    env_file: .env.demo
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  minio:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: server /data
+    env_file: .env.demo
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.postgres
+    env_file: .env.demo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadshelf"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:
+  workerdata:
+  caddy_data:
+  caddy_config:

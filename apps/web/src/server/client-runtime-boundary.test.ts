@@ -28,4 +28,17 @@ describe("client production runtime boundary", () => {
       expect(source(`src/messages/${locale}.json`)).not.toMatch(/demo|демо/i)
     }
   })
+
+  it("keeps the demo stand off the client profile and off public ports", () => {
+    const demo = source("../../deploy/docker-compose.demo.yml")
+    // Отдельное имя проекта — единственное, что мешает `demo.sh reset` снести
+    // тома клиентского прода: compose префиксует их именем проекта.
+    expect(demo).toContain("name: leadshelf-demo")
+    expect(demo).toContain("LEADSHELF_RUNTIME_PROFILE: demo")
+    expect(demo).not.toContain("LEADSHELF_RUNTIME_PROFILE: client")
+    // Наружу смотрит только публичный вход caddy; web — строго на loopback,
+    // postgres и minio не публикуются вовсе.
+    expect(demo).toContain('- "127.0.0.1:${LEADSHELF_DEMO_PORT:-8080}:3000"')
+    expect(demo.match(/^ {4}ports:$/gm)).toHaveLength(2)
+  })
 })

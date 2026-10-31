@@ -4,6 +4,16 @@ LeadShelf - отдельный продукт: field-force + shelf execution. У
 
 Репозиторий содержит планировочные документы (`docs/`) и monorepo с кодом (`apps/`, `packages/`, `services/`). Scope расширен до полного порта MTM-модуля - см. `docs/08-scope-expansion-mtm-full-port.md` и план миграции `docs/09-codex-migration-plan.md`.
 
+## Запустить и показать
+
+```bash
+scripts/demo.sh up
+```
+
+Поднимает весь продукт с демо-данными на `http://localhost:8080` — этим его
+показывают клиенту. Публичная ссылка, команды и путь до клиентского прода:
+`docs/DEMO-STAND.md`.
+
 ## Что читать первым
 
 1. `docs/01-product-scope.md` - что строим и что намеренно не тащим из CRM.
