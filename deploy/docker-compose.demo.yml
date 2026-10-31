@@ -157,37 +157,29 @@ services:
         condition: service_healthy
     profiles: ["tools"]
 
-  # Бакет создаёт отдельный одноразовый шаг, а не приложение: media-backfill
-  # кладёт объекты напрямую через PutObject и на отсутствующем бакете падает,
-  # а /api/ready по HeadBucket сразу отдал бы storage=down.
-  storage-init:
-    profiles: ["tools"]
-    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        mc alias set demo http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb --ignore-existing "demo/$$S3_BUCKET"
-    env_file: .env.demo
-    depends_on:
-      minio:
-        condition: service_healthy
-    restart: "no"
-
+  # Не официальный образ MinIO: minio/minio и quay.io/minio/minio больше не
+  # отдаются анонимно (`pull access denied`), поэтому прод-пин из
+  # docker-compose.prod.yml на чистой машине уже не скачивается. Здесь стоит
+  # последний публичный зеркальный образ Bitnami. Он заморожен и секурити-фиксов
+  # не получает — для стенда с синтетикой это приемлемо, для данных клиента нет:
+  # там объектное хранилище внешнее (см. deploy/SERVER_SETUP.md, шаг 3).
+  #
+  # Бакет создаёт сам образ по MINIO_DEFAULT_BUCKETS — отдельный шаг не нужен.
+  # Без бакета media-backfill падал бы на PutObject, а /api/ready по HeadBucket
+  # сразу отдавал бы storage=down.
   minio:
-    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    command: server /data
+    image: bitnamilegacy/minio@sha256:451fe6858cb770cc9d0e77ba811ce287420f781c7c1b806a386f6896471a349c
     env_file: .env.demo
+    environment:
+      MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-leadshelf-media}
     volumes:
-      - miniodata:/data
+      - miniodata:/bitnami/minio/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 10s
+      retries: 15
+      start_period: 15s
     restart: unless-stopped
 
   postgres:

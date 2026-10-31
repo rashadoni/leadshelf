@@ -173,7 +173,6 @@ PUB
 
   say "поднимаю базу и хранилище"
   compose up -d --wait postgres minio
-  compose run --rm storage-init >/dev/null
 
   say "накатываю миграции"
   compose run --rm migrate
