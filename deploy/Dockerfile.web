@@ -107,9 +107,10 @@ RUN apk add --no-cache build-base nasm \
 #
 # Точечно, а не `pnpm prune --prod`: prune сносит весь modules-каталог целиком
 # и ставит заново, а вместе с ним исчезает сгенерированный Prisma-клиент —
-# генератор пишет в node_modules/.prisma, своего output у схемы нет, и вернуть
-# клиент нечем, prisma CLI сам лежит в devDependencies. Чистый prod-состав
-# станет возможен, когда у генератора появится output внутри packages/db.
+# своего output у схемы нет, и в pnpm он оказывается внутри самого пакета
+# в виртуальном сторе, а не в корневом node_modules/.prisma. Вернуть его
+# нечем: prisma CLI лежит в devDependencies. Чистый prod-состав станет
+# возможен, когда у генератора появится output внутри packages/db.
 #
 # tsx и dotenv при этом переведены в dependencies воркера и vision: процессы
 # действительно стартуют через tsx и читают окружение, в dev они стояли неверно.
@@ -119,14 +120,18 @@ RUN apk add --no-cache build-base nasm \
 # а не в рантайме. Повисшие симлинки на удалённые пакеты безвредны: grype
 # читает файлы, а не ссылки.
 FROM builder AS worker-deps
-RUN rm -rf node_modules/.pnpm/vitest@* \
+RUN set -eu; \
+    rm -rf node_modules/.pnpm/vitest@* \
            node_modules/.pnpm/vite@* \
            node_modules/.pnpm/vite-node@* \
            node_modules/.pnpm/tinypool@* \
-           node_modules/.pnpm/@vitest+* \
-    && test -f services/worker/node_modules/tsx/dist/cli.mjs \
-    && test -f services/vision/node_modules/tsx/dist/cli.mjs \
-    && test -d node_modules/.prisma/client
+           node_modules/.pnpm/@vitest+*; \
+    test -f services/worker/node_modules/tsx/dist/cli.mjs \
+      || { echo "после чистки нет tsx воркера"; exit 1; }; \
+    test -f services/vision/node_modules/tsx/dist/cli.mjs \
+      || { echo "после чистки нет tsx vision"; exit 1; }; \
+    node -e "const {PrismaClient} = require('/app/services/worker/node_modules/@prisma/client'); if (typeof PrismaClient !== 'function') process.exit(1)" \
+      || { echo "Prisma-клиент не сгенерирован или не читается из воркера"; exit 1; }
 
 # --- фоновые worker-задачи ---
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.
