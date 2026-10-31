@@ -34,3 +34,16 @@ ignore:
   - vulnerability: CVE-2026-14456
     package:
       name: libcrypto3
+  # GHSA-mgcc-cww5-fp2q: DoS при разборе JWK с RSA-ключом. Линию v4 мы
+  # пинним на 4.1.7 (см. deploy/Dockerfile.caddy), а у v3 патча нет вообще:
+  # 3.0.5 — последний релиз, апстрим починил только четвёрку.
+  #
+  # В образ она приезжает одним путём: caddy -> github.com/smallstep/
+  # certificates (проверено по go.mod caddy 2.11.7 и certificates 0.30.2) —
+  # это встроенный в Caddy локальный УЦ. Мы его не включаем: в обоих наших
+  # Caddyfile только reverse_proxy и публичный ACME, ни `tls internal`, ни
+  # `acme_server`, ни блока `pki` нет, так что разбор чужих JWK не выполняется.
+  # Снять, как только smallstep/certificates перейдёт на go-jose/v4.
+  - vulnerability: GHSA-mgcc-cww5-fp2q
+    package:
+      name: github.com/go-jose/go-jose/v3
