@@ -1,6 +1,6 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto"
 import { unlink, writeFile } from "node:fs/promises"
-import { Prisma, type PrismaClient } from "@prisma/client"
+import { Prisma, type PrismaClient } from "@leadshelf/prisma-client"
 
 const SECRET_FIELD = /(password|secret|credential|token|jti|refresh|authorization|apikey|pin|session(id|key))/i
 

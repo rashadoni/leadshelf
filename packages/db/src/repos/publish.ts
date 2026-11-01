@@ -1,4 +1,4 @@
-import type { PrismaClient, TaskStatus } from "@prisma/client"
+import type { PrismaClient, TaskStatus } from "@leadshelf/prisma-client"
 import { randomUUID } from "node:crypto"
 import { shelfSpaceForShelf, validatePlacementOnShelf } from "@leadshelf/core"
 import { emitProductEvent } from "./alerts.ts"

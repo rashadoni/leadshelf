@@ -41,4 +41,29 @@ describe("client production runtime boundary", () => {
     expect(demo).toContain('- "127.0.0.1:${LEADSHELF_DEMO_PORT:-8080}:3000"')
     expect(demo.match(/^ {4}ports:$/gm)).toHaveLength(2)
   })
+
+  it("keeps the generated Prisma client outside node_modules so prod images prune cleanly", () => {
+    const schema = source("../../packages/db/prisma/schema.prisma")
+    const dockerfile = source("../../deploy/Dockerfile.web")
+    const nextConfig = source("next.config.ts")
+    // Генерат обязан лежать вне node_modules: иначе prod-чистка образа воркера
+    // уносит его с собой, а вернуть нечем — prisma CLI в devDependencies.
+    expect(schema).toContain('output   = "../../prisma-client/generated"')
+    // Порядок команд не косметика: prune чистит виртуальный стор, install
+    // возвращает ссылки пакетам воркспейса. Одной из них недостаточно.
+    expect(dockerfile).toContain("CI=true pnpm prune --prod")
+    expect(dockerfile).toContain("CI=true pnpm install --frozen-lockfile --prod")
+    expect(dockerfile.indexOf("CI=true pnpm prune --prod")).toBeLessThan(
+      dockerfile.indexOf("CI=true pnpm install --frozen-lockfile --prod"),
+    )
+    // Точечный rm был обходом того же пробела; возврат к нему прячет ошибки
+    // объявления зависимостей вместо того, чтобы их показывать.
+    expect(dockerfile).not.toContain("rm -rf node_modules/.pnpm/vitest@")
+    // Клиент грузит нативный движок и читает рядом schema.prisma — бандлить
+    // его нельзя, а имя в serverExternalPackages не должно транспилироваться.
+    expect(nextConfig).toContain('serverExternalPackages: ["@leadshelf/prisma-client"')
+    const transpiled = nextConfig.match(/transpilePackages: \[([\s\S]*?)\]/)?.[1] ?? ""
+    expect(transpiled).toContain("@leadshelf/db")
+    expect(transpiled).not.toContain("@leadshelf/prisma-client")
+  })
 })

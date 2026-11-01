@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 import { describe, expect, it, vi } from "vitest"
 import { decideHumanReview, ReviewRepoError } from "../repos/reviews.ts"
 

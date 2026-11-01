@@ -1,4 +1,4 @@
-import { Prisma, type ImportQueueJob, type PrismaClient } from "@prisma/client"
+import { Prisma, type ImportQueueJob, type PrismaClient } from "@leadshelf/prisma-client"
 import type { RawCsvRow } from "@leadshelf/core"
 
 import { executeProductsImport, type ProductsImportInput } from "./execute-products-import"

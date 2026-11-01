@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 import { parseAssortmentRow, type RawCsvRow, type RowIssue } from "@leadshelf/core"
 import { emitProductEvent } from "@leadshelf/db"
 import { loadRefMaps, resolveProductId } from "./resolve-refs"

@@ -1,0 +1,8 @@
+{
+  "name": "@leadshelf/prisma-client",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./generated/index.js",
+  "types": "./generated/index.d.ts",
+  "files": ["generated"]
+}

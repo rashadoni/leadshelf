@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { Prisma, type PrismaClient } from "@prisma/client"
+import { Prisma, type PrismaClient } from "@leadshelf/prisma-client"
 
 const DAY_MS = 86_400_000
 const GPS_KEYS = new Set(["gps", "gpslatitude", "gpslongitude", "latitude", "longitude", "lat", "lng", "lon", "coordinates", "distancem"])

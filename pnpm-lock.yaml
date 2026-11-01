@@ -162,15 +162,15 @@ importers:
       '@leadshelf/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@leadshelf/prisma-client':
+        specifier: workspace:*
+        version: link:../../packages/prisma-client
       '@leadshelf/worker':
         specifier: workspace:*
         version: link:../../services/worker
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
-      '@prisma/client':
-        specifier: ^6.19.3
-        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       jose:
         specifier: ^5.9.6
         version: 5.10.0
@@ -270,19 +270,22 @@ importers:
 
   packages/db:
     dependencies:
-      '@leadshelf/core':
-        specifier: workspace:*
-        version: link:../core
-      '@prisma/client':
-        specifier: ^6.19.3
-        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
-    devDependencies:
       '@aws-sdk/client-s3':
         specifier: 3.1078.0
         version: 3.1078.0
+      '@leadshelf/core':
+        specifier: workspace:*
+        version: link:../core
+      '@leadshelf/prisma-client':
+        specifier: workspace:*
+        version: link:../prisma-client
+    devDependencies:
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
+      '@prisma/client':
+        specifier: ^6.19.3
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       '@types/node':
         specifier: ^20.17.0
         version: 20.19.43
@@ -301,6 +304,8 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.5)(yaml@2.9.0)
+
+  packages/prisma-client: {}
 
   packages/ui: {}
 
@@ -346,9 +351,9 @@ importers:
       '@leadshelf/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@prisma/client':
-        specifier: ^6.19.3
-        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@leadshelf/prisma-client':
+        specifier: workspace:*
+        version: link:../../packages/prisma-client
       csv-parse:
         specifier: ^7.0.2
         version: 7.0.3

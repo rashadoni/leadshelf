@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 
 // Петля пересъемки шага (docs/23 web review backlog). Все функции берут
 // явный organizationId и фильтруют по нему — tenant boundary как в

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 
 // Преднагруженные карты справочников для резолва строк импорта.
 // Пилотный масштаб (до ~100k SKU) — загрузка целиком быстрее точечных запросов.

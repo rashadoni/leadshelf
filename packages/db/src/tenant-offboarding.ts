@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from "@prisma/client"
+import { Prisma, type PrismaClient } from "@leadshelf/prisma-client"
 
 const SAFE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/
 

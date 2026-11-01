@@ -10,6 +10,8 @@ export default [
       "**/dist/**",
       "**/build/**",
       "**/coverage/**",
+      // Генерат Prisma: мегабайты CJS и 9 МБ .d.ts, править нечего.
+      "packages/prisma-client/generated/**",
     ],
   },
   // packages/core — чистая доменная математика: без Prisma, БД и UI-фреймворков
@@ -22,7 +24,7 @@ export default [
         {
           patterns: [
             {
-              group: ["@prisma/client", "@prisma/*"],
+              group: ["@prisma/client", "@prisma/*", "@leadshelf/prisma-client"],
               message: "packages/core — чистые функции, Prisma запрещен (docs/11 п.9)",
             },
             {
@@ -49,6 +51,12 @@ export default [
           paths: [
             {
               name: "@prisma/client",
+              message:
+                "route handlers не импортируют Prisma напрямую — только tenantDb/authDb из @/server/db/client (docs/12)",
+            },
+            {
+              // Генерат переехал в свой пакет, забор должен знать новое имя.
+              name: "@leadshelf/prisma-client",
               message:
                 "route handlers не импортируют Prisma напрямую — только tenantDb/authDb из @/server/db/client (docs/12)",
             },

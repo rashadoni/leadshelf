@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient, TaskStatus } from "@prisma/client"
+import type { Prisma, PrismaClient, TaskStatus } from "@leadshelf/prisma-client"
 import { evaluateVisitGeofence } from "@leadshelf/core"
 import { emitProductEvent } from "./alerts.ts"
 import { listOpenCaptureRetakes } from "./capture.ts"

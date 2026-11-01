@@ -1,7 +1,7 @@
 // Route handlers импортируют ТОЛЬКО createTenantClient.
 // PrismaClient намеренно не реэкспортируется — worker/seed берут
 // createSystemClient с обязательной причиной.
-export { Prisma } from "@prisma/client"
+export { Prisma } from "@leadshelf/prisma-client"
 export {
   createTenantClient,
   createSystemClient,

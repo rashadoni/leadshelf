@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 
 // Parent-path репозиторий (паттерн из Codex-дизайна tenant-клиента):
 // ImportError не имеет organizationId, поэтому generic-доступ через tenant

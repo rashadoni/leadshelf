@@ -1,5 +1,5 @@
-import type { PrismaClient } from "@prisma/client"
-import { Prisma } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
+import { Prisma } from "@leadshelf/prisma-client"
 import {
   applyPromotions,
   buildInvoiceNumber,
