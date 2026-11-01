@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 
 // Parent-path репозиторий оборудования: EquipmentVersion/Shelf не имеют
 // organizationId, tenant client их не пишет. Владение проверяется через

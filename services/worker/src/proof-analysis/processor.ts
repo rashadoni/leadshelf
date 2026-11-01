@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
-import type { PrismaClient } from "@prisma/client"
-import { Prisma } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
+import { Prisma } from "@leadshelf/prisma-client"
 import {
   VISION_PROTOCOL_VERSION,
   type VisionReferenceSlot,

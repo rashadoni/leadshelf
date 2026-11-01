@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from "@prisma/client"
+import { Prisma, type PrismaClient } from "@leadshelf/prisma-client"
 
 type JsonRecord = Record<string, unknown>
 

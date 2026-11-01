@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient } from "@leadshelf/prisma-client"
 import { createTenantClient } from "../tenant-client.ts"
 
 // Интеграционные тесты против реального Postgres (127.0.0.1:55432 из .env).

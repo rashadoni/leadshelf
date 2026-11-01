@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@leadshelf/prisma-client"
 import { parseProductRow, type RawCsvRow } from "@leadshelf/core"
 import { createHash } from "node:crypto"
 

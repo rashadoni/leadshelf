@@ -16,6 +16,9 @@
 // - PlanogramRuleSet/RuleStep (Phase 5, auto placement).
 
 generator client {
+  // Генерат уезжает в отдельный пакет @leadshelf/prisma-client — зачем,
+  // написано в packages/prisma-client/README.md.
+  output   = "../../prisma-client/generated"
   provider = "prisma-client-js"
 }
 

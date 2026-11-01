@@ -29,7 +29,7 @@
     "@leadshelf/api-contracts": "workspace:*",
     "@leadshelf/core": "workspace:*",
     "@leadshelf/db": "workspace:*",
-    "@prisma/client": "^6.19.3",
+    "@leadshelf/prisma-client": "workspace:*",
     "csv-parse": "^7.0.2",
     "dotenv": "^16.4.0",
     "exceljs": "4.4.0",

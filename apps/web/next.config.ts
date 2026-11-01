@@ -48,8 +48,12 @@ const config: NextConfig = {
     "@leadshelf/api-contracts",
     "@leadshelf/worker",
   ],
-  // нативные/Node-only пакеты не бандлим
-  serverExternalPackages: ["@prisma/client", "@node-rs/argon2"],
+  // Нативные/Node-only пакеты не бандлим. @leadshelf/prisma-client — генерат
+  // Prisma: он грузит libquery_engine-*.so.node и читает рядом schema.prisma,
+  // поэтому должен остаться внешним и попасть в standalone через file tracing.
+  // Имя в этом списке обязано быть НЕ транспилируемым пакетом, иначе Next его
+  // всё равно соберёт в бандл — отсюда отдельный пакет, а не папка в db.
+  serverExternalPackages: ["@leadshelf/prisma-client", "@node-rs/argon2"],
   // Route-level guards ограничивают фото 15 MiB и видео 35 MiB. Transport
   // должен пропускать multipart overhead, иначе валидные видео обрезаются до
   // выполнения route и превращаются в неочевидный 400.

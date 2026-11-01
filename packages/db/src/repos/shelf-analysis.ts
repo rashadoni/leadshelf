@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { Prisma, type PrismaClient, type ShelfAnalysisRun, type ShelfAnalysisRunStatus } from "@prisma/client"
+import { Prisma, type PrismaClient, type ShelfAnalysisRun, type ShelfAnalysisRunStatus } from "@leadshelf/prisma-client"
 import { compareShelf, SHELF_COMPARISON_VERSION, type ShelfBBox } from "@leadshelf/core"
 import { persistShelfMetricSnapshot } from "./shelf-analytics.ts"
 

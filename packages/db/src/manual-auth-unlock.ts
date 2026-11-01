@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { Prisma, type PrismaClient } from "@prisma/client"
+import { Prisma, type PrismaClient } from "@leadshelf/prisma-client"
 import {
   authenticationLockoutScope,
   mobileAuthenticationLockoutKey,

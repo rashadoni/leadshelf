@@ -15,6 +15,9 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY patches/ patches/
 COPY apps/web/package.json apps/web/
 COPY packages/db/package.json packages/db/
+# Пакет-генерат: без его манифеста `pnpm install --frozen-lockfile` не сойдётся
+# с лок-файлом, потому что это проект воркспейса.
+COPY packages/prisma-client/package.json packages/prisma-client/
 COPY packages/core/package.json packages/core/
 COPY packages/api-contracts/package.json packages/api-contracts/
 COPY packages/ui/package.json packages/ui/
@@ -101,37 +104,58 @@ RUN apk add --no-cache build-base nasm \
     && make install \
     && /opt/ffmpeg/bin/ffmpeg -version
 
-# Прод-состав воркера: из сборочного дерева убирается тестовый прогонщик.
-# Иначе в рантайм-образ уезжает vitest со своими vite и tinypool, и grype
+# Прод-состав воркера: из сборочного дерева убираются dev-зависимости. Иначе
+# в рантайм-образ уезжает vitest со своими vite и tinypool, и grype
 # справедливо считает их уязвимостями прод-образа.
 #
-# Точечно, а не `pnpm prune --prod`: prune сносит весь modules-каталог целиком
-# и ставит заново, а вместе с ним исчезает сгенерированный Prisma-клиент —
-# своего output у схемы нет, и в pnpm он оказывается внутри самого пакета
-# в виртуальном сторе, а не в корневом node_modules/.prisma. Вернуть его
-# нечем: prisma CLI лежит в devDependencies. Чистый prod-состав станет
-# возможен, когда у генератора появится output внутри packages/db.
+# Штатный `pnpm prune --prod`, а не точечный rm: prune работает списком
+# разрешённого — остаётся ровно то, что объявлено в dependencies, — а rm
+# требовал помнить про каждый новый dev-пакет и молчал, когда забывали.
+# Возможным это стало после переезда генерата Prisma в
+# packages/prisma-client: prune сносит modules-каталог целиком и ставит
+# заново из стора, а генерат лежит вне node_modules и переживает это
+# (packages/prisma-client/README.md).
 #
-# tsx и dotenv при этом переведены в dependencies воркера и vision: процессы
-# действительно стартуют через tsx и читают окружение, в dev они стояли неверно.
+# Две команды, а не одна, и порядок важен — проверено на отдельном воркспейсе:
+#   * `prune --prod` вычищает виртуальный стор node_modules/.pnpm (ровно это и
+#     видит grype), но в воркспейсе перелинковывает только корневой проект, а
+#     node_modules пакетов оставляет ПУСТЫМИ — воркер не нашёл бы ни tsx, ни
+#     своих зависимостей;
+#   * `install --frozen-lockfile --prod` возвращает ссылки в prod-составе, но
+#     сам по себе файлы из виртуального стора не удаляет: после него vitest
+#     остаётся лежать на диске, то есть в образе и в отчёте grype.
+# CI=true нужен обеим: у сборки нет TTY, и без него pnpm отказывается удалять
+# modules-каталог (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+#
+# tsx и dotenv переведены в dependencies воркера и vision, @aws-sdk/client-s3 —
+# в dependencies packages/db: эти пакеты грузятся в рантайме, в devDependencies
+# они стояли неверно, и до prune ошибка была невидимой.
+#
+# apps/mobile исключён из контекста сборки (.dockerignore) по той же причине:
+# первый install идёт до `COPY . .` и мобильного проекта в воркспейсе не видит,
+# а этот — уже по полному дереву, и без исключения дерево Expo уезжает в образ
+# воркера вместе с четырьмя high. Причины перечислены в .dockerignore.
 #
 # Проверки в конце — ровно то, чем стартует контейнер, и клиент, без которого
-# он упал бы на первом запросе: если чистка задела лишнее, сборка падает здесь,
-# а не в рантайме. Повисшие симлинки на удалённые пакеты безвредны: grype
-# читает файлы, а не ссылки.
+# он упал бы на первом запросе: если prune задел лишнее, сборка падает здесь,
+# а не в рантайме. Последняя проверка сторожит сам смысл шага: если тестовый
+# прогонщик снова окажется в прод-составе, это ошибка объявления зависимостей,
+# и чинить её надо в package.json, а не дописывать сюда rm.
 FROM builder AS worker-deps
 RUN set -eu; \
-    rm -rf node_modules/.pnpm/vitest@* \
-           node_modules/.pnpm/vite@* \
-           node_modules/.pnpm/vite-node@* \
-           node_modules/.pnpm/tinypool@* \
-           node_modules/.pnpm/@vitest+*; \
+    CI=true pnpm prune --prod; \
+    CI=true pnpm install --frozen-lockfile --prod; \
     test -f services/worker/node_modules/tsx/dist/cli.mjs \
-      || { echo "после чистки нет tsx воркера"; exit 1; }; \
+      || { echo "после prune нет tsx воркера"; exit 1; }; \
     test -f services/vision/node_modules/tsx/dist/cli.mjs \
-      || { echo "после чистки нет tsx vision"; exit 1; }; \
-    node -e "const {PrismaClient} = require('/app/services/worker/node_modules/@prisma/client'); if (typeof PrismaClient !== 'function') process.exit(1)" \
-      || { echo "Prisma-клиент не сгенерирован или не читается из воркера"; exit 1; }
+      || { echo "после prune нет tsx vision"; exit 1; }; \
+    node -e "const {PrismaClient} = require(require.resolve('@leadshelf/prisma-client', { paths: ['/app/services/worker'] })); if (typeof PrismaClient !== 'function') process.exit(1)" \
+      || { echo "Prisma-клиент не виден воркеру после prune"; exit 1; }; \
+    if find node_modules/.pnpm -maxdepth 1 \
+         \( -name 'vitest@*' -o -name 'vite@*' -o -name 'tinypool@*' -o -name '@vitest+*' \) \
+         | grep -q .; then \
+      echo "prune не унёс тестовый прогонщик — проверь dependencies"; exit 1; \
+    fi
 
 # --- фоновые worker-задачи ---
 # Объявлен после runner: --target runner не устанавливает тяжёлый ffmpeg.

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient } from "@leadshelf/prisma-client"
 
 // Модели с колонкой organizationId — им скоуп инжектится автоматически.
 // Список ЗАХАРДКОЖЕН осознанно (политика важнее автодетекта); тест

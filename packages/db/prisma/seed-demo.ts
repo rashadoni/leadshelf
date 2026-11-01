@@ -2,7 +2,7 @@
 // Запуск: pnpm --filter @leadshelf/db seed:demo
 import "dotenv/config"
 import { hash } from "@node-rs/argon2"
-import { Prisma } from "@prisma/client"
+import { Prisma } from "@leadshelf/prisma-client"
 import { calculateShelfCompliance, compareShelf } from "@leadshelf/core"
 import { createSystemClient, createTenantClient, persistShelfMetricSnapshot } from "../src/index.ts"
 import { buildDemoSeedFailureLog, buildDemoSeedReadyLog } from "../src/demo-seed-log.ts"
