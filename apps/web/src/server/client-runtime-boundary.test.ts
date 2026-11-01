@@ -59,6 +59,10 @@ describe("client production runtime boundary", () => {
     // Точечный rm был обходом того же пробела; возврат к нему прячет ошибки
     // объявления зависимостей вместо того, чтобы их показывать.
     expect(dockerfile).not.toContain("rm -rf node_modules/.pnpm/vitest@")
+    // Прод-установка идёт по полному воркспейсу, поэтому RN-приложение должно
+    // быть вне контекста сборки: иначе дерево Expo приносит в образ воркера
+    // image-size, zod 3.25.76 и decode-uri-component — четыре high.
+    expect(source("../../.dockerignore")).toMatch(/^apps\/mobile$/m)
     // Клиент грузит нативный движок и читает рядом schema.prisma — бандлить
     // его нельзя, а имя в serverExternalPackages не должно транспилироваться.
     expect(nextConfig).toContain('serverExternalPackages: ["@leadshelf/prisma-client"')

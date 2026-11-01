@@ -13,3 +13,12 @@ deploy
 # (glibc) libquery_engine — это лишние 17 МБ и чужая платформа рядом с нужной,
 # а локальная сборка демо-стенда идёт как раз из дерева с готовым генератом.
 packages/prisma-client/generated
+
+# Мобильное приложение не входит ни в один серверный образ, а его дерево Expo
+# тащит четыре high: image-size (metro), zod 3.25.76 (@expo/cli) и
+# decode-uri-component (query-string <- expo-router). Раньше это было не видно:
+# builder ставил зависимости до `COPY . .` и apps/mobile в воркспейсе не
+# находил. Прод-установка в worker-deps идёт уже по полному дереву, поэтому
+# исключение должно быть явным — иначе RN-зависимости приезжают в образ воркера.
+# Собирается apps/mobile не docker'ом, а .github/workflows/mobile-native.yml.
+apps/mobile
